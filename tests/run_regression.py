@@ -274,6 +274,58 @@ def main():
         bad = [t for t, u in errs if not ignorable(t, u)]
         for t in bad[:3]:
             fail('muhan', '콘솔 오류: ' + t[:200])
+        # 밸류리밸런싱 VR 5.0 — 엔진(라오어 원문 표·공식 그대로)·백테스트 재현·기록 화면 흐름
+        if os.path.isdir(os.path.join(ROOT, 'vr')):
+            print('[VR] 밸류리밸런싱', flush=True)
+            errs.clear()
+            page.set_viewport_size({'width': 390, 'height': 844})
+            page.goto(base + 'vr/', wait_until='load'); page.wait_for_timeout(1500)
+            page.evaluate("localStorage.removeItem('vr5-store'); localStorage.removeItem('vr5-sync')")
+            page.reload(wait_until='load'); page.wait_for_timeout(2500)
+            v = page.evaluate("""async () => {
+              const R = [], ok = (name, c, info) => R.push({ name, ok: !!c, info }), W = ms => new Promise(r => setTimeout(r, ms)), E = window.VRE, $ = s => document.querySelector(s);
+              if (!E || !window.VRdebug) return [{ name: 'VRE·VRdebug 없음', ok: false }];
+              const t1 = E.buyTable(10509.46, 176, 383.14, 1e9, 5).map(r => r.price + '/' + r.pool).join(' ');
+              ok('원문 매수표 ① (최소값 10,509.46 · 176개)', t1 === '59.71/323.43 59.38/264.05 59.04/205.01 58.71/146.3 58.39/87.91', t1);
+              const t2 = E.buyTable(4599.89, 98, 929.09, 1e9, 12).map(r => r.price).join(' ');
+              ok('원문 매수표 ② (최소값 4,599.89 · 98개)', t2 === '46.94 46.46 46 45.54 45.1 44.66 44.23 43.81 43.4 42.99 42.59 42.2', t2);
+              const nx = E.next(9000, 1000, 10, 'acc', 250);
+              ok('원문 V 계산 예 (9,000 + 1,000/10 + 250 = 9,350)', nx.V === 9350 && nx.pool === 1250, nx);
+              ok('밴드 ±15% · 인출은 Pool 이 있는 만큼만', E.band(10000, 0.15).min === 8500 && E.band(10000, 0.15).max === 11500 && E.next(10000, 50, 20, 'wd', 100).flow === -50, '');
+              ok('Pool 한도 안에서만 매수표', E.buyTable(8500, 100, 1000, 500, 999).reduce((s, r) => s + r.price, 0) <= 500.0001, '');
+              const mx = E.sellTable(11500, 100, 0, 3); ok('매도표 = 최대값 ÷ 팔기 전 개수', mx[0].price === 115 && mx[1].price === 116.16 && mx[0].n === 99, mx);
+              for (let i = 0; i < 40 && document.querySelectorAll('#vrbt tbody tr').length < 15; i++) await W(250);
+              const rows = [...document.querySelectorAll('#vrbt table')].map(t => t.querySelectorAll('tbody tr').length);
+              ok('백테스트 표 (그냥 보유 + G 7개 · 원문 비교 7줄)', rows[0] === 8 && rows[1] === 7, rows);
+              const diffs = [...document.querySelectorAll('#vrbt table')][1] ? [...[...document.querySelectorAll('#vrbt table')][1].querySelectorAll('tbody tr')].map(tr => parseFloat(tr.cells[3].textContent.replace('−', '-'))) : [];
+              ok('라오어 공개 수치 재현 (G 10~100, 연평균 차이 0.3%p 이내)', diffs.length === 7 && diffs.slice(1).every(d => Math.abs(d) <= 0.3), diffs);
+              $('[data-vi="setup.n"]').value = '100'; $('[data-vi="setup.n"]').dispatchEvent(new Event('input', { bubbles: true }));
+              const p = $('[data-vi="setup.pool"]'); p.value = '1000'; p.dispatchEvent(new Event('input', { bubbles: true }));
+              const px = $('[data-vi="setup.px"]'); px.value = '50'; px.dispatchEvent(new Event('input', { bubbles: true }));
+              $('[data-va="setup-ok"]').click(); await W(200);
+              const c1 = VRdebug.store.accs[0].cycles[0], d = VRdebug.derive();
+              ok('계좌 시작: V = 개수 × 현재가 · 밴드 · 매수 한도 75%', c1 && c1.V === 5000 && d.bd.min === 4250 && d.bd.max === 5750 && d.lim === 750 && d.bt.length > 0 && d.bt[0].price === 42.5, c1);
+              $('[data-va="close-open"]').click(); await W(150);
+              const n = $('[data-vi="close.n"]'); n.value = '100'; n.dispatchEvent(new Event('input', { bubbles: true }));
+              const cp = $('[data-vi="close.pool"]'); cp.value = '1000'; cp.dispatchEvent(new Event('input', { bubbles: true })); await W(100);
+              $('[data-va="close-ok"]').click(); await W(200);
+              const cs = VRdebug.store.accs[0].cycles;
+              ok('사이클 마감 → 다음 V = 5,000 + 1,000/10 + 250 = 5,350 · Pool 1,250', cs.length === 2 && cs[0].end && cs[1].V === 5350 && cs[1].pool === 1250 && cs[1].flow === 250, cs.map(c => [c.V, c.pool]));
+              $('[data-va="view"][data-v="hist"]').click(); await W(300);
+              ok('기록 탭: 그래프·표', !!document.getElementById('vr-chart') && document.querySelectorAll('.vr-tbl.hist .vr-tr').length === 3, '');
+              ok('저장 (이 기기)', JSON.parse(localStorage.getItem('vr5-store')).accs[0].cycles.length === 2, '');
+              return R;
+            }""")
+            for t in v:
+                if not t['ok']:
+                    fail('vr', '%s: %s' % (t['name'], json.dumps(t.get('info'), ensure_ascii=False)))
+            page.reload(wait_until='load'); page.wait_for_timeout(1200)
+            if page.evaluate("window.VRdebug ? VRdebug.store.accs[0].cycles.length : -1") != 2:
+                fail('vr', '새로고침 뒤 기록이 남아 있지 않음')
+            page.evaluate("localStorage.removeItem('vr5-store')")
+            for t in [t for t, u in errs if not ignorable(t, u)][:3]:
+                fail('vr', '콘솔 오류: ' + t[:200])
+            page.set_viewport_size({'width': 1440, 'height': 900})
         # 홈 첫 화면 — AI 시대, 노동자에서 자본가로: 두 힘·하나의 답 숫자 · 데이터 탭 · 직업 검색
         print('[홈] 첫 화면', flush=True)
         errs.clear()

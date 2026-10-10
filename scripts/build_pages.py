@@ -353,7 +353,8 @@ def tr_text(t):
 
 def translate_html(frag):
     """스크립트·스타일·주석을 뺀 나머지의 글자 덩어리와 일부 속성(title·aria-label·placeholder)만 바꿈"""
-    parts = re.split(r'(<script\b.*?</script>|<style\b.*?</style>|<!--.*?-->)', frag, flags=re.S)
+    # translate="no" 인 짧은 span(일부러 남기는 한국어 원어)은 번역하지 않음 — 같은 글자가 메뉴 등 다른 곳에서는 번역되도록
+    parts = re.split(r'(<script\b.*?</script>|<style\b.*?</style>|<!--.*?-->|<span\b[^>]*\btranslate="no"[^>]*>[^<]*</span>)', frag, flags=re.S)
     for i in range(0, len(parts), 2):
         seg = re.sub(r'>([^<>]+)<', lambda m: '>' + tr_text(m.group(1)) + '<', parts[i])
         seg = re.sub(r'((?:title|aria-label|placeholder)=")([^"]*)(")', lambda m: m.group(1) + tr_text(m.group(2)) + m.group(3), seg)

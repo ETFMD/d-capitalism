@@ -267,6 +267,14 @@
       }
     },
     {
+      "path": "vr",
+      "tab": "vr",
+      "group": "invest",
+      "title": "밸류리밸런싱 VR 5.0 — 라오어 VR 매수표·매도표 기록과 TQQQ 백테스트",
+      "short": "밸류리밸런싱 VR 5.0",
+      "desc": "라오어 밸류리밸런싱 VR 5.0 공식으로 2주마다 V·밴드·매수표·매도표를 계산·기록하고 TQQQ 일봉으로 백테스트합니다."
+    },
+    {
       "path": "nasdaq",
       "tab": "nasdaq",
       "group": "invest",

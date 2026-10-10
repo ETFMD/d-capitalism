@@ -990,10 +990,10 @@
   #page-moneyspeed .card:last-child { margin-bottom: 0; }
 
 /* ═══ [MUHAN] 무한매수법 4.0 — 스타일 (사이트 색상 변수 사용, #page-muhan 범위) ═══ */
-#page-muhan{--m-bg:var(--bg);--m-s1:var(--bg2);--m-s2:var(--bg3);--m-bd:var(--card-border);--m-tx:var(--text);--m-t2:var(--text2);--m-t3:var(--text3);
+#page-muhan,#page-vr{--m-bg:var(--bg);--m-s1:var(--bg2);--m-s2:var(--bg3);--m-bd:var(--card-border);--m-tx:var(--text);--m-t2:var(--text2);--m-t3:var(--text3);
  --m-ac:var(--accent);--m-ac-s:rgba(49,130,246,.12);--m-ac-b:rgba(49,130,246,.35);--m-ok:#3182f6;--m-bad:#f04452;--m-warn:#fe9800;--m-info:#3182f6;--m-rev:#3182f6;--m-on-ac:#ffffff}
-html[data-theme="light"] #page-muhan{--m-ac-s:rgba(49,130,246,.10);--m-ac-b:rgba(49,130,246,.35);--m-ok:#3182f6;--m-bad:#f04452;--m-warn:#fe9800;--m-info:#3182f6;--m-rev:#3182f6;--m-on-ac:#ffffff}
-#mh-root{max-width:440px;margin:0 auto;color:var(--m-tx);font-family:var(--font);padding-bottom:96px}
+html[data-theme="light"] #page-muhan,html[data-theme="light"] #page-vr{--m-ac-s:rgba(49,130,246,.10);--m-ac-b:rgba(49,130,246,.35);--m-ok:#3182f6;--m-bad:#f04452;--m-warn:#fe9800;--m-info:#3182f6;--m-rev:#3182f6;--m-on-ac:#ffffff}
+#mh-root,#vr-root{max-width:440px;margin:0 auto;color:var(--m-tx);font-family:var(--font);padding-bottom:96px}
 .mh-card{background:var(--m-s1);border:1px solid var(--m-bd);border-radius:16px;padding:14px;margin-bottom:10px}
 .mh-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .mh-h3{margin:0;font-size:13px;font-weight:600;color:var(--m-tx)}
@@ -1071,6 +1071,24 @@ html[data-theme="light"] #page-muhan{--m-ac-s:rgba(49,130,246,.10);--m-ac-b:rgba
 @media (prefers-reduced-motion:reduce){.mh-conf{display:none}}
 
 
+/* ═══ [VR] 밸류리밸런싱 VR 5.0 — 무한매수법 기록과 같은 .mh-* 부품 위에 VR 전용만 ═══ */
+.vr-gauge{position:relative;height:30px;margin:14px 4px 4px;border-radius:8px;background:linear-gradient(90deg,rgba(49,130,246,.10),rgba(var(--fg-rgb),.04) 50%,rgba(240,68,82,.10))}
+.vr-g-band{position:absolute;top:8px;bottom:8px;border-radius:5px;background:rgba(var(--fg-rgb),.12)}
+.vr-g-v{position:absolute;top:4px;bottom:4px;width:2px;margin-left:-1px;background:var(--m-ac)}
+.vr-g-e{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:var(--m-tx);border:2px solid var(--m-s1);box-shadow:0 0 0 1px var(--m-bd)}
+.vr-g-e.buy{background:var(--m-ok)}.vr-g-e.sell{background:var(--m-bad)}
+.vr-g-lbl{display:flex;justify-content:space-between;gap:6px;color:var(--m-t3);margin:2px 2px 0}
+.vr-tbl{border:1px solid var(--m-bd);border-radius:10px;overflow:hidden;margin-top:10px;font-size:12px}
+.vr-tr{display:grid;grid-template-columns:.8fr 1fr 1fr;gap:6px;padding:6px 10px;border-top:1px solid var(--m-bd);align-items:center}
+.vr-tr:first-child{border-top:0}.vr-tr span{text-align:right;min-width:0;overflow-wrap:anywhere}.vr-tr span:first-child{text-align:left}
+.vr-tbl.hist .vr-tr{grid-template-columns:.7fr 1.1fr 1fr 1.2fr;line-height:1.45}
+.vr-th{background:var(--m-s2);color:var(--m-t2);font-weight:600;font-size:11px}.vr-th span{font-family:var(--font)!important}
+.vr-tbl.buy .vr-tr:not(.vr-th) span:nth-child(2){color:var(--m-ok);font-weight:700}.vr-tbl.sell .vr-tr:not(.vr-th) span:nth-child(2){color:var(--m-bad);font-weight:700}
+.vr-calc{margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--m-ac-s);line-height:1.8;overflow-wrap:anywhere}
+.vr-close{border-color:var(--m-ac-b)}
+.vr-chart{position:relative;height:230px;margin-top:12px}
+.vr-chart > canvas{max-width:100%}
+.vrbt-h{margin:18px 0 6px;font-size:14px;color:var(--text)}
   /* ═══ [THEME] 라이트 테마 — html[data-theme="light"] 일 때 색 변수만 교체 ═══ */
   html[data-theme="light"] {
     /* 토스증권 라이트 팔레트 */
@@ -1083,14 +1101,14 @@ html[data-theme="light"] #page-muhan{--m-ac-s:rgba(49,130,246,.10);--m-ac-b:rgba
   }
   html[data-theme="light"] body { background: var(--bg); color: var(--text); }
 
-#page-muhan .mh-info-body{font-size:13px;line-height:1.7;color:var(--m-tx)}#page-muhan .mh-info-body p{margin:10px 0}
-#page-muhan .mh-ibox{background:var(--m-ac-s);border-radius:12px;padding:12px 14px;font-size:12.5px}
-#page-muhan .mh-hr{border:0;border-top:1px solid var(--m-bd);margin:12px 0}
-#page-muhan .mh-tag.lim{background:rgba(49,130,246,.15);color:var(--m-rev)}#page-muhan .mh-tag.moc{background:rgba(240,68,82,.15);color:var(--m-bad)}
-#page-muhan .mh-odet{margin:-2px 0 8px;border-radius:10px;padding:10px 12px;font-size:11.5px;line-height:1.6;background:var(--m-ac-s);color:var(--m-t2)}
-#page-muhan .mh-done{width:100%;margin-top:10px;padding:12px;border-radius:12px;border:1px solid var(--m-ac-b);background:var(--m-ac-s);color:var(--m-t2);font:inherit;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
-#page-muhan .mh-done .ic{width:16px;height:16px;border-radius:50%;border:1.5px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:10px}
-#page-muhan .mh-done.on{background:rgba(49,130,246,.14);border-color:rgba(49,130,246,.45);color:var(--m-ok)}#page-muhan .mh-done.on .ic{background:var(--m-ok);border-color:var(--m-ok);color:var(--m-s1)}
+:is(#page-muhan,#page-vr) .mh-info-body{font-size:13px;line-height:1.7;color:var(--m-tx)}:is(#page-muhan,#page-vr) .mh-info-body p{margin:10px 0}
+:is(#page-muhan,#page-vr) .mh-ibox{background:var(--m-ac-s);border-radius:12px;padding:12px 14px;font-size:12.5px}
+:is(#page-muhan,#page-vr) .mh-hr{border:0;border-top:1px solid var(--m-bd);margin:12px 0}
+:is(#page-muhan,#page-vr) .mh-tag.lim{background:rgba(49,130,246,.15);color:var(--m-rev)}:is(#page-muhan,#page-vr) .mh-tag.moc{background:rgba(240,68,82,.15);color:var(--m-bad)}
+:is(#page-muhan,#page-vr) .mh-odet{margin:-2px 0 8px;border-radius:10px;padding:10px 12px;font-size:11.5px;line-height:1.6;background:var(--m-ac-s);color:var(--m-t2)}
+:is(#page-muhan,#page-vr) .mh-done{width:100%;margin-top:10px;padding:12px;border-radius:12px;border:1px solid var(--m-ac-b);background:var(--m-ac-s);color:var(--m-t2);font:inherit;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+:is(#page-muhan,#page-vr) .mh-done .ic{width:16px;height:16px;border-radius:50%;border:1.5px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:10px}
+:is(#page-muhan,#page-vr) .mh-done.on{background:rgba(49,130,246,.14);border-color:rgba(49,130,246,.45);color:var(--m-ok)}:is(#page-muhan,#page-vr) .mh-done.on .ic{background:var(--m-ok);border-color:var(--m-ok);color:var(--m-s1)}
   /* ETF 명칭 옆 티커(종목코드) */
   .etf-ticker { font-family:var(--mono); font-size:11px; font-weight:500; color:var(--text3); margin-left:4px; letter-spacing:.02em; }
   .etf-ticker-h1 { font-size:0.42em; vertical-align:middle; padding:3px 8px; border:1px solid var(--card-border); border-radius:6px; background:var(--card); }
