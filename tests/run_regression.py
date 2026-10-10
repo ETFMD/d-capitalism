@@ -291,8 +291,8 @@ def main():
         t = msg_text or ''
         if t.startswith('Failed to load resource'):   # 주소가 없는 브라우저 메시지 → 아래 응답 기록(주소 포함)으로 대신 판단
             return True
-        if t.startswith('[Report Only]'):             # 광고 iframe 의 CSP '보고 전용' 알림 — 아무것도 막지 않음 (가끔 나와 검사를 흔듦)
-            return True
+        if t.startswith('[Report Only]') or 'report-only Content Security Policy' in t:
+            return True   # 광고 iframe(google.com)의 CSP '보고 전용' 위반 알림 — 아무것도 막지 않음 · Chromium 판마다 문구가 달라 둘 다 (2026-10 부터 간헐 발생)
         if not local:
             return False
         return ('workers.dev' in t or 'CORS' in t or 'ERR_FAILED' in t or 'ERR_NAME_NOT_RESOLVED' in t
