@@ -21,6 +21,10 @@
  *   · GET  /kr/status     PC별 마지막 접속 시각·국가 · 주소 수
  *   · 수집기 열쇠는 원문 대신 SHA-256 값만 이 코드에 둠 · 3일 동안 아무도 찾지 않은 주소는 정리
  *
+ * GET /etf?m=k|u&s=코드 → ETF 일봉 원문(수정주가)을 대신 받아 30분 보관 — ETF 차트 비교 (브라우저는 CORS 로 직접 못 부름)
+ *   · m=k 국내: 네이버 증권 siseJson (상장일부터 · 분배금 반영 수정주가) · m=u 미국: Yahoo Finance v8 chart (adjclose)
+ *   · 이 사이트(ALLOWED_ORIGINS)에서 온 요청만 · 코드 형식 검사(다른 주소로는 못 보냄) · 원문을 그대로 D1 cache 에 보관(가공 없이 → CPU 적게)
+ *   · 받아 오지 못하면 직전 보관본 · 매일 03시에 7일 넘게 안 쓴 보관본 정리
  * GET /apt?sgg=11650&seq=시군구|법정동|지번|단지명 → 아파트 한 단지의 최근 1년 매매 실거래 [[계약일, 금액(만원), 전용㎡, 층], ...]
  *   · 자료는 GitHub Actions 가 2시간마다 POST /apt/put 으로 올린 시군구·월별 실거래 (D1)
  *
@@ -242,6 +246,46 @@ async function kr(req, env, url, json) {
   return json({ error: 'not found' }, 404);
 }
 
+/* ── ETF 차트 비교: 일봉 원문 중계 + 30분 보관 ── */
+const ETF_TTL = 1800;   // 초
+function etfSource(m, s) {
+  const now = Math.floor(Date.now() / 1000);
+  if (m === 'k' && /^[0-9A-Z]{6}$/.test(s)) {
+    const end = new Date(Date.now() + 9 * 3600e3 + 86400e3).toISOString().slice(0, 10).replace(/-/g, '');   // 한국 날짜 + 1일 (오늘 장중 값 포함)
+    return { url: `https://api.finance.naver.com/siseJson.naver?symbol=${s}&requestType=1&startTime=19900101&endTime=${end}&timeframe=day`,
+             ok: (v) => /\["\d{8}",/.test(v), ref: 'https://finance.naver.com/' };
+  }
+  if (m === 'u' && /^[A-Z][A-Z0-9-]{0,9}$/.test(s)) {
+    return { url: `https://query1.finance.yahoo.com/v8/finance/chart/${s}?period1=315532800&period2=${now + 86400}&interval=1d&includePrePost=false`,
+             ok: (v) => v.indexOf('"timestamp"') >= 0 && v.indexOf('"adjclose"') >= 0, ref: 'https://finance.yahoo.com/' };
+  }
+  return null;
+}
+async function etfChart(env, url, cors, json) {
+  if (!cors.ok) return json({ error: 'origin' }, 403);
+  const m = url.searchParams.get('m') || '', s = (url.searchParams.get('s') || '').toUpperCase();
+  const src = etfSource(m, s);
+  if (!src) return json({ error: 'bad symbol' }, 400);
+  const key = 'etf:' + m + ':' + s, now = Math.floor(Date.now() / 1000);
+  const row = await env.DB.prepare('SELECT t, v FROM cache WHERE k = ?').bind(key).first();
+  const send = (v, how) => new Response(v, { headers: { ...cors.headers, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'private, max-age=600', 'X-Etf-Cache': how,
+    'Access-Control-Expose-Headers': 'X-Etf-Cache' } });
+  if (row && now - row.t < ETF_TTL) return send(row.v, 'hit');
+  try {
+    const r = await fetch(src.url, { headers: { 'User-Agent': CNN_UA, Accept: 'application/json, text/plain, */*', 'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8', Referer: src.ref } });
+    const v = await r.text();
+    if (!r.ok || !src.ok(v)) {
+      if (r.status === 404 || /No data found|delisted/i.test(v)) { if (!row) return json({ error: 'not found' }, 404); }
+      throw new Error('upstream ' + r.status);
+    }
+    if (v.length < 1900000) await env.DB.prepare('INSERT INTO cache (k, t, v) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET t = excluded.t, v = excluded.v').bind(key, now, v).run();
+    return send(v, 'miss');
+  } catch (e) {
+    if (row) return send(row.v, 'stale');                                  // 원본 일시 오류 → 직전 보관본
+    return json({ error: 'upstream', detail: String(e && e.message || e).slice(0, 120) }, 502);
+  }
+}
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
@@ -274,6 +318,7 @@ export default {
         const one = (x) => { const r = x.results && x.results[0]; return r ? { ...JSON.parse(r.v), at: new Date(r.t * 1000).toISOString() } : null; };
         return json({ token: !!env.GH_TOKEN, lastDispatch: one(row), aptDispatch: one(ap) });
       }
+      if (url.pathname === '/etf' && req.method === 'GET') return await etfChart(env, url, cors, json);
       /* GET /relay?u=… → 해외 서버(GitHub Actions)를 막는 운용사 사이트의 공개 분배금 자료만 대신 받아 옴 (허용 주소만 · GET 만) */
       if (url.pathname === '/relay' && req.method === 'GET') {
         let target;
@@ -305,6 +350,7 @@ export default {
     if (h === 3 && m < 15) {                                             // 매일 03:00~03:14 (한국 시간)
       const cut = kstDay(Date.now() - 2 * 86400e3);
       ctx.waitUntil(env.DB.prepare('DELETE FROM visits WHERE day < ?').bind(cut).run());
+      ctx.waitUntil(env.DB.prepare("DELETE FROM cache WHERE k LIKE 'etf:%' AND t < ?").bind(Math.floor(Date.now() / 1000) - 7 * 86400).run());   // ETF 차트 보관본: 7일 넘게 안 쓴 것
     }
     if (!env.GH_TOKEN) return;
     if (h % 2 === 0 && m < 15) ctx.waitUntil(dispatch(env, APT_WORKFLOW));     // 아파트 실거래: 2시간마다 (공공 API 하루 한도 안에서 가장 자주)
