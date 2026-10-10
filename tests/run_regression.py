@@ -16,7 +16,7 @@
   python tests/run_regression.py --quick      # 화면 폭 4개만
 실패가 하나라도 있으면 종료 코드 1
 """
-import argparse, functools, http.server, json, os, socketserver, sys, threading, time
+import re, argparse, functools, http.server, json, os, socketserver, sys, threading, time
 
 from playwright.sync_api import sync_playwright
 
@@ -143,6 +143,14 @@ def main():
     def fail(where, what):
         fails.append('%s — %s' % (where or '/', what))
         print('  ✗ %s — %s' % (where or '/', what), flush=True)
+
+    # 계정 자동 저장 키: 화면이 쓰는 /udata/<키> 가 Worker 허용 목록(UDATA_KEYS)에 모두 있어야 함 (없으면 로그인 사용자에게 '저장 실패')
+    _src = open(os.path.join(ROOT, 'src', 'index.html'), encoding='utf-8').read()
+    _ks = set(re.findall(r"/udata/([a-z0-9-]+)'", _src))
+    _al = re.search(r"UDATA_KEYS = \[([^\]]*)\]", open(os.path.join(ROOT, 'worker', 'src', 'auth.js'), encoding='utf-8').read())
+    _al = set(re.findall(r"'([a-z0-9-]+)'", _al.group(1))) if _al else set()
+    for k in sorted(_ks - _al):
+        fail('worker', '계정 저장 키 /udata/%s 가 worker/src/auth.js UDATA_KEYS 에 없음' % k)
 
     # 외부 광고·방문 분석 서버(일시 오류가 잦고 사이트 기능과 무관) — 실패해도 사이트 오류로 보지 않음
     THIRD = ('clarity.ms', 'bing.com', 'naver.com', 'naver.net', 'pstatic.net', 'googlesyndication', 'doubleclick',

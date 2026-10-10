@@ -14,7 +14,7 @@
  */
 const enc = new TextEncoder();
 const TOKEN_DAYS = 30, TICKET_MIN = 10, MAX_SAVES = 200, MAX_DATA = 16000, TERMS_VER = '2026-10-09';
-const UDATA_KEYS = ['muhan'], MAX_UDATA = 1800000;   /* 계정 자료 키 (허용 목록) · 한 덩어리 최대 크기(UTF-8 바이트, D1 한 칸 한도 2MB 안쪽) */
+const UDATA_KEYS = ['muhan', 'vr'], MAX_UDATA = 1800000;   /* 계정 자료 키 (허용 목록: 무한매수법·밸류리밸런싱 기록 — 화면에서 새 키를 쓰면 여기에도 추가, 회귀 테스트가 확인) · 한 덩어리 최대 크기(UTF-8 바이트, D1 한 칸 한도 2MB 안쪽) */
 
 function b64u(buf) {
   const s = typeof buf === 'string' ? btoa(unescape(encodeURIComponent(buf))) : btoa(String.fromCharCode(...new Uint8Array(buf)));

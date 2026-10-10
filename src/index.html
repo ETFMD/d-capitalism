@@ -22504,7 +22504,7 @@ if (typeof module !== 'undefined') module.exports = MHE;
       '<div class="mh-grid2">' + [['avg', '평단가 (' + sym + ')', '0.0001', '현재 평균매수가'], ['qty', '보유수량 (주)', '1', '현재 보유 주수'], ['cash', '잔금 (' + sym + ')', '0.01', '남은 투자금'], ['t', 'T값', '0.5', '현재 T값']]
         .map(function (f) { return '<div><label class="mh-lbl">' + f[1] + '</label><input class="mh-in" type="number" step="' + f[2] + '" placeholder="' + f[3] + '" value="' + esc(u[f[0]]) + '" data-in="su:' + f[0] + '"></div>'; }).join('') + '</div>' :
       '<div><label class="mh-lbl">원금 (' + sym + ')</label><input class="mh-in" type="number" placeholder="' + (u.currency === 'KRW' ? '30000000' : '20000') + '" value="' + esc(u.cap) + '" data-in="su:cap"></div>';
-    return '<div style="text-align:center;padding:18px 0 14px"><h1 style="margin:0;font-size:22px;font-weight:800">무한매수법</h1><p class="mh-ac" style="margin:2px 0 4px;font-weight:700">V4.0</p>' +
+    return '<div style="text-align:center;padding:18px 0 14px"><h1 style="margin:0;font-size:22px;font-weight:800">무한매수법</h1><p class="mh-ac" style="margin:2px 0 4px;font-weight:700">V4.0 리버스모드</p>' +
       '<p class="mh-tiny mh-faint" style="margin:0 0 10px">창시자 <b style="color:var(--m-tx)">라오어</b> · <a href="https://cafe.naver.com/infinitebuying" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">공식 카페 ↗</a></p>' +
       '<button class="mh-btn" style="font-size:12px;margin-right:6px" data-act="guide">📘 처음이라면 가이드북부터</button>' +
       (window.dcAuth && !SY.uid && SY.can ? '<button class="mh-btn mh-btn-p" style="font-size:12px;margin-right:6px" data-act="sync-login">로그인하고 내 기록 불러오기</button>' : '') +
@@ -22574,7 +22574,7 @@ if (typeof module !== 'undefined') module.exports = MHE;
   function viewTop(D) {
     var s = D.s, col = colorHex(D.ses.color);
     return '<div class="mh-top"' + (col ? ' style="border-bottom:3px solid ' + rgba(col, .55) + '"' : '') + '><div class="mh-row" style="position:relative">' +
-      '<div style="min-width:0"><div style="display:flex;align-items:center;gap:6px"><h1 style="margin:0;font-size:17px;font-weight:800">무한매수법 4.0</h1>' +
+      '<div style="min-width:0"><div style="display:flex;align-items:center;gap:6px"><h1 style="margin:0;font-size:17px;font-weight:800">무한매수법 V4.0 리버스모드</h1>' +
       ((D.isCustom || E.isExtSplits(s.splits)) ? '<span class="mh-chip mh-chip-warn">⚠ 비추천</span>' : '') + '</div>' +
       '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap"><span class="mh-small mh-muted">' + esc(s.ticker) + ' · ' + s.splits + '분할 · ' + (D.cur === 'KRW' ? '₩' : '$') + s.totalCapital.toLocaleString() + '</span>' +
       (MH.todo ? '<span class="mh-chip ' + (D.orderDone ? 'mh-chip-ac' : 'mh-chip-warn') + '">' + (D.orderDone ? '주문 ✓' : '주문 전') + '</span>' : '') +
