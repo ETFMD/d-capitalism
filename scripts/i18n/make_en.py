@@ -34,7 +34,7 @@ TEXT = {
     '대출 이자 계산기': 'Loan interest calculator', '복리 계산기': 'Compound interest calculator', 'CAGR 계산기': 'CAGR calculator',
     '환율 계산기': 'Currency converter', '건강보험료 계산기': 'Korean health insurance', '연봉 실수령액 계산기': 'Korean net salary',
     '퇴직금 계산기': 'Korean severance pay', '주담대 LTV·DSR 한도 계산기': 'Korean mortgage LTV·DSR limit', '부동산 중개수수료 계산기': 'Korean brokerage fee',
-    '공포 &amp; 탐욕 지수': 'Fear &amp; Greed Index', '돈, 자산, 노동의 가치 속도': 'Money, assets & wages in Korea', '무한매수법 V4.0 리버스모드': 'Infinite buying V4.0 reverse mode (TQQQ·SOXL)', '밸류리밸런싱 VR 5.0': 'Value rebalancing VR 5.0 (Korean)', '나의 직업 수명': 'Job lifespan vs AI (Korean)', 'ETF 차트 비교': 'ETF chart comparison — Korea & U.S. (Korean)',
+    '공포 &amp; 탐욕 지수': 'Fear &amp; Greed Index', '돈, 자산, 노동의 가치 속도': 'Money, assets & wages in Korea', '무한매수법 V4.0 리버스모드': 'Infinite buying V4.0 reverse mode (TQQQ·SOXL)', '밸류리밸런싱 VR 5.0': 'Value rebalancing VR 5.0 (Korean)', '나의 직업 수명': 'Job lifespan vs AI (Korean)', 'ETF 차트 비교': 'ETF Chart Comparison',
     'ETF CAGR 비교': 'ETF CAGR comparison', '코스피 성장률': 'KOSPI growth', '코스피 200 성장률': 'KOSPI 200 growth', '코스닥 성장률': 'KOSDAQ growth',
     '세금 계산기': 'Tax calculators', '종합소득세 계산기': 'Korean comprehensive income tax', '해외주식 양도소득세 계산기': 'Korean tax on foreign stock gains', '배당소득세·금융소득종합과세': 'Korean dividend & financial income tax',
     '연금저축·IRP 세액공제': 'Korean pension savings tax credit', '증여세·상속세 계산기': 'Korean gift & inheritance tax', '부동산 취득세 계산기': 'Korean property acquisition tax',
@@ -332,6 +332,46 @@ GUIDES['muhan'] = guide('muhan', 'How the Infinite Buying order sheet is calcula
      ('Did Infinite Buying beat buy and hold in the past?', '<p>Not on return. In the real-data backtest in chapter 3-6 (TQQQ and SOXL since 2010, 27 settings, recalculated daily) the default settings earned less per year than simply holding, but with much shallower maximum drawdowns. See the live table above for current numbers.</p>'),
      ('Where are my records stored?', '<p>If you <b>sign in</b>, all records are saved to your account automatically and follow you to any phone or PC. Without signing in they stay only in this browser (localStorage) and are uploaded to your account when you sign in later.</p>'),
      ('Can Infinite Buying lose money?', '<p>Yes. TQQQ and SOXL track 3× the daily return, so a long decline can shrink your capital sharply, and if the market does not recover after the cash is used up, losses are realised. This page helps you calculate and record orders under the method; investment decisions are your own responsibility.</p>')])
+
+# ── ETF 차트 비교 (/en/etf-compare/) — 화면 글자 (설명글은 GUIDES['etf-compare'], 움직이는 글자는 src 의 L()) ──
+TEXT.update({
+    '차트 비교': 'Chart Comparison', '국내 상장': 'Korea-listed', '여 개 · 미국 상장': ' · U.S.-listed',
+    '여 개 ETF 가운데 최대 10개를 한 차트에서 — 분배금 세금·매매 수수료를 뺀': ' ETFs — compare up to 10 on one chart by',
+    '세후 실제 수익률': 'return after tax and fees', ', 세전 총수익, 가격만으로 비교합니다.': ', total return before tax, or price only.',
+    '검색할 시장': 'Market to search', '국내': 'Korea', '미국': 'U.S.',
+    'ETF 이름·코드·티커 검색 — 예: KODEX 200, SPY, 슈드': 'Search ETF name, code or ticker — e.g. KODEX 200, SPY, SCHD',
+    '비교할 ETF 검색': 'Search ETFs to compare', '고른 ETF 수': 'ETFs selected', '자주 비교하는 조합': 'Popular comparisons',
+    '누적 수익률 비교': 'Cumulative return', '수익률 보기': 'Return view', '세후 실제': 'After tax & fees', '세전 총수익': 'Total return', '가격만': 'Price only',
+    '미국 ETF 원화 환산': 'U.S. ETFs in KRW', '매매 수수료(거래할 때마다)': 'Trading fee (per trade)', '국내 ETF': 'Korean ETFs', '미국 ETF': 'U.S. ETFs',
+    '국내 ETF 매매 수수료(%)': 'Korean ETF trading fee (%)', '미국 ETF 매매 수수료(%)': 'U.S. ETF trading fee (%)',
+    '분배금 세금: 국내 ETF 주당 과세표준 × 15.4% · 미국 ETF 배당 15% 원천징수': 'Distribution tax: Korean ETFs 15.4% of the taxable base per share · U.S. ETFs 15% dividend withholding',
+    '선택한 ETF의 누적 수익률 비교 차트': 'Cumulative return chart of the selected ETFs', 'ETF를 고르면 차트가 그려집니다.': 'Pick ETFs to draw the chart.',
+    '비교 기간': 'Comparison period', '기간 성과 비교': 'Performance over the period',
+    '표를 옆으로 밀면 CAGR · 연환산 · 최대 낙폭 · 변동성 · 기준일이 보입니다 →': 'Swipe the table sideways for CAGR, annualized return, max drawdown, volatility and dates →',
+    'ETF를 고르면 기간 수익률·CAGR·연환산·최대 낙폭·변동성이 나옵니다.': 'Pick ETFs to see return, CAGR, annualized return, max drawdown and volatility.',
+    '기간 수익률': 'Return', '연환산': 'Annualized', '최대 낙폭': 'Max drawdown', '변동성(연)': 'Volatility (ann.)', '기준일 · 상장일': 'Period · listing',
+    '표 머리(기간 수익률·CAGR·연환산·최대 낙폭·변동성)를 누르면 내림차순, 한 번 더 누르면 오름차순 · CAGR = 1년 이상일 때 복리 연평균, 연환산 = 기간 수익률 × 365.25 ÷ 일수(단리) · 국내: 네이버 증권 종가·FunETF·운용사 공개 분배 이력(주당 과세표준) · 미국: Yahoo Finance 종가·배당 · 원/달러: 한국은행 ECOS 매매기준율 · 일반 계좌 기준(ISA·연금 계좌·금융소득종합과세는 반영하지 않음) · 투자 판단의 책임은 이용자에게 있습니다.':
+        'Click a column header (return, CAGR, annualized, max drawdown, volatility) to sort descending, click again for ascending · CAGR = compound annual growth for periods of a year or more; annualized = return × 365.25 ÷ days (simple) · Korea: Naver Finance closes, FunETF and issuer distribution records (taxable base per share) · U.S.: Yahoo Finance closes and dividends · USD/KRW: Bank of Korea ECOS · ordinary taxable account (ISA, pension accounts and comprehensive financial-income tax not modelled) · investment decisions are your own responsibility.',
+})
+GUIDES['etf-compare'] = guide('etfcmp', 'Compare Korean and U.S. ETFs on one chart — after tax and fees',
+    'Two ETFs tracking the same S&amp;P 500 leave you with different money once currency, fees and distribution tax are counted. Pick up to 10 ETFs from every Korea-listed and every U.S.-listed ETF and see their cumulative returns over the same period on one chart. Switch between <b>After tax &amp; fees</b> (distribution tax and trading fees deducted), <b>Total return</b> (distributions reinvested) and <b>Price only</b> (distributions excluded); the period buttons (1M · 3M · 6M · YTD · 1Y · MAX) or a custom range recalculate the chart and table instantly.',
+    '<ul class="g-list"><li><b>Price only</b> = close ÷ base close − 1, distributions excluded.</li>'
+    '<li><b>Total return</b>: each distribution is reinvested on the ex-date at the previous close minus the distribution (the same method as Yahoo’s adjusted close).</li>'
+    '<li><b>After tax &amp; fees</b>: only the after-tax distribution is reinvested. Korean ETFs are taxed at <b>15.4% of the taxable base per share</b> published by the issuer — not of the whole distribution; U.S. ETFs at <b>15%</b> withholding under the Korea–U.S. tax treaty. A trading fee is charged on the first purchase, on each reinvestment and on the final sale (Korean ETFs pay no securities transaction tax).</li>'
+    '<li><b>Korean covered-call and equity ETFs</b>: gains on Korean listed stocks and on exchange-traded Korean derivatives such as KOSPI 200 options are not taxable, so a 300-won distribution can carry a taxable base of only a few won. The actual base is used for every distribution.</li>'
+    '<li><b>MAX</b> starts all ETFs on the first trading day of the most recently listed ETF; 1M–1Y count back from the latest trading day; YTD starts at last year’s final close.</li>'
+    '<li><b>CAGR</b> = (1 + return)<sup>365.25 ÷ days</sup> − 1 for a year or more · <b>Annualized</b> = return × 365.25 ÷ days · <b>Max drawdown</b> = largest peak-to-trough fall · <b>Volatility</b> = daily return standard deviation × √252.</li></ul>',
+    tbl(['Distribution of 300 won', 'Taxable base', 'Tax at 15.4%', 'Reinvested'], [['Korean index covered call', '2 won', '0.3 won', '299.7 won'], ['Korea-listed U.S. covered call', '300 won', '46.2 won', '253.8 won'], ['U.S.-listed ETF (15% withholding)', '—', '45 won', '255 won']],
+        'Taxable bases differ every distribution; this page uses the value the issuer published for each one. When an issuer has not published an older distribution, the ETF’s average published ratio is used, or the full amount if none was published — the table shows how many were published.'),
+    [('How many and which ETFs can I compare?', '<p>Up to 10 at once, from every Korea-listed ETF (Naver Finance list, updated daily) and every U.S.-listed ETF (Nasdaq Trader symbol directory, updated daily). Search by name, code or ticker; a code or ticker not yet in the list can be added as typed.</p>'),
+     ('How is tax calculated in the after-tax view?', '<p>Korean ETFs: 15.4% of the taxable base per share for each distribution, collected daily from FunETF and issuers (KODEX, TIGER, ACE, SOL, RISE, PLUS, KIWOOM and others). U.S. ETFs: 15% withheld in the U.S.; as it exceeds the Korean 14% rate, no further Korean tax is due in the usual case.</p>'),
+     ('Why do Korean covered-call ETFs pay so little tax?', '<p>Their distributions come mostly from KOSPI 200 option premiums, and gains on exchange-traded Korean derivatives are not taxable for domestic equity funds. Korea-listed ETFs that write U.S. options, by contrast, have almost all of each distribution taxable.</p>'),
+     ('What trading fees are used?', '<p>0.015% for Korean ETFs and 0.25% for U.S. ETFs by default (typical standard broker rates); change them above the chart to match your broker.</p>'),
+     ('What is not deducted?', '<p>Tax on sale gains (22% U.S. capital-gains tax above the 2.5 million won allowance; dividend-income tax on gains of Korea-listed overseas ETFs), comprehensive financial-income tax, ISA or pension-account benefits and currency-exchange costs. Expense ratios are already in the daily prices.</p>'),
+     ('Why does MAX start at the most recently listed ETF?', '<p>So every ETF starts from the same day. Each ETF’s own listing date is shown in the table.</p>'),
+     ('How do CAGR and annualized return differ?', '<p>CAGR compounds and is shown only for a year or more, where it is meaningful. Annualized return scales the period return linearly to a year, so it is shown for short periods too.</p>'),
+     ('Why does the return differ slightly from Naver Finance adjusted prices?', '<p>Total return here reinvests each distribution on the ex-date at the previous close minus the distribution — the standard method behind Yahoo’s adjusted close — for Korean and U.S. ETFs alike. Naver’s adjusted prices set the ex-date adjustment a little differently (tick-size rounding and the like), so small gaps build up over many distributions: usually under 1% of the final value (KODEX 200 since its 2002 listing: about 0.6%; since 2020: under 0.1%).</p>'),
+     ('Is today’s price included?', '<p>During market hours the latest price is the last point and becomes the close after the market ends. The same ETF reuses its data for 30 minutes, so the newest price can arrive a little late. Korean distribution records update every evening; a very recent distribution not yet in the records is detected from the prices, estimated and flagged under the chart.</p>')])
 
 TEXT.update({w: w for w in ['＋ 오늘 기록하기', '오늘 주문 다 넣었어요', '중간 진입', '라오어', '큰수']})   # 영어판에 일부러 남기는 한국어 원어 (translate="no")
 GUIDEBOOKS = {'muhan': open(os.path.join(os.path.dirname(OUT), 'muhan_guidebook_en.html'), encoding='utf-8').read()}

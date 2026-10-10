@@ -16,6 +16,7 @@ ETF 1좌당 과세표준액 — 운용사별 공개 자료 (scripts/update_etfdi
   대신(DAISHIN) ..... asset.daishin.com 분배금 팝업 MD_divide.php (주당과세표준액)      상세 페이지의 [종목코드:A……] · 한국 PC 수집기 경유
     ※ HANARO·1Q·FOCUS 는 운용사 사이트(한국 IP 로도 확인)·FunETF 어디에도 과세표준이 없어, FunETF 에 올라오는 대로 자동 반영
 반환: {종목코드: [[기준일 'YYYY-MM-DD', 분배금, 주당 과세표준액], ...]}  · 실패한 종목은 빠짐 (호출한 쪽이 직전 값 유지)
+n: 최근 몇 건까지 (기본 12 · None 이면 운용사가 주는 전체 — scripts/update_etf_dist.py 가 ETF 차트 비교용 전체 이력에 씀)
 """
 import json, re, ssl, sys, time, urllib.parse, urllib.request, concurrent.futures as cf
 
@@ -107,7 +108,7 @@ def tiger(tickers, months, relay):
 
 
 # ───── 한국투자 ACE ─────
-def ace(tickers, cache):
+def ace(tickers, cache, n=12):
     B, H = 'https://papi.aceetf.co.kr', {'Origin': 'https://www.aceetf.co.kr', 'Referer': 'https://www.aceetf.co.kr/'}
     fc = cache.setdefault('aceFund', {})
     if any(t not in fc for t in tickers):
@@ -118,7 +119,7 @@ def ace(tickers, cache):
     def one(t):
         if t not in fc: return t, None
         try:
-            d = _get(B + '/api/funds/%s/dividend?page=1&size=12' % fc[t], headers=H, as_json=True)
+            d = _get(B + '/api/funds/%s/dividend?page=1&size=%d' % (fc[t], n or 600), headers=H, as_json=True)
             return t, [[_ymd(x.get('std_DT')), _num(x.get('dividend_PRI')), _num(x.get('tax_PRI'))] for x in d.get('dividendList') or []
                        if _ymd(x.get('std_DT')) and x.get('tax_PRI') is not None]
         except Exception: return t, None
@@ -126,7 +127,7 @@ def ace(tickers, cache):
 
 
 # ───── 신한 SOL ─────
-def sol(tickers, cache):
+def sol(tickers, cache, n=12):
     fc = cache.setdefault('solFund', {})
     if any(t not in fc for t in tickers):
         for pg in range(1, 15):
@@ -139,7 +140,7 @@ def sol(tickers, cache):
         if t not in fc: return t, None
         try:
             d = _get('https://www.soletf.com/api/etf/pds/dividend/' + fc[t], as_json=True)
-            return t, [[_ymd(x.get('WORK_DT')), _num(x.get('DIVIDEND_PRI')), _num(x.get('WEEK_PRI'))] for x in (d.get('items') or [])[:12]
+            return t, [[_ymd(x.get('WORK_DT')), _num(x.get('DIVIDEND_PRI')), _num(x.get('WEEK_PRI'))] for x in (d.get('items') or [])[:n]
                        if _ymd(x.get('WORK_DT')) and x.get('WEEK_PRI') is not None]
         except Exception: return t, None
     return _pool(one, tickers)
@@ -187,7 +188,7 @@ def plus(tickers, sig, cache, relay=None):
 
 
 # ───── 키움 KIWOOM ─────
-def kiwoom(tickers):
+def kiwoom(tickers, n=12):
     def one(t):
         try:
             h = _get('https://www.kiwoometf.com/service/etf/KO02010200M?gcode=' + t, ctx=_KIWOOM_CTX, timeout=30)
@@ -198,13 +199,13 @@ def kiwoom(tickers):
             for r in re.findall(r'<tr>(.*?)</tr>', body, re.S):
                 tds = [re.sub(r'<[^>]+>', '', x).strip() for x in re.findall(r'<td[^>]*>(.*?)</td>', r, re.S)]
                 if len(tds) >= 5 and _ymd(tds[0]): res.append([_ymd(tds[0]), _num(tds[2]), _num(tds[4])])
-            return t, res[:12]
+            return t, res[:n]
         except Exception: return t, None
     return _pool(one, tickers, 4)
 
 
 # ───── 우리 WON ─────
-def _table(h, start):
+def _table(h, start, n=12):
     """start 뒤 첫 표에서 [기준일, 분배금, 과세표준] (열: 기준일 · 지급일 · 분배금 · 과세표준 …)"""
     i = h.find(start)
     if i < 0: return None
@@ -213,10 +214,10 @@ def _table(h, start):
     for r in re.findall(r'<tr[^>]*>(.*?)</tr>', body, re.S):
         tds = [re.sub(r'<[^>]+>', '', x).strip() for x in re.findall(r'<td[^>]*>(.*?)</td>', r, re.S)]
         if len(tds) >= 4 and _ymd(tds[0]) and _num(tds[3]) is not None: res.append([_ymd(tds[0]), _num(tds[2]), _num(tds[3])])
-    return res[:12]
+    return res[:n]
 
 
-def won(tickers, cache):
+def won(tickers, cache, n=12):
     B = 'https://www.wooriam.kr/investment/'
     ids = cache.setdefault('wonId', {})                  # 종목코드 → 상세 페이지 id
     pages = {}
@@ -231,13 +232,13 @@ def won(tickers, cache):
             if m: ids[m.group(1)] = i; pages[m.group(1)] = h
     def one(t):
         if t not in ids: return t, None
-        try: return t, _table(pages.get(t) or _get(B + 'etf-view/' + ids[t]), 'id="popPayStatus"')
+        try: return t, _table(pages.get(t) or _get(B + 'etf-view/' + ids[t]), 'id="popPayStatus"', n)
         except Exception: return t, None
     return _pool(one, tickers, 4)
 
 
 # ───── 타임폴리오 TIME ─────
-def time_(tickers, cache):
+def time_(tickers, cache, n=12):
     B = 'https://timeetf.co.kr/'
     idx = cache.setdefault('timeIdx', {})                 # 종목코드 → 'idx&cate'
     pages = {}
@@ -255,7 +256,7 @@ def time_(tickers, cache):
             if m and m.group(1) not in idx and 'moreList3' in h: idx[m.group(1)] = 'idx=%s&cate=%s' % k; pages[m.group(1)] = h
     def one(t):
         if t not in idx: return t, None
-        try: return t, _table(pages.get(t) or _get(B + 'm11_view.php?' + idx[t]), 'moreList3')
+        try: return t, _table(pages.get(t) or _get(B + 'm11_view.php?' + idx[t]), 'moreList3', n)
         except Exception: return t, None
     return _pool(one, tickers, 4)
 
@@ -292,7 +293,7 @@ def _kr(url, relay, as_json=True):
         return json.loads(t) if as_json else t
 
 
-def rise(tickers, names, relay, cache):
+def rise(tickers, names, relay, cache, n=12):
     if not relay: return {}
     B = 'https://kbam.co.kr/api/products/etfs/'
     fc = cache.setdefault('riseFund', {})                 # 종목코드 → KB 상품코드
@@ -313,14 +314,14 @@ def rise(tickers, names, relay, cache):
         if t not in fc: return t, None
         try:
             d = _kr(B + fc[t] + '/dividend', relay)
-            return t, d and [[_ymd(x.get('base_date')), _num(x.get('amount')), _num(x.get('tax_standard_amount'))] for x in (d.get('history') or [])[:12]
+            return t, d and [[_ymd(x.get('base_date')), _num(x.get('amount')), _num(x.get('tax_standard_amount'))] for x in (d.get('history') or [])[:n]
                               if _ymd(x.get('base_date')) and x.get('tax_standard_amount') is not None]
         except Exception: return t, None
     return _pool(one, tickers, 4)
 
 
 # ───── 대신 DAISHIN (한국 PC 수집기 · Worker /kr) ─────
-def daishin(tickers, relay, cache):
+def daishin(tickers, relay, cache, n=12):
     if not relay: return {}
     B = 'https://asset.daishin.com/ko/'
     fc = cache.setdefault('daishinFund', {})              # 종목코드 → [FUND_CODE, DI_DATE]
@@ -342,7 +343,7 @@ def daishin(tickers, relay, cache):
             for r in re.findall(r'<tr[^>]*>(.*?)</tr>', h, re.S):
                 tds = [re.sub(r'<[^>]+>', '', x).strip() for x in re.findall(r'<td[^>]*>(.*?)</td>', r, re.S)]
                 if len(tds) >= 4 and _ymd(tds[0]) and _num(tds[3]) is not None: res[_ymd(tds[0])] = [_ymd(tds[0]), _num(tds[2]), _num(tds[3])]
-            return t, sorted(res.values(), reverse=True)[:12]
+            return t, sorted(res.values(), reverse=True)[:n]
         except Exception: return t, None
     return _pool(one, tickers, 2)
 

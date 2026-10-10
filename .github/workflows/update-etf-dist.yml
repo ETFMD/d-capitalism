@@ -1,0 +1,59 @@
+name: ETF 차트 비교 국내 분배 이력 갱신
+
+# ETF 차트 비교(/etf-compare/)의 '세후 실제·세전 총수익·가격만' 계산에 쓰는 국내 ETF 분배 이력
+#  · data/etfdist/0~7.json — 종목별 [분배락일, 분배금, 주당 과세표준, 분배락 전날 실제 종가] + 마지막 거래일 종가
+#      (묶음 번호 = 종목코드 글자 코드 합 % 8 · 화면은 고른 종목의 묶음 하나만 받음)
+#  · data/etfdist/state.json — 수집 상태(FunETF 받은 날·KIND 공시·운용사 과세표준 재시도 날짜)
+#  · 출처: KIND 분배 공시(분배락일) · FunETF 분배 이력 · 운용사 공개 과세표준(KODEX 달력·TIGER·ACE·SOL·KIWOOM·WON·TIME·PLUS·RISE·DAISHIN)
+#          · 네이버 증권(분배락 전날 실제 종가·마지막 종가)
+#  · 하루 두 번: KST 19:40(그날 종가·공시 반영) · 23:40(늦게 올라온 공시·과세표준 반영)
+#  · 수동 실행에서 all=true 면 모든 ETF 의 FunETF 이력과 운용사 과세표준을 처음부터 다시 받음
+on:
+  schedule:
+    - cron: '40 10,14 * * *'
+  workflow_dispatch:
+    inputs:
+      all:
+        description: '모든 ETF 다시 받기 (FunETF·운용사 전체 이력)'
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths: ['scripts/update_etf_dist.py', 'scripts/etf_tax.py', '.github/workflows/update-etf-dist.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: etf-dist
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 분배 이력·과세표준·전날 종가 받기
+        run: python3 scripts/update_etf_dist.py ${{ github.event_name == 'workflow_dispatch' && inputs.all && '--all' || '' }}
+      - name: 내용이 바뀐 경우에만 커밋 (받은 시각만 바뀐 묶음은 커밋하지 않음)
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898099+github-actions[bot]@users.noreply.github.com'
+          changed=''
+          for f in data/etfdist/[0-7].json; do
+            if ! git show HEAD:$f > /tmp/old.json 2>/dev/null; then changed="$changed $f"; continue; fi
+            if ! python3 -c "import json,sys;a=json.load(open('/tmp/old.json'));b=json.load(open('$f'));a.pop('updated',None);b.pop('updated',None);sys.exit(0 if a==b else 1)"; then changed="$changed $f"; fi
+          done
+          if [ -z "$changed" ]; then echo "분배 이력 변경 없음"; exit 0; fi
+          git add $changed data/etfdist/state.json
+          git commit -m "chore: ETF 차트 비교 국내 분배 이력 갱신"
+          for i in 1 2 3; do
+            git pull --rebase -X theirs --autostash && git push && exit 0
+            git rebase --abort 2>/dev/null || true
+            sleep 5
+          done
+          exit 1

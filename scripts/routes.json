@@ -249,10 +249,15 @@
       "path": "etf-compare",
       "tab": "etfcmp",
       "group": "invest",
-      "title": "ETF 차트 비교 — 국내·미국 ETF 수익률 비교 (KODEX·TIGER·SPY·QQQ)",
+      "title": "ETF 차트 비교 — 국내·미국 ETF 세후 수익률 비교 (KODEX·TIGER·SPY·QQQ)",
       "short": "ETF 차트 비교",
       "share": "국내 ETF vs 미국 ETF, 수익률을 한 차트로 — ETF 차트 비교",
-      "desc": "국내·미국 상장 ETF 전체에서 최대 5개를 골라 1M~MAX·기간설정 수익률과 최대 낙폭을 한 차트로 비교합니다."
+      "desc": "국내·미국 상장 ETF 최대 10개를 분배금 세금·수수료를 뺀 세후 수익률·세전·가격으로 한 차트에서 비교합니다.",
+      "en": {
+        "short": "ETF Chart Comparison",
+        "title": "ETF Chart Comparison — Korean & U.S. ETF Returns After Tax and Fees",
+        "desc": "Compare up to 10 Korea- and U.S.-listed ETFs on one chart: return after distribution tax and trading fees, total return or price only, with CAGR and drawdown."
+      }
     },
     {
       "path": "marketcap",

@@ -256,7 +256,8 @@ function etfSource(m, s) {
              ok: (v) => /\["\d{8}",/.test(v), ref: 'https://finance.naver.com/' };
   }
   if (m === 'u' && /^[A-Z][A-Z0-9-]{0,9}$/.test(s)) {
-    return { url: `https://query1.finance.yahoo.com/v8/finance/chart/${s}?period1=315532800&period2=${now + 86400}&interval=1d&includePrePost=false`,
+    // events=div: 분배금(배당) 내역 — 화면의 '가격(분배금 제외)·세후' 계산에 씀 (quote.close = 분배 미반영 종가, adjclose = 분배 재투자)
+    return { url: `https://query1.finance.yahoo.com/v8/finance/chart/${s}?period1=315532800&period2=${now + 86400}&interval=1d&includePrePost=false&events=div`,
              ok: (v) => v.indexOf('"timestamp"') >= 0 && v.indexOf('"adjclose"') >= 0, ref: 'https://finance.yahoo.com/' };
   }
   return null;
@@ -266,7 +267,7 @@ async function etfChart(env, url, cors, json) {
   const m = url.searchParams.get('m') || '', s = (url.searchParams.get('s') || '').toUpperCase();
   const src = etfSource(m, s);
   if (!src) return json({ error: 'bad symbol' }, 400);
-  const key = 'etf:' + m + ':' + s, now = Math.floor(Date.now() / 1000);
+  const key = 'etf:' + (m === 'u' ? 'u2' : m) + ':' + s, now = Math.floor(Date.now() / 1000);   // u2: 분배 내역이 들어간 응답 (예전 보관본과 섞이지 않게)
   const row = await env.DB.prepare('SELECT t, v FROM cache WHERE k = ?').bind(key).first();
   const send = (v, how) => new Response(v, { headers: { ...cors.headers, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'private, max-age=600', 'X-Etf-Cache': how,
     'Access-Control-Expose-Headers': 'X-Etf-Cache' } });

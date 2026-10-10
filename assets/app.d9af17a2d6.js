@@ -52,7 +52,7 @@ var SITE_EN = (document.documentElement.getAttribute('lang') || '').indexOf('en'
     var v = '?v=' + Math.floor(Date.now() / TTL);
     var ms = BIG[file] ? 25000 : 6000;
     var p = getJSON('data/' + file + v, ms).catch(function () { return null; }).then(function (a) {
-      var fresh = a && a.updated && (Date.now() - Date.parse(a.updated)) < (FRESH_MS[file] || 40 * 60 * 1000);
+      var fresh = a && a.updated && (Date.now() - Date.parse(a.updated)) < (FRESH_MS[file] || (/^etfdist\//.test(file) ? 7 * 86400e3 : 40 * 60 * 1000));   /* ETF 분배 이력 묶음: 매일 밤 갱신 */
       var raw = rawURL(file);
       if (fresh || !raw) return a;
       return getJSON(raw + v, ms).catch(function () { return null; }).then(function (b) {
@@ -5838,83 +5838,199 @@ var TAX = (function () {
 })();
 
 /* ════════════════════════════════════════════════════════════
-   [ETFCMP] ETF 차트 비교 — 국내 상장 ETF 전체 + 미국 상장 ETF 전체 중 최대 5개를 한 차트에
+   [ETFCMP] ETF 차트 비교 — 국내 상장 ETF 전체 + 미국 상장 ETF 전체 중 최대 10개를 한 차트에
    · 목록: data/etf_list.json (scripts/update_etf_list.py, 매일) · 원/달러: data/usdkrw.json (한국은행 ECOS, 매일)
-   · 일봉: Worker GET /etf?m=k|u&s=코드 (국내 네이버 수정주가 · 미국 Yahoo 수정 종가, 30분 보관)
+   · 일봉: Worker GET /etf?m=k|u&s=코드 (국내 네이버 수정주가 · 미국 Yahoo 종가·분배 내역, 30분 보관)
            Worker 가 안 되면 공개 프록시(allorigins)로 같은 원본을 XHR 로 직접 (사이트 fetch 래퍼가 야후 요청을 가로채지 않게)
+   · 국내 분배 이력: data/etfdist/{0..7}.json (scripts/update_etf_dist.py, 매일) — [분배락일, 분배금, 주당 과세표준, 분배락 전날 종가]
+   · 보기 3가지 (모두 같은 '실제 종가 + 분배금'으로 계산 → 세금·수수료가 0이면 세후 = 세전)
+       가격      실제 종가만 (분배금 제외)
+       세전      분배금을 분배락일에 재투자 (재투자 가격 = 분배락 전날 종가 − 분배금 · 야후 수정 종가·CRSP 와 같은 방식)
+       세후 실제 분배금에서 세금을 떼고 재투자 + 매수·매도 수수료 (기본 보기)
+                 국내 ETF: 분배금의 '주당 과세표준' × 15.4% (국내 주식형·커버드콜은 과세표준이 분배금보다 훨씬 작음)
+                           과세표준을 운용사가 공개하지 않은 회차 → 같은 ETF 공개 회차의 평균 비율 · 공개 회차가 없으면 분배금 전액
+                 미국 ETF: 배당 × 15% (한미 조세조약 원천징수, 국내 추가 과세 없음)
+                 수수료: 처음 매수·분배금 재투자 매수·마지막 매도에 한 번씩 (국내 ETF 는 증권거래세 없음)
+                 매도 차익 세금(해외주식 양도세·국내 상장 해외 ETF 매매차익 과세)·금융소득종합과세·환전 비용은 빼지 않음
+   · 국내 실제 종가 = 네이버 수정주가 ÷ 구간 비율 (분배락일 사이 구간마다 '분배락 전날 실제 종가'로 비율을 정함)
    · 기간: 1M 3M 6M 1Y = 가장 최근 거래일 E 에서 n개월 전 날짜 S (그날 또는 그 전 마지막 거래일 종가가 기준)
            YTD = 지난해 12월 31일(또는 그 전 마지막 거래일) 종가 기준 · MAX = 고른 ETF 중 가장 늦게 상장한 ETF 의 첫 거래일 기준
-           기간설정 = 고른 날짜 (시작일 그날 또는 그 전 마지막 거래일 종가 기준 ~ 종료일 그날 또는 그 전 마지막 거래일)
-           기간 시작 뒤에 상장한 ETF 는 상장일 종가가 기준 (표에 '기간 중 상장')
-   · 수익률 = 수정주가(분배금 재투자) 기준 · 원화 환산: 미국 ETF 수정 종가 × 같은 날(없으면 그 전 마지막 날) 원/달러 매매기준율
+           기간설정 = 고른 날짜 · 기간 시작 뒤에 상장한 ETF 는 상장일 종가가 기준 (표에 '기간 중 상장')
+   · 원화 환산: 미국 ETF 가치 × 그날(없으면 그 전 마지막 날) 원/달러 ÷ 시작일 원/달러
    · 순수 계산은 window.ECX (DOM 없음 · 회귀 테스트가 직접 확인) · 화면 상태는 window.ECXdebug
    · window.fcRegister 로 탭 진입·테마 변경 때 그림 → 반드시 [FC-UI] 정의 뒤에 둠 (앞에 두면 스크립트 전체가 멈춤)
 ════════════════════════════════════════════════════════════ */
 (function () {
-  var DAY = 864e5, MAXN = 5, COLORS = ['#3182f6', '#f04452', '#fe9800', '#1fa27a', '#8b5cf6'];
+  var DAY = 864e5, MAXN = 10, TAX_K = 0.154, TAX_U = 0.15, FEE_K = 0.015, FEE_U = 0.25, NSHARD = 8;
+  var COLORS = ['#3182f6', '#f04452', '#fe9800', '#1fa27a', '#8b5cf6', '#0891b2', '#db2777', '#a07d00', '#64748b', '#9c5b2e'];
   var PERS = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12 };
-  var TABS = { 1: '국내 시장지수', 2: '국내 업종·테마', 3: '국내 파생', 4: '해외 주식', 5: '원자재', 6: '채권', 7: '기타' };
   var EXCH = { P: 'NYSE Arca', Q: 'NASDAQ', Z: 'Cboe BZX', N: 'NYSE', A: 'NYSE American', V: 'IEX' };   /* nasdaqtraded.txt 상장 거래소 (확인되지 않은 코드는 표시 안 함) */
 
   /* ── 순수 계산 (DOM 없음) ── */
   function ymdOf(day) { return new Date(day * DAY).toISOString().slice(0, 10); }
   function dayOf(s) { var m = /^(\d{4})-?(\d{2})-?(\d{2})$/.exec(String(s || '')); if (!m) return null; var t = Date.UTC(+m[1], +m[2] - 1, +m[3]); var d = new Date(t); if (d.getUTCFullYear() !== +m[1] || d.getUTCMonth() !== +m[2] - 1 || d.getUTCDate() !== +m[3]) return null; return Math.round(t / DAY); }
+  function dayOfInt(n) { return Math.round(Date.UTC(Math.floor(n / 10000), Math.floor(n / 100) % 100 - 1, n % 100) / DAY); }   /* 20260730 → 일수 */
   function addMonths(day, n) {
     var d = new Date(day * DAY), y = d.getUTCFullYear(), m = d.getUTCMonth() + n, dd = d.getUTCDate();
     var last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();               /* 3월 31일의 1개월 전 = 2월 마지막 날 */
     return Math.round(Date.UTC(y, m, Math.min(dd, last)) / DAY);
   }
   function idxLE(a, x) { var lo = 0, hi = a.length - 1, r = -1; while (lo <= hi) { var mid = (lo + hi) >> 1; if (a[mid] <= x) { r = mid; lo = mid + 1; } else hi = mid - 1; } return r; }
+  function idxGE(a, x) { var lo = 0, hi = a.length - 1, r = a.length; while (lo <= hi) { var mid = (lo + hi) >> 1; if (a[mid] >= x) { r = mid; hi = mid - 1; } else lo = mid + 1; } return r; }
   function pushPt(d, v, day, c) { if (d.length && day <= d[d.length - 1]) { if (day === d[d.length - 1]) v[v.length - 1] = c; return; } d.push(day); v.push(c); }
-  /* 네이버 siseJson: [["날짜","시가","고가","저가","종가",...], ["20021014", 5025, 5157, 4890, 4990, ...], ...] */
+  function shardOf(code) { var s = 0; for (var i = 0; i < code.length; i++) s += code.charCodeAt(i); return s % NSHARD; }
+  /* 네이버 siseJson: [["날짜","시가","고가","저가","종가",...], ["20021014", 5025, 5157, 4890, 4990, ...], ...] (수정주가) */
   function parseK(txt) {
     var re = /\["(\d{4})(\d{2})(\d{2})",\s*(?:-?[\d.]+|null),\s*(?:-?[\d.]+|null),\s*(?:-?[\d.]+|null),\s*(-?[\d.]+)/g, m, d = [], v = [];
     while ((m = re.exec(String(txt || '')))) { var c = +m[4]; if (!(c > 0)) continue; pushPt(d, v, Math.round(Date.UTC(+m[1], +m[2] - 1, +m[3]) / DAY), c); }
     return d.length ? { d: d, v: v, cur: 'KRW' } : null;
   }
-  /* Yahoo v8 chart: 수정 종가(adjclose) — 없으면 종가 · 날짜 = 거래소 현지 날짜 */
+  /* Yahoo v8 chart: quote.close = 분배 미반영 실제 종가(분할만 반영) · events.dividends = 분배락일·분배금 · 날짜 = 거래소 현지 날짜 */
   function parseU(txt) {
     var j; try { j = typeof txt === 'string' ? JSON.parse(txt) : txt; } catch (e) { return null; }
     var r = j && j.chart && j.chart.result && j.chart.result[0]; if (!r || !r.timestamp || !r.indicators) return null;
     var off = (r.meta && +r.meta.gmtoffset) || 0, ts = r.timestamp, ind = r.indicators;
-    var ac = ind.adjclose && ind.adjclose[0] && ind.adjclose[0].adjclose, cl = ind.quote && ind.quote[0] && ind.quote[0].close, src = ac || cl, d = [], v = [];
-    if (!src) return null;
-    for (var i = 0; i < ts.length; i++) { var c = src[i]; if (c == null || !(c > 0)) continue; pushPt(d, v, Math.floor((ts[i] + off) / 86400), c); }
-    return d.length ? { d: d, v: v, cur: String((r.meta && r.meta.currency) || 'USD').toUpperCase() } : null;
+    var cl = ind.quote && ind.quote[0] && ind.quote[0].close, ac = ind.adjclose && ind.adjclose[0] && ind.adjclose[0].adjclose, d = [], v = [], a = [];
+    if (!cl && !ac) return null;
+    for (var i = 0; i < ts.length; i++) {
+      var c = cl ? cl[i] : null, q = ac ? ac[i] : null; if (!(c > 0)) c = null; if (!(q > 0)) q = null;
+      if (c == null && q == null) continue;
+      var day = Math.floor((ts[i] + off) / 86400);
+      if (d.length && day <= d[d.length - 1]) { if (day === d[d.length - 1]) { v[v.length - 1] = c; a[a.length - 1] = q; } continue; }
+      d.push(day); v.push(c); a.push(q);
+    }
+    var div = [], ev = r.events && r.events.dividends;
+    if (ev) Object.keys(ev).forEach(function (k) { var x = ev[k]; if (x && x.amount > 0 && x.date) div.push({ x: Math.floor((x.date + off) / 86400), a: +x.amount }); });
+    div.sort(function (p, q) { return p.x - q.x; });
+    /* 종가가 빠진 날은 수정 종가 비율로 메움 (드묾) — 둘 다 없으면 그날은 뺌 */
+    var D = [], V = [], A = [];
+    for (i = 0; i < d.length; i++) {
+      var c2 = v[i];
+      if (c2 == null) { for (var k2 = i - 1; k2 >= 0 && c2 == null; k2--) if (v[k2] != null && a[k2] != null && a[i] != null) c2 = v[k2] * a[i] / a[k2]; }
+      if (c2 == null || !(c2 > 0)) continue;
+      D.push(d[i]); V.push(c2); A.push(a[i]);
+    }
+    return D.length ? { d: D, v: V, adj: A, div: div, cur: String((r.meta && r.meta.currency) || 'USD').toUpperCase() } : null;
   }
   function parseFx(j) {
     if (!j || !j.c || !j.dd || j.c.length !== j.dd.length + 1) return null;
     var d = [j.d0]; for (var i = 0; i < j.dd.length; i++) d.push(d[i] + j.dd[i]);
     return { d: d, v: j.c };
   }
-  /* 원화 환산: 날짜마다 그날(없으면 그 전 마지막 날) 환율을 곱함 · 환율이 없는 앞부분은 뺌 */
-  function toKRW(s, fx) {
-    var d = [], v = [];
-    for (var i = 0; i < s.d.length; i++) { var k = idxLE(fx.d, s.d[i]); if (k < 0) continue; d.push(s.d[i]); v.push(s.v[i] * fx.v[k]); }
-    return d.length ? { d: d, v: v, cur: 'KRW' } : null;
+  /* 국내: 네이버 수정주가 + 분배 이력 → 실제 종가 p · 분배 목록(세금 포함)
+     rec: [[분배락일 YYYYMMDD, 분배금, 주당 과세표준|null, 분배락 전날 종가|null], ...] · z: [마지막 거래일, 그날 종가] */
+  function prepK(s, dist) {
+    var d = s.d, a = s.v, n = d.length, rec = (dist && dist.r) || [], z = dist && dist.z;
+    var R = [];
+    rec.forEach(function (r) {
+      var x = dayOfInt(r[0]), i = idxGE(d, x);
+      if (!(r[1] > 0) || i <= 0 || i >= n) return;                         /* 상장 전 · 아직 오지 않은 분배락일 */
+      if (R.length && R[R.length - 1].i === i) { R[R.length - 1].a += r[1]; return; }   /* 같은 거래일에 둘(드묾) → 합침 */
+      R.push({ x: x, i: i, a: +r[1], tb: r[2] == null ? null : +r[2], rp: r[3] == null ? null : +r[3] });
+    });
+    /* 자료에 아직 없는 새 분배: 마지막 거래일 종가(z)와 수정주가가 다르면 그 뒤에 분배락이 있었던 것 */
+    var pend = false;
+    if (z && z.length === 2) {
+      var zd = dayOfInt(z[0]), iz = idxLE(d, zd);
+      var lastI = R.length ? R[R.length - 1].i : 0;
+      if (iz >= 0 && d[iz] === zd && iz >= lastI && iz < n - 1 && z[1] > 0) {
+        var f = a[iz] / z[1];
+        if (f < 1 - Math.max(0.6 / z[1], 2e-5) * 2 && f > 0.5) {
+          pend = true;
+          R.push({ x: d[iz + 1], i: iz + 1, a: z[1] * (1 - f), tb: null, rp: z[1], est: true });
+        }
+      }
+    }
+    /* 구간 비율 q (수정주가 ÷ 실제 종가): 마지막 분배락일 뒤 = 1 · 그 전 구간 = 분배락 전날 수정주가 ÷ 분배락 전날 실제 종가
+       전날 실제 종가를 모르는 회차만 표준 공식(1 − 분배금 ÷ 전날 종가)으로 앞 구간에서 이어 계산 */
+    var q = new Array(n), qa = 1;
+    for (var t = 0; t < n; t++) q[t] = 1;
+    for (var k = R.length - 1; k >= 0; k--) {
+      var i0 = R[k].i, prev = a[i0 - 1], qk = null;
+      if (R[k].rp > 0) { qk = prev / R[k].rp; if (!(qk > 0.05 && qk <= qa * 1.0005)) qk = null; }
+      if (qk == null) qk = qa * prev / (prev + qa * R[k].a);
+      var lo = k > 0 ? R[k - 1].i : 0;
+      for (t = lo; t < i0; t++) q[t] = qk;
+      qa = qk;
+    }
+    var p = new Array(n);
+    for (t = 0; t < n; t++) p[t] = a[t] / q[t];
+    /* 세금: 과세표준 × 15.4% · 과세표준을 모르면 같은 ETF 공개 회차 평균 비율, 공개 회차가 없으면 분배금 전액 */
+    var sa = 0, st = 0;
+    R.forEach(function (r) { if (r.tb != null && !r.est) { sa += r.a; st += r.tb; } });
+    var ratio = sa > 0 ? st / sa : null;
+    var dv = R.map(function (r) {
+      var kind = r.tb != null ? 'k' : ratio != null ? 'a' : 'f', base = r.tb != null ? r.tb : r.a * (ratio != null ? ratio : 1);
+      return { x: d[r.i], i: r.i, a: r.a, t: Math.max(0, base) * TAX_K, k: kind, est: !!r.est };
+    });
+    return { d: d, p: p, dv: dv, cur: 'KRW', pend: pend, ratio: ratio };
   }
-  /* 기간 → 기준일(S)·종료일(E) · arr: [{d,v}] */
+  /* 미국: Yahoo 종가 + 분배 → 분배 목록(세금 15%) */
+  function prepU(s) {
+    var d = s.d, dv = [];
+    (s.div || []).forEach(function (x) {
+      var i = idxGE(d, x.x); if (i <= 0 || i >= d.length) return;
+      if (dv.length && dv[dv.length - 1].i === i) { dv[dv.length - 1].a += x.a; dv[dv.length - 1].t = dv[dv.length - 1].a * TAX_U; return; }
+      dv.push({ x: d[i], i: i, a: x.a, t: x.a * TAX_U, k: 'u' });
+    });
+    return { d: d, p: s.v, dv: dv, cur: s.cur || 'USD', pend: false, ratio: null };
+  }
+  /* 원/달러: 날짜마다 그날(없으면 그 전 마지막 날) 환율 · 환율이 없는 날은 null */
+  function fxAlign(s, fx) {
+    var out = new Array(s.d.length);
+    for (var i = 0; i < s.d.length; i++) { var k = idxLE(fx.d, s.d[i]); out[i] = k < 0 ? null : fx.v[k]; }
+    return out;
+  }
+  /* 가치 흐름 (처음 넣은 돈 = 1) · mode: 'px' 가격 · 'tr' 세전 · 'net' 세후 실제
+     o: { fee: 한 번 거래 수수료(비율), fx: 원/달러 배열(미국 원화 환산) } → { v: 날짜별 가치(bi~ei), tax, fee, n: 분배 횟수, nk/na/nf: 과세표준 공개·추정·전액 } */
+  function valueSeries(s, bi, ei, mode, o) {
+    var p = s.p, fx = o && o.fx, phi = mode === 'net' ? ((o && o.fee) || 0) : 0, v = new Array(ei - bi + 1);
+    var fx0 = fx ? fx[bi] : 1, fxr = function (t) { return fx ? fx[t] / fx0 : 1; };
+    var u = (1 - phi) / p[bi], tax = 0, fee = phi, n = 0, nk = 0, na = 0, nf = 0, j = 0, dv = s.dv;
+    while (j < dv.length && dv[j].i <= bi) j++;
+    for (var t = bi; t <= ei; t++) {
+      while (j < dv.length && dv[j].i === t) {
+        var e = dv[j++], D = e.a, X = p[t - 1] - D;
+        if (!(X > 0)) X = p[t];
+        n++; if (e.k === 'k') nk++; else if (e.k === 'a') na++; else if (e.k === 'f') nf++;
+        if (mode === 'tr') u *= 1 + D / X;
+        else if (mode === 'net') {
+          var T = Math.min(D, e.t), cash = u * (D - T);
+          tax += u * T * fxr(t); fee += cash * phi * fxr(t);
+          u += cash * (1 - phi) / X;
+        }
+      }
+      var val = (mode === 'px' ? p[t] / p[bi] : u * p[t]) * fxr(t);
+      v[t - bi] = mode === 'net' ? val * (1 - phi) : val;
+    }
+    if (mode === 'net') fee += v[v.length - 1] / (1 - phi) * phi;
+    return { v: v, tax: tax, fee: mode === 'net' ? fee : 0, n: n, nk: nk, na: na, nf: nf };
+  }
+  /* 기간 → 기준일(S)·종료일(E) · arr: [{d}] */
   function window_(arr, per, from, to) {
     var firsts = arr.map(function (s) { return s.d[0]; }), lasts = arr.map(function (s) { return s.d[s.d.length - 1]; });
     var E = Math.max.apply(null, lasts), S;
     if (per === 'MAX') S = Math.max.apply(null, firsts);
     else if (per === 'YTD') S = Math.round(Date.UTC(new Date(E * DAY).getUTCFullYear() - 1, 11, 31) / DAY);
-    else if (per === 'C') { if (from == null || to == null || from >= to) return { err: '시작일이 종료일보다 앞이어야 합니다.' }; S = from; E = Math.min(to, E); if (E <= S) return { err: '고른 기간에 가격 자료가 없습니다.' }; }
+    else if (per === 'C') { if (from == null || to == null || from >= to) return { err: 'range' }; S = from; E = Math.min(to, E); if (E <= S) return { err: 'nodata' }; }
     else S = addMonths(E, -(PERS[per] || 12));
     return { S: S, E: E, minFirst: Math.min.apply(null, firsts), maxLast: E };
   }
-  /* 한 종목의 기간 성과 */
-  function stats(s, S, E) {
-    var d = s.d, v = s.v, ei = idxLE(d, E);
+  /* 한 종목의 기간 성과 (모드별 가치 흐름) */
+  function stats(s, S, E, mode, o) {
+    var d = s.d, ei = idxLE(d, E);
     if (ei < 0) return { skip: 'after' };                                   /* 종료일 뒤에 상장 */
     var bi = idxLE(d, S), late = false;
     if (bi < 0) { bi = 0; late = true; }                                    /* 기간 시작 뒤에 상장 → 상장일 종가가 기준 */
     if (ei <= bi) return { skip: d[ei] < S ? 'before' : 'short' };          /* 기간 전에 끝남 · 하루뿐 */
-    var base = v[bi], last = v[ei], span = d[ei] - d[bi], pk = base, mdd = 0, n = 0, sum = 0, sq = 0;
-    for (var i = bi; i <= ei; i++) { if (v[i] > pk) pk = v[i]; var dd = v[i] / pk - 1; if (dd < mdd) mdd = dd; if (i > bi) { var r = Math.log(v[i] / v[i - 1]); n++; sum += r; sq += r * r; } }
-    var vol = n >= 5 ? Math.sqrt(Math.max(0, (sq - sum * sum / n) / (n - 1))) * Math.sqrt(252) : null;
-    return { bi: bi, ei: ei, late: late, base: base, baseDay: d[bi], endDay: d[ei], first: d[0], ret: last / base - 1,
-             cagr: span >= 365 ? Math.pow(last / base, 365.25 / span) - 1 : null, mdd: mdd, vol: vol };
+    if (o && o.fx) { while (bi < ei && o.fx[bi] == null) bi++; if (o.fx[bi] == null || ei <= bi) return { skip: 'short' }; }
+    var vs = valueSeries(s, bi, ei, mode, o), v = vs.v, last = v[v.length - 1], span = d[ei] - d[bi], pk = v[0], mdd = 0, cnt = 0, sum = 0, sq = 0;
+    for (var t = 0; t < v.length; t++) { if (v[t] > pk) pk = v[t]; var dd = v[t] / pk - 1; if (dd < mdd) mdd = dd; if (t > 0) { var r = Math.log(v[t] / v[t - 1]); cnt++; sum += r; sq += r * r; } }
+    var ret = last - 1;
+    return { bi: bi, ei: ei, late: late, baseDay: d[bi], endDay: d[ei], first: d[0], ret: ret, v: v,
+             cagr: span >= 365 && last > 0 ? Math.pow(last, 365.25 / span) - 1 : null, ann: span > 0 ? ret * 365.25 / span : null,
+             mdd: mdd, vol: cnt >= 5 ? Math.sqrt(Math.max(0, (sq - sum * sum / cnt) / (cnt - 1))) * Math.sqrt(252) : null,
+             tax: vs.tax, fee: vs.fee, n: vs.n, nk: vs.nk, na: vs.na, nf: vs.nf };
   }
   /* 차트 점: 모든 종목 날짜의 합집합 위에서 각자 직전 값 이어 그리기 → 점이 많으면 칸(bucket)마다 첫 점 + 종목별 최저·최고 점만 남김 (극값 보존)
      모든 종목이 같은 x 배열을 쓰므로 툴팁(mode:index)이 같은 날짜의 값을 함께 보여 줌 */
@@ -5923,11 +6039,11 @@ var TAX = (function () {
     list.forEach(function (o) { for (var i = o.st.bi; i <= o.st.ei; i++) set[o.s.d[i]] = 1; });
     Object.keys(set).forEach(function (k) { U.push(+k); }); U.sort(function (a, b) { return a - b; });
     var Y = list.map(function (o) {
-      var y = new Array(U.length), j = o.st.bi, d = o.s.d, v = o.s.v;
+      var y = new Array(U.length), j = o.st.bi, d = o.s.d, v = o.st.v;
       for (var t = 0; t < U.length; t++) {
         if (U[t] < o.st.baseDay) { y[t] = null; continue; }                 /* 기준일 전은 비움 · 마지막 거래일 뒤(다른 시장만 열린 날)는 직전 값 유지 */
         while (j + 1 <= o.st.ei && d[j + 1] <= U[t]) j++;
-        y[t] = (v[j] / o.st.base - 1) * 100;
+        y[t] = (v[j - o.st.bi] - 1) * 100;
       }
       return y;
     });
@@ -5940,19 +6056,19 @@ var TAX = (function () {
         Y.forEach(function (y) { var lo = -1, hi = -1; for (var t = a; t < b; t++) { if (y[t] == null) continue; if (lo < 0 || y[t] < y[lo]) lo = t; if (hi < 0 || y[t] > y[hi]) hi = t; } if (lo >= 0) keep[lo] = 1; if (hi >= 0) keep[hi] = 1; });
       }
       keep[U.length - 1] = 1;
-      list.forEach(function (o) { var t = idxLE(U, o.st.baseDay); if (t >= 0) keep[t] = 1; });   /* 각 종목의 0% 시작점 */
+      list.forEach(function (o) { var t = idxLE(U, o.st.baseDay); if (t >= 0) keep[t] = 1; });   /* 각 종목의 출발점 */
     }
     var idx = Object.keys(keep).map(Number).sort(function (a, b) { return a - b; });
     return { x: idx.map(function (t) { return U[t]; }), y: Y.map(function (y) { return idx.map(function (t) { return y[t] == null ? null : Math.round(y[t] * 100) / 100; }); }), n: U.length };
   }
-  /* 한 번에: 종목들 → 기간·성과·차트 점 */
-  function calc(arr, per, from, to, buckets) {
+  /* 한 번에: 종목들 → 기간·성과·차트 점 · arr[i] = 준비된 종목(prepK/prepU) 또는 null · opts[i] = valueSeries 옵션 */
+  function calc(arr, per, from, to, buckets, mode, opts) {
     var ok = arr.filter(function (s) { return s && s.d && s.d.length >= 2; });
-    if (!ok.length) return { err: '비교할 자료가 없습니다.' };
+    if (!ok.length) return { err: 'empty' };
     var w = window_(ok, per, from, to); if (w.err) return w;
     var list = [], skipped = [];
-    arr.forEach(function (s, i) { if (!s || !s.d || s.d.length < 2) return; var st = stats(s, w.S, w.E); if (st.skip) skipped.push({ i: i, why: st.skip }); else list.push({ i: i, s: s, st: st }); });
-    if (!list.length) return { err: '고른 기간에 가격 자료가 없습니다.', w: w, skipped: skipped };
+    arr.forEach(function (s, i) { if (!s || !s.d || s.d.length < 2) return; var st = stats(s, w.S, w.E, mode || 'tr', opts && opts[i]); if (st.skip) skipped.push({ i: i, why: st.skip }); else list.push({ i: i, s: s, st: st }); });
+    if (!list.length) return { err: 'nodata', w: w, skipped: skipped };
     var P = points(list, buckets || 600);
     return { w: w, list: list, skipped: skipped, pts: P };
   }
@@ -5992,27 +6108,45 @@ var TAX = (function () {
     L.forEach(function (x) { x.cl = nrm(x.c); x.nk = nrm(x.n); x.nk2 = x.nk.replace(/&/g, ''); x.ak = x.a ? nrm(x.a).replace(/&/g, '') : ''; x.key = x.k + x.c; });
     return L;
   }
-  window.ECX = { calc: calc, parseK: parseK, parseU: parseU, parseFx: parseFx, toKRW: toKRW, addMonths: addMonths, dayOf: dayOf, ymdOf: ymdOf, idxLE: idxLE, search: search, buildList: buildList, stats: stats, directKey: directKey };
+  /* 표 정렬: 값이 없는 줄(—)은 오름·내림 모두 맨 뒤 */
+  function sortRows(rows, key, dir) {
+    return rows.map(function (r, i) { return { r: r, i: i }; }).sort(function (a, b) {
+      var x = a.r.v, y = b.r.v, nx = x == null || !isFinite(x), ny = y == null || !isFinite(y);
+      if (nx || ny) return nx === ny ? a.i - b.i : nx ? 1 : -1;
+      return (x - y) * dir || a.i - b.i;
+    }).map(function (o) { return o.r; });
+  }
+  window.ECX = { calc: calc, parseK: parseK, parseU: parseU, parseFx: parseFx, prepK: prepK, prepU: prepU, fxAlign: fxAlign, valueSeries: valueSeries, stats: stats,
+                 addMonths: addMonths, dayOf: dayOf, dayOfInt: dayOfInt, ymdOf: ymdOf, idxLE: idxLE, idxGE: idxGE, search: search, buildList: buildList,
+                 directKey: directKey, shardOf: shardOf, sortRows: sortRows, TAX_K: TAX_K, TAX_U: TAX_U, MAXN: MAXN };
 
   /* ── 화면 ── */
   if (!document.getElementById('page-etfcmp')) return;
   var $ = function (id) { return document.getElementById(id); };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
-  var S = { L: null, by: {}, sel: [], per: '1Y', from: null, to: null, fx: false, data: {}, err: {}, pend: {}, fxd: null, fxp: null, kr: {}, chart: null, mk: 'all', sugs: [], sugIdx: -1, ready: false, listErr: false, last: null, hash: null };
+  var Lx = typeof L === 'function' ? L : function (ko) { return ko; };
+  var TABS = { 1: Lx('국내 시장지수', 'Korea market index'), 2: Lx('국내 업종·테마', 'Korea sector/theme'), 3: Lx('국내 파생', 'Korea derivatives'), 4: Lx('해외 주식', 'Overseas equity'), 5: Lx('원자재', 'Commodities'), 6: Lx('채권', 'Bonds'), 7: Lx('기타', 'Other') };
+  var S = { L: null, by: {}, sel: [], per: '1Y', from: null, to: null, fx: false, mode: 'net', feeK: FEE_K, feeU: FEE_U, sort: null,
+            data: {}, err: {}, pend: {}, dist: {}, distP: {}, distErr: {}, fxd: null, fxp: null, prep: {}, chart: null, mk: 'all', sugs: [], sugIdx: -1,
+            ready: false, listErr: false, last: null, hash: null };
   var PRESETS = [
-    ['S&P500 국내 vs 미국', ['K360750', 'K379800', 'USPY', 'UVOO']], ['나스닥100', ['K133690', 'K379810', 'UQQQ', 'UQQQM']],
-    ['미국 배당', ['K458730', 'K446720', 'USCHD']], ['반도체', ['K091160', 'K381180', 'USOXX', 'USMH']],
-    ['커버드콜 월배당', ['K441640', 'UJEPI', 'UJEPQ', 'UQYLD']], ['나스닥 레버리지', ['UQQQ', 'UQLD', 'UTQQQ']],
-    ['코스피 vs S&P500', ['K069500', 'K360750', 'USPY']], ['금·채권', ['K132030', 'UGLD', 'UTLT', 'K305080']]
+    [Lx('S&P500 국내 vs 미국', 'S&P 500: Korea vs U.S.'), ['K360750', 'K379800', 'USPY', 'UVOO']], [Lx('나스닥100', 'Nasdaq-100'), ['K133690', 'K379810', 'UQQQ', 'UQQQM']],
+    [Lx('미국 배당', 'U.S. dividend'), ['K458730', 'K446720', 'USCHD']], [Lx('반도체', 'Semiconductors'), ['K091160', 'K381180', 'USOXX', 'USMH']],
+    [Lx('커버드콜 월배당', 'Covered-call income'), ['K441640', 'K498400', 'UJEPI', 'UJEPQ', 'UQYLD']], [Lx('나스닥 레버리지', 'Nasdaq leverage'), ['UQQQ', 'UQLD', 'UTQQQ']],
+    [Lx('코스피 vs S&P500', 'KOSPI vs S&P 500'), ['K069500', 'K360750', 'USPY']], [Lx('금·채권', 'Gold & bonds'), ['K132030', 'UGLD', 'UTLT', 'K305080']]
   ];
   var DEFAULT = ['K069500', 'K360750', 'USPY', 'UQQQ'];
+  var COLS = [['ret', Lx('기간 수익률', 'Return')], ['cagr', 'CAGR'], ['ann', Lx('연환산', 'Annualized')], ['mdd', Lx('최대 낙폭', 'Max drawdown')], ['vol', Lx('변동성(연)', 'Volatility (ann.)')]];
   /* 이름: 국내는 종목명, 미국은 티커 (사람들이 부르는 이름) · 보조: 국내 코드, 미국 정식 이름 */
   function labelOf(it) { var x = S.by[it.k + it.c]; return it.k === 'K' ? (x ? x.n : it.c) : it.c; }
-  function subOf(it) { var x = S.by[it.k + it.c]; return x ? (it.k === 'K' ? it.c : x.n) : it.k === 'K' ? '목록에 없는 종목코드' : '목록에 없는 티커'; }
-  function fmtD(day) { return ymdOf(day).replace(/-/g, '.'); }
+  function subOf(it) { var x = S.by[it.k + it.c]; return x ? (it.k === 'K' ? it.c : x.n) : it.k === 'K' ? Lx('목록에 없는 종목코드', 'Code not in list') : Lx('목록에 없는 티커', 'Ticker not in list'); }
+  function mkt(k) { return k === 'K' ? Lx('국내', 'KR') : Lx('미국', 'US'); }
+  function fmtD(day) { return SITE_EN ? ymdOf(day) : ymdOf(day).replace(/-/g, '.'); }
   function pct(x, dg) { if (x == null || !isFinite(x)) return '—'; var v = x * 100, s = v.toFixed(dg == null ? 2 : dg); if (+s === 0) s = (0).toFixed(dg == null ? 2 : dg); return (+s > 0 ? '+' : +s < 0 ? '−' : '') + s.replace('-', '') + '%'; }
   function cls(x) { return x == null ? '' : x > 0.00005 ? 'ecx-up' : x < -0.00005 ? 'ecx-dn' : ''; }
   function toast(t) { var el = $('ecx-toast'); if (!el) { el = document.createElement('div'); el.id = 'ecx-toast'; el.className = 'ecx-toast'; el.setAttribute('role', 'status'); document.body.appendChild(el); } el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { el.hidden = true; }, 2600); }
+  function errText(e) { return { range: Lx('시작일이 종료일보다 앞이어야 합니다.', 'The start date must be before the end date.'), nodata: Lx('고른 기간에 가격 자료가 없습니다.', 'No price data in the selected period.'), empty: Lx('비교할 자료가 없습니다.', 'No data to compare.') }[e] || e; }
+  var SITE_EN = typeof window.SITE_EN === 'boolean' ? window.SITE_EN : (document.documentElement.getAttribute('lang') || '').indexOf('en') === 0;
 
   /* 자료 받기 — Worker (30분 보관) → 안 되면 공개 프록시로 원본 직접 · 사이트 fetch 래퍼를 피해 XHR */
   function xhr(url, ms) {
@@ -6027,7 +6161,7 @@ var TAX = (function () {
   function endpoint() { if (EP !== null) return Promise.resolve(EP); return (window.mdLoad ? window.mdLoad('counter.json') : Promise.resolve(null)).then(function (c) { EP = (c && c.endpoint) || ''; return EP; }, function () { EP = ''; return ''; }); }
   function upstream(it) {
     if (it.k === 'K') { var t = new Date(Date.now() + 9 * 3600e3 + DAY).toISOString().slice(0, 10).replace(/-/g, ''); return 'https://api.finance.naver.com/siseJson.naver?symbol=' + it.c + '&requestType=1&startTime=19900101&endTime=' + t + '&timeframe=day'; }
-    return 'https://query1.finance.yahoo.com/v8/finance/chart/' + it.c + '?period1=315532800&period2=' + (Math.floor(Date.now() / 1000) + 86400) + '&interval=1d&includePrePost=false';
+    return 'https://query1.finance.yahoo.com/v8/finance/chart/' + it.c + '?period1=315532800&period2=' + (Math.floor(Date.now() / 1000) + 86400) + '&interval=1d&includePrePost=false&events=div';
   }
   function fetchSeries(it) {
     var key = it.k + it.c; if (S.data[key]) return Promise.resolve(S.data[key]); if (S.pend[key]) return S.pend[key];
@@ -6040,23 +6174,48 @@ var TAX = (function () {
         return xhr('https://api.allorigins.win/raw?url=' + encodeURIComponent(upstream(it)), 25000).then(good);
       })
       .then(function (s) { S.data[key] = s; delete S.err[key]; return s; },
-            function (e) { S.err[key] = e && e.status === 404 ? '자료 없음' : '불러오기 실패'; throw e; });
+            function (e) { S.err[key] = e && e.status === 404 ? 'nodata' : 'fail'; throw e; });
     S.pend[key] = p;
     p.then(function () { delete S.pend[key]; render(); }, function () { delete S.pend[key]; render(); });
+    return p;
+  }
+  /* 국내 분배 이력 묶음 (가격·세후·세전 모두 필요 — 실제 종가를 되살리는 데 씀) */
+  function fetchDist(code) {
+    var sh = shardOf(code);
+    if (S.dist[sh] || S.distErr[sh]) return Promise.resolve(S.dist[sh]);
+    if (S.distP[sh]) return S.distP[sh];
+    var p = (window.mdLoad ? window.mdLoad('etfdist/' + sh + '.json') : Promise.resolve(null)).then(function (j) {
+      if (!j || !j.e) throw new Error('dist'); S.dist[sh] = j.e; return j.e;
+    }).catch(function () { S.distErr[sh] = true; return null; });
+    S.distP[sh] = p;
+    p.then(function () { delete S.distP[sh]; S.prep = {}; render(); });
     return p;
   }
   function fxSeries() {
     if (S.fxd) return Promise.resolve(S.fxd);
     if (S.fxp) return S.fxp;
     S.fxp = (window.mdLoad ? window.mdLoad('usdkrw.json') : Promise.resolve(null)).then(function (j) {
-      S.fxp = null; S.fxd = parseFx(j); if (!S.fxd) throw new Error('fx'); render(); return S.fxd;
+      S.fxp = null; S.fxd = parseFx(j); if (!S.fxd) throw new Error('fx'); S.prep = {}; render(); return S.fxd;
     }, function (e) { S.fxp = null; throw e; });
     return S.fxp;
   }
-  function seriesOf(it) {
-    var s = S.data[it.k + it.c]; if (!s) return null;
-    if (S.fx && it.k === 'U') { if (!S.fxd) return null; var k = it.k + it.c; if (!S.kr[k] || S.kr[k].src !== s) S.kr[k] = { src: s, v: toKRW(s, S.fxd) }; return S.kr[k].v; }
-    return s;
+  /* 준비된 종목 (실제 종가·분배 목록) — 국내는 분배 이력 묶음이 와야 계산 */
+  function prepOf(it) {
+    var key = it.k + it.c, s = S.data[key]; if (!s) return null;
+    if (it.k === 'K') {
+      var sh = shardOf(it.c);
+      if (!S.dist[sh] && !S.distErr[sh]) return null;
+      var dist = S.dist[sh] ? S.dist[sh][it.c] : null;
+      if (!S.prep[key] || S.prep[key].src !== s) S.prep[key] = { src: s, v: prepK(s, dist), noDist: !S.dist[sh] };
+      return S.prep[key].v;
+    }
+    if (!S.prep[key] || S.prep[key].src !== s) S.prep[key] = { src: s, v: prepU(s) };
+    return S.prep[key].v;
+  }
+  function optOf(it, s) {
+    var o = { fee: (it.k === 'K' ? S.feeK : S.feeU) / 100 };
+    if (S.fx && it.k === 'U' && S.fxd) { if (!s._fx || s._fxd !== S.fxd) { s._fx = fxAlign(s, S.fxd); s._fxd = S.fxd; } o.fx = s._fx; }
+    return o;
   }
 
   /* 고르기 */
@@ -6064,17 +6223,19 @@ var TAX = (function () {
     var x = S.by[key];
     var it = x ? { k: x.k, c: x.c } : /^(K[0-9][0-9A-Z]{5}|U[A-Z][A-Z0-9-]{0,9})$/.test(key) ? { k: key[0], c: key.slice(1) } : null;
     if (!it) return false;
-    if (S.sel.some(function (s) { return s.k + s.c === key; })) { if (!quiet) toast('이미 비교 중인 ETF입니다.'); return false; }
-    if (S.sel.length >= MAXN) { if (!quiet) toast('최대 ' + MAXN + '개까지 비교할 수 있어요. 하나를 빼고 추가하세요.'); return false; }
+    if (S.sel.some(function (s) { return s.k + s.c === key; })) { if (!quiet) toast(Lx('이미 비교 중인 ETF입니다.', 'Already in the comparison.')); return false; }
+    if (S.sel.length >= MAXN) { if (!quiet) toast(Lx('최대 ' + MAXN + '개까지 비교할 수 있어요. 하나를 빼고 추가하세요.', 'Up to ' + MAXN + ' ETFs. Remove one first.')); return false; }
     var used = S.sel.map(function (s) { return s.color; });
     it.color = COLORS.filter(function (c) { return used.indexOf(c) < 0; })[0];
     S.sel.push(it); fetchSeries(it).catch(function () {});
+    if (it.k === 'K') fetchDist(it.c);
     return true;
   }
   function remove(key) { S.sel = S.sel.filter(function (s) { return s.k + s.c !== key; }); }
   function setSel(keys) { S.sel = []; keys.forEach(function (k) { add(k, true); }); }
 
-  /* 주소 #e=K069500,USPY&p=1Y&fx=1 (기간설정: p=C20200101-20241231) — 공유하면 같은 비교가 열림 */
+  /* 주소 #e=K069500,USPY&p=1Y&fx=1&m=tr&fk=0.015&fu=0.25 (기간설정: p=C20200101-20241231 · 보기 m: net 기본·tr·px) — 공유하면 같은 비교가 열림 */
+  function feeOk(x) { return x != null && isFinite(x) && x >= 0 && x <= 5; }
   function readHash() {
     var h = location.hash.replace(/^#/, ''), o = {}; h.split('&').forEach(function (kv) { var i = kv.indexOf('='); if (i > 0) { try { o[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); } catch (e) {} } });
     if (!o.e) return false;
@@ -6084,12 +6245,16 @@ var TAX = (function () {
     if (m && f != null && t != null && f < t) { S.per = 'C'; S.from = f; S.to = t; }
     else S.per = ['1M', '3M', '6M', 'YTD', '1Y', 'MAX'].indexOf(p) >= 0 ? p : '1Y';
     S.fx = o.fx === '1';
+    S.mode = ['net', 'tr', 'px'].indexOf(o.m) >= 0 ? o.m : 'net';
+    var fk = parseFloat(o.fk), fu = parseFloat(o.fu);
+    S.feeK = feeOk(fk) ? fk : FEE_K; S.feeU = feeOk(fu) ? fu : FEE_U;
     return S.sel.length > 0;
   }
   function writeHash() {
     if (!$('page-etfcmp').classList.contains('active')) return;
     var p = S.per === 'C' && S.from != null && S.to != null ? 'C' + ymdOf(S.from).replace(/-/g, '') + '-' + ymdOf(S.to).replace(/-/g, '') : S.per === 'C' ? '1Y' : S.per;
-    var h = S.sel.length ? '#e=' + S.sel.map(function (s) { return s.k + s.c; }).join(',') + '&p=' + p + (S.fx ? '&fx=1' : '') : '';
+    var h = S.sel.length ? '#e=' + S.sel.map(function (s) { return s.k + s.c; }).join(',') + '&p=' + p + (S.fx ? '&fx=1' : '') + (S.mode !== 'net' ? '&m=' + S.mode : '')
+      + (S.feeK !== FEE_K ? '&fk=' + S.feeK : '') + (S.feeU !== FEE_U ? '&fu=' + S.feeU : '') : '';
     S.hash = h;
     try { if (location.hash !== h) history.replaceState(history.state, '', location.pathname + location.search + h); } catch (e) {}
   }
@@ -6098,17 +6263,17 @@ var TAX = (function () {
   function showSug() {
     var q = $('ecx-q').value, box = $('ecx-sug');
     if (!q.trim()) { hideSug(); return; }
-    if (!S.L) { S.sugs = []; S.sugIdx = -1; box.innerHTML = '<li class="none">' + (S.listErr ? 'ETF 목록을 불러오지 못했습니다. 새로고침해 주세요.' : 'ETF 목록을 불러오는 중…') + '</li>'; box.hidden = false; $('ecx-q').setAttribute('aria-expanded', 'true'); return; }
+    if (!S.L) { S.sugs = []; S.sugIdx = -1; box.innerHTML = '<li class="none">' + (S.listErr ? Lx('ETF 목록을 불러오지 못했습니다. 새로고침해 주세요.', 'Could not load the ETF list. Please reload.') : Lx('ETF 목록을 불러오는 중…', 'Loading the ETF list…')) + '</li>'; box.hidden = false; $('ecx-q').setAttribute('aria-expanded', 'true'); return; }
     S.sugs = search(S.L, q, S.mk, 30);
     var dk = !S.sugs.length && directKey(q, S.mk);
     if (dk) S.sugs = [{ k: dk[0], c: dk.slice(1), key: dk, direct: true }];
     S.sugIdx = S.sugs.length ? 0 : -1;
     var on = {}; S.sel.forEach(function (s) { on[s.k + s.c] = 1; });
     box.innerHTML = S.sugs.length ? S.sugs.map(function (x, i) {
-      var nm = x.direct ? (x.k === 'K' ? '종목코드 ' : '티커 ') + x.c + ' 그대로 추가' : x.n;
-      var sub = x.direct ? '목록에 없는 코드 — 새로 상장한 종목 등' : x.k === 'K' ? TABS[x.t] || '' : [x.a ? x.a.split(' ')[0] : '', EXCH[x.x] || ''].filter(Boolean).join(' · ');
-      return '<li role="option" id="ecx-o' + i + '" data-key="' + esc(x.key) + '" class="' + (i === 0 ? 'on' : '') + (on[x.key] ? ' added' : '') + '" aria-selected="' + (i === 0) + '"><span class="ecx-mkb ' + x.k + '">' + (x.k === 'K' ? '국내' : '미국') + '</span><span class="nm">' + esc(nm) + '<small>' + esc(sub) + '</small></span><span class="cd">' + esc(x.c) + (on[x.key] ? ' ✓' : '') + '</span></li>';
-    }).join('') : '<li class="none">찾는 ETF가 없습니다 — 종목코드(예: 069500)나 티커(예: SPY)로도 찾아 보세요.</li>';
+      var nm = x.direct ? (x.k === 'K' ? Lx('종목코드 ', 'Code ') : Lx('티커 ', 'Ticker ')) + x.c + Lx(' 그대로 추가', ' — add as typed') : x.n;
+      var sub = x.direct ? Lx('목록에 없는 코드 — 새로 상장한 종목 등', 'Not in the list — e.g. newly listed') : x.k === 'K' ? TABS[x.t] || '' : [SITE_EN ? '' : x.a ? x.a.split(' ')[0] : '', EXCH[x.x] || ''].filter(Boolean).join(' · ');
+      return '<li role="option" id="ecx-o' + i + '" data-key="' + esc(x.key) + '" class="' + (i === 0 ? 'on' : '') + (on[x.key] ? ' added' : '') + '" aria-selected="' + (i === 0) + '"><span class="ecx-mkb ' + x.k + '">' + mkt(x.k) + '</span><span class="nm">' + esc(nm) + '<small>' + esc(sub) + '</small></span><span class="cd">' + esc(x.c) + (on[x.key] ? ' ✓' : '') + '</span></li>';
+    }).join('') : '<li class="none">' + Lx('찾는 ETF가 없습니다 — 종목코드(예: 069500)나 티커(예: SPY)로도 찾아 보세요.', 'No match — try a Korean code (e.g. 069500) or a ticker (e.g. SPY).') + '</li>';
     box.hidden = false; $('ecx-q').setAttribute('aria-expanded', 'true');
     if (S.sugs.length) $('ecx-q').setAttribute('aria-activedescendant', 'ecx-o0'); else $('ecx-q').removeAttribute('aria-activedescendant');
   }
@@ -6121,57 +6286,67 @@ var TAX = (function () {
   function pick(key) { if (add(key)) { $('ecx-q').value = ''; hideSug(); render(); } else showSug(); }
 
   /* 그리기 */
+  function errLabel(key) { var e = S.err[key]; return e === 'nodata' ? Lx('자료 없음', 'No data') : e ? Lx('불러오기 실패', 'Failed to load') : ''; }
   function renderSel() {
     $('ecx-sel').innerHTML = S.sel.map(function (s) {
-      var key = s.k + s.c, st = S.err[key] ? '<span class="st err">' + esc(S.err[key]) + '</span><button type="button" class="retry" data-retry="' + esc(key) + '">다시</button>' : S.pend[key] || !S.data[key] ? '<span class="st">불러오는 중…</span>' : '';
-      return '<span class="ecx-chip"><i class="dot" style="background:' + s.color + '"></i><span class="ecx-mkb ' + s.k + '">' + (s.k === 'K' ? '국내' : '미국') + '</span><span class="nm" title="' + esc(labelOf(s) + ' · ' + subOf(s)) + '">' + esc(labelOf(s)) + '</span><span class="cd' + (s.k === 'U' && S.by[key] ? ' nmx' : '') + '">' + esc(subOf(s)) + '</span>' + st + '<button type="button" data-del="' + esc(key) + '" aria-label="' + esc(labelOf(s)) + ' 빼기">✕</button></span>';
+      var key = s.k + s.c, st = S.err[key] ? '<span class="st err">' + esc(errLabel(key)) + '</span><button type="button" class="retry" data-retry="' + esc(key) + '">' + Lx('다시', 'Retry') + '</button>' : S.pend[key] || !S.data[key] ? '<span class="st">' + Lx('불러오는 중…', 'Loading…') + '</span>' : '';
+      return '<span class="ecx-chip"><i class="dot" style="background:' + s.color + '"></i><span class="ecx-mkb ' + s.k + '">' + mkt(s.k) + '</span><span class="nm" title="' + esc(labelOf(s) + ' · ' + subOf(s)) + '">' + esc(labelOf(s)) + '</span><span class="cd' + (s.k === 'U' && S.by[key] ? ' nmx' : '') + '">' + esc(subOf(s)) + '</span>' + st + '<button type="button" data-del="' + esc(key) + '" aria-label="' + esc(labelOf(s)) + Lx(' 빼기', ' — remove') + '">✕</button></span>';
     }).join('');
+    var c = $('ecx-count'); if (c) c.textContent = S.sel.length + ' / ' + MAXN;
   }
   function renderPer() {
     document.querySelectorAll('#ecx-per .chart-tab').forEach(function (b) { var on = b.getAttribute('data-per') === S.per; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
-    $('ecx-custom').hidden = S.per !== 'C'; $('ecx-fx').checked = S.fx;
+    document.querySelectorAll('#ecx-mode button').forEach(function (b) { var on = b.getAttribute('data-m') === S.mode; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+    $('ecx-custom').hidden = S.per !== 'C'; $('ecx-fx').checked = S.fx; $('ecx-fees').hidden = S.mode !== 'net';
+    var fk = $('ecx-fk'), fu = $('ecx-fu');
+    if (document.activeElement !== fk) fk.value = String(S.feeK); if (document.activeElement !== fu) fu.value = String(S.feeU);
   }
   function status(t) { var el = $('ecx-status'); el.textContent = t || ''; el.style.display = t ? '' : 'none'; }
+  function cell(x, k) {
+    if (k === 'vol') return x == null ? '—' : (x * 100).toFixed(1) + '%';
+    return pct(x);
+  }
   function render() {
     if (!S.ready) return;
     renderSel(); renderPer(); writeHash();
     var canvas = $('ecx-chart'), leg = $('ecx-leg'), tb = $('ecx-stats'), note = $('ecx-range');
     var hasU = S.sel.some(function (it) { return it.k === 'U'; });
-    if (S.fx && !S.fxd && hasU) fxSeries().catch(function () { S.fx = false; toast('원/달러 환율 자료를 불러오지 못해 원화 환산을 껐습니다.'); render(); });
-    var items = S.sel.map(function (it) { return { it: it, s: seriesOf(it) }; });
-    var loading = S.sel.some(function (it) { return S.pend[it.k + it.c]; }) || (S.fx && !S.fxd && hasU);
-    var narrow = (canvas.parentNode.clientWidth || 800) < 520, B = narrow ? 800 : 2500, arr = items.map(function (o) { return o.s; }), R;
+    if (S.fx && !S.fxd && hasU) fxSeries().catch(function () { S.fx = false; toast(Lx('원/달러 환율 자료를 불러오지 못해 원화 환산을 껐습니다.', 'Could not load USD/KRW rates; KRW conversion turned off.')); render(); });
+    var items = S.sel.map(function (it) { var s = prepOf(it); return { it: it, s: s, o: s ? optOf(it, s) : null }; });
+    var loading = S.sel.some(function (it) { return S.pend[it.k + it.c] || (it.k === 'K' && S.data[it.k + it.c] && !prepOf(it)); }) || (S.fx && !S.fxd && hasU);
+    var narrow = (canvas.parentNode.clientWidth || 800) < 520, B = narrow ? 800 : 2500, arr = items.map(function (o) { return o.s; }), opts = items.map(function (o) { return o.o; }), R;
     if (S.per === 'C' && (S.from == null || S.to == null)) {                /* 기간설정을 처음 누름 → 지금(1Y) 범위로 채워 시작 */
-      R = calc(arr, '1Y', null, null, B); if (R.w && !R.err) { S.from = R.w.S; S.to = R.w.E; R = calc(arr, 'C', S.from, S.to, B); }
-    } else R = calc(arr, S.per, S.from, S.to, B);
+      R = calc(arr, '1Y', null, null, B, S.mode, opts); if (R.w && !R.err) { S.from = R.w.S; S.to = R.w.E; R = calc(arr, 'C', S.from, S.to, B, S.mode, opts); }
+    } else R = calc(arr, S.per, S.from, S.to, B, S.mode, opts);
     S.last = R;
     if (S.chart) { S.chart.destroy(); S.chart = null; }
     if (!S.sel.length) {
-      status('ETF를 고르면 차트가 그려집니다.'); leg.innerHTML = ''; note.textContent = ''; $('ecx-err').textContent = '';
-      tb.innerHTML = '<tr><td colspan="6" class="ecx-empty">위 검색창에서 비교할 ETF를 고르세요 (최대 ' + MAXN + '개).</td></tr>'; tb.parentNode.classList.add('is-empty'); $('ecx-swipe').hidden = true; return;
+      status(Lx('ETF를 고르면 차트가 그려집니다.', 'Pick ETFs to draw the chart.')); leg.innerHTML = ''; note.textContent = ''; $('ecx-err').textContent = '';
+      tb.innerHTML = '<tr><td colspan="7" class="ecx-empty">' + Lx('위 검색창에서 비교할 ETF를 고르세요 (최대 ' + MAXN + '개).', 'Search above to add ETFs (up to ' + MAXN + ').') + '</td></tr>'; tb.parentNode.classList.add('is-empty'); $('ecx-swipe').hidden = true; renderHead(); return;
     }
     /* 고른 순서대로 한 줄씩: 성과(r) 또는 빠진 이유(sk) */
     var rows = items.map(function (o, i) {
       return { it: o.it, s: o.s, key: o.it.k + o.it.c, r: R.list ? R.list.filter(function (x) { return x.i === i; })[0] : null, sk: R.skipped ? R.skipped.filter(function (x) { return x.i === i; })[0] : null };
     });
-    var why = function (x) { return S.err[x.key] || (!x.s ? '불러오는 중…' : !x.sk ? '—' : x.sk.why === 'after' ? '이 기간 뒤에 상장' : x.sk.why === 'before' ? '이 기간에 거래 자료 없음' : '기간이 너무 짧음'); };
+    var why = function (x) { return errLabel(x.key) || (!x.s ? Lx('불러오는 중…', 'Loading…') : !x.sk ? '—' : x.sk.why === 'after' ? Lx('이 기간 뒤에 상장', 'Listed after this period') : x.sk.why === 'before' ? Lx('이 기간에 거래 자료 없음', 'No trading data in this period') : Lx('기간이 너무 짧음', 'Period too short')); };
     /* 범례: 차트 바로 위 (색 · 이름 · 기간 수익률) */
     leg.innerHTML = rows.map(function (x) {
       var v = x.r ? '<em class="' + cls(x.r.st.ret) + '">' + pct(x.r.st.ret) + '</em>' : '<em class="st' + (S.err[x.key] ? ' err' : '') + '">' + esc(why(x)) + '</em>';
       return '<span><i style="background:' + x.it.color + '"></i><b title="' + esc(labelOf(x.it) + ' · ' + subOf(x.it)) + '">' + esc(labelOf(x.it)) + '</b>' + v + '</span>';
     }).join('');
     if (R.err) {
-      status(loading ? '자료를 불러오는 중…' : R.err); $('ecx-err').textContent = S.per === 'C' && !loading ? R.err : '';
-      tb.innerHTML = '<tr><td colspan="6" class="ecx-empty">' + esc(loading ? '자료를 불러오는 중…' : R.err) + '</td></tr>'; tb.parentNode.classList.add('is-empty'); $('ecx-swipe').hidden = true; note.textContent = ''; bounds(null); return;
+      var et = errText(R.err);
+      status(loading ? Lx('자료를 불러오는 중…', 'Loading data…') : et); $('ecx-err').textContent = S.per === 'C' && !loading ? et : '';
+      tb.innerHTML = '<tr><td colspan="7" class="ecx-empty">' + esc(loading ? Lx('자료를 불러오는 중…', 'Loading data…') : et) + '</td></tr>'; tb.parentNode.classList.add('is-empty'); $('ecx-swipe').hidden = true; note.textContent = ''; bounds(null); renderHead(); return;
     }
     $('ecx-err').textContent = ''; status('');
     bounds(R.w);
     /* 차트 */
     var xmin = R.pts.x[0], xmax = R.pts.x[R.pts.x.length - 1];
-    if (typeof Chart === 'undefined') status('차트 도구를 불러오지 못했습니다 — 아래 표는 그대로 볼 수 있어요.');
+    if (typeof Chart === 'undefined') status(Lx('차트 도구를 불러오지 못했습니다 — 아래 표는 그대로 볼 수 있어요.', 'The chart library failed to load — the table below still works.'));
     else {
       var tick = getComputedStyle(document.documentElement).getPropertyValue('--text3').trim() || '#888';
-      var ds = R.list.map(function (o, k) { var it = items[o.i].it; return { label: labelOf(it), data: R.pts.x.map(function (x, t) { return { x: x, y: R.pts.y[k][t] }; }), borderColor: it.color, backgroundColor: it.color, borderWidth: 2, pointRadius: 0, pointHoverRadius: 3, tension: 0, spanGaps: false, fill: false }; });
+      var ds = R.list.map(function (o, k) { var it = items[o.i].it; return { label: labelOf(it), data: R.pts.x.map(function (x, t) { return { x: x, y: R.pts.y[k][t] }; }), borderColor: it.color, backgroundColor: it.color, borderWidth: 1, pointRadius: 0, pointHoverRadius: 3, tension: 0, spanGaps: false, fill: false }; });
       S.chart = new Chart(canvas, {
         type: 'line', data: { datasets: ds },
         options: {
@@ -6201,30 +6376,64 @@ var TAX = (function () {
       });
       if (window.chartZoom) window.chartZoom.attach(canvas, S.chart, { min: xmin, max: xmax, minSpan: Math.min(7, xmax - xmin) || 1 });
     }
-    /* 표 */
+    /* 표 (머리 버튼으로 정렬 · 값 없는 줄은 맨 뒤) */
+    renderHead();
     var best = R.list.reduce(function (m, o) { return !m || o.st.ret > m.st.ret ? o : m; }, null);
-    tb.innerHTML = rows.map(function (x) {
-      var it = x.it, top = R.list.length > 1 && x.r && x.r === best;
-      var nm = '<div class="n"><i style="background:' + it.color + '"></i><b>' + esc(labelOf(it)) + (top ? '<span class="ecx-best">최고</span>' : '') + '<small title="' + esc(subOf(it)) + '">' + (it.k === 'K' ? '국내 · ' : '미국 · ') + esc(subOf(it)) + (S.fx && it.k === 'U' ? ' · 원화 환산' : '') + '</small></b></div>';
-      if (!x.r) return '<tr><td>' + nm + '</td><td colspan="5" class="ecx-empty ecx-why">' + esc(why(x)) + '</td></tr>';
-      var st = x.r.st;
-      return '<tr' + (top ? ' class="best"' : '') + '><td>' + nm + '</td><td class="' + cls(st.ret) + '">' + pct(st.ret) + '</td><td class="' + cls(st.cagr) + '">' + pct(st.cagr) + '</td><td>' + pct(st.mdd) + '</td><td>' + (st.vol == null ? '—' : (st.vol * 100).toFixed(1) + '%') + '</td>' +
-        '<td class="d">' + fmtD(st.baseDay) + ' → ' + fmtD(st.endDay) + '<br>' + (st.late ? '<em>기간 중 상장 · ' + fmtD(st.first) + '</em>' : '자료 시작(상장) ' + fmtD(st.first)) + '</td></tr>';
+    var ord = rows;
+    if (S.sort) ord = sortRows(rows.map(function (x) { return { x: x, v: x.r ? x.r.st[S.sort.k] : null }; }), S.sort.k, S.sort.dir).map(function (o) { return o.x; });
+    tb.innerHTML = ord.map(function (x) {
+      var it = x.it, top = R.list.length > 1 && x.r && x.r === best, st = x.r && x.r.st;
+      var info = st ? infoLine(it, x.s, st) : '';
+      var nm = '<div class="n"><i style="background:' + it.color + '"></i><b>' + esc(labelOf(it)) + (top ? '<span class="ecx-best">' + Lx('최고', 'Best') + '</span>' : '') + '<small title="' + esc(subOf(it)) + '">' + mkt(it.k) + ' · ' + esc(subOf(it)) + (S.fx && it.k === 'U' ? Lx(' · 원화 환산', ' · in KRW') : '') + '</small>' + (info ? '<small class="ecx-info" title="' + esc(info) + '">' + esc(info) + '</small>' : '') + '</b></div>';
+      if (!x.r) return '<tr><td>' + nm + '</td><td colspan="6" class="ecx-empty ecx-why">' + esc(why(x)) + '</td></tr>';
+      return '<tr' + (top ? ' class="best"' : '') + '><td>' + nm + '</td>' + COLS.map(function (c) { var v = st[c[0]]; return '<td class="' + (c[0] === 'ret' || c[0] === 'cagr' || c[0] === 'ann' ? cls(v) : '') + '">' + cell(v, c[0]) + '</td>'; }).join('') +
+        '<td class="d">' + fmtD(st.baseDay) + ' → ' + fmtD(st.endDay) + '<br>' + (st.late ? '<em>' + Lx('기간 중 상장 · ', 'Listed in period · ') + fmtD(st.first) + '</em>' : Lx('자료 시작(상장) ', 'Data from (listing) ') + fmtD(st.first)) + '</td></tr>';
     }).join('');
     tb.parentNode.classList.remove('is-empty');
     var ts = tb.parentNode.parentNode; $('ecx-swipe').hidden = !(ts.scrollWidth > ts.clientWidth + 2);   /* 표가 화면보다 넓을 때만 '옆으로 밀기' 안내 */
     /* 기간 설명 */
-    var w = R.w, lab = { '1M': '1개월', '3M': '3개월', '6M': '6개월', 'YTD': '올해(YTD)', '1Y': '1년', 'MAX': 'MAX', 'C': '기간설정' }[S.per];
+    var w = R.w, lab = { '1M': Lx('1개월', '1 month'), '3M': Lx('3개월', '3 months'), '6M': Lx('6개월', '6 months'), 'YTD': Lx('올해(YTD)', 'Year to date'), '1Y': Lx('1년', '1 year'), 'MAX': 'MAX', 'C': Lx('기간설정', 'Custom') }[S.per];
     var late = R.list.filter(function (o) { return o.st.late; }).map(function (o) { return labelOf(items[o.i].it); });
     var youngest = S.per === 'MAX' ? R.list.reduce(function (m, o) { return !m || o.s.d[0] > m.s.d[0] ? o : m; }, null) : null;
-    note.innerHTML = (typeof zpHint === 'function' && S.chart ? zpHint() + '<br>' : '') + '<b>' + lab + '</b> · 기준 ' + fmtD(w.S) + ' → ' + fmtD(w.E) +
-      (youngest ? ' · 가장 늦게 상장한 <b>' + esc(labelOf(items[youngest.i].it)) + '</b>의 첫 거래일(' + fmtD(youngest.s.d[0]) + ')부터 모두 0%에서 출발' : '') +
-      (late.length && S.per !== 'MAX' ? '<br>기간 중 상장: ' + esc(late.join(', ')) + ' — 상장일 종가를 0%로 그렸습니다' : '') +
-      '<br>분배금을 재투자한 수정주가 기준' + (S.fx && hasU ? ' · 미국 ETF는 원/달러 매매기준율로 원화 환산' : ' · 각 ETF의 거래 통화 기준') + (R.list.length > 1 ? ' · 표에서 기간 수익률이 가장 높은 ETF에 ‘최고’ 표시' : '');
+    var pend = R.list.filter(function (o) { return o.s.pend; }).map(function (o) { return labelOf(items[o.i].it); });
+    var noDist = items.filter(function (o) { return o.it.k === 'K' && o.s && S.prep[o.it.k + o.it.c] && S.prep[o.it.k + o.it.c].noDist; }).map(function (o) { return labelOf(o.it); });
+    note.innerHTML = (typeof zpHint === 'function' && S.chart ? zpHint() + '<br>' : '') + '<b>' + lab + '</b> · ' + Lx('기준 ', 'From ') + fmtD(w.S) + ' → ' + fmtD(w.E) +
+      (youngest ? Lx(' · 가장 늦게 상장한 <b>' + esc(labelOf(items[youngest.i].it)) + '</b>의 첫 거래일(' + fmtD(youngest.s.d[0]) + ')부터 모두 같은 출발선', ' · all start on the first trading day (' + fmtD(youngest.s.d[0]) + ') of the most recently listed ETF, <b>' + esc(labelOf(items[youngest.i].it)) + '</b>') : '') +
+      (late.length && S.per !== 'MAX' ? '<br>' + Lx('기간 중 상장: ', 'Listed during the period: ') + esc(late.join(', ')) + Lx(' — 상장일 종가부터 그렸습니다', ' — drawn from the listing-day close') : '') +
+      '<br>' + modeNote(hasU) +
+      (pend.length ? '<br><span class="ecx-warn">' + Lx('최근 분배가 아직 자료에 없어 추정으로 반영: ', 'A very recent distribution is estimated until the data updates: ') + esc(pend.join(', ')) + '</span>' : '') +
+      (noDist.length ? '<br><span class="ecx-warn">' + Lx('분배 이력을 불러오지 못해 분배를 반영하지 못함: ', 'Could not load distribution history for: ') + esc(noDist.join(', ')) + '</span>' : '') +
+      (R.list.length > 1 ? Lx(' · 표에서 기간 수익률이 가장 높은 ETF에 ‘최고’ 표시', ' · “Best” marks the highest return in the table') : '');
+  }
+  function modeNote(hasU) {
+    var cur = S.fx && hasU ? Lx(' · 미국 ETF는 원/달러 매매기준율로 원화 환산', ' · U.S. ETFs converted to KRW at the Bank of Korea rate') : Lx(' · 각 ETF의 거래 통화 기준', ' · in each ETF’s trading currency');
+    if (S.mode === 'px') return Lx('<b>가격만</b>: 분배금·배당금을 빼고 실제 종가 변화만', '<b>Price only</b>: closing-price change, distributions excluded') + cur;
+    if (S.mode === 'tr') return Lx('<b>세전 총수익</b>: 분배금을 분배락일에 그대로 재투자 (세금·수수료 없음)', '<b>Total return (pre-tax)</b>: distributions reinvested on the ex-date, no tax or fees') + cur;
+    return Lx('<b>세후 실제</b>: 국내 ETF 분배금은 주당 과세표준 × 15.4%, 미국 ETF 배당은 15% 원천징수 후 재투자 · 매수·재투자·매도 때 수수료(국내 ' + S.feeK + '% · 미국 ' + S.feeU + '%) · 매도 차익 세금·환전 비용은 빼지 않음',
+      '<b>After tax & fees</b>: Korean ETF distributions taxed at 15.4% of the taxable base per share, U.S. dividends 15% withholding, then reinvested · trading fee on each buy, reinvestment and sale (KR ' + S.feeK + '% · US ' + S.feeU + '%) · capital-gains tax and FX costs not deducted') + cur;
+  }
+  /* 표 이름 칸 둘째 줄: 분배 횟수 · 세금·수수료 · 과세표준 공개 여부 */
+  function infoLine(it, s, st) {
+    if (!st.n && S.mode !== 'net') return '';
+    if (S.mode === 'px') return Lx('분배 ' + st.n + '회 제외', st.n + ' distribution' + (st.n === 1 ? '' : 's') + ' excluded');
+    if (S.mode === 'tr') return Lx('분배 ' + st.n + '회 재투자', st.n + ' distribution' + (st.n === 1 ? '' : 's') + ' reinvested');
+    /* 낸 세금·수수료 합계 ÷ 처음 넣은 돈 (수익률 차이 %p 가 아님 — 재투자 손실까지 합치면 세전과의 차이는 이보다 클 수 있음) */
+    var t = Lx('원금 대비 세금 ' + (st.tax * 100).toFixed(2) + '% · 수수료 ' + (st.fee * 100).toFixed(2) + '%', 'tax ' + (st.tax * 100).toFixed(2) + '% · fees ' + (st.fee * 100).toFixed(2) + '% of principal');
+    if (!st.n) return t;
+    var src = it.k === 'U' ? Lx('배당 15% 원천징수', '15% withholding') : st.nk === st.n ? Lx('과세표준 운용사 공개 ' + st.nk + '회', 'taxable base published ×' + st.nk)
+      : Lx('과세표준 공개 ' + st.nk + '/' + st.n + '회', 'taxable base ' + st.nk + '/' + st.n + ' published') + (st.na ? Lx(' · 나머지는 공개 회차 평균 비율', ' · rest at the published average ratio') : '') + (st.nf ? Lx(' · 공개 없음: 분배금 전액 과세로 계산', ' · none published: taxed on the full amount') : '');
+    return Lx('분배 ' + st.n + '회 · ', st.n + ' distributions · ') + src + ' · ' + t;
+  }
+  function renderHead() {
+    var tr = $('ecx-head'); if (!tr) return;
+    tr.innerHTML = '<th>ETF</th>' + COLS.map(function (c) {
+      var on = S.sort && S.sort.k === c[0], ar = on ? (S.sort.dir < 0 ? ' ▼' : ' ▲') : ' ↕';   /* ↕ = 누를 수 있다는 표시(흐리게) */
+      return '<th aria-sort="' + (on ? (S.sort.dir < 0 ? 'descending' : 'ascending') : 'none') + '"><button type="button" class="ecx-sort' + (on ? ' on' : '') + '" data-sort="' + c[0] + '" title="' + Lx('누르면 내림차순 · 한 번 더 누르면 오름차순', 'Click to sort descending, again for ascending') + '">' + esc(c[1]) + '<span aria-hidden="true">' + ar + '</span></button></th>';
+    }).join('') + '<th>' + Lx('기준일 · 상장일', 'Period · listing') + '</th>';
   }
   function bounds(w) {
     var f = $('ecx-from'), t = $('ecx-to');
-    var arr = S.sel.map(seriesOf).filter(function (s) { return s && s.d.length; });
+    var arr = S.sel.map(prepOf).filter(function (s) { return s && s.d.length; });
     if (!arr.length) return;
     var lo = Math.min.apply(null, arr.map(function (s) { return s.d[0]; })), hi = Math.max.apply(null, arr.map(function (s) { return s.d[s.d.length - 1]; }));
     f.min = t.min = ymdOf(lo); f.max = t.max = ymdOf(hi);
@@ -6262,10 +6471,26 @@ var TAX = (function () {
       else S.per = p;
       render();
     });
+    $('ecx-mode').addEventListener('click', function (e) { var b = e.target.closest('button[data-m]'); if (!b || b.getAttribute('data-m') === S.mode) return; S.mode = b.getAttribute('data-m'); render(); });
+    var ft = null;
+    ['ecx-fk', 'ecx-fu'].forEach(function (id) {
+      $(id).addEventListener('input', function () {
+        var v = parseFloat(String(this.value).replace(',', '.')), okv = feeOk(v), el = this;
+        el.classList.toggle('bad', !okv && el.value.trim() !== '');
+        if (!okv) return;
+        clearTimeout(ft); ft = setTimeout(function () { if (id === 'ecx-fk') S.feeK = v; else S.feeU = v; render(); }, 250);
+      });
+      $(id).addEventListener('blur', function () { this.classList.remove('bad'); this.value = String(id === 'ecx-fk' ? S.feeK : S.feeU); });
+    });
+    $('ecx-stats').parentNode.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-sort]'); if (!b) return; var k = b.getAttribute('data-sort');
+      S.sort = S.sort && S.sort.k === k ? { k: k, dir: -S.sort.dir } : { k: k, dir: -1 };   /* 처음 누르면 내림차순 · 다시 누르면 오름차순 */
+      render();
+    });
     $('ecx-apply').addEventListener('click', function () {
       var f = dayOf($('ecx-from').value), t = dayOf($('ecx-to').value);
-      if (f == null || t == null) { $('ecx-err').textContent = '시작일과 종료일을 모두 고르세요.'; return; }
-      if (f >= t) { $('ecx-err').textContent = '시작일이 종료일보다 앞이어야 합니다.'; return; }
+      if (f == null || t == null) { $('ecx-err').textContent = Lx('시작일과 종료일을 모두 고르세요.', 'Pick both a start and an end date.'); return; }
+      if (f >= t) { $('ecx-err').textContent = errText('range'); return; }
       S.per = 'C'; S.from = f; S.to = t; render();
     });
     $('ecx-fx').addEventListener('change', function () { S.fx = this.checked; render(); });
@@ -6274,13 +6499,16 @@ var TAX = (function () {
   }
   function init() {
     if (S.inited) return; S.inited = true;
+    var mkL = { all: Lx('전체', 'All'), K: Lx('국내', 'Korea'), U: Lx('미국', 'U.S.') };   /* 영어판: 공용 사전의 '전체'(Total) 대신 */
+    document.querySelectorAll('.ecx-mk button').forEach(function (b) { b.textContent = mkL[b.getAttribute('data-mk')] || b.textContent; });
     bind();
-    status('ETF 목록을 불러오는 중…');
+    status(Lx('ETF 목록을 불러오는 중…', 'Loading the ETF list…'));
     (window.mdLoad ? window.mdLoad('etf_list.json') : Promise.resolve(null)).then(function (j) {
       if (!j || !j.kr || !j.us || !j.kr.length || !j.us.length) throw new Error('list');
       S.L = buildList(j); S.L.forEach(function (x) { S.by[x.key] = x; });
-      $('ecx-nkr').textContent = j.kr.length.toLocaleString('ko-KR'); $('ecx-nus').textContent = j.us.length.toLocaleString('ko-KR');
-      $('ecx-presets').innerHTML = '<span>자주 비교하는 조합</span>' + PRESETS.map(function (p, i) { return p[1].filter(function (k) { return S.by[k]; }).length >= 2 ? '<button type="button" data-p="' + i + '">' + esc(p[0]) + '</button>' : ''; }).join('');
+      var loc = SITE_EN ? 'en-US' : 'ko-KR';
+      $('ecx-nkr').textContent = j.kr.length.toLocaleString(loc); $('ecx-nus').textContent = j.us.length.toLocaleString(loc);
+      $('ecx-presets').innerHTML = '<span>' + Lx('자주 비교하는 조합', 'Popular comparisons') + '</span>' + PRESETS.map(function (p, i) { return p[1].filter(function (k) { return S.by[k]; }).length >= 2 ? '<button type="button" data-p="' + i + '">' + esc(p[0]) + '</button>' : ''; }).join('');
     }).catch(function () { S.listErr = true; }).then(function () {
       S.ready = true;
       if (!readHash()) setSel(DEFAULT);
@@ -6288,7 +6516,7 @@ var TAX = (function () {
       if ($('ecx-q') === document.activeElement && $('ecx-q').value.trim()) showSug();
     });
   }
-  window.ECXdebug = { S: S, render: render, add: function (k) { var r = add(k); render(); return r; }, remove: function (k) { remove(k); render(); }, pick: pick };
+  window.ECXdebug = { S: S, render: render, add: function (k) { var r = add(k); render(); return r; }, remove: function (k) { remove(k); render(); }, pick: pick, prepOf: prepOf, optOf: optOf };
   /* 주소의 #e=… 가 화면이 마지막으로 쓴 것과 다르면(주소창 수정·뒤로 가기) 그 비교로 바꿈
      — 뒤로 가기·주소 수정 때는 popstate(라우터 → 탭 다시 그리기)가 hashchange 보다 먼저 오므로, 다시 그리기 전에도 확인해야 새 주소를 옛 상태로 덮어쓰지 않음 */
   function newHash() { return location.hash !== S.hash && /^#(?:.*&)?e=/.test(location.hash) && (readHash(), true); }
