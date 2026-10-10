@@ -246,6 +246,15 @@
       }
     },
     {
+      "path": "etf-compare",
+      "tab": "etfcmp",
+      "group": "invest",
+      "title": "ETF 차트 비교 — 국내·미국 ETF 수익률 비교 (KODEX·TIGER·SPY·QQQ)",
+      "short": "ETF 차트 비교",
+      "share": "국내 ETF vs 미국 ETF, 수익률을 한 차트로 — ETF 차트 비교",
+      "desc": "국내·미국 상장 ETF 전체에서 최대 5개를 골라 1M~MAX·기간설정 수익률과 최대 낙폭을 한 차트로 비교합니다."
+    },
+    {
       "path": "marketcap",
       "tab": "mcap",
       "group": "invest",

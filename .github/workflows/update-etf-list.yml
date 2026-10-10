@@ -1,0 +1,51 @@
+name: ETF 차트 비교 목록·환율 갱신
+
+# ETF 차트 비교(/etf-compare/)의 검색 목록과 원/달러 환율을 새로 받음
+#  · data/etf_list.json — 국내 상장 ETF 전체(네이버 증권) + 미국 상장 ETF 전체(Nasdaq Trader nasdaqtraded.txt)
+#  · data/usdkrw.json   — 한국은행 ECOS 원/미국달러 매매기준율(일별) · '미국 ETF 원화 환산'에 씀
+#  · 하루 두 번: KST 09:25(그날 새로 상장한 국내 ETF 반영) · 18:25(그날 환율·미국 목록 반영)
+#  · 가격(일봉)은 여기서 받지 않음 — 화면이 Worker /etf 로 그때그때 받음
+on:
+  schedule:
+    - cron: '25 0,9 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['scripts/update_etf_list.py', '.github/workflows/update-etf-list.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: etf-list
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 목록·환율 받기
+        run: python3 scripts/update_etf_list.py
+      - name: 내용이 바뀐 경우에만 커밋 (받은 시각만 바뀐 경우는 커밋하지 않음)
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898099+github-actions[bot]@users.noreply.github.com'
+          changed=''
+          for f in data/etf_list.json data/usdkrw.json; do
+            if ! git show HEAD:$f > /tmp/old.json 2>/dev/null; then changed="$changed $f"; continue; fi
+            if ! python3 -c "import json,sys;a=json.load(open('/tmp/old.json'));b=json.load(open('$f'));a.pop('updated',None);b.pop('updated',None);sys.exit(0 if a==b else 1)"; then changed="$changed $f"; fi
+          done
+          if [ -z "$changed" ]; then echo "변경 없음"; exit 0; fi
+          git add $changed
+          git commit -m "chore: ETF 차트 비교 목록·환율 갱신"
+          for i in 1 2 3; do
+            git pull --rebase -X theirs --autostash && git push && exit 0
+            git rebase --abort 2>/dev/null || true
+            sleep 5
+          done
+          exit 1
