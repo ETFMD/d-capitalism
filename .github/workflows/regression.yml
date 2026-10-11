@@ -1,12 +1,12 @@
 name: 회귀 테스트
 
 # 원본·페이지·테스트가 바뀌면 tests/run_regression.py 로 전 경로 × 16개 화면 폭(넘침·잘림·콘솔 오류),
-# 메뉴·검색·허브 카드, 무한매수법 엔진(라오어 카페 원문 예시)·가이드북, ETF 차트 비교(합성 자료로 숫자까지)·Worker 실제 가격 경로를 검사함. 배포를 막지는 않고 결과만 알려 줌
+# 메뉴·검색·허브 카드, 무한매수법 엔진(라오어 카페 원문 예시)·가이드북, ETF 차트 비교(합성 자료로 숫자까지 · 상장 전 백테스트는 scripts/etf_bt_fit.py 기준 구현과 대조)·Worker 실제 가격 경로를 검사함. 배포를 막지는 않고 결과만 알려 줌
 on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['src/index.html', 'index.html', '*/index.html', 'en/**', 'assets/**', 'scripts/routes.json', 'tests/**', 'worker/src/**', '.github/workflows/regression.yml']
+    paths: ['src/index.html', 'index.html', '*/index.html', 'en/**', 'assets/**', 'scripts/routes.json', 'scripts/etf_bt_fit.py', 'tests/**', 'worker/src/**', '.github/workflows/regression.yml']
 
 concurrency:
   group: regression
@@ -23,7 +23,7 @@ jobs:
           python-version: '3.12'
       - name: Playwright · 한글 글꼴 설치
         run: |
-          pip install playwright==1.63.0
+          pip install playwright==1.63.0 numpy
           python -m playwright install --with-deps chromium
           sudo apt-get install -y -q fonts-noto-cjk
       - name: 검사기 자체 확인 (일부러 넣은 넘침·오류를 잡는지)

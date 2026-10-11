@@ -135,6 +135,10 @@ ETF_JS = """async (local) => {
   ok('처음: 기본 4개 · 1Y · 시장가(버튼 2개 중 시장가) · 주소', JSON.stringify(keys()) === '["K069500","K360750","USPY","UQQQ"]' && S.per === '1Y' && S.mode === 'px' && location.hash === '#e=K069500,K360750,USPY,UQQQ&p=1Y' && document.querySelectorAll('#ecx-mode button').length === 2 && document.querySelector('#ecx-mode button.on').dataset.m === 'px', [keys(), S.per, S.mode, location.hash]);
   ok('처음: 표 4줄 × 7칸(기간 수익률·CAGR·연환산·최대 낙폭·변동성) · 범례 4 · 차트 선 4(굵기 1)', rows().length === 4 && rows().every(r => r.cells.length === 7 && /%/.test(r.cells[1].textContent)) && document.querySelectorAll('#ecx-head th').length === 7 && document.querySelectorAll('#ecx-leg span').length === 4 && S.chart && S.chart.data.datasets.length === 4 && S.chart.data.datasets.every(d => d.borderWidth === 1), rows().map(r => r.textContent.slice(0, 50)));
   ok('기간설정 날짜 칸은 처음에 숨김 · 재투자 수수료 칸은 시장가에서 숨김', getComputedStyle($('ecx-custom')).display === 'none' && $('ecx-fees').hidden && getComputedStyle($('ecx-fees')).display === 'none', '');
+  ok('상장 전 백테스트: 처음부터 켜짐(체크) · 주소에 bt 없음', $('ecx-bt').checked && S.bt === true && !/&bt=/.test(location.hash), [$('ecx-bt').checked, S.bt, location.hash]);
+  // 아래는 실제 가격 시나리오(상장일·실제 거래 가격 기준) → 백테스트를 끄고 확인 (백테스트는 따로 BT_JS 에서)
+  $('ecx-bt').click(); await W(80); await done();
+  ok('백테스트 끄기 → 주소 &bt=0', S.bt === false && /&bt=0/.test(location.hash), location.hash);
   let r = last(); const E = Math.max(...r.list.map(o => o.s.d[o.s.d.length - 1]));
   ok('1Y: E = 가장 최근 거래일 · S = 그 12개월 전', r.w.E === E && r.w.S === X.addMonths(E, -12), [X.ymdOf(r.w.S), X.ymdOf(r.w.E)]);
   const infos = () => rows().map(tr => (tr.querySelector('.ecx-info') || {}).textContent || '');
@@ -232,19 +236,19 @@ ETF_JS = """async (local) => {
   ok('검색: 지수 이름·별칭이 먼저 (코스피·S&P500·나스닥·나스닥 100·다우)', top('코스피')[0] === 'IKOSPI' && top('S&P500')[0] === 'ISPX' && top('나스닥')[0] === 'ICOMP' && top('나스닥 100')[0] === 'INDX' && top('다우')[0] === 'IDJI' && top('코스피', 'U').indexOf('IKOSPI') < 0, [top('코스피')[0], top('S&P500')[0], top('나스닥')[0]]);
   ok('목록: 국내 1,000개 이상 · 미국 3,000개 이상', S.L.filter(x => x.k === 'K').length > 1000 && S.L.filter(x => x.k === 'U').length > 3000, '');
   // 10. 기간설정(시가 기준) 주소로 열기 — 국내 ETF 3 · 미국 1 · 지수 1 (야후에 빠진 기준·끝날은 네이버 일별 시세 한 쪽으로 채워 실제 가격 확인)
-  S.sort = null; location.hash = '#e=K069500,K360750,K498400,USPY,IKOSPI&p=C20260509-20260909'; await W(200); await done(); r = last();
+  S.sort = null; location.hash = '#e=K069500,K360750,K498400,USPY,IKOSPI&p=C20260509-20260909&bt=0'; await W(200); await done(); r = last();
   const C = rets(), KC = r.list.filter(isK);
   ok('주소로 기간설정 열기 → 5개 · 시작일(또는 그 뒤 첫 거래일) 시가 → 끝날(또는 그 전 마지막 거래일) 종가', keys().join() === 'K069500,K360750,K498400,USPY,IKOSPI' && S.per === 'C' && r.list.length === 5 && r.list.every(o => o.st.open && o.st.pKind === 'o' && o.st.pDay === o.st.baseDay && o.st.baseDay >= r.w.S && o.st.endDay <= r.w.E), [keys(), S.per, r.list.map(o => [X.ymdOf(o.st.pDay), o.st.pKind, X.ymdOf(o.st.endDay)])]);
   ok('기간설정: 국내 ETF 기준·끝 가격 모두 실제 거래 가격으로 확인 · 표 칸 = 계산 가격 · 시장가 수익률 = 끝 ÷ 기준 − 1', KC.length === 3 && KC.every(o => o.st.xb && o.st.xe) && cellBad().length === 0 && r.list.every(o => Math.abs(o.st.ret - (o.st.pE / o.st.p0 - 1)) < 1e-12), [KC.map(o => [S.sel[o.i].c, o.st.xb, o.st.xe]), cellBad()]);
   // 11. 사용자가 찾은 사례(2026-10): 분배가 잦은 국내 ETF + 코스피 · MAX → 둘 다 그 ETF 상장일 시가 → 마지막 거래일 종가
-  location.hash = '#e=K498400,IKOSPI&p=MAX'; await W(200); await done(); r = last();
+  location.hash = '#e=K498400,IKOSPI&p=MAX&bt=0'; await W(200); await done(); r = last();
   const XM = rets(), tt = S.chart && S.chart.options.plugins.tooltip.callbacks.title, x0 = r.w.S - 0.5;
   ok('MAX(분배 잦은 국내 ETF + 코스피): 둘 다 상장일 시가 → 마지막 거래일 종가 · 실제 가격 확인 · 표 칸 = 계산 가격', r.list.length === 2 && r.list.every(o => o.st.pKind === 'o' && o.st.pDay === r.w.S && o.st.endDay === o.s.d[o.s.d.length - 1] && Math.abs(o.st.ret - (o.st.pE / o.st.p0 - 1)) < 1e-12) && r.list[0].st.xb && r.list[0].st.xe && cellBad().length === 0, [r.list.map(o => [X.ymdOf(o.st.pDay), o.st.pKind, o.st.p0, o.st.pE, o.st.xb, o.st.xe]), cellBad()]);
   ok('MAX 차트: 상장일 반나절 앞 0% 에서 출발 · 툴팁 "… 시가"', r.pts.x[0] === x0 && r.pts.y.every(y => y[0] === 0) && !!tt && /시가|open/.test(tt([{ parsed: { x: x0 } }])) && !/시가|open/.test(tt([{ parsed: { x: r.w.S } }])), [r.pts.x[0], x0, tt && tt([{ parsed: { x: x0 } }])]);
   // 12. 실제 가격이 어디에도 없는 날(야후 빈 날 + 일별 시세 자료 시작 전)이 기준일 → 근사로 두고 표 가격 앞 ≈ · 기간 설명에 종목·날 수(같은 날을 두 번 세지 않음)
   //     같은 쪽의 다음 빈 날(2010-06-17)은 'first=' 답 뒤에 다시 받아 실제 가격으로 · 같은 날을 다시 묻지 않음
   if (local) {   // 합성 자료의 '야후 빈 날 + 일별 시세 자료 전' 날 (실제 자료에는 이 날이 정상이라 로컬에서만)
-  location.hash = '#e=K069500&p=C20100615-20100630'; await W(200); await done(); r = last();
+  location.hash = '#e=K069500&p=C20100615-20100630&bt=0'; await W(200); await done(); r = last();
   const o12 = r.list[0], n12 = (() => { let c = 0; if (o12) for (let t = o12.st.bi; t <= o12.st.ei; t++) if (!o12.s.xc[t]) c++; return c; })(), rg12 = $('ecx-range').textContent, c12 = rows()[0] && rows()[0].cells[6] ? rows()[0].cells[6].textContent : '';
   ok('실제 가격이 없는 기준일 → 근사 · 표 "2010.06.15 시가 ≈…" · 끝 가격은 실제(≈ 없음) · 설명 "근사한 날 … KODEX 200 1일"', !!o12 && n12 === 1 && !o12.st.xb && o12.st.xe && o12.st.pKind === 'o' && /^2010\\.06\\.15 시가 ≈[\\d,]+원→ 2010\\.06\\.30 종가 [\\d,]+원/.test(c12) && /근사한 날|approximated/.test(rg12) && /KODEX 200 1일/.test(rg12), [n12, c12, rg12.slice(-170)]);
   }
@@ -270,6 +274,9 @@ ETF_DIV = {'K069500': (30, 63, 0.006), 'K360750': (30, 63, 0.006), 'USPY': (30, 
            'K498400': (8, 21, 0.012)}   # (첫 분배락 거래일 번호, 간격(거래일), 분배금 ÷ 전날 종가)
 ETF_KR_OFF = {_dt.date(2025, 10, d) for d in range(3, 10)} | {_dt.date(2026, 10, 9)}
 ETF_NODATA = {'UNODATA'}
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import bt_synth   # noqa: E402  상장 전 백테스트 합성 식·금리·환율 + 파이썬 기준 기대값
+ETF_FIRST.update(bt_synth.BT_FIRST); ETF_FIRST.update(bt_synth.CAL_FIRST); ETF_FIRST.update(bt_synth.DEP_FIRST)   # 백테스트 대상·후보 상장일 · 국내(코스피)·미국(^GSPC·^SP500TR) 달력 시작 · 후보 종목
 ETF_FEE = {'K': 0.015 / 100, 'U': 0.25 / 100}
 ETF_YGAP = {'K069500': {_dt.date(2010, 6, 15), _dt.date(2010, 6, 17), _dt.date(2025, 10, 2)}, 'K360750': {_dt.date(2026, 5, 11)}, 'K498400': {_dt.date(2026, 9, 9)}}
 ETF_LOG = []   # 화면이 부른 실제 가격 주소 (m, 코드, 날짜, 화면이 추정한 쪽, 실제 쪽)
@@ -303,7 +310,13 @@ def etf_series(key):
         d += _dt.timedelta(1)
     a, b, c = 0.00015 + (seed % 7) * 0.00004, 0.06 + (seed % 5) * 0.02, 35 + (seed % 11) * 4
     k = 100.0 if key[0] == 'K' else 1.0
-    return days, [_px(key, 100 * k * _math.exp(a * t + b * _math.sin(t / c + seed))) for t in range(len(days))]
+    out = [_px(key, 100 * k * _math.exp(a * t + b * _math.sin(t / c + seed))) for t in range(len(days))]
+    if key == 'U^SP500TR':     # 미국 후보의 큰 하루 변화(30% 튀었다 돌아옴)는 정리하지 않음 — 화면·파이썬 모두 그대로 쓰는지 (USSO 백테스트)
+        out[500] = _px(key, out[500] * 1.3)
+    if key == 'K005930':       # 국내 후보의 자료 오류: 2003 튀었다 돌아옴(+55%) · 2007 가격제한폭(±15%) 밖 끊김(+40%) — 화면 btClean·파이썬 clean_dep 이 함께 정리하는지 (K091160 백테스트)
+        out[1820] = _px(key, out[1820] * 1.55)
+        out[2860:] = [_px(key, x * 1.4) for x in out[2860:]]
+    return days, out
 
 
 def etf_opens(key, raw):
@@ -402,9 +415,129 @@ def etf_route(route):
     return route.fulfill(status=200, headers=hd, body='\n'.join('%s,%s,%s' % r for r in page))
 
 
+BT_SYN = None
+
+
+def etf_bt_route(route):
+    """data/etfbt/<0~15>.json 식 묶음 · data/etfbt/r/<키>.json 금리·환율·S&P TR 앞부분 — 로컬 합성 (bt_synth)"""
+    global BT_SYN
+    if BT_SYN is None:
+        BT_SYN = bt_synth.Synth(etf_series, etf_body)
+    u = urllib.parse.urlparse(route.request.url).path
+    m = re.search(r'/etfbt/(\d+)\.json$', u)
+    if m:
+        return route.fulfill(status=200, headers={'Content-Type': 'application/json'}, body=bt_synth.shard_body(int(m.group(1))))
+    m = re.search(r'/etfbt/r/([A-Za-z0-9_]+\.json)$', u)
+    body = BT_SYN.file(m.group(1)) if m else None
+    return route.fulfill(status=200 if body else 404, headers={'Content-Type': 'application/json'}, body=body or '{}')
+
+
 def etf_dist_route(route):
     m = re.search(r'/etfdist/(\d)\.json', route.request.url)
     route.fulfill(status=200, headers={'Content-Type': 'application/json'}, body=etf_shard(int(m.group(1))) if m else '{}')
+
+
+def bt_check(fail, b, local):
+    """백테스트 화면 값 점검 — 로컬: 파이썬 기준 구현(scripts/etf_bt_fit.bt_levels + btJoin 규칙)과 날짜·가격·가상 분배까지 · 배포: 모양·문구·켜고 끄기"""
+    F = lambda m: fail('etf-backtest', m)
+    S_, rows, ds = b.get('s') or {}, b.get('rows') or [], b.get('ds') or []
+    if not S_ or not rows:
+        return F('화면 값 없음: %s' % json.dumps(b, ensure_ascii=False)[:300])
+    want = ['K133690', 'K122630', 'UTQQQ', 'USSO', 'K091160'] if local else ['K498400', 'K360750', 'USPY']
+    for k in want:
+        s = S_.get(k)
+        if not s or not s['bt'] or s['list'] is None or s['first'] >= s['list']:
+            F('%s 백테스트 없음 또는 시작일이 상장일 뒤: %s' % (k, s and {x: s[x] for x in ('bt', 'list', 'first', 'n')})); continue
+        if s['d'][s['bt']] != s['list']:
+            F('%s 백테스트 마지막 다음 날 ≠ 상장일 (%s · %s)' % (k, s['d'][s['bt']], s['list']))
+    # 표: 이름 아래 백테스트 줄(방법·검증 오차·색) · 기준 칸 '백테스트' · 차트 점선(상장일 전)·세로선 · 설명
+    for o in rows:
+        if o['key'] in want:
+            if not re.search(r'(백테스트|Backtest): .+ · ((예상 오차 연 ±|expected error ±)\d+\.\d|상장 후 자료가 짧아)', o['info']) or not re.search(r'ecx-bt [gmb]$', o['cls']):
+                F('%s 표 백테스트 줄 이상: %s · %s' % (o['key'], o['info'][:120], o['cls']))
+            if o['bt'] <= 0 or o['list'] is None:
+                F('%s 기간 안 백테스트 날 수 %s · 상장일 %s' % (o['key'], o['bt'], o['list']))
+            if o['pDay'] < o['list'] and not re.search(r'^\d{4}[.-]\d\d[.-]\d\d (백테스트|backtest)', o['cell']):
+                F('%s 기준 칸에 백테스트 표시 없음: %s' % (o['key'], o['cell'][:80]))
+            if not re.search(r'(상장|Listed) \d{4}[.-]\d\d[.-]\d\d · ((백테스트|backtest from) \d{4}|<em>|기간 중|backtest starts)', o['cell']):
+                F('%s 기준 칸 아래 상장·백테스트 시작 표시 없음: %s' % (o['key'], o['cell'][-80:]))
+    lab = {o['key']: o for o in rows}
+    for d_ in ds:
+        o = next((x for x in rows if x['key'] in want and x['list'] == d_['lx']), None)
+        if d_['lx'] is not None and (not d_['dash'] or d_['dash'][0] != [4, 3] or d_['dash'][1] is not None):
+            F('차트 점선 구간 이상(상장일 전 점선 · 뒤 실선): %s' % d_)
+    if sum(1 for d_ in ds if d_['lx'] is not None) < len(want):
+        F('차트 상장일 세로선(lx) 수 %d (기대 %d 이상)' % (sum(1 for d_ in ds if d_['lx'] is not None), len(want)))
+    if not re.search(r'(점선|Dashed) = (상장 전 백테스트|pre-listing backtest)', b.get('note', '')):
+        F('기간 설명에 점선·백테스트 설명 없음: %s' % b.get('note', '')[-200:])
+    firsts = [S_[k]['first'] for k in S_ if S_[k]]
+    if b.get('w') and firsts and b['w']['S'] != max(firsts):
+        F('MAX 기준일 %s ≠ 백테스트 포함 가장 늦은 시작 %s' % (b['w']['S'], max(firsts)))
+    off = b.get('off') or {}
+    if not off or '&bt=0' not in off.get('hash', '') or any(x != 0 for x in off.get('bt', [1])) or off.get('dashed') != 0:
+        F('백테스트 끄기 → 실제 기간만·주소 bt=0·점선 없음 이 아님: %s' % off)
+    elif off.get('w') != max(x for x in off.get('firsts', [0]) if x is not None):
+        F('끈 뒤 MAX 기준일 %s ≠ 가장 늦은 상장일 %s' % (off.get('w'), off.get('firsts')))
+    if not b.get('back') or '&bt=' in b['back'].get('hash', '') or b['back'].get('w') != (b.get('w') or {}).get('S'):
+        F('다시 켜기 → 처음과 같은 MAX·주소 bt 없음 이 아님: %s' % b.get('back'))
+    pz = b.get('parse') or {}
+    if pz.get('bt') is not False or pz.get('box') is not False or pz.get('any') is not False or '&bt=0' not in pz.get('hash', ''):
+        F('주소 &bt=0 으로 열기 → 백테스트 꺼짐(체크 해제·점선 없음)이 아님: %s' % pz)
+    if not local:
+        return
+    # ── 로컬: 숫자까지 ──
+    if 'IWM' not in b.get('note', '') or not re.search(r'백테스트 재료를 불러오지 못해|Backtest data unavailable', b.get('note', '')):
+        F('재료 없는 식(UIWM) → 실제 기간만 + 경고 문구 없음: %s' % b.get('note', '')[-200:])
+    if (S_.get('UIWM') or {}).get('bt'):
+        F('재료 없는 UIWM 에 백테스트가 붙음')
+    syn = BT_SYN or bt_synth.Synth(etf_series, etf_body)
+    try:
+        exp = bt_synth.expected(syn)
+    except Exception as ex:
+        return F('파이썬 기대값 계산 실패: %r' % ex)
+    R = bt_synth.recipes()
+    for k in want:
+        key = k[0] + ':' + k[1:]
+        e, s = exp.get(key), S_.get(k)
+        if not e or not s or not s['bt']:
+            F('%s 기대값·화면 값 없음' % k); continue
+        if s['bt'] != e['iS'] or s['d'][:e['iS']] != e['d'][:e['iS']]:
+            F('%s 백테스트 날짜 다름: 화면 %d일(%s~) · 기대 %d일(%s~)' % (k, s['bt'], s['d'][0], e['iS'], e['d'][0])); continue
+        days, raw = etf_series(k)
+        P, ex_ = bt_synth.joined_prices(e, R[key], raw[0])
+        worst = max(abs(a / b_ - 1) for a, b_ in zip(s['p'][:e['iS']], P))
+        print('    %s 백테스트 %d일 (%s~) · 가격 최대 상대 차 %.1e · 가상 분배 %d회' % (k, e['iS'], (_EP + _dt.timedelta(e['d'][0])).isoformat(), worst, len(s.get('dv') or [])), flush=True)
+        if worst > 1e-9:
+            F('%s 백테스트 가격(분배 뺀 시장가) 최대 상대 차 %.2e (기대 1e-9 이하)' % (k, worst))
+        if s['p'][e['iS']] != raw[0]:
+            F('%s 상장 첫날 가격 %s ≠ 실제 %s' % (k, s['p'][e['iS']], raw[0]))
+        prof = R[key].get('dv')
+        dvs = s.get('dv') or []
+        if prof:
+            want_ex = [e['d'][i] for i in ex_][:len(dvs)]
+            if [x[0] for x in dvs] != want_ex or not dvs:
+                F('%s 가상 분배 날짜 다름: 화면 %s · 기대 %s' % (k, [x[0] for x in dvs][:5], want_ex[:5]))
+            else:
+                dl = prof['y'] / prof['f']; tx = (prof.get('tx', 1) * 0.154) if k[0] == 'K' else 0.154
+                bad = [x for x in dvs if abs(x[2] - dl * P[x[1] - 1]) > 1e-9 * max(1, x[2]) or abs(x[3] - x[2] * tx) > 1e-9 * max(1, x[3])]
+                if bad:
+                    F('%s 가상 분배금·세금 다름: %s' % (k, bad[:3]))
+        elif dvs:
+            F('%s 분배 습관이 없는데 가상 분배가 있음' % k)
+    # 체인: TQQQ 백테스트는 QLD 백테스트를 이어 붙여 QQQ 상장일(합성 1999-03-10) 뒤 첫 거래일 무렵까지
+    if S_.get('UTQQQ') and S_['UTQQQ']['first'] >= (bt_synth.BT_FIRST['UQLD'] - _EP).days:
+        F('체인 안 됨: TQQQ 백테스트 시작 %s 가 QLD 상장일(%s) 뒤' % (S_['UTQQQ']['first'], bt_synth.BT_FIRST['UQLD']))
+    # 방법 문구: 환 노출 · 콜 매도 · 배수
+    want_lab = {'K133690': r'SPY×원/달러 · 예상 오차 연 ±3\.4%p$', 'K122630': r'KODEX 200 0\.90배 \+ 위클리 콜 매도\(커버 33% · 1\.0% OTM\) · 예상 오차 연 ±5\.2%p$',
+                'UTQQQ': r'QLD 1\.5배 · 예상 오차 연 ±1\.1%p \(이어 붙인 앞 구간 ±2\.0%p\)$', 'USSO': r'S&P 500 TR 2\.0배 · 예상 오차 연 ±2\.1%p$'}
+    for k, pat in want_lab.items():
+        if not re.search(pat, (lab.get(k) or {}).get('info', '')):
+            F('%s 방법 문구 %r 없음: %s' % (k, pat, (lab.get(k) or {}).get('info', '')[:140]))
+    # 색 = 예상 오차(이어 붙인 앞 구간이 더 크면 그것) 연 3% 미만 초록 g · 8% 미만 노랑 m · 그 밖 빨강 b
+    want_cls = {'K133690': 'm', 'K122630': 'm', 'UTQQQ': 'g', 'USSO': 'g'}
+    for k, c in want_cls.items():
+        if not (lab.get(k) or {}).get('cls', '').endswith('ecx-bt ' + c):
+            F('%s 오차 색 %r 아님: %s' % (k, c, (lab.get(k) or {}).get('cls')))
 
 
 def etf_expect(keys, S, mode, E=None, open_=False):
@@ -477,9 +610,9 @@ def etf_cmp(fail, where, got, exp, fields=('ret', 'tax', 'fee', 'mdd', 'vol', 'p
 #   화면이 표에 보여 주고 계산에 쓴 기준·끝 가격을 독립 출처와 맞춰 봄: 국내 ETF·지수 = 네이버 일별 시세(m.stock) · 미국 = 야후 일봉
 #   (화면은 국내 ETF 실제 가격을 야후 일봉(Worker m=kr)으로, 빠진 날만 네이버 일별 시세(m=kp)로 받음 → 출처가 달라도 같아야 함)
 #   (조합, {종목: (기준 날짜, 시가 o·종가 c)} 정답) — 2024-12-03 = KODEX 200타겟위클리커버드콜(498400) 상장일
-ETF_AUDIT = [('#e=K498400,IKOSPI&p=MAX', {'K498400': ('2024-12-03', 'o'), 'IKOSPI': ('2024-12-03', 'o')}),
-             ('#e=K069500,K360750,K498400,USPY,ISPX&p=1Y', None),
-             ('#e=K069500,K498400,IKOSPI,USPY&p=C20250102-20250630', None)]
+ETF_AUDIT = [('#e=K498400,IKOSPI&p=MAX&bt=0', {'K498400': ('2024-12-03', 'o'), 'IKOSPI': ('2024-12-03', 'o')}),   # 실제 가격 점검이라 상장 전 백테스트는 끔
+             ('#e=K069500,K360750,K498400,USPY,ISPX&p=1Y&bt=0', None),
+             ('#e=K069500,K498400,IKOSPI,USPY&p=C20250102-20250630&bt=0', None)]
 ETF_AUDIT_JS = """() => { const S = window.ECXdebug && ECXdebug.S, R = S && S.last, X = window.ECX; if (!R || !R.list) return null;
   const tr = [...document.querySelectorAll('#ecx-stats tr')];
   return { per: S.per, mode: S.mode, err: R.err || null, n: S.sel.length, rows: R.list.map(o => { const it = S.sel[o.i], x = S.by[it.k + it.c] || {}, st = o.st;
@@ -664,6 +797,7 @@ def main():
         if local:   # ETF 차트 비교 일봉: 로컬 주소는 Worker 가 막으므로(허용 출처 아님) 합성 자료로 대신 · 공개 프록시도 부르지 않게
             ctx.route(re.compile(r'.*workers\.dev/etf\?.*'), etf_route)
             ctx.route(re.compile(r'.*/data/etfdist/\d\.json.*'), etf_dist_route)
+            ctx.route(re.compile(r'.*/data/etfbt/.*\.json.*'), etf_bt_route)
             ctx.route(re.compile(r'.*allorigins\.win/.*'), lambda r: r.fulfill(status=200, headers={'Access-Control-Allow-Origin': '*'}, body=''))
         page = ctx.new_page()
         errs = []
@@ -935,6 +1069,8 @@ def main():
             epoch = _dt.date(1970, 1, 1)
             ready = ("() => window.ECXdebug && ECXdebug.S.ready && ECXdebug.S.sel.length && !Object.keys(ECXdebug.S.pend).length"
                      " && !Object.keys(ECXdebug.S.distP).length && !Object.keys(ECXdebug.S.exP).length && !Object.keys(ECXdebug.S.pgP).length"
+                     " && !Object.keys(ECXdebug.S.btP).length && !Object.keys(ECXdebug.S.depP).length"   # 상장 전 백테스트 식 묶음·재료까지
+                     " && ECXdebug.S.sel.every(s => !ECXdebug.S.data[s.k + s.c] || ECXdebug.prepOf(s))"
                      " && (!ECXdebug.S.fx || ECXdebug.S.fxd)")
             del ETF_LOG[:]
             page.set_viewport_size({'width': 1280, 'height': 900})
@@ -1075,6 +1211,50 @@ def main():
                     if 'KOSPI vs S&P 500' not in e['presets']: fail('en/etf-compare', '묶음 버튼이 영어가 아님: %s' % e['presets'][:120])
                 for t in [t for t, u in errs if not ignorable(t, u)][:3]:
                     fail('en/etf-compare', '콘솔 오류: ' + t[:200])
+            # 상장 전 백테스트 — 로컬: 합성 식(환 노출·체인·콜 매도 덧씌우기·S&P TR 이어 붙이기·재료 없음)을 파이썬 기준 구현과 숫자까지 · 배포: 실제 식 점검
+            print('[ETF] 상장 전 백테스트', flush=True)
+            errs.clear()
+            page.goto('about:blank'); page.goto(base + 'etf-compare/', wait_until='load')
+            try:
+                page.wait_for_function(ready, timeout=45000)
+            except Exception:
+                pass
+            hash_ = '#e=K133690,K122630,UTQQQ,USSO,UIWM,K091160&p=MAX' if local else '#e=K498400,K360750,USPY&p=MAX'
+            try:
+                b = page.evaluate(bt_synth.BT_JS, {'hash': hash_})
+            except Exception as ex:
+                b = {'R': [{'name': '백테스트 검사 실행', 'ok': False, 'info': str(ex)[:200]}]}
+            for t in b.get('R', []):
+                if not t['ok']:
+                    fail('etf-backtest', '%s: %s' % (t['name'], json.dumps(t.get('info'), ensure_ascii=False)))
+            bt_check(fail, b, local)
+            # 후보 일봉 자료 오류 정리(btClean): 화면 JS = 순수 파이썬 기준 구현(= 로컬은 scripts/etf_bt_fit.clean_dep 까지) — 일부러 넣은 오류로
+            try:
+                cases = bt_synth.clean_cases()
+                got = page.evaluate("cs => cs.map(c => { const r = ECX.btClean(c.k, { d: c.d, a: c.a, cur: 'KRW' }); return { d: r.d, a: r.a }; })", cases)
+                ref_np = None
+                if local:
+                    sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+                    import numpy as _np, etf_bt_fit as _F
+                    ref_np = lambda c: [x.tolist() for x in _F.clean_dep(c['k'], _np.array(c['d'], _np.int64), _np.array(c['a'], _np.float64))]
+                close = lambda x, y: len(x) == len(y) and all(abs(p - q) <= 1e-12 * max(1.0, abs(q)) for p, q in zip(x, y))
+                for c, g in zip(cases, got):
+                    ed, ea = bt_synth.clean_ref(c['k'], c['d'], c['a'])
+                    if g['d'] != ed or not close(g['a'], ea):
+                        fail('etf-backtest', '자료 오류 정리(btClean)가 기준과 다름: %s · 날 %d/%d' % (c['name'], len(g['d']), len(ed)))
+                    if ref_np:
+                        nd, na = ref_np(c)
+                        if nd != ed or not close(na, ea):
+                            fail('etf-backtest', '자료 오류 정리(clean_dep 파이썬)가 기준과 다름: %s' % c['name'])
+                    same = ea == [round(y, 6) for y in c['a']][-len(ea):]
+                    if same and c['k'] in ('K:TESTA', 'K:TESTB', 'K:TESTF'):
+                        fail('etf-backtest', '자료 오류 정리 시험 자료에 정리할 오류가 없음: %s' % c['name'])
+                    if not same and c['k'][0] == 'U':
+                        fail('etf-backtest', '미국 일봉은 정리하지 않아야 함: %s' % c['name'])
+            except Exception as ex:
+                fail('etf-backtest', '자료 오류 정리 검사 실행: %s' % str(ex)[:200])
+            for t in [t for t, u in errs if not ignorable(t, u)][:3]:
+                fail('etf-backtest', '콘솔 오류: ' + t[:200])
         # 영어판 무한매수법 — 가이드북·3-6·자동 숫자가 영어로, 일부러 남긴 원어(translate=no) 밖에는 한글 없음
         if os.path.isdir(os.path.join(ROOT, 'en', 'muhan')):
             errs.clear()

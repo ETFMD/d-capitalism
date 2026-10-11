@@ -272,7 +272,7 @@ function etfSource(m, s) {
     return { url: `https://api.finance.naver.com/siseJson.naver?symbol=${encodeURIComponent(s)}&requestType=1&startTime=19900101&endTime=${end}&timeframe=day`,
              ok: (v) => /\["\d{8}",/.test(v), ref: 'https://finance.naver.com/' };
   }
-  if (m === 'u' && /^\^?[A-Z][A-Z0-9-]{0,9}$/.test(s)) {                 // 미국 ETF 티커 · 미국 지수(^GSPC·^SP500TR 등)
+  if (m === 'u' && /^\^?[A-Z0-9][A-Z0-9.=-]{0,15}$/.test(s)) {           // 미국 ETF·주식 티커 · 지수(^GSPC 등) · 선물·환율(GC=F·JPY=X) · 해외 지수(000001.SS) — 상장 전 백테스트 재료
     // events=div: 분배금(배당) 내역 — 화면의 '가격(분배금 제외)·세후' 계산에 씀 (quote.close = 분배 미반영 종가, adjclose = 분배 재투자)
     return { url: `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?period1=315532800&period2=${now + 86400}&interval=1d&includePrePost=false&events=div`,
              ok: (v) => v.indexOf('"timestamp"') >= 0 && v.indexOf('"adjclose"') >= 0, ref: 'https://finance.yahoo.com/' };

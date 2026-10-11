@@ -11,7 +11,7 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const src = fs.readFileSync(path.join(ROOT, 'worker', 'src', 'index.js'), 'utf8');
 const a = src.indexOf('const KP_TTL'), b = src.indexOf('async function etfChart');
 if (a < 0 || b < 0) { console.log('FAIL Worker 에서 etfPage·yahooRows 구간을 찾지 못함'); process.exit(1); }
-const W = new Function('CNN_UA', src.slice(a, b) + '\nreturn { etfPage, yahooRows };')('test');
+const W = new Function('CNN_UA', src.slice(a, b) + '\nreturn { etfPage, yahooRows, etfSource };')('test');
 
 const days = []; for (let d = Date.UTC(2026, 0, 2); days.length < 200; d += 864e5) { const w = new Date(d).getUTCDay(); if (w > 0 && w < 6) days.push(new Date(d).toISOString().slice(0, 10)); }
 const ymd = (s) => s.replace(/-/g, '');
@@ -50,5 +50,11 @@ r = await kp(days[30], 2); ok(r.status === 200 && r.calls.length === 0, '원본 
 const yv = JSON.stringify({ chart: { result: [{ meta: { gmtoffset: 32400 }, timestamp: [1733184000, 1733270400, 1733356800], indicators: { quote: [{ open: [9840, null, 9800], close: [9925, 9830, null] }] } }] } });
 ok(W.yahooRows(yv) === '20241203,9840,9925\n20241204,,9830', '야후 줄: 현지 날짜 · 시가 없는 날 빈칸 · 종가 없는 날 뺌', W.yahooRows(yv));
 ok(W.yahooRows('{"chart":{"result":[{}]}}') === '', '야후 자료 없음 → 빈 문자열', '');
+// 상장 전 백테스트 재료: 야후 기호(지수·선물·환율·해외 종목·클래스 주식) 허용 · 이상한 기호·너무 긴 기호는 거절 · 네이버 지수·종목 코드
+const okU = ['SPY', '^SP500TR', 'GC=F', '7203.T', 'BRK-B', '000001.SS', 'ERIC-B.ST', 'NZDUSD=X', 'BTC-USD', 'BAJAJ-AUTO.BO'].filter(x => !W.etfSource('u', x));
+ok(!okU.length, 'm=u 백테스트 재료 기호 허용', okU);
+const badU = ['', 'a b', '../x', 'spy', 'ABCDEFGHIJKLMNOPQ', '^^GSPC', 'SPY&x=1'].filter(x => W.etfSource('u', x));
+ok(!badU.length, 'm=u 이상한 기호 거절', badU);
+ok(['KOSPI', 'KPI200', '069500', '0167A0'].every(x => W.etfSource('k', x)) && !W.etfSource('k', 'KOSPI;') && !W.etfSource('k', 'abc'), 'm=k 국내 지수·종목 코드', '');
 console.log('Worker ETF 실제 가격 경로: ok ' + oks + ' · fail ' + fails);
 process.exit(fails ? 1 : 0);
