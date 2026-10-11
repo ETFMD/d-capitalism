@@ -110,7 +110,7 @@ MUHAN_JS = """async () => {
   return R;
 }"""
 
-ETF_JS = """async () => {
+ETF_JS = """async (local) => {
   const R = [], ok = (name, c, info) => R.push({ name, ok: !!c, info }), W = ms => new Promise(r => setTimeout(r, ms));
   const S = window.ECXdebug && ECXdebug.S, X = window.ECX, $ = id => document.getElementById(id);
   if (!S || !X || !S.L) return { R: [{ name: 'ECX·ECXdebug·목록 없음', ok: false }], m: {}, S1y: 0, maxS: 0, late: false, ix: {} };
@@ -243,9 +243,11 @@ ETF_JS = """async () => {
   ok('MAX 차트: 상장일 반나절 앞 0% 에서 출발 · 툴팁 "… 시가"', r.pts.x[0] === x0 && r.pts.y.every(y => y[0] === 0) && !!tt && /시가|open/.test(tt([{ parsed: { x: x0 } }])) && !/시가|open/.test(tt([{ parsed: { x: r.w.S } }])), [r.pts.x[0], x0, tt && tt([{ parsed: { x: x0 } }])]);
   // 12. 실제 가격이 어디에도 없는 날(야후 빈 날 + 일별 시세 자료 시작 전)이 기준일 → 근사로 두고 표 가격 앞 ≈ · 기간 설명에 종목·날 수(같은 날을 두 번 세지 않음)
   //     같은 쪽의 다음 빈 날(2010-06-17)은 'first=' 답 뒤에 다시 받아 실제 가격으로 · 같은 날을 다시 묻지 않음
+  if (local) {   // 합성 자료의 '야후 빈 날 + 일별 시세 자료 전' 날 (실제 자료에는 이 날이 정상이라 로컬에서만)
   location.hash = '#e=K069500&p=C20100615-20100630'; await W(200); await done(); r = last();
   const o12 = r.list[0], n12 = (() => { let c = 0; if (o12) for (let t = o12.st.bi; t <= o12.st.ei; t++) if (!o12.s.xc[t]) c++; return c; })(), rg12 = $('ecx-range').textContent, c12 = rows()[0] && rows()[0].cells[6] ? rows()[0].cells[6].textContent : '';
   ok('실제 가격이 없는 기준일 → 근사 · 표 "2010.06.15 시가 ≈…" · 끝 가격은 실제(≈ 없음) · 설명 "근사한 날 … KODEX 200 1일"', !!o12 && n12 === 1 && !o12.st.xb && o12.st.xe && o12.st.pKind === 'o' && /^2010\\.06\\.15 시가 ≈[\\d,]+원→ 2010\\.06\\.30 종가 [\\d,]+원/.test(c12) && /근사한 날|approximated/.test(rg12) && /KODEX 200 1일/.test(rg12), [n12, c12, rg12.slice(-170)]);
+  }
   return { R, m: M, S1y, maxS, late, ix: IX, c: C, xm: XM };
 }"""
 
@@ -939,7 +941,7 @@ def main():
             page.goto('about:blank'); page.goto(base + 'etf-compare/', wait_until='load')
             try:
                 page.wait_for_function(ready, timeout=45000)
-                x = page.evaluate(ETF_JS)
+                x = page.evaluate(ETF_JS, local)
             except Exception as ex:
                 x = {'R': [{'name': '화면 준비·검사 실행', 'ok': False, 'info': str(ex)[:200]}], 'm': {}, 'S1y': 0, 'maxS': 0, 'late': False, 'ix': {}}
             for t in x['R']:
