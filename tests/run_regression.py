@@ -8,8 +8,8 @@
   3. 메뉴 항목 수(홈 + 도구 수) · 검색 결과 · 허브 카드 수(같은 그룹 도구 수)
   5. 나의 직업 수명 — 776개 직업·21분야 데이터·모델 방향·연구 순서·검색·순위·주소·공유
   4. 무한매수법 — 라오어 카페 원문 예시 숫자로 계산 엔진 검사, 기록 화면 그리기, 가이드북(23장 · 용어 31개 · 자동 숫자 · 장 열기 · 3-6 실제 일봉 백테스트 표)
-  6. ETF 차트 비교 — 보기 3가지(세후 실제·세전 총수익·가격만) · 기간(1M·3M·6M·YTD·1Y·MAX·기간설정) 기준일 · MAX = 가장 늦게 상장한 ETF 첫 거래일 ·
-     수익률·세금·수수료·CAGR·연환산 계산 · 표 정렬 · 수수료 입력 · 검색 · 최대 10개 · 원화 환산 · 주소(#e=…) 복원 · 묶음 버튼 · 자료 없음 표시 · 영어판
+  6. ETF 차트 비교 — 보기 2가지(시장가·기준가) · 기간(1M·3M·6M·YTD·1Y·MAX·기간설정) 기준일 · MAX = 가장 늦게 상장한 ETF 첫 거래일 ·
+     수익률·세금·재투자 수수료·CAGR·연환산 계산 · 표 정렬 · 수수료 입력 · 검색 · 최대 10개 · 원화 환산 · 주소(#e=…) 복원 · 묶음 버튼 · 자료 없음 표시 · 영어판
      (로컬 검사는 Worker /etf 와 국내 분배 이력 묶음을 합성 자료로 대신해 숫자까지 맞춰 봄)
 
 사용법
@@ -118,19 +118,19 @@ ETF_JS = """async () => {
   const mode = async m => { click('#ecx-mode [data-m="' + m + '"]'); await W(60); };
   const rets = () => { const o = {}; last().list.forEach(x => { o[S.sel[x.i].k + S.sel[x.i].c] = { ret: x.st.ret, cagr: x.st.cagr, ann: x.st.ann, tax: x.st.tax, fee: x.st.fee, n: x.st.n, nk: x.st.nk, na: x.st.na, nf: x.st.nf }; }); return o; };
   await done();
-  // 1. 처음 화면: 기본 4개 · 1Y · 세후 실제
+  // 1. 처음 화면: 기본 4개 · 1Y · 시장가
   const rows = () => [...document.querySelectorAll('#ecx-stats tr')];
-  ok('처음: 기본 4개 · 1Y · 세후 실제 · 주소', JSON.stringify(keys()) === '["K069500","K360750","USPY","UQQQ"]' && S.per === '1Y' && S.mode === 'net' && location.hash === '#e=K069500,K360750,USPY,UQQQ&p=1Y', [keys(), S.per, S.mode, location.hash]);
+  ok('처음: 기본 4개 · 1Y · 시장가(버튼 2개 중 시장가) · 주소', JSON.stringify(keys()) === '["K069500","K360750","USPY","UQQQ"]' && S.per === '1Y' && S.mode === 'px' && location.hash === '#e=K069500,K360750,USPY,UQQQ&p=1Y' && document.querySelectorAll('#ecx-mode button').length === 2 && document.querySelector('#ecx-mode button.on').dataset.m === 'px', [keys(), S.per, S.mode, location.hash]);
   ok('처음: 표 4줄 × 7칸(기간 수익률·CAGR·연환산·최대 낙폭·변동성) · 범례 4 · 차트 선 4(굵기 1)', rows().length === 4 && rows().every(r => r.cells.length === 7 && /%/.test(r.cells[1].textContent)) && document.querySelectorAll('#ecx-head th').length === 7 && document.querySelectorAll('#ecx-leg span').length === 4 && S.chart && S.chart.data.datasets.length === 4 && S.chart.data.datasets.every(d => d.borderWidth === 1), rows().map(r => r.textContent.slice(0, 50)));
-  ok('기간설정 날짜 칸은 처음에 숨김 · 수수료 칸은 세후에서 보임', getComputedStyle($('ecx-custom')).display === 'none' && !$('ecx-fees').hidden, '');
+  ok('기간설정 날짜 칸은 처음에 숨김 · 재투자 수수료 칸은 시장가에서 숨김', getComputedStyle($('ecx-custom')).display === 'none' && $('ecx-fees').hidden && getComputedStyle($('ecx-fees')).display === 'none', '');
   let r = last(); const E = Math.max(...r.list.map(o => o.s.d[o.s.d.length - 1]));
   ok('1Y: E = 가장 최근 거래일 · S = 그 12개월 전', r.w.E === E && r.w.S === X.addMonths(E, -12), [X.ymdOf(r.w.S), X.ymdOf(r.w.E)]);
-  const M = { net: rets() }; await mode('tr'); M.tr = rets(); const hTr = location.hash, fTr = $('ecx-fees').hidden; await mode('px'); M.px = rets(); const hPx = location.hash; await mode('net');
-  ok('보기 3가지: 세후 ≤ 세전 · 가격만 < 세전(분배 있는 종목) · 주소 m=tr·m=px · 세후(기본)는 주소에 m 없음 · 수수료 칸은 세후에서만', Object.keys(M.tr).every(k => M.net[k].ret <= M.tr[k].ret + 1e-12 && (M.tr[k].n === 0 || M.px[k].ret < M.tr[k].ret)) && /&m=tr/.test(hTr) && /&m=px/.test(hPx) && !/&m=/.test(location.hash) && fTr && !$('ecx-fees').hidden, [hTr, hPx, location.hash, M.net, M.tr, M.px]);
-  const info = [...document.querySelectorAll('#ecx-stats tr')].map(tr => (tr.querySelector('.ecx-info') || {}).textContent || '');
-  const kr = /과세표준 (운용사 공개 \\d+회|공개 \\d+\\/\\d+회)|taxable base (published ×\\d+|\\d+\\/\\d+ published)/, avg = /나머지는 공개 회차 평균 비율|rest at the published average ratio/;
-  ok('표 이름 아래: 분배 횟수·과세표준 공개 회차(모르는 회차는 평균 비율 표시)·미국 원천징수·원금 대비 세금·수수료', [0, 1].every(r => kr.test(info[r]) && avg.test(info[r]) === (M.net[keys()[r]].na > 0)) && [2, 3].every(r => /배당 15% 원천징수|15% withholding/.test(info[r])) && info.every(t => /원금 대비 세금 \\d+\\.\\d\\d% · 수수료 \\d+\\.\\d\\d%|tax \\d+\\.\\d\\d% · fees \\d+\\.\\d\\d% of principal/.test(t)), info);
-  ok('세전·가격 보기: 세금·수수료 0 · 세후: 수수료 > 0', Object.keys(M.tr).every(k => M.tr[k].tax === 0 && M.tr[k].fee === 0 && M.px[k].fee === 0 && M.net[k].fee > 0), '');
+  const infos = () => rows().map(tr => (tr.querySelector('.ecx-info') || {}).textContent || '');
+  const M = { px: rets() }, iPx = infos(); await mode('nav'); M.nav = rets(); const hNav = location.hash, fNav = !$('ecx-fees').hidden, iNav = infos(); await mode('px');
+  ok('보기 2가지: 시장가 < 기준가(분배 있는 종목, 없으면 같음) · 주소 m=nav · 시장가(기본)는 주소에 m 없음 · 수수료 칸은 기준가에서만', Object.keys(M.px).every(k => M.nav[k].n === 0 ? Math.abs(M.nav[k].ret - M.px[k].ret) < 1e-12 : M.px[k].ret < M.nav[k].ret) && /&m=nav/.test(hNav) && !/&m=/.test(location.hash) && fNav && $('ecx-fees').hidden, [hNav, location.hash, M.px, M.nav]);
+  ok('시장가: 세금·수수료 0 · 기준가: 세금·재투자 수수료 > 0 (분배 있는 종목)', Object.keys(M.px).every(k => M.px[k].tax === 0 && M.px[k].fee === 0 && (M.nav[k].n === 0 || (M.nav[k].tax > 0 && M.nav[k].fee > 0))), '');
+  const kr = /과세표준 (운용사 공개 \\d+회|공개 \\d+\\/\\d+회)|taxable base (published ×\\d+|\\d+\\/\\d+ published)/, avg = /나머지는 공개 회차 평균 비율|rest at the published average ratio/, nOf = i => M.px[keys()[i]].n;
+  ok('표 이름 아래 — 시장가: 분배 n회 제외 · 기준가: 재투자 회차·과세표준 공개 회차(모르는 회차는 평균 비율 표시)·미국 배당세 15.4%·원금 대비 세금·재투자 수수료', iPx.every((t, i) => nOf(i) === 0 ? t === '' : /^분배 \\d+회 제외$|^\\d+ distributions? excluded$/.test(t)) && [0, 1].every(i => nOf(i) === 0 || (kr.test(iNav[i]) && avg.test(iNav[i]) === (M.nav[keys()[i]].na > 0))) && [2, 3].every(i => nOf(i) === 0 || /배당세 15\\.4%|15\\.4% dividend tax/.test(iNav[i])) && iNav.every((t, i) => nOf(i) === 0 ? t === '' : /원금 대비 세금 (\\d+\\.\\d\\d%|0\\.01% 미만) · 재투자 수수료 (\\d+\\.\\d\\d%|0\\.01% 미만)$|tax (\\d+\\.\\d\\d%|under 0\\.01%) · reinvestment fees (\\d+\\.\\d\\d%|under 0\\.01%) of principal$/.test(t)), [iPx, iNav]);
   const pts = r.pts; ok('차트: 같은 날짜 축 · 끝 = 표 수익률', pts.y.every(y => y.length === pts.x.length) && r.list.every((o, k) => { const y = pts.y[k]; return Math.abs(y[y.length - 1] - Math.round(o.st.ret * 1e4) / 100) < 0.011; }), '');
   const S1y = r.w.S;
   // 2. 정렬: 표 머리 → 내림차순 → 오름차순 · 값 없는 줄은 맨 뒤
@@ -142,10 +142,11 @@ ETF_JS = """async () => {
   click('#ecx-head [data-sort="mdd"]'); await W(60); const m1 = col('mdd').map(num);
   ok('정렬: 다른 머리 누르면 그 칸 내림차순', m1.every((v, i) => i === 0 || v <= m1[i - 1]), m1);
   S.sort = null; ECXdebug.render();
-  // 3. 수수료 바꾸기 → 세후만 바뀜 · 주소 fk
-  const before = rets(); const fk = $('ecx-fk'); fk.value = '0.5'; fk.dispatchEvent(new Event('input', { bubbles: true })); await W(400);
-  const after = rets(); ok('국내 수수료 0.5% → 국내 ETF 세후 수익률 낮아짐 · 미국은 그대로 · 주소 fk=0.5', after.K069500.ret < before.K069500.ret && Math.abs(after.USPY.ret - before.USPY.ret) < 1e-12 && /&fk=0.5/.test(location.hash), [before.K069500.ret, after.K069500.ret]);
-  fk.value = '0.015'; fk.dispatchEvent(new Event('input', { bubbles: true })); await W(400); fk.blur();
+  // 3. 재투자 수수료 바꾸기 (기준가) → 국내 ETF 만 바뀜 · 주소 fk · 시장가는 수수료와 무관
+  await mode('nav'); const before = rets(); const fk = $('ecx-fk'); fk.value = '0.5'; fk.dispatchEvent(new Event('input', { bubbles: true })); await W(400);
+  const after = rets(); await mode('px'); const pxAfter = rets(); const hFee = location.hash;
+  ok('기준가: 국내 재투자 수수료 0.5% → 국내 ETF 수익률 낮아짐 · 미국은 그대로 · 주소 fk=0.5 · 시장가는 그대로', (nOf(0) === 0 || after.K069500.ret < before.K069500.ret) && Math.abs(after.USPY.ret - before.USPY.ret) < 1e-12 && /&fk=0.5/.test(hFee) && Math.abs(pxAfter.K069500.ret - M.px.K069500.ret) < 1e-12, [before.K069500.ret, after.K069500.ret, hFee]);
+  await mode('nav'); fk.value = '0.015'; fk.dispatchEvent(new Event('input', { bubbles: true })); await W(400); fk.blur(); await mode('px');
   // 4. 검색 · 추가 · 최대 10개
   await type('spy'); const sug = [...document.querySelectorAll('#ecx-sug li[data-key]')].map(l => l.dataset.key);
   ok('검색 spy → 첫 줄 SPY', sug[0] === 'USPY', sug.slice(0, 3));
@@ -183,8 +184,9 @@ ETF_JS = """async () => {
   click('#ecx-sel [data-del="K0167A0"]'); await W(60);
   ok('빼기 → 4개', S.sel.length === 4 && keys().indexOf('K0167A0') < 0, keys());
   const b1 = rets(); click('#ecx-fx'); await done(); await W(60); const b2 = rets();
-  const fxOk = (() => { const it = S.sel.find(s => s.c === 'SPY'), s = ECXdebug.prepOf(it), o = ECXdebug.optOf(it, s), w = last().w, x = last().list.find(o => S.sel[o.i].c === 'SPY'); if (!o.fx || !x) return false;
-    const bi = X.idxLE(s.d, w.S), ei = X.idxLE(s.d, w.E), v = X.valueSeries(s, bi, ei, 'net', { fee: S.feeU / 100 }); return Math.abs(x.st.ret - (v.v[v.v.length - 1] * o.fx[ei] / o.fx[bi] - 1)) < 1e-12; })();
+  const fxOf = () => { const it = S.sel.find(s => s.c === 'SPY'), s = ECXdebug.prepOf(it), o = ECXdebug.optOf(it, s), w = last().w, x = last().list.find(o => S.sel[o.i].c === 'SPY'); if (!o.fx || !x) return false;
+    const bi = X.idxLE(s.d, w.S), ei = X.idxLE(s.d, w.E), v = X.valueSeries(s, bi, ei, S.mode, { fee: S.feeU / 100 }); return Math.abs(x.st.ret - (v.v[v.v.length - 1] * o.fx[ei] / o.fx[bi] - 1)) < 1e-12; };
+  let fxOk = fxOf(); await mode('nav'); fxOk = fxOk && fxOf(); await mode('px');
   ok('원화 환산: 미국 ETF 가치 × 그날 원/달러 ÷ 시작일 원/달러 · 국내는 그대로 · 주소 fx=1', fxOk && Math.abs(b2.K069500.ret - b1.K069500.ret) < 1e-12 && Math.abs(b2.USPY.ret - b1.USPY.ret) > 1e-9 && /&fx=1/.test(location.hash), [b1.USPY.ret, b2.USPY.ret]);
   click('#ecx-fx'); await W(60);
   // 9. 묶음 버튼 · 검색 순서 · 목록
@@ -200,9 +202,9 @@ ETF_JS = """async () => {
 }"""
 
 # ── ETF 차트 비교: 로컬 검사용 합성 자료 (Worker /etf · 국내 분배 이력 묶음 data/etfdist 대신) ──
-#   실제 종가·분배금이 정해져 있어 세 가지 보기(가격·세전·세후)의 기대값을 여기서 직접 계산해 화면 숫자와 맞춰 봄
+#   실제 종가·분배금이 정해져 있어 두 가지 보기(시장가·기준가)의 기대값을 여기서 직접 계산해 화면 숫자와 맞춰 봄
 #   · 국내는 2025-10-03~09·2026-10-09 휴장(실제 달력과 같게) · 수정주가 = 실제 종가 × (그 뒤 분배락마다 1 − 분배금 ÷ 전날 종가)
-#   · K069500: 4회마다 과세표준 비공개(→ 같은 ETF 공개 회차 평균 비율로 계산) · K360750: 과세표준 = 분배금 · 미국: 배당 15%
+#   · K069500: 4회마다 과세표준 비공개(→ 같은 ETF 공개 회차 평균 비율로 계산) · K360750: 과세표준 = 분배금 · 미국: 배당 15.4%
 import datetime as _dt, math as _math
 ETF_END = _dt.date(2026, 10, 9)
 ETF_FIRST = {'K069500': _dt.date(2002, 10, 14), 'K360750': _dt.date(2020, 8, 7), 'USPY': _dt.date(1993, 1, 29),
@@ -289,7 +291,8 @@ def etf_dist_route(route):
 def etf_expect(keys, S, mode):
     """기대값 {종목: {ret, tax, fee, n, nk, na, nf, span}} — 화면 valueSeries 와 같은 규칙을 여기서 따로 구현
        기준일 = S(1970-01-01 기준 일수) 이하 마지막 거래일(없으면 첫 거래일) → 마지막 거래일
-       mode: px 가격 · tr 세전(분배락 전날 종가 − 분배금에 재투자) · net 세후(국내 과세표준 × 15.4% · 미국 15% · 수수료 기본값)"""
+       mode: px 시장가(종가 변화만, 세금·수수료 없음) · nav 기준가(분배금에서 세금을 떼고 재투자 수수료를 뺀 만큼 분배락 전날 종가 − 분배금에 재투자,
+             국내 과세표준 × 15.4% · 미국 배당 × 15.4% · 처음 매수·마지막 매도 수수료 없음)"""
     out = {}
     for k in keys:
         days, raw = etf_series(k)
@@ -305,18 +308,14 @@ def etf_expect(keys, S, mode):
                 o['nk' if t is not None else 'na' if ratio is not None else 'nf'] += 1
         if mode == 'px':
             o['ret'] = raw[ei] / raw[bi] - 1; out[k] = o; continue
-        fee = ETF_FEE[k[0]] if mode == 'net' else 0.0
-        u = (1 - fee) / raw[bi]
-        if mode == 'net': o['fee'] = fee
+        fee, u = ETF_FEE[k[0]], 1 / raw[bi]
         for i, a, t in dv:
             x = raw[i - 1] - a
-            if mode == 'tr': u *= 1 + a / x; continue
-            tax = a * 0.15 if k[0] == 'U' else (t if t is not None else a * (ratio if ratio is not None else 1.0)) * 0.154
-            cash = u * (a - tax)
-            o['tax'] += u * tax; o['fee'] += cash * fee
-            u += cash * (1 - fee) / x
-        o['ret'] = u * raw[ei] * (1 - fee) - 1
-        if mode == 'net': o['fee'] += u * raw[ei] * fee
+            tax = a * 0.154 if k[0] == 'U' else (t if t is not None else a * (ratio if ratio is not None else 1.0)) * 0.154
+            cash = u * (a - tax); buy = cash / (1 + fee)
+            o['tax'] += u * tax; o['fee'] += cash - buy
+            u += buy / x
+        o['ret'] = u * raw[ei] - 1
         out[k] = o
     return out
 
@@ -573,7 +572,7 @@ def main():
           ok('제목에 "노동자에서 자본가로"', /노동자에서 자본가로/.test(document.querySelector('#page-home h1').textContent) && /AI/.test(document.querySelector('#page-home h1').textContent), '');
           ok('두 힘·하나의 답 카드 3개 · 숫자 채워짐', document.querySelectorAll('.hm-f').length === 3 && ['hm-k-cpi', 'hm-k-seoul', 'hm-k-spy'].every(id => /^연 [+−-]?\\d/.test(t(id))), ['hm-k-cpi', 'hm-k-seoul', 'hm-k-spy'].map(t));
           ok('아이콘: 메뉴와 같은 선 아이콘(SVG) · 그림 문자 없음', document.querySelectorAll('.hm-tools .dc-ico svg').length === 12 && document.querySelectorAll('.hm-f-k .dc-ico svg, .hm-dtabs .dc-ico svg').length === 7 && !/\\p{Extended_Pictographic}/u.test(document.getElementById('page-home').textContent), (document.getElementById('page-home').textContent.match(/\\p{Extended_Pictographic}/gu) || []).slice(0, 5));
-          ok('많이 찾는 도구 12개 · 6단계', document.querySelectorAll('.hm-tools .hm-tool').length === 12 && document.querySelectorAll('.hm-ps').length === 6, '');
+          ok('많이 찾는 도구 12개(ETF 차트 비교 포함 · 무한매수법 자리) · 6단계', document.querySelectorAll('.hm-tools .hm-tool').length === 12 && !!document.querySelector('.hm-tools a[href="etf-compare/"] svg') && !document.querySelector('.hm-tools a[href="muhan/"]') && document.querySelectorAll('.hm-ps').length === 6, '');
           const panels = () => [...document.querySelectorAll('[data-hp-panel]')].map(p => p.hidden);
           ok('데이터 탭: 처음엔 첫 주제만', JSON.stringify(panels()) === '[false,true,true,true]', panels());
           document.querySelector('.hm-dtabs [data-hp="3"]').click(); await W(400);
@@ -653,7 +652,7 @@ def main():
                     fail('job-life', '%s: %s' % (t['name'], json.dumps(t.get('info'), ensure_ascii=False)))
             for t in [t for t, u in errs if not ignorable(t, u)][:3]:
                 fail('job-life', '콘솔 오류: ' + t[:200])
-        # ETF 차트 비교 — 보기 3가지(세후·세전·가격)·기간·MAX(가장 늦게 상장한 ETF 기준)·계산·정렬·수수료·검색·최대 10개·원화 환산·주소 복원·묶음 버튼·자료 없음
+        # ETF 차트 비교 — 보기 2가지(시장가·기준가)·기간·MAX(가장 늦게 상장한 ETF 기준)·계산·정렬·재투자 수수료·검색·최대 10개·원화 환산·주소 복원·묶음 버튼·자료 없음
         if os.path.isdir(os.path.join(ROOT, 'etf-compare')):
             print('[ETF] ETF 차트 비교', flush=True)
             errs.clear()
@@ -674,7 +673,7 @@ def main():
                 if x['S1y'] != (_dt.date(2025, 10, 9) - epoch).days:
                     fail('etf-compare', '1Y 기준일 %s (기대 2025-10-09)' % x['S1y'])
                 keys = ['K069500', 'K360750', 'USPY', 'UQQQ']
-                for mode in ('net', 'tr', 'px'):
+                for mode in ('px', 'nav'):
                     got, exp = x['m'].get(mode, {}), etf_expect(keys, x['S1y'], mode)
                     if sorted(got) != sorted(keys):
                         fail('etf-compare', '%s 1Y 표 종목 %s (기대 %s)' % (mode, sorted(got), keys)); continue
@@ -688,25 +687,25 @@ def main():
                         cg = (1 + e['ret']) ** (365.25 / e['span']) - 1 if e['span'] >= 365 else None
                         if (g['cagr'] is None) != (cg is None) or (cg is not None and abs(g['cagr'] - cg) > 1e-9) or abs(g['ann'] - e['ret'] * 365.25 / e['span']) > 1e-9:
                             fail('etf-compare', '%s 1Y %s CAGR·연환산: 화면 %s · %s · 기대 %s · %s' % (mode, k, g['cagr'], g['ann'], cg, e['ret'] * 365.25 / e['span']))
-                n = etf_expect(keys, x['S1y'], 'net')
+                n = etf_expect(keys, x['S1y'], 'nav')
                 if not (n['K069500']['nk'] > 0 and n['K069500']['na'] > 0 and n['K360750']['nk'] == n['K360750']['n'] > 0 and n['USPY']['n'] > 0):
                     fail('etf-compare', '합성 자료가 과세표준 공개·평균 비율·미국 배당을 모두 담지 못함: %s' % {k: [v['n'], v['nk'], v['na']] for k, v in n.items()})
                 if x['maxS'] != (ETF_FIRST['K0167A0'] - epoch).days or not x['late']:
                     fail('etf-compare', 'MAX 기준일 %s (기대 2026-03-17 = 가장 늦게 상장한 0167A0) · 1Y 기간 중 상장 %s' % (x['maxS'], x['late']))
             # 주소로 열기(공유 링크): 종목·기간·원화 환산 복원 (로컬은 자료 없는 종목도 섞어 '자료 없음' 표시 확인)
             page.goto('about:blank')
-            page.goto(base + 'etf-compare/#e=USPY,K069500%s&p=MAX&fx=1' % (',UNODATA' if local else ''), wait_until='load')
+            page.goto(base + 'etf-compare/#e=USPY,K069500%s&p=MAX&fx=1&m=tr' % (',UNODATA' if local else ''), wait_until='load')   # 예전 주소의 m=tr → 기준가
             try:
                 page.wait_for_function(ready, timeout=45000)
             except Exception:
                 pass
             h = page.evaluate("""() => { const S = window.ECXdebug && ECXdebug.S, r = S && S.last; if (!S) return {};
-                return { sel: S.sel.map(s => s.k + s.c), per: S.per, fx: S.fx, box: document.getElementById('ecx-fx').checked,
+                return { sel: S.sel.map(s => s.k + s.c), per: S.per, fx: S.fx, box: document.getElementById('ecx-fx').checked, mode: S.mode, hash: location.hash,
                   active: [...document.querySelectorAll('#ecx-per .chart-tab.active')].map(b => b.dataset.per), S: r && r.w ? r.w.S : null,
                   firsts: r && r.list ? r.list.map(o => o.s.d[0]) : [], chips: document.getElementById('ecx-sel').innerText, tbl: document.getElementById('ecx-stats').innerText }; }""")
             want = ['USPY', 'K069500'] + (['UNODATA'] if local else [])
-            if h.get('sel') != want or h.get('per') != 'MAX' or not h.get('fx') or not h.get('box') or h.get('active') != ['MAX']:
-                fail('etf-compare', '주소 복원 실패: %s' % json.dumps({k: h.get(k) for k in ('sel', 'per', 'fx', 'box', 'active')}, ensure_ascii=False))
+            if h.get('sel') != want or h.get('per') != 'MAX' or not h.get('fx') or not h.get('box') or h.get('active') != ['MAX'] or h.get('mode') != 'nav' or '&m=nav' not in (h.get('hash') or ''):
+                fail('etf-compare', '주소 복원 실패: %s' % json.dumps({k: h.get(k) for k in ('sel', 'per', 'fx', 'box', 'active', 'mode', 'hash')}, ensure_ascii=False))
             if not h.get('firsts') or h.get('S') != max(h['firsts']):
                 fail('etf-compare', '주소 복원 MAX 기준일 %s · 첫 거래일 %s' % (h.get('S'), h.get('firsts')))
             if local and (h.get('chips', '').count('자료 없음') != 1 or '자료 없음' not in h.get('tbl', '')):
@@ -717,8 +716,8 @@ def main():
                 page.wait_for_function(ready, timeout=30000)
             except Exception:
                 pass
-            hc = page.evaluate("() => { const S = ECXdebug.S; return [S.sel.map(s => s.k + s.c), S.per, S.fx, location.hash]; }")
-            if hc != [['UQQQ'], '3M', False, '#e=UQQQ&p=3M']:
+            hc = page.evaluate("() => { const S = ECXdebug.S; return [S.sel.map(s => s.k + s.c), S.per, S.fx, S.mode, location.hash]; }")
+            if hc != [['UQQQ'], '3M', False, 'px', '#e=UQQQ&p=3M']:
                 fail('etf-compare', '주소의 #e= 만 바꾼 경우 반영 안 됨: %s' % hc)
             # 좁은 화면: 표는 옆으로 밀기(이름 칸 고정) + 안내 · 넓은 화면은 안내 없음
             page.set_viewport_size({'width': 390, 'height': 844}); page.wait_for_timeout(600)
@@ -734,7 +733,7 @@ def main():
             # 영어판 /en/etf-compare/ — 언어·보기 버튼·표 머리·표 설명·기간 설명이 영어 · 목록·표가 그려짐 · 종목 이름 말고는 한글 없음
             if os.path.isdir(os.path.join(ROOT, 'en', 'etf-compare')):
                 errs.clear()
-                page.goto('about:blank'); page.goto(base + 'en/etf-compare/', wait_until='load')
+                page.goto('about:blank'); page.goto(base + 'en/etf-compare/#e=K069500,K360750,USPY,UQQQ&p=1Y&m=nav', wait_until='load')
                 try:
                     page.wait_for_function(ready, timeout=45000)
                 except Exception:
@@ -750,11 +749,11 @@ def main():
                     fail('en/etf-compare', 'ECXdebug·페이지 없음')
                 else:
                     if e['lang'] != 'en': fail('en/etf-compare', 'html lang=%s' % e['lang'])
-                    if e['modes'] != ['After tax & fees', 'Total return', 'Price only']: fail('en/etf-compare', '보기 버튼 %s' % e['modes'])
+                    if e['modes'] != ['Market price', 'Reinvested (after tax)']: fail('en/etf-compare', '보기 버튼 %s' % e['modes'])
                     if e['head'] != ['ETF', 'Return', 'CAGR', 'Annualized', 'Max drawdown', 'Volatility (ann.)', 'Period · listing']: fail('en/etf-compare', '표 머리 %s' % e['head'])
                     if not e['list'] or e['rows'] != 4: fail('en/etf-compare', '목록 %s · 표 %d줄 (기대 4)' % (e['list'], e['rows']))
                     if len(e['info']) != 4 or e['koInfo'] or not all('of principal' in t for t in e['info']): fail('en/etf-compare', '표 이름 아래 설명이 영어가 아님: %s' % e['info'])
-                    if 'From' not in e['range'] or 'After tax & fees' not in e['range']: fail('en/etf-compare', '기간 설명이 영어가 아님: %s' % e['range'][:160])
+                    if 'From' not in e['range'] or 'Reinvested (after tax)' not in e['range']: fail('en/etf-compare', '기간 설명이 영어가 아님: %s' % e['range'][:160])
                     if e['ko']: fail('en/etf-compare', '영어 화면에 한글 남음: %s' % e['ko'])
                     if 'KOSPI vs S&P 500' not in e['presets']: fail('en/etf-compare', '묶음 버튼이 영어가 아님: %s' % e['presets'][:120])
                 for t in [t for t, u in errs if not ignorable(t, u)][:3]:

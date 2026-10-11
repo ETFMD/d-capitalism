@@ -2870,7 +2870,7 @@ html[data-theme="light"] #page-muhan,html[data-theme="light"] #page-vr{--m-ac-s:
         <a class="hm-tool" href="dividend-calendar/" data-tab="etfdiv" data-group="passive"><i class="dc-ico" data-ico="drop-etfdiv"></i><b>ETF 월분배 및 배당 달력</b><span>월분배 ETF 공시·분배락·지급일</span></a>
         <a class="hm-tool" href="dividend-calculator/" data-tab="divcalc" data-group="passive"><i class="dc-ico" data-ico="drop-divcalc"></i><b>배당금 계산기</b><span>월 배당으로 생활비 만들기</span></a>
         <a class="hm-tool" href="fire/" data-tab="fire" data-group="passive"><i class="dc-ico" data-ico="drop-fire"></i><b>파이어족 계산기</b><span>일을 그만둬도 되는 자산</span></a>
-        <a class="hm-tool" href="muhan/" data-tab="muhan" data-group="invest"><i class="dc-ico" data-ico="drop-muhan"></i><b>무한매수법 V4.0 리버스모드</b><span>TQQQ·SOXL 분할 매수 기록·가이드</span></a>
+        <a class="hm-tool" href="etf-compare/" data-tab="etfcmp" data-group="invest"><i class="dc-ico" data-ico="drop-etfcmp"></i><b>ETF 차트 비교</b><span>국내·미국 ETF 최대 10개 수익률 비교</span></a>
       </div>
     </section>
 
@@ -11838,7 +11838,7 @@ html[data-theme="light"] #page-muhan,html[data-theme="light"] #page-vr{--m-ac-s:
     <div class="header"><div class="header-left">
       <span class="badge">ETF CHART COMPARE</span>
       <h1>ETF <span>차트 비교</span></h1>
-      <p class="subtitle">국내 상장 <b id="ecx-nkr">1,100</b>여 개 · 미국 상장 <b id="ecx-nus">5,700</b>여 개 ETF 가운데 최대 10개를 한 차트에서 — 분배금 세금·매매 수수료를 뺀 <b>세후 실제 수익률</b>, 세전 총수익, 가격만으로 비교합니다.</p>
+      <p class="subtitle">국내 상장 <b id="ecx-nkr">1,100</b>여 개 · 미국 상장 <b id="ecx-nus">5,700</b>여 개 ETF 가운데 최대 10개를 한 차트에서 — 시장가(종가 변화)와 기준가(분배금에서 세금·수수료를 떼고 재투자)로 비교합니다.</p>
     </div></div>
 
     <div class="card ecx-card ecx-card-s">
@@ -11861,15 +11861,15 @@ html[data-theme="light"] #page-muhan,html[data-theme="light"] #page-vr{--m-ac-s:
       <div class="ecx-top">
         <span class="acc-title" id="ecx-title">누적 수익률 비교</span>
         <div class="ecx-mode" id="ecx-mode" role="group" aria-label="수익률 보기">
-          <button type="button" class="on" data-m="net" aria-pressed="true">세후 실제</button><button type="button" data-m="tr" aria-pressed="false">세전 총수익</button><button type="button" data-m="px" aria-pressed="false">가격만</button>
+          <button type="button" class="on" data-m="px" aria-pressed="true">시장가</button><button type="button" data-m="nav" aria-pressed="false">기준가</button>
         </div>
         <label class="ecx-fx"><input type="checkbox" id="ecx-fx"> 미국 ETF 원화 환산</label>
       </div>
-      <div class="ecx-fees" id="ecx-fees">
-        <span class="ecx-fee-t">매매 수수료(거래할 때마다)</span>
-        <label>국내 ETF <input type="text" inputmode="decimal" id="ecx-fk" value="0.015" aria-label="국내 ETF 매매 수수료(%)">%</label>
-        <label>미국 ETF <input type="text" inputmode="decimal" id="ecx-fu" value="0.25" aria-label="미국 ETF 매매 수수료(%)">%</label>
-        <span class="ecx-fee-n">분배금 세금: 국내 ETF 주당 과세표준 × 15.4% · 미국 ETF 배당 15% 원천징수</span>
+      <div class="ecx-fees" id="ecx-fees" hidden>
+        <span class="ecx-fee-t">분배금 재투자 수수료</span>
+        <label>국내 ETF <input type="text" inputmode="decimal" id="ecx-fk" value="0.015" aria-label="국내 ETF 재투자 매수 수수료(%)">%</label>
+        <label>미국 ETF <input type="text" inputmode="decimal" id="ecx-fu" value="0.25" aria-label="미국 ETF 재투자 매수 수수료(%)">%</label>
+        <span class="ecx-fee-n">분배금 세금: 국내 ETF 주당 과세표준 × 15.4% · 미국 ETF 배당 × 15.4%(국내 배당소득세율로 보수적 계산)</span>
       </div>
       <div class="ecx-leg" id="ecx-leg" aria-live="polite"></div>
       <div class="ecx-wrap"><canvas id="ecx-chart" role="img" aria-label="선택한 ETF의 누적 수익률 비교 차트"></canvas><p class="kcmp-status" id="ecx-status">ETF를 고르면 차트가 그려집니다.</p></div>
@@ -11895,13 +11895,13 @@ html[data-theme="light"] #page-muhan,html[data-theme="light"] #page-vr{--m-ac-s:
 
     <!-- [GUIDE:etfcmp] 계산 원리 · 예시 · 자주 묻는 질문 (검색엔진·이용자용 설명글) -->
     <section class="guide" aria-labelledby="g-etfcmp-h">
-      <h2 id="g-etfcmp-h">국내 ETF와 미국 ETF, 세금·수수료까지 빼고 한 차트에서 비교하기</h2>
-      <p class="g-lead">같은 S&amp;P500을 따라가도 국내 상장 ETF와 미국 상장 ETF는 환율·보수·분배금 세금 때문에 손에 쥐는 돈이 다릅니다. ETF 차트 비교는 국내 상장 ETF 전체와 미국 상장 ETF 전체 가운데 최대 10개를 골라, 같은 기간의 누적 수익률을 한 차트에 겹쳐 보여 줍니다. <b>세후 실제</b>(분배금 세금·매매 수수료를 뺀 결과), <b>세전 총수익</b>(분배금 재투자), <b>가격만</b>(분배금 제외) 세 가지로 볼 수 있고, 기간 버튼(1M·3M·6M·YTD·1Y·MAX)이나 기간설정으로 범위를 바꾸면 차트와 성과표가 바로 다시 계산됩니다.</p>
+      <h2 id="g-etfcmp-h">국내 ETF와 미국 ETF, 분배금 재투자까지 한 차트에서 비교하기</h2>
+      <p class="g-lead">같은 S&amp;P500을 따라가도 국내 상장 ETF와 미국 상장 ETF는 환율·보수·분배금 세금 때문에 결과가 다릅니다. ETF 차트 비교는 국내 상장 ETF 전체와 미국 상장 ETF 전체 가운데 최대 10개를 골라, 같은 기간의 누적 수익률을 한 차트에 겹쳐 보여 줍니다. <b>시장가</b>(분배금을 재투자하지 않은 종가 변화)와 <b>기준가</b>(분배금에서 세금·수수료를 떼고 재투자) 두 가지로 볼 수 있고, 기간 버튼(1M·3M·6M·YTD·1Y·MAX)이나 기간설정으로 범위를 바꾸면 차트와 성과표가 바로 다시 계산됩니다.</p>
       <div class="g-grid">
-        <article class="g-card"><h3>계산 원리</h3><ul class="g-list"><li><b>가격만</b> = 그날 종가 ÷ 기준일 종가 − 1. 분배금·배당금은 넣지 않습니다.</li><li><b>세전 총수익</b>: 분배금을 분배락일에 그대로 다시 사들였다고 봅니다(재투자 가격 = 분배락 전날 종가 − 분배금, 야후 수정 종가와 같은 방식).</li><li><b>세후 실제</b>: 분배금에서 세금을 떼고 남은 돈만 재투자합니다. 국내 ETF는 분배금 전체가 아니라 운용사가 공시한 <b>1좌당 과세표준 × 15.4%</b>(소득세 14% + 지방소득세 1.4%), 미국 ETF는 배당의 <b>15%</b>(한미 조세조약 원천징수)를 뗍니다. 처음 살 때·분배금으로 다시 살 때·마지막에 팔 때 매매 수수료를 한 번씩 뗍니다(국내 ETF는 증권거래세 없음).</li><li><b>국내 커버드콜·국내 주식형</b>: 국내 주식 매매차익과 코스피200 옵션 같은 국내 장내파생상품 손익은 과세 대상이 아니어서, 분배금이 300원이어도 과세표준은 수 원인 경우가 많습니다. 그래서 회차마다 실제 과세표준을 씁니다.</li><li><b>MAX</b>: 고른 ETF 가운데 <b>가장 늦게 상장한 ETF의 첫 거래일</b>부터 모두 함께 비교합니다. <b>1M·3M·6M·1Y</b>는 가장 최근 거래일에서 1·3·6·12개월 전, <b>YTD</b>는 지난해 마지막 거래일 종가가 기준입니다.</li><li><b>CAGR</b> = (1 + 기간 수익률)<sup>365.25 ÷ 일수</sup> − 1 (복리 연평균, 1년 이상일 때) · <b>연환산</b> = 기간 수익률 × 365.25 ÷ 일수(단리) · <b>최대 낙폭</b> = 기간 중 고점 대비 가장 크게 떨어진 비율 · <b>변동성</b> = 하루 수익률 표준편차 × √252.</li></ul></article>
-        <article class="g-card"><h3>이렇게 써 보세요</h3><ul class="g-list"><li><b>국내 vs 미국 같은 지수</b>: TIGER 미국S&amp;P500과 SPY를 고르고 <b>미국 ETF 원화 환산</b>을 켜면, 원화로 투자했을 때의 차이(환율 효과 포함)를 볼 수 있습니다.</li><li><b>커버드콜 비교</b>: KODEX 200타겟위클리커버드콜처럼 과세표준이 작은 국내 커버드콜과 JEPI·QYLD 같은 미국 커버드콜을 세후 실제로 비교하면, 세금 차이가 수익률에 얼마나 남는지 드러납니다. 표 이름 아래에 회차 수·과세표준 공개 여부·세금·수수료가 나옵니다.</li><li><b>가격만 vs 세전</b>: 같은 ETF를 두 보기로 바꿔 보면, 고배당·커버드콜 ETF의 수익 대부분이 분배금에서 나온다는 것을 확인할 수 있습니다.</li><li>표 머리를 눌러 기간 수익률·CAGR·최대 낙폭 순으로 줄 세울 수 있고, 주소창의 링크를 공유하면 고른 ETF·기간·보기가 그대로 열립니다.</li></ul></article>
+        <article class="g-card"><h3>계산 원리</h3><ul class="g-list"><li><b>시장가</b>(기본) = 그날 종가 ÷ 기준일 종가 − 1. 분배금·배당금은 재투자하지 않고, 세금·수수료도 빼지 않은 평가수익입니다.</li><li><b>기준가</b>: 분배금을 받으면 세금을 떼고, 남은 돈에서 매수 수수료를 뺀 만큼 분배락일에 다시 산다고 봅니다(재투자 가격 = 분배락 전날 종가 − 분배금, 야후 수정 종가와 같은 방식). 기간 끝에는 팔지 않은 평가수익이라 처음 매수·마지막 매도 수수료와 매도 차익 세금은 빼지 않습니다.</li><li><b>분배금 세금</b>: 국내 ETF는 분배금 전체가 아니라 운용사가 공시한 <b>1좌당 과세표준 × 15.4%</b>(소득세 14% + 지방소득세 1.4%), 미국 ETF는 배당의 <b>15.4%</b>입니다. 미국 배당은 실제로 미국에서 15%가 원천징수되고 국내 추가 징수가 없는 것이 보통이지만, 국내 배당소득세율을 적용해 보수적으로 계산합니다.</li><li><b>국내 커버드콜·국내 주식형</b>: 국내 상장 주식 매매차익과 코스피200 옵션 같은 국내 장내파생상품 손익은 과세 대상이 아니어서, 분배금이 300원이어도 과세표준은 수 원인 경우가 많습니다. 그래서 회차마다 실제 과세표준을 씁니다.</li><li><b>MAX</b>: 고른 ETF 가운데 <b>가장 늦게 상장한 ETF의 첫 거래일</b>부터 모두 함께 비교합니다. <b>1M·3M·6M·1Y</b>는 가장 최근 거래일에서 1·3·6·12개월 전, <b>YTD</b>는 지난해 마지막 거래일 종가가 기준입니다.</li><li><b>CAGR</b> = (1 + 기간 수익률)<sup>365.25 ÷ 일수</sup> − 1 (복리 연평균, 1년 이상일 때) · <b>연환산</b> = 기간 수익률 × 365.25 ÷ 일수(단리) · <b>최대 낙폭</b> = 기간 중 고점 대비 가장 크게 떨어진 비율 · <b>변동성</b> = 하루 수익률 표준편차 × √252.</li></ul></article>
+        <article class="g-card"><h3>이렇게 써 보세요</h3><ul class="g-list"><li><b>국내 vs 미국 같은 지수</b>: TIGER 미국S&amp;P500과 SPY를 고르고 <b>미국 ETF 원화 환산</b>을 켜면, 원화로 투자했을 때의 차이(환율 효과 포함)를 볼 수 있습니다.</li><li><b>커버드콜 비교</b>: KODEX 200타겟위클리커버드콜처럼 과세표준이 작은 국내 커버드콜과 JEPI·QYLD 같은 미국 커버드콜을 <b>기준가</b>로 비교하면, 세금 차이가 수익률에 얼마나 남는지 드러납니다. 표 이름 아래에 재투자 회차·과세표준 공개 여부·낸 세금·재투자 수수료가 나옵니다.</li><li><b>시장가 vs 기준가</b>: 같은 ETF를 두 보기로 바꿔 보면, 고배당·커버드콜 ETF의 수익 대부분이 분배금에서 나온다는 것을 확인할 수 있습니다.</li><li>표 머리를 눌러 기간 수익률·CAGR·최대 낙폭 순으로 줄 세울 수 있고, 주소창의 링크를 공유하면 고른 ETF·기간·보기가 그대로 열립니다.</li></ul></article>
       </div>
-      <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>몇 개까지, 어떤 ETF를 비교할 수 있나요?</summary><div class="g-ans"><p>한 번에 최대 10개입니다. 국내는 네이버 증권 ETF 목록 전체(매일 갱신), 미국은 나스닥 트레이더의 미국 상장 종목 목록 가운데 ETF 전체(매일 갱신)를 검색할 수 있습니다. 이름·종목코드·티커로 찾고, 자주 찾는 미국 ETF는 ‘슈드’·‘나스닥 3배’처럼 한글로도 찾을 수 있습니다. 목록에 아직 없는 새 종목은 종목코드나 티커를 그대로 입력해 추가할 수 있습니다.</p></div></details><details class="g-faq"><summary>세후 실제 수익률에서 세금은 어떻게 계산하나요?</summary><div class="g-ans"><p>국내 상장 ETF는 분배금마다 운용사가 공시한 1좌당 과세표준에 15.4%를 곱한 금액을 뗍니다. 과세표준은 FunETF와 각 운용사(KODEX·TIGER·ACE·SOL·RISE·PLUS·KIWOOM 등) 공개 자료를 매일 모아 쓰고, 운용사가 공개하지 않은 오래된 회차는 같은 ETF의 공개 회차 평균 비율로, 공개 회차가 하나도 없으면 분배금 전액을 과세표준으로 계산합니다(표 이름 아래에 몇 회가 공개 값인지 표시). 미국 상장 ETF는 배당의 15%가 미국에서 원천징수되고, 국내 세율(14%)보다 높아 국내에서 더 걷지 않는 일반적인 경우로 계산합니다.</p></div></details><details class="g-faq"><summary>국내 커버드콜 ETF는 왜 세금이 적게 나오나요?</summary><div class="g-ans"><p>국내 주식형 ETF의 분배금 가운데 국내 상장 주식 매매차익과 코스피200 옵션 같은 국내 장내파생상품 손익은 과세 대상이 아닙니다. 국내 지수 커버드콜 ETF의 분배금은 대부분 옵션 프리미엄에서 나오기 때문에, 예를 들어 분배금 300원 가운데 과세표준은 2원뿐인 회차도 있습니다. 반대로 미국 주식·미국 옵션에 투자하는 국내 상장 커버드콜은 분배금 대부분이 과세표준입니다.</p></div></details><details class="g-faq"><summary>매매 수수료는 얼마로 계산하나요?</summary><div class="g-ans"><p>기본값은 국내 ETF 0.015%, 미국 ETF 0.25%(증권사 기본 수수료 수준)이며, 차트 위 칸에서 쓰는 증권사 수수료로 바꿀 수 있습니다. 처음 매수·분배금 재투자 매수·기간 끝 매도에 한 번씩 뗍니다. 국내 ETF는 매도 때 증권거래세가 없습니다.</p></div></details><details class="g-faq"><summary>빼지 않은 세금·비용도 있나요?</summary><div class="g-ans"><p>매도할 때 생기는 세금(미국 ETF 해외주식 양도소득세 22%·연 250만 원 공제, 국내 상장 해외 ETF 매매차익의 배당소득세)은 투자 금액과 다른 손익에 따라 달라 빼지 않았습니다. 금융소득종합과세, ISA·연금 계좌 혜택, 환전 수수료도 반영하지 않습니다. ETF 운용 보수는 매일 가격에 이미 들어 있습니다.</p></div></details><details class="g-faq"><summary>MAX는 왜 가장 늦게 상장한 ETF 기준인가요?</summary><div class="g-ans"><p>상장일이 서로 다른 ETF를 각자 상장일부터 그리면 출발선이 달라 비교가 되지 않습니다. 그래서 MAX는 고른 ETF가 모두 존재했던 첫날, 즉 가장 늦게 상장한 ETF의 첫 거래일을 0%로 맞춰 함께 그립니다.</p></div></details><details class="g-faq"><summary>CAGR과 연환산은 무엇이 다른가요?</summary><div class="g-ans"><p>CAGR은 수익이 해마다 복리로 불었다고 볼 때의 연평균 수익률이고, 1년 이상 기간에서만 보여 줍니다(짧은 기간을 복리로 늘리면 숫자가 과장되기 때문). 연환산은 기간 수익률을 1년 길이로 단순 환산한 값(기간 수익률 × 365.25 ÷ 일수)이라 짧은 기간에도 나옵니다.</p></div></details><details class="g-faq"><summary>네이버 증권 수정주가로 계산한 수익률과 왜 조금 다른가요?</summary><div class="g-ans"><p>세전 총수익은 분배금을 분배락일에 ‘분배락 전날 종가 − 분배금’ 가격으로 다시 산다고 보는 표준 방식(Yahoo 수정 종가와 같은 방식)으로 국내·미국 ETF를 똑같이 계산합니다. 네이버 수정주가는 분배락 조정 비율을 정하는 방식(호가 단위 맞춤 등)이 조금 달라, 분배가 많고 기간이 길수록 작은 차이가 쌓입니다. 최종 금액 기준으로 보통 1% 안쪽입니다(예: KODEX 200 2002년 상장부터 약 0.6%, 2020년부터는 0.1% 미만).</p></div></details><details class="g-faq"><summary>오늘 가격도 반영되나요?</summary><div class="g-ans"><p>장중에는 그날의 현재가가 마지막 점으로 들어가고, 장이 끝나면 종가로 바뀝니다. 같은 ETF는 30분 동안 같은 자료를 다시 쓰므로 최근 가격이 조금 늦게 반영될 수 있습니다. 국내 분배 이력은 매일 밤 갱신하며, 아직 반영되지 않은 최근 분배는 가격 자료로 알아채 추정치로 넣고 차트 아래에 표시합니다.</p></div></details></div>
+      <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>몇 개까지, 어떤 ETF를 비교할 수 있나요?</summary><div class="g-ans"><p>한 번에 최대 10개입니다. 국내는 네이버 증권 ETF 목록 전체(매일 갱신), 미국은 나스닥 트레이더의 미국 상장 종목 목록 가운데 ETF 전체(매일 갱신)를 검색할 수 있습니다. 이름·종목코드·티커로 찾고, 자주 찾는 미국 ETF는 ‘슈드’·‘나스닥 3배’처럼 한글로도 찾을 수 있습니다. 목록에 아직 없는 새 종목은 종목코드나 티커를 그대로 입력해 추가할 수 있습니다.</p></div></details><details class="g-faq"><summary>시장가와 기준가는 무엇이 다른가요?</summary><div class="g-ans"><p><b>시장가</b>는 분배금·배당금을 재투자하지 않은 순수 종가 변화로, 증권사 앱에서 보는 주가 수익률과 같습니다. <b>기준가</b>는 받은 분배금에서 세금과 재투자 수수료를 떼고 남은 돈으로 같은 ETF를 다시 샀다고 본 수익률입니다. 두 보기 모두 아직 팔지 않은 평가수익이라 처음 매수·마지막 매도 수수료와 매도 차익 세금은 빼지 않으며, 그래서 분배가 없는 ETF는 두 값이 같습니다.</p></div></details><details class="g-faq"><summary>기준가에서 세금은 어떻게 계산하나요?</summary><div class="g-ans"><p>국내 상장 ETF는 분배금마다 운용사가 공시한 1좌당 과세표준에 15.4%를 곱한 금액을 뗍니다. 과세표준은 FunETF와 각 운용사(KODEX·TIGER·ACE·SOL·RISE·PLUS·KIWOOM 등) 공개 자료를 매일 모아 쓰고, 운용사가 공개하지 않은 회차는 같은 ETF의 공개 회차 평균 비율로, 공개 회차가 하나도 없으면 분배금 전액을 과세표준으로 계산합니다(표 이름 아래에 몇 회가 공개 값인지 표시). 미국 상장 ETF는 배당의 15.4%를 뗍니다. 실제로는 미국에서 15%가 원천징수되고 국내 소득세율(14%)보다 높아 국내에서 더 걷지 않는 것이 보통이지만, 국내 배당소득세율을 적용해 보수적으로 계산합니다. 금융소득이 연 2천만원을 넘어 종합과세 대상이 되면 실제 세금은 더 늘 수 있습니다.</p></div></details><details class="g-faq"><summary>국내 커버드콜 ETF는 왜 세금이 적게 나오나요?</summary><div class="g-ans"><p>국내 주식형 ETF의 분배금 가운데 국내 상장 주식 매매차익과 코스피200 옵션 같은 국내 장내파생상품 손익은 과세 대상이 아닙니다. 국내 지수 커버드콜 ETF의 분배금은 대부분 옵션 프리미엄에서 나오기 때문에, 예를 들어 분배금 300원 가운데 과세표준은 2원뿐인 회차도 있습니다. 반대로 미국 주식·미국 옵션에 투자하는 국내 상장 커버드콜은 분배금 대부분이 과세표준입니다.</p></div></details><details class="g-faq"><summary>재투자 수수료는 얼마로 계산하나요?</summary><div class="g-ans"><p>기본값은 국내 ETF 0.015%, 미국 ETF 0.25%(증권사 기본 수수료 수준)이며, 기준가 보기에서 차트 위 칸에 쓰는 증권사 수수료를 넣으면 바로 다시 계산됩니다. 받은 분배금으로 다시 살 때만 떼고(매수 금액 + 수수료 = 받은 돈), 처음 매수·마지막 매도 수수료는 평가수익이라 빼지 않습니다. 국내 ETF는 매도 때 증권거래세가 없습니다.</p></div></details><details class="g-faq"><summary>빼지 않은 세금·비용도 있나요?</summary><div class="g-ans"><p>두 보기 모두 아직 팔지 않은 평가수익이라 처음 매수·마지막 매도 수수료와 매도할 때 생기는 세금(미국 ETF 해외주식 양도소득세 22%·연 250만 원 공제, 국내 상장 해외 ETF 매매차익의 배당소득세)은 빼지 않았습니다. 금융소득종합과세, ISA·연금 계좌 혜택, 환전 수수료도 반영하지 않습니다. ETF 운용 보수는 매일 가격에 이미 들어 있습니다.</p></div></details><details class="g-faq"><summary>MAX는 왜 가장 늦게 상장한 ETF 기준인가요?</summary><div class="g-ans"><p>상장일이 서로 다른 ETF를 각자 상장일부터 그리면 출발선이 달라 비교가 되지 않습니다. 그래서 MAX는 고른 ETF가 모두 존재했던 첫날, 즉 가장 늦게 상장한 ETF의 첫 거래일을 0%로 맞춰 함께 그립니다.</p></div></details><details class="g-faq"><summary>CAGR과 연환산은 무엇이 다른가요?</summary><div class="g-ans"><p>CAGR은 수익이 해마다 복리로 불었다고 볼 때의 연평균 수익률이고, 1년 이상 기간에서만 보여 줍니다(짧은 기간을 복리로 늘리면 숫자가 과장되기 때문). 연환산은 기간 수익률을 1년 길이로 단순 환산한 값(기간 수익률 × 365.25 ÷ 일수)이라 짧은 기간에도 나옵니다.</p></div></details><details class="g-faq"><summary>네이버 증권 수정주가로 계산한 수익률과 왜 다른가요?</summary><div class="g-ans"><p>네이버 수정주가는 분배금을 세금 없이 그대로 재투자한 값이라, 세금과 재투자 수수료를 떼는 기준가보다 조금 높게 나옵니다. 또 이 페이지는 분배락일에 ‘분배락 전날 종가 − 분배금’ 가격으로 다시 산다고 보는 표준 방식(Yahoo 수정 종가와 같은 방식)으로 국내·미국 ETF를 똑같이 계산하는데, 네이버는 분배락 조정 비율을 정하는 방식(호가 단위 맞춤 등)이 조금 달라 세금을 빼지 않아도 최종 금액 기준 보통 1% 안쪽의 차이가 납니다. 시장가는 분배금을 넣지 않은 실제 종가 변화라 수정주가와 비교 대상이 아닙니다.</p></div></details><details class="g-faq"><summary>오늘 가격도 반영되나요?</summary><div class="g-ans"><p>장중에는 그날의 현재가가 마지막 점으로 들어가고, 장이 끝나면 종가로 바뀝니다. 같은 ETF는 30분 동안 같은 자료를 다시 쓰므로 최근 가격이 조금 늦게 반영될 수 있습니다. 국내 분배 이력은 매일 저녁 갱신하며, 아직 반영되지 않은 최근 분배는 가격 자료로 알아채 추정치로 넣고 차트 아래에 표시합니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:etfcmp] -->
   </div><!-- /page-etfcmp -->
@@ -18094,15 +18094,16 @@ var TAX = (function () {
    · 일봉: Worker GET /etf?m=k|u&s=코드 (국내 네이버 수정주가 · 미국 Yahoo 종가·분배 내역, 30분 보관)
            Worker 가 안 되면 공개 프록시(allorigins)로 같은 원본을 XHR 로 직접 (사이트 fetch 래퍼가 야후 요청을 가로채지 않게)
    · 국내 분배 이력: data/etfdist/{0..7}.json (scripts/update_etf_dist.py, 매일) — [분배락일, 분배금, 주당 과세표준, 분배락 전날 종가]
-   · 보기 3가지 (모두 같은 '실제 종가 + 분배금'으로 계산 → 세금·수수료가 0이면 세후 = 세전)
-       가격      실제 종가만 (분배금 제외)
-       세전      분배금을 분배락일에 재투자 (재투자 가격 = 분배락 전날 종가 − 분배금 · 야후 수정 종가·CRSP 와 같은 방식)
-       세후 실제 분배금에서 세금을 떼고 재투자 + 매수·매도 수수료 (기본 보기)
-                 국내 ETF: 분배금의 '주당 과세표준' × 15.4% (국내 주식형·커버드콜은 과세표준이 분배금보다 훨씬 작음)
-                           과세표준을 운용사가 공개하지 않은 회차 → 같은 ETF 공개 회차의 평균 비율 · 공개 회차가 없으면 분배금 전액
-                 미국 ETF: 배당 × 15% (한미 조세조약 원천징수, 국내 추가 과세 없음)
-                 수수료: 처음 매수·분배금 재투자 매수·마지막 매도에 한 번씩 (국내 ETF 는 증권거래세 없음)
-                 매도 차익 세금(해외주식 양도세·국내 상장 해외 ETF 매매차익 과세)·금융소득종합과세·환전 비용은 빼지 않음
+   · 보기 2가지 (둘 다 같은 '실제 종가 + 분배 목록'으로 계산 · 둘 다 평가수익 = 처음 매수·마지막 매도 수수료와 매도 차익 세금은 빼지 않음
+                → 분배가 없는 ETF 는 두 보기가 같음)
+       시장가 (기본) 실제 종가 변화만 — 분배금·배당금을 재투자하지 않음 · 세금·수수료 없음
+       기준가        분배금에서 세금을 떼고, 남은 돈으로 분배락일에 다시 삼(재투자 가격 = 분배락 전날 종가 − 분배금 · 야후 수정 종가·CRSP 방식)
+                     재투자 매수 수수료: 매수 금액 = 받은 돈 ÷ (1 + 수수료율) (기본 국내 0.015% · 미국 0.25%, 화면에서 바꿈)
+                     국내 ETF 세금: 분배금의 '주당 과세표준' × 15.4% (국내 주식형·커버드콜은 과세표준이 분배금보다 훨씬 작음)
+                                    과세표준을 운용사가 공개하지 않은 회차 → 같은 ETF 공개 회차의 평균 비율 · 공개 회차가 없으면 분배금 전액
+                     미국 ETF 세금: 배당 × 15.4% — 실제 원천징수는 15%(국내 소득세율 14%보다 높아 국내 추가 징수 없음)이나,
+                                    운영자 결정으로 국내 배당소득세율을 적용한 보수적 가정 (화면 설명에 명시)
+                     금융소득종합과세·ISA·연금 계좌·환전 비용은 반영하지 않음
    · 국내 실제 종가 = 네이버 수정주가 ÷ 구간 비율 (분배락일 사이 구간마다 '분배락 전날 실제 종가'로 비율을 정함)
    · 기간: 1M 3M 6M 1Y = 가장 최근 거래일 E 에서 n개월 전 날짜 S (그날 또는 그 전 마지막 거래일 종가가 기준)
            YTD = 지난해 12월 31일(또는 그 전 마지막 거래일) 종가 기준 · MAX = 고른 ETF 중 가장 늦게 상장한 ETF 의 첫 거래일 기준
@@ -18112,7 +18113,7 @@ var TAX = (function () {
    · window.fcRegister 로 탭 진입·테마 변경 때 그림 → 반드시 [FC-UI] 정의 뒤에 둠 (앞에 두면 스크립트 전체가 멈춤)
 ════════════════════════════════════════════════════════════ */
 (function () {
-  var DAY = 864e5, MAXN = 10, TAX_K = 0.154, TAX_U = 0.15, FEE_K = 0.015, FEE_U = 0.25, NSHARD = 8;
+  var DAY = 864e5, MAXN = 10, TAX_K = 0.154, TAX_U = 0.154, FEE_K = 0.015, FEE_U = 0.25, NSHARD = 8;   /* TAX_U: 보수적 가정(국내 배당소득세율) */
   var COLORS = ['#3182f6', '#f04452', '#fe9800', '#1fa27a', '#8b5cf6', '#0891b2', '#db2777', '#a07d00', '#64748b', '#9c5b2e'];
   var PERS = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12 };
   var EXCH = { P: 'NYSE Arca', Q: 'NASDAQ', Z: 'Cboe BZX', N: 'NYSE', A: 'NYSE American', V: 'IEX' };   /* nasdaqtraded.txt 상장 거래소 (확인되지 않은 코드는 표시 안 함) */
@@ -18216,7 +18217,7 @@ var TAX = (function () {
     });
     return { d: d, p: p, dv: dv, cur: 'KRW', pend: pend, ratio: ratio };
   }
-  /* 미국: Yahoo 종가 + 분배 → 분배 목록(세금 15%) */
+  /* 미국: Yahoo 종가 + 분배 → 분배 목록(세금 15.4% — 보수적 가정) */
   function prepU(s) {
     var d = s.d, dv = [];
     (s.div || []).forEach(function (x) {
@@ -18232,30 +18233,28 @@ var TAX = (function () {
     for (var i = 0; i < s.d.length; i++) { var k = idxLE(fx.d, s.d[i]); out[i] = k < 0 ? null : fx.v[k]; }
     return out;
   }
-  /* 가치 흐름 (처음 넣은 돈 = 1) · mode: 'px' 가격 · 'tr' 세전 · 'net' 세후 실제
-     o: { fee: 한 번 거래 수수료(비율), fx: 원/달러 배열(미국 원화 환산) } → { v: 날짜별 가치(bi~ei), tax, fee, n: 분배 횟수, nk/na/nf: 과세표준 공개·추정·전액 } */
+  /* 가치 흐름 (처음 넣은 돈 = 1) · mode: 'px' 시장가(종가 변화만) · 'nav' 기준가(세금·재투자 수수료를 뗀 분배금을 재투자)
+     둘 다 평가 가치 — 처음 매수·마지막 매도 수수료와 매도 차익 세금은 빼지 않음
+     o: { fee: 재투자 매수 수수료(비율), fx: 원/달러 배열(미국 원화 환산) } → { v: 날짜별 가치(bi~ei), tax, fee, n: 분배 횟수, nk/na/nf: 과세표준 공개·평균 비율·전액 } */
   function valueSeries(s, bi, ei, mode, o) {
-    var p = s.p, fx = o && o.fx, phi = mode === 'net' ? ((o && o.fee) || 0) : 0, v = new Array(ei - bi + 1);
+    var p = s.p, fx = o && o.fx, nav = mode === 'nav', phi = nav ? ((o && o.fee) || 0) : 0, v = new Array(ei - bi + 1);
     var fx0 = fx ? fx[bi] : 1, fxr = function (t) { return fx ? fx[t] / fx0 : 1; };
-    var u = (1 - phi) / p[bi], tax = 0, fee = phi, n = 0, nk = 0, na = 0, nf = 0, j = 0, dv = s.dv;
+    var u = 1 / p[bi], tax = 0, fee = 0, n = 0, nk = 0, na = 0, nf = 0, j = 0, dv = s.dv;
     while (j < dv.length && dv[j].i <= bi) j++;
     for (var t = bi; t <= ei; t++) {
       while (j < dv.length && dv[j].i === t) {
         var e = dv[j++], D = e.a, X = p[t - 1] - D;
         if (!(X > 0)) X = p[t];
         n++; if (e.k === 'k') nk++; else if (e.k === 'a') na++; else if (e.k === 'f') nf++;
-        if (mode === 'tr') u *= 1 + D / X;
-        else if (mode === 'net') {
-          var T = Math.min(D, e.t), cash = u * (D - T);
-          tax += u * T * fxr(t); fee += cash * phi * fxr(t);
-          u += cash * (1 - phi) / X;
+        if (nav) {
+          var T = Math.min(D, e.t), cash = u * (D - T), buy = cash / (1 + phi);   /* 받은 돈 = 매수 금액 + 매수 금액 × 수수료율 */
+          tax += u * T * fxr(t); fee += (cash - buy) * fxr(t);
+          u += buy / X;
         }
       }
-      var val = (mode === 'px' ? p[t] / p[bi] : u * p[t]) * fxr(t);
-      v[t - bi] = mode === 'net' ? val * (1 - phi) : val;
+      v[t - bi] = (nav ? u * p[t] : p[t] / p[bi]) * fxr(t);
     }
-    if (mode === 'net') fee += v[v.length - 1] / (1 - phi) * phi;
-    return { v: v, tax: tax, fee: mode === 'net' ? fee : 0, n: n, nk: nk, na: na, nf: nf };
+    return { v: v, tax: tax, fee: fee, n: n, nk: nk, na: na, nf: nf };
   }
   /* 기간 → 기준일(S)·종료일(E) · arr: [{d}] */
   function window_(arr, per, from, to) {
@@ -18318,7 +18317,7 @@ var TAX = (function () {
     if (!ok.length) return { err: 'empty' };
     var w = window_(ok, per, from, to); if (w.err) return w;
     var list = [], skipped = [];
-    arr.forEach(function (s, i) { if (!s || !s.d || s.d.length < 2) return; var st = stats(s, w.S, w.E, mode || 'tr', opts && opts[i]); if (st.skip) skipped.push({ i: i, why: st.skip }); else list.push({ i: i, s: s, st: st }); });
+    arr.forEach(function (s, i) { if (!s || !s.d || s.d.length < 2) return; var st = stats(s, w.S, w.E, mode || 'px', opts && opts[i]); if (st.skip) skipped.push({ i: i, why: st.skip }); else list.push({ i: i, s: s, st: st }); });
     if (!list.length) return { err: 'nodata', w: w, skipped: skipped };
     var P = points(list, buckets || 600);
     return { w: w, list: list, skipped: skipped, pts: P };
@@ -18377,7 +18376,7 @@ var TAX = (function () {
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var Lx = typeof L === 'function' ? L : function (ko) { return ko; };
   var TABS = { 1: Lx('국내 시장지수', 'Korea market index'), 2: Lx('국내 업종·테마', 'Korea sector/theme'), 3: Lx('국내 파생', 'Korea derivatives'), 4: Lx('해외 주식', 'Overseas equity'), 5: Lx('원자재', 'Commodities'), 6: Lx('채권', 'Bonds'), 7: Lx('기타', 'Other') };
-  var S = { L: null, by: {}, sel: [], per: '1Y', from: null, to: null, fx: false, mode: 'net', feeK: FEE_K, feeU: FEE_U, sort: null,
+  var S = { L: null, by: {}, sel: [], per: '1Y', from: null, to: null, fx: false, mode: 'px', feeK: FEE_K, feeU: FEE_U, sort: null,
             data: {}, err: {}, pend: {}, dist: {}, distP: {}, distErr: {}, fxd: null, fxp: null, prep: {}, chart: null, mk: 'all', sugs: [], sugIdx: -1,
             ready: false, listErr: false, last: null, hash: null };
   var PRESETS = [
@@ -18485,7 +18484,7 @@ var TAX = (function () {
   function remove(key) { S.sel = S.sel.filter(function (s) { return s.k + s.c !== key; }); }
   function setSel(keys) { S.sel = []; keys.forEach(function (k) { add(k, true); }); }
 
-  /* 주소 #e=K069500,USPY&p=1Y&fx=1&m=tr&fk=0.015&fu=0.25 (기간설정: p=C20200101-20241231 · 보기 m: net 기본·tr·px) — 공유하면 같은 비교가 열림 */
+  /* 주소 #e=K069500,USPY&p=1Y&fx=1&m=nav&fk=0.015&fu=0.25 (기간설정: p=C20200101-20241231 · 보기 m: 없으면 시장가, nav = 기준가 · 예전 주소의 m=tr 은 기준가로) — 공유하면 같은 비교가 열림 */
   function feeOk(x) { return x != null && isFinite(x) && x >= 0 && x <= 5; }
   function readHash() {
     var h = location.hash.replace(/^#/, ''), o = {}; h.split('&').forEach(function (kv) { var i = kv.indexOf('='); if (i > 0) { try { o[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); } catch (e) {} } });
@@ -18496,7 +18495,7 @@ var TAX = (function () {
     if (m && f != null && t != null && f < t) { S.per = 'C'; S.from = f; S.to = t; }
     else S.per = ['1M', '3M', '6M', 'YTD', '1Y', 'MAX'].indexOf(p) >= 0 ? p : '1Y';
     S.fx = o.fx === '1';
-    S.mode = ['net', 'tr', 'px'].indexOf(o.m) >= 0 ? o.m : 'net';
+    S.mode = o.m === 'nav' || o.m === 'tr' ? 'nav' : 'px';
     var fk = parseFloat(o.fk), fu = parseFloat(o.fu);
     S.feeK = feeOk(fk) ? fk : FEE_K; S.feeU = feeOk(fu) ? fu : FEE_U;
     return S.sel.length > 0;
@@ -18504,7 +18503,7 @@ var TAX = (function () {
   function writeHash() {
     if (!$('page-etfcmp').classList.contains('active')) return;
     var p = S.per === 'C' && S.from != null && S.to != null ? 'C' + ymdOf(S.from).replace(/-/g, '') + '-' + ymdOf(S.to).replace(/-/g, '') : S.per === 'C' ? '1Y' : S.per;
-    var h = S.sel.length ? '#e=' + S.sel.map(function (s) { return s.k + s.c; }).join(',') + '&p=' + p + (S.fx ? '&fx=1' : '') + (S.mode !== 'net' ? '&m=' + S.mode : '')
+    var h = S.sel.length ? '#e=' + S.sel.map(function (s) { return s.k + s.c; }).join(',') + '&p=' + p + (S.fx ? '&fx=1' : '') + (S.mode === 'nav' ? '&m=nav' : '')
       + (S.feeK !== FEE_K ? '&fk=' + S.feeK : '') + (S.feeU !== FEE_U ? '&fu=' + S.feeU : '') : '';
     S.hash = h;
     try { if (location.hash !== h) history.replaceState(history.state, '', location.pathname + location.search + h); } catch (e) {}
@@ -18548,7 +18547,7 @@ var TAX = (function () {
   function renderPer() {
     document.querySelectorAll('#ecx-per .chart-tab').forEach(function (b) { var on = b.getAttribute('data-per') === S.per; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
     document.querySelectorAll('#ecx-mode button').forEach(function (b) { var on = b.getAttribute('data-m') === S.mode; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
-    $('ecx-custom').hidden = S.per !== 'C'; $('ecx-fx').checked = S.fx; $('ecx-fees').hidden = S.mode !== 'net';
+    $('ecx-custom').hidden = S.per !== 'C'; $('ecx-fx').checked = S.fx; $('ecx-fees').hidden = S.mode !== 'nav';
     var fk = $('ecx-fk'), fu = $('ecx-fu');
     if (document.activeElement !== fk) fk.value = String(S.feeK); if (document.activeElement !== fu) fu.value = String(S.feeU);
   }
@@ -18658,22 +18657,21 @@ var TAX = (function () {
   }
   function modeNote(hasU) {
     var cur = S.fx && hasU ? Lx(' · 미국 ETF는 원/달러 매매기준율로 원화 환산', ' · U.S. ETFs converted to KRW at the Bank of Korea rate') : Lx(' · 각 ETF의 거래 통화 기준', ' · in each ETF’s trading currency');
-    if (S.mode === 'px') return Lx('<b>가격만</b>: 분배금·배당금을 빼고 실제 종가 변화만', '<b>Price only</b>: closing-price change, distributions excluded') + cur;
-    if (S.mode === 'tr') return Lx('<b>세전 총수익</b>: 분배금을 분배락일에 그대로 재투자 (세금·수수료 없음)', '<b>Total return (pre-tax)</b>: distributions reinvested on the ex-date, no tax or fees') + cur;
-    return Lx('<b>세후 실제</b>: 국내 ETF 분배금은 주당 과세표준 × 15.4%, 미국 ETF 배당은 15% 원천징수 후 재투자 · 매수·재투자·매도 때 수수료(국내 ' + S.feeK + '% · 미국 ' + S.feeU + '%) · 매도 차익 세금·환전 비용은 빼지 않음',
-      '<b>After tax & fees</b>: Korean ETF distributions taxed at 15.4% of the taxable base per share, U.S. dividends 15% withholding, then reinvested · trading fee on each buy, reinvestment and sale (KR ' + S.feeK + '% · US ' + S.feeU + '%) · capital-gains tax and FX costs not deducted') + cur;
+    if (S.mode === 'nav') return Lx('<b>기준가</b>: 분배금·배당금에서 세금(국내 ETF 주당 과세표준 × 15.4% · 미국 ETF 배당 × 15.4%)과 재투자 수수료(국내 ' + S.feeK + '% · 미국 ' + S.feeU + '%)를 떼고 분배락일에 재투자한 평가수익 · 처음 매수·마지막 매도 수수료와 매도 차익 세금은 빼지 않음',
+      '<b>Reinvested (after tax)</b>: distributions reinvested on the ex-date after tax (Korean ETFs 15.4% of the taxable base per share · U.S. ETFs 15.4% of dividends) and a reinvestment fee (KR ' + S.feeK + '% · US ' + S.feeU + '%) · unrealized value: no fee on the first purchase or final sale, no capital-gains tax') + cur;
+    return Lx('<b>시장가</b>: 분배금·배당금을 재투자하지 않은 실제 종가 변화만 (세금·수수료 없는 평가수익)', '<b>Market price</b>: closing-price change only, distributions not reinvested (unrealized, no tax or fees)') + cur;
   }
-  /* 표 이름 칸 둘째 줄: 분배 횟수 · 세금·수수료 · 과세표준 공개 여부 */
+  /* 표 이름 칸 둘째 줄: 분배 횟수 · 과세표준 공개 여부 · 낸 세금·재투자 수수료 */
   function infoLine(it, s, st) {
-    if (!st.n && S.mode !== 'net') return '';
-    if (S.mode === 'px') return Lx('분배 ' + st.n + '회 제외', st.n + ' distribution' + (st.n === 1 ? '' : 's') + ' excluded');
-    if (S.mode === 'tr') return Lx('분배 ' + st.n + '회 재투자', st.n + ' distribution' + (st.n === 1 ? '' : 's') + ' reinvested');
-    /* 낸 세금·수수료 합계 ÷ 처음 넣은 돈 (수익률 차이 %p 가 아님 — 재투자 손실까지 합치면 세전과의 차이는 이보다 클 수 있음) */
-    var t = Lx('원금 대비 세금 ' + (st.tax * 100).toFixed(2) + '% · 수수료 ' + (st.fee * 100).toFixed(2) + '%', 'tax ' + (st.tax * 100).toFixed(2) + '% · fees ' + (st.fee * 100).toFixed(2) + '% of principal');
-    if (!st.n) return t;
-    var src = it.k === 'U' ? Lx('배당 15% 원천징수', '15% withholding') : st.nk === st.n ? Lx('과세표준 운용사 공개 ' + st.nk + '회', 'taxable base published ×' + st.nk)
+    if (!st.n) return '';
+    var many = function (n) { return n + ' distribution' + (n === 1 ? '' : 's'); };
+    if (S.mode !== 'nav') return Lx('분배 ' + st.n + '회 제외', many(st.n) + ' excluded');
+    /* 낸 세금·수수료 합계 ÷ 처음 넣은 돈 (수익률 차이 %p 가 아님) */
+    var pc = function (x) { return x > 0 && x < 0.00005 ? Lx('0.01% 미만', 'under 0.01%') : (x * 100).toFixed(2) + '%'; };   /* 0.00% 로 보여 '없음'처럼 읽히지 않게 */
+    var t = Lx('원금 대비 세금 ' + pc(st.tax) + ' · 재투자 수수료 ' + pc(st.fee), 'tax ' + pc(st.tax) + ' · reinvestment fees ' + pc(st.fee) + ' of principal');
+    var src = it.k === 'U' ? Lx('배당세 15.4%', '15.4% dividend tax') : st.nk === st.n ? Lx('과세표준 운용사 공개 ' + st.nk + '회', 'taxable base published ×' + st.nk)
       : Lx('과세표준 공개 ' + st.nk + '/' + st.n + '회', 'taxable base ' + st.nk + '/' + st.n + ' published') + (st.na ? Lx(' · 나머지는 공개 회차 평균 비율', ' · rest at the published average ratio') : '') + (st.nf ? Lx(' · 공개 없음: 분배금 전액 과세로 계산', ' · none published: taxed on the full amount') : '');
-    return Lx('분배 ' + st.n + '회 · ', st.n + ' distributions · ') + src + ' · ' + t;
+    return Lx('분배 ' + st.n + '회 재투자 · ', many(st.n) + ' reinvested · ') + src + ' · ' + t;
   }
   function renderHead() {
     var tr = $('ecx-head'); if (!tr) return;

@@ -5843,15 +5843,16 @@ var TAX = (function () {
    · 일봉: Worker GET /etf?m=k|u&s=코드 (국내 네이버 수정주가 · 미국 Yahoo 종가·분배 내역, 30분 보관)
            Worker 가 안 되면 공개 프록시(allorigins)로 같은 원본을 XHR 로 직접 (사이트 fetch 래퍼가 야후 요청을 가로채지 않게)
    · 국내 분배 이력: data/etfdist/{0..7}.json (scripts/update_etf_dist.py, 매일) — [분배락일, 분배금, 주당 과세표준, 분배락 전날 종가]
-   · 보기 3가지 (모두 같은 '실제 종가 + 분배금'으로 계산 → 세금·수수료가 0이면 세후 = 세전)
-       가격      실제 종가만 (분배금 제외)
-       세전      분배금을 분배락일에 재투자 (재투자 가격 = 분배락 전날 종가 − 분배금 · 야후 수정 종가·CRSP 와 같은 방식)
-       세후 실제 분배금에서 세금을 떼고 재투자 + 매수·매도 수수료 (기본 보기)
-                 국내 ETF: 분배금의 '주당 과세표준' × 15.4% (국내 주식형·커버드콜은 과세표준이 분배금보다 훨씬 작음)
-                           과세표준을 운용사가 공개하지 않은 회차 → 같은 ETF 공개 회차의 평균 비율 · 공개 회차가 없으면 분배금 전액
-                 미국 ETF: 배당 × 15% (한미 조세조약 원천징수, 국내 추가 과세 없음)
-                 수수료: 처음 매수·분배금 재투자 매수·마지막 매도에 한 번씩 (국내 ETF 는 증권거래세 없음)
-                 매도 차익 세금(해외주식 양도세·국내 상장 해외 ETF 매매차익 과세)·금융소득종합과세·환전 비용은 빼지 않음
+   · 보기 2가지 (둘 다 같은 '실제 종가 + 분배 목록'으로 계산 · 둘 다 평가수익 = 처음 매수·마지막 매도 수수료와 매도 차익 세금은 빼지 않음
+                → 분배가 없는 ETF 는 두 보기가 같음)
+       시장가 (기본) 실제 종가 변화만 — 분배금·배당금을 재투자하지 않음 · 세금·수수료 없음
+       기준가        분배금에서 세금을 떼고, 남은 돈으로 분배락일에 다시 삼(재투자 가격 = 분배락 전날 종가 − 분배금 · 야후 수정 종가·CRSP 방식)
+                     재투자 매수 수수료: 매수 금액 = 받은 돈 ÷ (1 + 수수료율) (기본 국내 0.015% · 미국 0.25%, 화면에서 바꿈)
+                     국내 ETF 세금: 분배금의 '주당 과세표준' × 15.4% (국내 주식형·커버드콜은 과세표준이 분배금보다 훨씬 작음)
+                                    과세표준을 운용사가 공개하지 않은 회차 → 같은 ETF 공개 회차의 평균 비율 · 공개 회차가 없으면 분배금 전액
+                     미국 ETF 세금: 배당 × 15.4% — 실제 원천징수는 15%(국내 소득세율 14%보다 높아 국내 추가 징수 없음)이나,
+                                    운영자 결정으로 국내 배당소득세율을 적용한 보수적 가정 (화면 설명에 명시)
+                     금융소득종합과세·ISA·연금 계좌·환전 비용은 반영하지 않음
    · 국내 실제 종가 = 네이버 수정주가 ÷ 구간 비율 (분배락일 사이 구간마다 '분배락 전날 실제 종가'로 비율을 정함)
    · 기간: 1M 3M 6M 1Y = 가장 최근 거래일 E 에서 n개월 전 날짜 S (그날 또는 그 전 마지막 거래일 종가가 기준)
            YTD = 지난해 12월 31일(또는 그 전 마지막 거래일) 종가 기준 · MAX = 고른 ETF 중 가장 늦게 상장한 ETF 의 첫 거래일 기준
@@ -5861,7 +5862,7 @@ var TAX = (function () {
    · window.fcRegister 로 탭 진입·테마 변경 때 그림 → 반드시 [FC-UI] 정의 뒤에 둠 (앞에 두면 스크립트 전체가 멈춤)
 ════════════════════════════════════════════════════════════ */
 (function () {
-  var DAY = 864e5, MAXN = 10, TAX_K = 0.154, TAX_U = 0.15, FEE_K = 0.015, FEE_U = 0.25, NSHARD = 8;
+  var DAY = 864e5, MAXN = 10, TAX_K = 0.154, TAX_U = 0.154, FEE_K = 0.015, FEE_U = 0.25, NSHARD = 8;   /* TAX_U: 보수적 가정(국내 배당소득세율) */
   var COLORS = ['#3182f6', '#f04452', '#fe9800', '#1fa27a', '#8b5cf6', '#0891b2', '#db2777', '#a07d00', '#64748b', '#9c5b2e'];
   var PERS = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12 };
   var EXCH = { P: 'NYSE Arca', Q: 'NASDAQ', Z: 'Cboe BZX', N: 'NYSE', A: 'NYSE American', V: 'IEX' };   /* nasdaqtraded.txt 상장 거래소 (확인되지 않은 코드는 표시 안 함) */
@@ -5965,7 +5966,7 @@ var TAX = (function () {
     });
     return { d: d, p: p, dv: dv, cur: 'KRW', pend: pend, ratio: ratio };
   }
-  /* 미국: Yahoo 종가 + 분배 → 분배 목록(세금 15%) */
+  /* 미국: Yahoo 종가 + 분배 → 분배 목록(세금 15.4% — 보수적 가정) */
   function prepU(s) {
     var d = s.d, dv = [];
     (s.div || []).forEach(function (x) {
@@ -5981,30 +5982,28 @@ var TAX = (function () {
     for (var i = 0; i < s.d.length; i++) { var k = idxLE(fx.d, s.d[i]); out[i] = k < 0 ? null : fx.v[k]; }
     return out;
   }
-  /* 가치 흐름 (처음 넣은 돈 = 1) · mode: 'px' 가격 · 'tr' 세전 · 'net' 세후 실제
-     o: { fee: 한 번 거래 수수료(비율), fx: 원/달러 배열(미국 원화 환산) } → { v: 날짜별 가치(bi~ei), tax, fee, n: 분배 횟수, nk/na/nf: 과세표준 공개·추정·전액 } */
+  /* 가치 흐름 (처음 넣은 돈 = 1) · mode: 'px' 시장가(종가 변화만) · 'nav' 기준가(세금·재투자 수수료를 뗀 분배금을 재투자)
+     둘 다 평가 가치 — 처음 매수·마지막 매도 수수료와 매도 차익 세금은 빼지 않음
+     o: { fee: 재투자 매수 수수료(비율), fx: 원/달러 배열(미국 원화 환산) } → { v: 날짜별 가치(bi~ei), tax, fee, n: 분배 횟수, nk/na/nf: 과세표준 공개·평균 비율·전액 } */
   function valueSeries(s, bi, ei, mode, o) {
-    var p = s.p, fx = o && o.fx, phi = mode === 'net' ? ((o && o.fee) || 0) : 0, v = new Array(ei - bi + 1);
+    var p = s.p, fx = o && o.fx, nav = mode === 'nav', phi = nav ? ((o && o.fee) || 0) : 0, v = new Array(ei - bi + 1);
     var fx0 = fx ? fx[bi] : 1, fxr = function (t) { return fx ? fx[t] / fx0 : 1; };
-    var u = (1 - phi) / p[bi], tax = 0, fee = phi, n = 0, nk = 0, na = 0, nf = 0, j = 0, dv = s.dv;
+    var u = 1 / p[bi], tax = 0, fee = 0, n = 0, nk = 0, na = 0, nf = 0, j = 0, dv = s.dv;
     while (j < dv.length && dv[j].i <= bi) j++;
     for (var t = bi; t <= ei; t++) {
       while (j < dv.length && dv[j].i === t) {
         var e = dv[j++], D = e.a, X = p[t - 1] - D;
         if (!(X > 0)) X = p[t];
         n++; if (e.k === 'k') nk++; else if (e.k === 'a') na++; else if (e.k === 'f') nf++;
-        if (mode === 'tr') u *= 1 + D / X;
-        else if (mode === 'net') {
-          var T = Math.min(D, e.t), cash = u * (D - T);
-          tax += u * T * fxr(t); fee += cash * phi * fxr(t);
-          u += cash * (1 - phi) / X;
+        if (nav) {
+          var T = Math.min(D, e.t), cash = u * (D - T), buy = cash / (1 + phi);   /* 받은 돈 = 매수 금액 + 매수 금액 × 수수료율 */
+          tax += u * T * fxr(t); fee += (cash - buy) * fxr(t);
+          u += buy / X;
         }
       }
-      var val = (mode === 'px' ? p[t] / p[bi] : u * p[t]) * fxr(t);
-      v[t - bi] = mode === 'net' ? val * (1 - phi) : val;
+      v[t - bi] = (nav ? u * p[t] : p[t] / p[bi]) * fxr(t);
     }
-    if (mode === 'net') fee += v[v.length - 1] / (1 - phi) * phi;
-    return { v: v, tax: tax, fee: mode === 'net' ? fee : 0, n: n, nk: nk, na: na, nf: nf };
+    return { v: v, tax: tax, fee: fee, n: n, nk: nk, na: na, nf: nf };
   }
   /* 기간 → 기준일(S)·종료일(E) · arr: [{d}] */
   function window_(arr, per, from, to) {
@@ -6067,7 +6066,7 @@ var TAX = (function () {
     if (!ok.length) return { err: 'empty' };
     var w = window_(ok, per, from, to); if (w.err) return w;
     var list = [], skipped = [];
-    arr.forEach(function (s, i) { if (!s || !s.d || s.d.length < 2) return; var st = stats(s, w.S, w.E, mode || 'tr', opts && opts[i]); if (st.skip) skipped.push({ i: i, why: st.skip }); else list.push({ i: i, s: s, st: st }); });
+    arr.forEach(function (s, i) { if (!s || !s.d || s.d.length < 2) return; var st = stats(s, w.S, w.E, mode || 'px', opts && opts[i]); if (st.skip) skipped.push({ i: i, why: st.skip }); else list.push({ i: i, s: s, st: st }); });
     if (!list.length) return { err: 'nodata', w: w, skipped: skipped };
     var P = points(list, buckets || 600);
     return { w: w, list: list, skipped: skipped, pts: P };
@@ -6126,7 +6125,7 @@ var TAX = (function () {
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var Lx = typeof L === 'function' ? L : function (ko) { return ko; };
   var TABS = { 1: Lx('국내 시장지수', 'Korea market index'), 2: Lx('국내 업종·테마', 'Korea sector/theme'), 3: Lx('국내 파생', 'Korea derivatives'), 4: Lx('해외 주식', 'Overseas equity'), 5: Lx('원자재', 'Commodities'), 6: Lx('채권', 'Bonds'), 7: Lx('기타', 'Other') };
-  var S = { L: null, by: {}, sel: [], per: '1Y', from: null, to: null, fx: false, mode: 'net', feeK: FEE_K, feeU: FEE_U, sort: null,
+  var S = { L: null, by: {}, sel: [], per: '1Y', from: null, to: null, fx: false, mode: 'px', feeK: FEE_K, feeU: FEE_U, sort: null,
             data: {}, err: {}, pend: {}, dist: {}, distP: {}, distErr: {}, fxd: null, fxp: null, prep: {}, chart: null, mk: 'all', sugs: [], sugIdx: -1,
             ready: false, listErr: false, last: null, hash: null };
   var PRESETS = [
@@ -6234,7 +6233,7 @@ var TAX = (function () {
   function remove(key) { S.sel = S.sel.filter(function (s) { return s.k + s.c !== key; }); }
   function setSel(keys) { S.sel = []; keys.forEach(function (k) { add(k, true); }); }
 
-  /* 주소 #e=K069500,USPY&p=1Y&fx=1&m=tr&fk=0.015&fu=0.25 (기간설정: p=C20200101-20241231 · 보기 m: net 기본·tr·px) — 공유하면 같은 비교가 열림 */
+  /* 주소 #e=K069500,USPY&p=1Y&fx=1&m=nav&fk=0.015&fu=0.25 (기간설정: p=C20200101-20241231 · 보기 m: 없으면 시장가, nav = 기준가 · 예전 주소의 m=tr 은 기준가로) — 공유하면 같은 비교가 열림 */
   function feeOk(x) { return x != null && isFinite(x) && x >= 0 && x <= 5; }
   function readHash() {
     var h = location.hash.replace(/^#/, ''), o = {}; h.split('&').forEach(function (kv) { var i = kv.indexOf('='); if (i > 0) { try { o[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); } catch (e) {} } });
@@ -6245,7 +6244,7 @@ var TAX = (function () {
     if (m && f != null && t != null && f < t) { S.per = 'C'; S.from = f; S.to = t; }
     else S.per = ['1M', '3M', '6M', 'YTD', '1Y', 'MAX'].indexOf(p) >= 0 ? p : '1Y';
     S.fx = o.fx === '1';
-    S.mode = ['net', 'tr', 'px'].indexOf(o.m) >= 0 ? o.m : 'net';
+    S.mode = o.m === 'nav' || o.m === 'tr' ? 'nav' : 'px';
     var fk = parseFloat(o.fk), fu = parseFloat(o.fu);
     S.feeK = feeOk(fk) ? fk : FEE_K; S.feeU = feeOk(fu) ? fu : FEE_U;
     return S.sel.length > 0;
@@ -6253,7 +6252,7 @@ var TAX = (function () {
   function writeHash() {
     if (!$('page-etfcmp').classList.contains('active')) return;
     var p = S.per === 'C' && S.from != null && S.to != null ? 'C' + ymdOf(S.from).replace(/-/g, '') + '-' + ymdOf(S.to).replace(/-/g, '') : S.per === 'C' ? '1Y' : S.per;
-    var h = S.sel.length ? '#e=' + S.sel.map(function (s) { return s.k + s.c; }).join(',') + '&p=' + p + (S.fx ? '&fx=1' : '') + (S.mode !== 'net' ? '&m=' + S.mode : '')
+    var h = S.sel.length ? '#e=' + S.sel.map(function (s) { return s.k + s.c; }).join(',') + '&p=' + p + (S.fx ? '&fx=1' : '') + (S.mode === 'nav' ? '&m=nav' : '')
       + (S.feeK !== FEE_K ? '&fk=' + S.feeK : '') + (S.feeU !== FEE_U ? '&fu=' + S.feeU : '') : '';
     S.hash = h;
     try { if (location.hash !== h) history.replaceState(history.state, '', location.pathname + location.search + h); } catch (e) {}
@@ -6297,7 +6296,7 @@ var TAX = (function () {
   function renderPer() {
     document.querySelectorAll('#ecx-per .chart-tab').forEach(function (b) { var on = b.getAttribute('data-per') === S.per; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
     document.querySelectorAll('#ecx-mode button').forEach(function (b) { var on = b.getAttribute('data-m') === S.mode; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
-    $('ecx-custom').hidden = S.per !== 'C'; $('ecx-fx').checked = S.fx; $('ecx-fees').hidden = S.mode !== 'net';
+    $('ecx-custom').hidden = S.per !== 'C'; $('ecx-fx').checked = S.fx; $('ecx-fees').hidden = S.mode !== 'nav';
     var fk = $('ecx-fk'), fu = $('ecx-fu');
     if (document.activeElement !== fk) fk.value = String(S.feeK); if (document.activeElement !== fu) fu.value = String(S.feeU);
   }
@@ -6407,22 +6406,21 @@ var TAX = (function () {
   }
   function modeNote(hasU) {
     var cur = S.fx && hasU ? Lx(' · 미국 ETF는 원/달러 매매기준율로 원화 환산', ' · U.S. ETFs converted to KRW at the Bank of Korea rate') : Lx(' · 각 ETF의 거래 통화 기준', ' · in each ETF’s trading currency');
-    if (S.mode === 'px') return Lx('<b>가격만</b>: 분배금·배당금을 빼고 실제 종가 변화만', '<b>Price only</b>: closing-price change, distributions excluded') + cur;
-    if (S.mode === 'tr') return Lx('<b>세전 총수익</b>: 분배금을 분배락일에 그대로 재투자 (세금·수수료 없음)', '<b>Total return (pre-tax)</b>: distributions reinvested on the ex-date, no tax or fees') + cur;
-    return Lx('<b>세후 실제</b>: 국내 ETF 분배금은 주당 과세표준 × 15.4%, 미국 ETF 배당은 15% 원천징수 후 재투자 · 매수·재투자·매도 때 수수료(국내 ' + S.feeK + '% · 미국 ' + S.feeU + '%) · 매도 차익 세금·환전 비용은 빼지 않음',
-      '<b>After tax & fees</b>: Korean ETF distributions taxed at 15.4% of the taxable base per share, U.S. dividends 15% withholding, then reinvested · trading fee on each buy, reinvestment and sale (KR ' + S.feeK + '% · US ' + S.feeU + '%) · capital-gains tax and FX costs not deducted') + cur;
+    if (S.mode === 'nav') return Lx('<b>기준가</b>: 분배금·배당금에서 세금(국내 ETF 주당 과세표준 × 15.4% · 미국 ETF 배당 × 15.4%)과 재투자 수수료(국내 ' + S.feeK + '% · 미국 ' + S.feeU + '%)를 떼고 분배락일에 재투자한 평가수익 · 처음 매수·마지막 매도 수수료와 매도 차익 세금은 빼지 않음',
+      '<b>Reinvested (after tax)</b>: distributions reinvested on the ex-date after tax (Korean ETFs 15.4% of the taxable base per share · U.S. ETFs 15.4% of dividends) and a reinvestment fee (KR ' + S.feeK + '% · US ' + S.feeU + '%) · unrealized value: no fee on the first purchase or final sale, no capital-gains tax') + cur;
+    return Lx('<b>시장가</b>: 분배금·배당금을 재투자하지 않은 실제 종가 변화만 (세금·수수료 없는 평가수익)', '<b>Market price</b>: closing-price change only, distributions not reinvested (unrealized, no tax or fees)') + cur;
   }
-  /* 표 이름 칸 둘째 줄: 분배 횟수 · 세금·수수료 · 과세표준 공개 여부 */
+  /* 표 이름 칸 둘째 줄: 분배 횟수 · 과세표준 공개 여부 · 낸 세금·재투자 수수료 */
   function infoLine(it, s, st) {
-    if (!st.n && S.mode !== 'net') return '';
-    if (S.mode === 'px') return Lx('분배 ' + st.n + '회 제외', st.n + ' distribution' + (st.n === 1 ? '' : 's') + ' excluded');
-    if (S.mode === 'tr') return Lx('분배 ' + st.n + '회 재투자', st.n + ' distribution' + (st.n === 1 ? '' : 's') + ' reinvested');
-    /* 낸 세금·수수료 합계 ÷ 처음 넣은 돈 (수익률 차이 %p 가 아님 — 재투자 손실까지 합치면 세전과의 차이는 이보다 클 수 있음) */
-    var t = Lx('원금 대비 세금 ' + (st.tax * 100).toFixed(2) + '% · 수수료 ' + (st.fee * 100).toFixed(2) + '%', 'tax ' + (st.tax * 100).toFixed(2) + '% · fees ' + (st.fee * 100).toFixed(2) + '% of principal');
-    if (!st.n) return t;
-    var src = it.k === 'U' ? Lx('배당 15% 원천징수', '15% withholding') : st.nk === st.n ? Lx('과세표준 운용사 공개 ' + st.nk + '회', 'taxable base published ×' + st.nk)
+    if (!st.n) return '';
+    var many = function (n) { return n + ' distribution' + (n === 1 ? '' : 's'); };
+    if (S.mode !== 'nav') return Lx('분배 ' + st.n + '회 제외', many(st.n) + ' excluded');
+    /* 낸 세금·수수료 합계 ÷ 처음 넣은 돈 (수익률 차이 %p 가 아님) */
+    var pc = function (x) { return x > 0 && x < 0.00005 ? Lx('0.01% 미만', 'under 0.01%') : (x * 100).toFixed(2) + '%'; };   /* 0.00% 로 보여 '없음'처럼 읽히지 않게 */
+    var t = Lx('원금 대비 세금 ' + pc(st.tax) + ' · 재투자 수수료 ' + pc(st.fee), 'tax ' + pc(st.tax) + ' · reinvestment fees ' + pc(st.fee) + ' of principal');
+    var src = it.k === 'U' ? Lx('배당세 15.4%', '15.4% dividend tax') : st.nk === st.n ? Lx('과세표준 운용사 공개 ' + st.nk + '회', 'taxable base published ×' + st.nk)
       : Lx('과세표준 공개 ' + st.nk + '/' + st.n + '회', 'taxable base ' + st.nk + '/' + st.n + ' published') + (st.na ? Lx(' · 나머지는 공개 회차 평균 비율', ' · rest at the published average ratio') : '') + (st.nf ? Lx(' · 공개 없음: 분배금 전액 과세로 계산', ' · none published: taxed on the full amount') : '');
-    return Lx('분배 ' + st.n + '회 · ', st.n + ' distributions · ') + src + ' · ' + t;
+    return Lx('분배 ' + st.n + '회 재투자 · ', many(st.n) + ' reinvested · ') + src + ' · ' + t;
   }
   function renderHead() {
     var tr = $('ecx-head'); if (!tr) return;
