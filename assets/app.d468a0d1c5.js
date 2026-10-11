@@ -6569,7 +6569,7 @@ var TAX = (function () {
     var checking = Object.keys(S.pgP).length > 0;
     var inexact = R.list.filter(function (o) { return items[o.i].it.k === 'K' && o.s.xc; }).map(function (o) {
       var c = 0; for (var t = o.st.bi; t <= o.st.ei; t++) if (!o.s.xc[t]) c++;
-      if (!o.st.xb && (o.st.pKind === 'o' || o.st.pDay < o.st.baseDay)) c++;
+      if (!o.st.xb && (o.st.pKind === 'o' ? o.s.xc[o.st.bi] : o.st.pDay < o.st.baseDay)) c++;   /* 기준 가격이 근사인데 그날 종가는 실제인 경우만 한 날 더 (같은 날을 두 번 세지 않게) */
       return c ? labelOf(items[o.i].it) + ' ' + c + Lx('일', ' day' + (c === 1 ? '' : 's')) : '';
     }).filter(Boolean);
     note.innerHTML = (typeof zpHint === 'function' && S.chart ? zpHint() + '<br>' : '') + '<b>' + lab + '</b> · ' + Lx('기준 ', 'From ') + fmtD(w.S) + (w.open ? Lx('(그날 또는 그 뒤 첫 거래일) 시가', ' (or the next trading day) open') : Lx('(그날 또는 그 전 마지막 거래일) 종가', ' (or the last trading day before) close')) + ' → ' + fmtD(w.E) + Lx(' 종가', ' close') +

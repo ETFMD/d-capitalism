@@ -241,10 +241,11 @@ ETF_JS = """async () => {
   const XM = rets(), tt = S.chart && S.chart.options.plugins.tooltip.callbacks.title, x0 = r.w.S - 0.5;
   ok('MAX(분배 잦은 국내 ETF + 코스피): 둘 다 상장일 시가 → 마지막 거래일 종가 · 실제 가격 확인 · 표 칸 = 계산 가격', r.list.length === 2 && r.list.every(o => o.st.pKind === 'o' && o.st.pDay === r.w.S && o.st.endDay === o.s.d[o.s.d.length - 1] && Math.abs(o.st.ret - (o.st.pE / o.st.p0 - 1)) < 1e-12) && r.list[0].st.xb && r.list[0].st.xe && cellBad().length === 0, [r.list.map(o => [X.ymdOf(o.st.pDay), o.st.pKind, o.st.p0, o.st.pE, o.st.xb, o.st.xe]), cellBad()]);
   ok('MAX 차트: 상장일 반나절 앞 0% 에서 출발 · 툴팁 "… 시가"', r.pts.x[0] === x0 && r.pts.y.every(y => y[0] === 0) && !!tt && /시가|open/.test(tt([{ parsed: { x: x0 } }])) && !/시가|open/.test(tt([{ parsed: { x: r.w.S } }])), [r.pts.x[0], x0, tt && tt([{ parsed: { x: x0 } }])]);
-  // 12. 실제 가격이 어디에도 없는 날(야후 빈 날 + 일별 시세 자료 시작 전) → 근사로 두고 기간 설명에 종목·날 수 · 같은 날을 다시 묻지 않음
-  location.hash = '#e=K069500&p=C20100601-20100630'; await W(200); await done(); r = last();
-  const o12 = r.list[0], n12 = (() => { let c = 0; if (o12) for (let t = o12.st.bi; t <= o12.st.ei; t++) if (!o12.s.xc[t]) c++; return c; })(), rg12 = $('ecx-range').textContent;
-  ok('실제 가격이 없는 날 1일 → 근사 · 설명 "근사한 날 … 1일" · 기준·끝은 실제 가격(≈ 없음)', !!o12 && n12 === 1 && o12.st.xb && o12.st.xe && /근사한 날|approximated/.test(rg12) && /KODEX 200 1일|KODEX 200 1 day/.test(rg12) && cellBad().length === 0, [n12, rg12.slice(-200), cellBad()]);
+  // 12. 실제 가격이 어디에도 없는 날(야후 빈 날 + 일별 시세 자료 시작 전)이 기준일 → 근사로 두고 표 가격 앞 ≈ · 기간 설명에 종목·날 수(같은 날을 두 번 세지 않음)
+  //     같은 쪽의 다음 빈 날(2010-06-17)은 'first=' 답 뒤에 다시 받아 실제 가격으로 · 같은 날을 다시 묻지 않음
+  location.hash = '#e=K069500&p=C20100615-20100630'; await W(200); await done(); r = last();
+  const o12 = r.list[0], n12 = (() => { let c = 0; if (o12) for (let t = o12.st.bi; t <= o12.st.ei; t++) if (!o12.s.xc[t]) c++; return c; })(), rg12 = $('ecx-range').textContent, c12 = rows()[0] && rows()[0].cells[6] ? rows()[0].cells[6].textContent : '';
+  ok('실제 가격이 없는 기준일 → 근사 · 표 "2010.06.15 시가 ≈…" · 끝 가격은 실제(≈ 없음) · 설명 "근사한 날 … KODEX 200 1일"', !!o12 && n12 === 1 && !o12.st.xb && o12.st.xe && o12.st.pKind === 'o' && /^2010\\.06\\.15 시가 ≈[\\d,]+원→ 2010\\.06\\.30 종가 [\\d,]+원/.test(c12) && /근사한 날|approximated/.test(rg12) && /KODEX 200 1일/.test(rg12), [n12, c12, rg12.slice(-170)]);
   return { R, m: M, S1y, maxS, late, ix: IX, c: C, xm: XM };
 }"""
 
