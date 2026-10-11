@@ -280,7 +280,9 @@ function etfSource(m, s) {
   return null;
 }
 /* 네이버 일별 시세 한 쪽(60거래일, 1쪽 = 가장 최근)의 실제 시가·종가 — 야후에 빠진 날을 정확히 채울 때 (m=kp&s=코드&d=YYYYMMDD&g=추정 쪽)
-   추정 쪽에 그 날짜가 없으면 앞뒤 쪽으로 옮겨 최대 4번 · 결과는 그 쪽 전체 "YYYYMMDD,시가,종가" 줄 */
+   추정 쪽에 그 날짜가 없으면 앞뒤 쪽으로 옮겨 최대 6번 · 결과는 그 쪽 전체 "YYYYMMDD,시가,종가" 줄
+   그 날짜가 일별 시세 자료가 시작하기 전이면 200 "first=자료 첫날" (예: 069500 은 2003-04-04 부터 · 보관) → 화면은 그 전 날들을 다시 묻지 않음
+   (정상인 '자료 없음'이라 404 로 보내지 않음 — 브라우저 콘솔 오류가 되지 않게) */
 async function etfPage(env, url, cors, json) {
   const s = (url.searchParams.get('s') || '').toUpperCase(), d = url.searchParams.get('d') || '';
   let g = Math.max(1, Math.min(500, parseInt(url.searchParams.get('g'), 10) || 1));
@@ -291,16 +293,26 @@ async function etfPage(env, url, cors, json) {
     'Access-Control-Expose-Headers': 'X-Etf-Cache' } });
   if (row && now - row.t < KP_TTL) return send(row.v, 'hit');
   try {
-    for (let k = 0; k < 4; k++) {
+    let older = '', first = '';
+    for (let k = 0; k < 6; k++) {
       const r = await fetch(`https://m.stock.naver.com/api/stock/${s}/price?pageSize=60&page=${g}`, { headers: { 'User-Agent': CNN_UA, Accept: 'application/json', Referer: 'https://m.stock.naver.com/' } });
       if (!r.ok) throw new Error('upstream ' + r.status);
       const a = await r.json();
       const rows = (Array.isArray(a) ? a : []).map((x) => [String(x.localTradedAt || '').replace(/-/g, ''), numK(x.openPrice), numK(x.closePrice)]).filter((x) => /^\d{8}$/.test(x[0]) && x[2] > 0);
-      if (!rows.length) break;
+      if (!rows.length) {                                                     // 빈 쪽 = 자료 끝(가장 옛날 쪽)을 지남
+        if (older) { first = older; break; }                                  //   바로 앞 쪽이 마지막 쪽 → 자료 첫날 = 그 쪽의 가장 옛날 날짜
+        if (g > 1) { g = Math.max(1, g - 2); continue; }                      //   추정 쪽이 너무 뒤 → 앞으로
+        break;
+      }
       const hi = rows[0][0], lo = rows[rows.length - 1][0];
       if (d > hi) { if (g === 1) break; g--; continue; }                     // 더 최근 쪽
-      if (d < lo) { g++; continue; }                                          // 더 옛날 쪽
+      if (d < lo) { if (rows.length < 60) { first = lo; break; } older = lo; g++; continue; }   // 더 옛날 쪽 (60줄이 안 되는 쪽 = 마지막 쪽)
       const v = rows.map((x) => x[0] + ',' + (x[1] > 0 ? x[1] : '') + ',' + x[2]).join('\n');
+      await env.DB.prepare('INSERT INTO cache (k, t, v) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET t = excluded.t, v = excluded.v').bind(key, now, v).run();
+      return send(v, 'miss');
+    }
+    if (first) {
+      const v = 'first=' + first;
       await env.DB.prepare('INSERT INTO cache (k, t, v) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET t = excluded.t, v = excluded.v').bind(key, now, v).run();
       return send(v, 'miss');
     }

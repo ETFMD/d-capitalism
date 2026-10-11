@@ -23,7 +23,7 @@
   python tests/run_regression.py --base https://d-capitalism.com/ --etf-audit   # ETF 차트 비교 실제 가격 점검만
 실패가 하나라도 있으면 종료 코드 1
 """
-import re, argparse, functools, http.server, json, os, socketserver, sys, threading, time, urllib.parse, urllib.request
+import re, argparse, functools, http.server, json, os, shutil, socketserver, subprocess, sys, threading, time, urllib.parse, urllib.request
 
 from playwright.sync_api import sync_playwright
 
@@ -241,6 +241,10 @@ ETF_JS = """async () => {
   const XM = rets(), tt = S.chart && S.chart.options.plugins.tooltip.callbacks.title, x0 = r.w.S - 0.5;
   ok('MAX(분배 잦은 국내 ETF + 코스피): 둘 다 상장일 시가 → 마지막 거래일 종가 · 실제 가격 확인 · 표 칸 = 계산 가격', r.list.length === 2 && r.list.every(o => o.st.pKind === 'o' && o.st.pDay === r.w.S && o.st.endDay === o.s.d[o.s.d.length - 1] && Math.abs(o.st.ret - (o.st.pE / o.st.p0 - 1)) < 1e-12) && r.list[0].st.xb && r.list[0].st.xe && cellBad().length === 0, [r.list.map(o => [X.ymdOf(o.st.pDay), o.st.pKind, o.st.p0, o.st.pE, o.st.xb, o.st.xe]), cellBad()]);
   ok('MAX 차트: 상장일 반나절 앞 0% 에서 출발 · 툴팁 "… 시가"', r.pts.x[0] === x0 && r.pts.y.every(y => y[0] === 0) && !!tt && /시가|open/.test(tt([{ parsed: { x: x0 } }])) && !/시가|open/.test(tt([{ parsed: { x: r.w.S } }])), [r.pts.x[0], x0, tt && tt([{ parsed: { x: x0 } }])]);
+  // 12. 실제 가격이 어디에도 없는 날(야후 빈 날 + 일별 시세 자료 시작 전) → 근사로 두고 기간 설명에 종목·날 수 · 같은 날을 다시 묻지 않음
+  location.hash = '#e=K069500&p=C20100601-20100630'; await W(200); await done(); r = last();
+  const o12 = r.list[0], n12 = (() => { let c = 0; if (o12) for (let t = o12.st.bi; t <= o12.st.ei; t++) if (!o12.s.xc[t]) c++; return c; })(), rg12 = $('ecx-range').textContent;
+  ok('실제 가격이 없는 날 1일 → 근사 · 설명 "근사한 날 … 1일" · 기준·끝은 실제 가격(≈ 없음)', !!o12 && n12 === 1 && o12.st.xb && o12.st.xe && /근사한 날|approximated/.test(rg12) && /KODEX 200 1일|KODEX 200 1 day/.test(rg12) && cellBad().length === 0, [n12, rg12.slice(-200), cellBad()]);
   return { R, m: M, S1y, maxS, late, ix: IX, c: C, xm: XM };
 }"""
 
@@ -251,7 +255,8 @@ ETF_JS = """async () => {
 #     조정 오차(±0.05%)까지 넣음 → 수정주가 ÷ 구간 비율로 되살리면 틀린 가격이 나옴 (2026-10 사용자가 찾은 오류를 그대로 재현)
 #     화면은 실제 거래 가격(m=kr 야후 일봉 · 빠진 날은 m=kp 네이버 일별 시세 한 쪽)을 써야 숫자가 맞음
 #   · 야후(m=kr)에 빠진 날 ETF_YGAP: 1Y 기준일(K069500 2025-10-02 종가) · 기간설정 기준일(K360750 2026-05-11 시가)·끝날(K498400 2026-09-09 종가)
-#     → 화면이 그 날짜의 쪽만 m=kp 로 받아 채워야 함 · 2010-06-15(어느 기간의 기준·끝도 아님)는 받지 않아야 함
+#     → 화면이 보고 있는 기간 안의 빈 날만 m=kp 로 받아 채워야 함 · 2010-06-15 는 일별 시세에도 없는 날(ETF_KPFIRST) → 근사로 두고 설명에 날 수 표시
+#       같은 쪽의 2010-06-17(일별 시세 자료 첫날 뒤)은 'first=' 답을 받은 뒤 다시 받아 실제 가격으로 채워야 함
 #   · K069500: 4회마다 과세표준 비공개(→ 같은 ETF 공개 회차 평균 비율로 계산) · K360750: 과세표준 = 분배금
 #     K498400: 21거래일마다 큰 분배(전날 종가의 1.2%, 과세표준 10% · 5회마다 비공개) · 미국: 배당 15.4%
 import datetime as _dt, math as _math
@@ -263,8 +268,9 @@ ETF_DIV = {'K069500': (30, 63, 0.006), 'K360750': (30, 63, 0.006), 'USPY': (30, 
 ETF_KR_OFF = {_dt.date(2025, 10, d) for d in range(3, 10)} | {_dt.date(2026, 10, 9)}
 ETF_NODATA = {'UNODATA'}
 ETF_FEE = {'K': 0.015 / 100, 'U': 0.25 / 100}
-ETF_YGAP = {'K069500': {_dt.date(2010, 6, 15), _dt.date(2025, 10, 2)}, 'K360750': {_dt.date(2026, 5, 11)}, 'K498400': {_dt.date(2026, 9, 9)}}
+ETF_YGAP = {'K069500': {_dt.date(2010, 6, 15), _dt.date(2010, 6, 17), _dt.date(2025, 10, 2)}, 'K360750': {_dt.date(2026, 5, 11)}, 'K498400': {_dt.date(2026, 9, 9)}}
 ETF_LOG = []   # 화면이 부른 실제 가격 주소 (m, 코드, 날짜, 화면이 추정한 쪽, 실제 쪽)
+ETF_KPFIRST = {'K069500': '20100616'}   # 네이버 일별 시세 자료 첫날 (실제 069500 은 2003-04-04 부터) → 그 전 야후 빈 날(2010-06-15)은 실제 가격이 어디에도 없음
 KR_ETF = re.compile(r'^K[0-9][0-9A-Z]{5}$')
 _EP = _dt.date(1970, 1, 1)
 
@@ -381,12 +387,16 @@ def etf_route(route):
         gap = {d.strftime('%Y%m%d') for d in ETF_YGAP.get(key, ())}
         return route.fulfill(status=200, headers=hd, body='\n'.join('%s,%s,%s' % r for r in rows if r[0] not in gap))
     d, n = g1('d'), len(rows)   # m=kp: 그 날짜가 든 네이버 일별 시세 한 쪽(60거래일 · 1쪽 = 가장 최근) — Worker 가 쪽을 맞춰 찾은 결과
+    if key in ETF_KPFIRST and d < ETF_KPFIRST[key]:   # 일별 시세 자료가 시작하기 전 날 → Worker 와 같은 200 "first=자료 첫날"
+        ETF_LOG.append(('kp', s, d, g1('g'), 'first'))
+        return route.fulfill(status=200, headers=hd, body='first=' + ETF_KPFIRST[key])
     t = max([i for i, r in enumerate(rows) if r[0] <= d] or [-1])
     if t < 0 or rows[t][0] != d:
         ETF_LOG.append(('kp', s, d, g1('g'), '')); return nf()
     g = (n - 1 - t) // 60 + 1
     ETF_LOG.append(('kp', s, d, g1('g'), str(g)))
-    return route.fulfill(status=200, headers=hd, body='\n'.join('%s,%s,%s' % r for r in rows[max(0, n - g * 60): n - (g - 1) * 60][::-1]))
+    page = [r for r in rows[max(0, n - g * 60): n - (g - 1) * 60][::-1] if r[0] >= ETF_KPFIRST.get(key, '')]   # 일별 시세 자료 첫날 전 줄은 없음
+    return route.fulfill(status=200, headers=hd, body='\n'.join('%s,%s,%s' % r for r in page))
 
 
 def etf_dist_route(route):
@@ -622,6 +632,13 @@ def main():
     for _m in re.finditer(r"window\.fcRegister\('([a-z0-9]+)'", _src):
         if _def < 0 or _m.start() < _def:
             fail('src', "window.fcRegister('%s') 호출이 정의보다 앞에 있음 (스크립트 전체가 멈춤)" % _m.group(1))
+
+    # Worker ETF 실제 가격 경로(야후 줄 변환·네이버 일별 시세 쪽 찾기) 단독 확인 — node 가 있으면
+    if not a.etf_audit and shutil.which('node'):
+        _r = subprocess.run(['node', os.path.join(ROOT, 'tests', 'worker_etf_test.mjs')], capture_output=True, text=True, timeout=120)
+        print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'worker_etf_test: 출력 없음', flush=True)
+        if _r.returncode != 0:
+            fail('worker', 'ETF 실제 가격 경로 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:300])
 
     # 외부 광고·방문 분석 서버(일시 오류가 잦고 사이트 기능과 무관) — 실패해도 사이트 오류로 보지 않음
     THIRD = ('clarity.ms', 'bing.com', 'naver.com', 'naver.net', 'pstatic.net', 'googlesyndication', 'doubleclick',
@@ -973,9 +990,9 @@ def main():
                 kr = sorted({r[1] for r in log if r[0] == 'kr'}); kp = sorted((r[1], r[2]) for r in log if r[0] == 'kp')
                 if kr != ['069500', '360750', '498400']:
                     fail('etf-compare', '실제 거래 가격(m=kr) 요청 종목 %s (기대 069500·360750·498400)' % kr)
-                if kp != [('069500', '20251002'), ('360750', '20260511'), ('498400', '20260909')]:
-                    fail('etf-compare', '일별 시세 한 쪽(m=kp) 요청 %s (기대 069500 2025-10-02 · 360750 2026-05-11 · 498400 2026-09-09)' % kp)
-                if any(r[3] != r[4] for r in log if r[0] == 'kp'):
+                if kp != [('069500', '20100615'), ('069500', '20100617'), ('069500', '20251002'), ('360750', '20260511'), ('498400', '20260909')]:
+                    fail('etf-compare', '일별 시세 한 쪽(m=kp) 요청 %s (기대 069500 2010-06-15(자료 전 → 한 번만)·06-17(같은 쪽 나머지) · 2025-10-02 · 360750 2026-05-11 · 498400 2026-09-09)' % kp)
+                if any(r[3] != r[4] for r in log if r[0] == 'kp' and r[4] != 'first'):
                     fail('etf-compare', '화면이 추정한 일별 시세 쪽 번호가 실제와 다름: %s' % [r for r in log if r[0] == 'kp'])
             # 주소로 열기(공유 링크): 종목·기간·원화 환산 복원 (로컬은 자료 없는 종목도 섞어 '자료 없음' 표시 확인)
             page.goto('about:blank')

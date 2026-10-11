@@ -6348,7 +6348,8 @@ var TAX = (function () {
     Object.keys(need).forEach(function (rk) { var x = need[rk]; fetchPage(x.it, x.s, x.day); });
   }
   /* 네이버 일별 시세 한 쪽 (Worker m=kp · g = 1쪽 = 가장 최근 60거래일 기준 추정 쪽 — Worker 가 그 날짜가 든 쪽을 찾아 줌)
-     동시에 3개까지 · 종목마다 최대 120쪽 · 받을 때마다 다시 그림(마지막 쪽은 바로, 나머지는 잠깐 모아서) · 실패하면 그 쪽 날들은 다시 받지 않음(근사로 표시) */
+     동시에 3개까지 · 종목마다 최대 120쪽 · 받을 때마다 다시 그림(마지막 쪽은 바로, 나머지는 잠깐 모아서) · 실패하면 그 쪽 날들은 다시 받지 않음(근사로 표시)
+     · 일별 시세 자료가 시작하기 전 날(Worker 응답 "first=자료 첫날") → 그 전 날들만 근사로 두고 같은 쪽의 나머지 날은 다시 받음 */
   function fetchPage(it, s, day) {
     var key = it.k + it.c, rk = key + ':' + day; if (S.pgDone[rk] || S.pgP[rk]) return;
     var n = s.d.length, t = idxLE(s.d, day); if (t < 0) return;
@@ -6359,7 +6360,9 @@ var TAX = (function () {
     S.pgQ.push({ rk: rk, gk: gk, key: key, run: function () {
       return endpoint().then(function (ep) { if (!ep) throw new Error('no endpoint'); return xhr(ep + '/etf?m=kp&s=' + encodeURIComponent(it.c) + '&d=' + ymdOf(day).replace(/-/g, '') + '&g=' + g, 20000); })
         .then(function (txt) {
-          var m = parseExact(txt, {}), ds = Object.keys(m).map(Number); if (!ds.length) throw new Error('empty');
+          var m = parseExact(txt, {}), ds = Object.keys(m).map(Number), f = /^first=(\d{8})/.exec(txt);
+          if (f) { var fd = dayOfInt(+f[1]); for (var i = 0; i < n && s.d[i] < fd; i++) S.pgDone[key + ':' + s.d[i]] = 1; return; }   /* 일별 시세 자료가 시작하기 전 날 → 실제 가격 없음(근사로 둠) · 같은 쪽의 나머지 날은 다시 받음 */
+          if (!ds.length) throw new Error('empty');
           var ex = S.ex[key] || (S.ex[key] = {}); for (var k in m) ex[k] = m[k];
           mark(idxGE(s.d, Math.min.apply(null, ds)), idxLE(s.d, Math.max.apply(null, ds)));   /* 이 쪽 범위의 날은 다시 받지 않음 (일별 시세에도 없는 날 포함) */
         }).catch(function () { mark(n - g * 60, n - 1 - (g - 1) * 60); })
@@ -6549,7 +6552,7 @@ var TAX = (function () {
       var nm = '<div class="n"><i style="background:' + it.color + '"></i><b>' + esc(labelOf(it)) + (top ? '<span class="ecx-best">' + Lx('최고', 'Best') + '</span>' : '') + '<small title="' + esc(subOf(it)) + '">' + mkt(it.k) + ' · ' + esc(subOf(it)) + (S.fx && rgOf(it) === 'U' ? Lx(' · 원화 환산', ' · in KRW') : '') + '</small>' + (info ? '<small class="ecx-info" title="' + esc(info) + '">' + esc(info) + '</small>' : '') + '</b></div>';
       if (!x.r) return '<tr><td>' + nm + '</td><td colspan="6" class="ecx-empty ecx-why">' + esc(why(x)) + '</td></tr>';
       return '<tr' + (top ? ' class="best"' : '') + '><td>' + nm + '</td>' + COLS.map(function (c) { var v = st[c[0]]; return '<td class="' + (c[0] === 'ret' || c[0] === 'cagr' || c[0] === 'ann' ? cls(v) : '') + '">' + cell(v, c[0]) + '</td>'; }).join('') +
-        '<td class="d"><span class="ecx-px">' + fmtD(st.pDay) + ' ' + (st.pKind === 'o' ? Lx('시가', 'open') : Lx('종가', 'close')) + ' <b>' + fmtP(st.p0, it) + '</b></span><br><span class="ecx-px">→ ' + fmtD(st.endDay) + ' ' + Lx('종가', 'close') + ' <b>' + fmtP(st.pE, it) + '</b></span><br><small>'
+        '<td class="d"><span class="ecx-px">' + fmtD(st.pDay) + ' ' + (st.pKind === 'o' ? Lx('시가', 'open') : Lx('종가', 'close')) + ' <b>' + (st.xb ? '' : '≈') + fmtP(st.p0, it) + '</b></span><br><span class="ecx-px">→ ' + fmtD(st.endDay) + ' ' + Lx('종가', 'close') + ' <b>' + (st.xe ? '' : '≈') + fmtP(st.pE, it) + '</b></span><br><small>'
           + (it.k === 'I' ? (st.late ? '<em>' + Lx('기간 중 자료 시작 · ', 'Data starts in period · ') + fmtD(st.first) + '</em>' : Lx('자료 시작 ', 'Data from ') + fmtD(st.first))
           : st.late ? '<em>' + Lx('기간 중 상장 · ', 'Listed in period · ') + fmtD(st.first) + '</em>' : Lx('자료 시작(상장) ', 'Data from (listing) ') + fmtD(st.first)) + '</small></td></tr>';
     }).join('');
@@ -6578,7 +6581,7 @@ var TAX = (function () {
       (pend.length ? '<br><span class="ecx-warn">' + Lx('최근 분배가 아직 자료에 없어 추정으로 반영: ', 'A very recent distribution is estimated until the data updates: ') + esc(pend.join(', ')) + '</span>' : '') +
       (noDist.length ? '<br><span class="ecx-warn">' + Lx('분배 이력을 불러오지 못해 분배를 반영하지 못함: ', 'Could not load distribution history for: ') + esc(noDist.join(', ')) + '</span>' : '') +
       (checking ? '<br>' + Lx('실제 거래 가격 확인 중… (차트·표가 곧 확인된 가격으로 바뀝니다)', 'Checking actual trade prices… (the chart and table will update)')
-        : inexact.length ? '<br><span class="ecx-warn">' + Lx('실제 거래 가격을 받지 못해 수정주가로 근사한 날(호가 1단위 안팎): ', 'Days approximated from adjusted prices (about one tick) because actual prices could not be loaded: ') + esc(inexact.join(', ')) + '</span>' : '') +
+        : inexact.length ? '<br><span class="ecx-warn">' + Lx('실제 거래 가격 자료가 없어 수정주가로 근사한 날(오차는 대개 호가 1단위 안팎 · 표의 ≈ 가격): ', 'Days approximated from adjusted prices because actual prices are unavailable (usually within one tick; ≈ in the table): ') + esc(inexact.join(', ')) + '</span>' : '') +
       (R.list.length > 1 ? Lx(' · 표에서 기간 수익률이 가장 높은 ETF에 ‘최고’ 표시', ' · “Best” marks the highest return in the table') : '');
   }
   function modeNote(hasU) {
