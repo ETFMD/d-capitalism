@@ -5841,6 +5841,8 @@ var TAX = (function () {
    [ETFCMP] ETF 차트 비교 — 국내 상장 ETF 전체 + 미국 상장 ETF 전체 중 최대 10개를 한 차트에
    · 목록: data/etf_list.json (scripts/update_etf_list.py, 매일) · 원/달러: data/usdkrw.json (한국은행 ECOS, 매일)
    · 일봉: Worker GET /etf?m=k|u&s=코드 (국내 네이버 수정주가 · 미국 Yahoo 종가·분배 내역, 30분 보관)
+           국내 ETF 실제 거래 가격: m=kr&s=코드 (야후 .KS 일봉 실제 시가·종가 → "YYYYMMDD,시가,종가" 줄, 30분 보관)
+                                    m=kp&s=코드&d=YYYYMMDD&g=쪽 (네이버 일별 시세 한 쪽 60거래일, 6일 보관 — 보고 있는 기간 안의 야후 빈 날만)
            Worker 가 안 되면 공개 프록시(allorigins)로 같은 원본을 XHR 로 직접 (사이트 fetch 래퍼가 야후 요청을 가로채지 않게)
    · 국내 분배 이력: data/etfdist/{0..7}.json (scripts/update_etf_dist.py, 매일) — [분배락일, 분배금, 주당 과세표준, 분배락 전날 종가]
    · 지수(IDX, 키 'I' + id): 국내 코스피·코스닥·코스피 200 = 네이버(Worker m=k&s=KOSPI 등) · 미국 S&P 500 등 9개 = 야후(m=u&s=^GSPC 등)
@@ -5855,10 +5857,17 @@ var TAX = (function () {
                      미국 ETF 세금: 배당 × 15.4% — 실제 원천징수는 15%(국내 소득세율 14%보다 높아 국내 추가 징수 없음)이나,
                                     운영자 결정으로 국내 배당소득세율을 적용한 보수적 가정 (화면 설명에 명시)
                      금융소득종합과세·ISA·연금 계좌·환전 비용은 반영하지 않음
-   · 국내 실제 종가 = 네이버 수정주가 ÷ 구간 비율 (분배락일 사이 구간마다 '분배락 전날 실제 종가'로 비율을 정함)
+   · 국내 ETF 가격 = 실제 거래 가격: 마지막 분배락 뒤 구간은 네이버 수정주가 그대로(= 실제) · 그 전은 야후 일봉 실제 시가·종가(Worker m=kr)
+     → 보고 있는 기간 안에서 야후에 빠진 날(해마다 몇 날 · 069500 등 오래된 ETF 는 초기 몇 년)은 네이버 일별 시세 쪽(m=kp)을 받아 채움(기준·끝날 먼저)
+       그래도 없으면 수정주가 ÷ 구간 비율(호가 단위 근사) — 그런 날이 남으면 기간 설명에 종목·날 수를 밝힘
+     (수정주가 ÷ 구간 비율만으로는 네이버 수정주가의 반올림이 쌓여 하루 가격이 최대 0.08% 틀림 — 2026-10 사용자 확인으로 바꿈)
+   · 기준 가격: 1M·3M·6M·1Y·YTD = 기준일(그날 또는 그 전 마지막 거래일) 종가 · MAX·기간설정 = 시작일(그날 또는 그 뒤 첫 거래일) 시가 · 끝 = 끝날 종가
    · 기간: 1M 3M 6M 1Y = 가장 최근 거래일 E 에서 n개월 전 날짜 S (그날 또는 그 전 마지막 거래일 종가가 기준)
            YTD = 지난해 12월 31일(또는 그 전 마지막 거래일) 종가 기준 · MAX = 고른 ETF 중 가장 늦게 상장한 ETF 의 첫 거래일 기준
-           기간설정 = 고른 날짜 · 기간 시작 뒤에 상장한 ETF 는 상장일 종가가 기준 (표에 '기간 중 상장')
+           기간설정 = 고른 날짜(그날 또는 그 뒤 첫 거래일 시가 기준) · 기간 시작 뒤에 상장한 ETF 는 상장일 시가가 기준 (표에 '기간 중 상장')
+   · 표 마지막 칸 = 계산에 쓴 '기준 날짜 시가·종가 가격 → 끝 날짜 종가 가격' (사용자가 증권사 화면과 직접 맞춰 볼 수 있게)
+   · 회귀 테스트(tests/run_regression.py): 네이버 수정주가의 반올림·조정 오차를 넣은 합성 자료로 역산하면 틀리게 만들어 실제 가격 사용을 확인
+     · --etf-audit (Actions 'ETF 차트 비교 실제 가격 점검', 매일): 배포된 화면의 기준·끝 가격을 네이버 일별 시세·야후 일봉과 대조
    · 원화 환산: 미국 ETF 가치 × 그날(없으면 그 전 마지막 날) 원/달러 ÷ 시작일 원/달러
    · 순수 계산은 window.ECX (DOM 없음 · 회귀 테스트가 직접 확인) · 화면 상태는 window.ECXdebug
    · window.fcRegister 로 탭 진입·테마 변경 때 그림 → 반드시 [FC-UI] 정의 뒤에 둠 (앞에 두면 스크립트 전체가 멈춤)
@@ -5882,48 +5891,67 @@ var TAX = (function () {
   function idxGE(a, x) { var lo = 0, hi = a.length - 1, r = a.length; while (lo <= hi) { var mid = (lo + hi) >> 1; if (a[mid] >= x) { r = mid; hi = mid - 1; } else lo = mid + 1; } return r; }
   function pushPt(d, v, day, c) { if (d.length && day <= d[d.length - 1]) { if (day === d[d.length - 1]) v[v.length - 1] = c; return; } d.push(day); v.push(c); }
   function shardOf(code) { var s = 0; for (var i = 0; i < code.length; i++) s += code.charCodeAt(i); return s % NSHARD; }
-  /* 네이버 siseJson: [["날짜","시가","고가","저가","종가",...], ["20021014", 5025, 5157, 4890, 4990, ...], ...] (수정주가) */
+  /* 네이버 siseJson: [["날짜","시가","고가","저가","종가",...], ["20021014", 5025, 5157, 4890, 4990, ...], ...] (ETF 는 수정주가 · 지수는 그대로)
+     → { d: 일수, v: 종가, o: 시가(없으면 null) } */
   function parseK(txt) {
-    var re = /\["(\d{4})(\d{2})(\d{2})",\s*(?:-?[\d.]+|null),\s*(?:-?[\d.]+|null),\s*(?:-?[\d.]+|null),\s*(-?[\d.]+)/g, m, d = [], v = [];
-    while ((m = re.exec(String(txt || '')))) { var c = +m[4]; if (!(c > 0)) continue; pushPt(d, v, Math.round(Date.UTC(+m[1], +m[2] - 1, +m[3]) / DAY), c); }
-    return d.length ? { d: d, v: v, cur: 'KRW' } : null;
+    var re = /\["(\d{4})(\d{2})(\d{2})",\s*(-?[\d.]+|null),\s*(?:-?[\d.]+|null),\s*(?:-?[\d.]+|null),\s*(-?[\d.]+)/g, m, d = [], v = [], o = [];
+    while ((m = re.exec(String(txt || '')))) {
+      var c = +m[5]; if (!(c > 0)) continue; var op = m[4] === 'null' ? null : +m[4]; if (!(op > 0)) op = null;
+      var day = Math.round(Date.UTC(+m[1], +m[2] - 1, +m[3]) / DAY);
+      if (d.length && day <= d[d.length - 1]) { if (day === d[d.length - 1]) { v[v.length - 1] = c; o[o.length - 1] = op; } continue; }
+      d.push(day); v.push(c); o.push(op);
+    }
+    return d.length ? { d: d, v: v, o: o, cur: 'KRW' } : null;
   }
-  /* Yahoo v8 chart: quote.close = 분배 미반영 실제 종가(분할만 반영) · events.dividends = 분배락일·분배금 · 날짜 = 거래소 현지 날짜 */
+  /* Yahoo v8 chart: quote.close·open = 분배 미반영 실제 가격(분할만 반영) · events.dividends = 분배락일·분배금 · 날짜 = 거래소 현지 날짜 */
   function parseU(txt) {
     var j; try { j = typeof txt === 'string' ? JSON.parse(txt) : txt; } catch (e) { return null; }
     var r = j && j.chart && j.chart.result && j.chart.result[0]; if (!r || !r.timestamp || !r.indicators) return null;
-    var off = (r.meta && +r.meta.gmtoffset) || 0, ts = r.timestamp, ind = r.indicators;
-    var cl = ind.quote && ind.quote[0] && ind.quote[0].close, ac = ind.adjclose && ind.adjclose[0] && ind.adjclose[0].adjclose, d = [], v = [], a = [];
+    var off = (r.meta && +r.meta.gmtoffset) || 0, ts = r.timestamp, ind = r.indicators, qt = ind.quote && ind.quote[0] || {};
+    var cl = qt.close, op = qt.open, ac = ind.adjclose && ind.adjclose[0] && ind.adjclose[0].adjclose, d = [], v = [], a = [], o = [];
     if (!cl && !ac) return null;
     for (var i = 0; i < ts.length; i++) {
-      var c = cl ? cl[i] : null, q = ac ? ac[i] : null; if (!(c > 0)) c = null; if (!(q > 0)) q = null;
+      var c = cl ? cl[i] : null, q = ac ? ac[i] : null, x = op ? op[i] : null; if (!(c > 0)) c = null; if (!(q > 0)) q = null; if (!(x > 0)) x = null;
       if (c == null && q == null) continue;
       var day = Math.floor((ts[i] + off) / 86400);
-      if (d.length && day <= d[d.length - 1]) { if (day === d[d.length - 1]) { v[v.length - 1] = c; a[a.length - 1] = q; } continue; }
-      d.push(day); v.push(c); a.push(q);
+      if (d.length && day <= d[d.length - 1]) { if (day === d[d.length - 1]) { v[v.length - 1] = c; a[a.length - 1] = q; o[o.length - 1] = x; } continue; }
+      d.push(day); v.push(c); a.push(q); o.push(x);
     }
     var div = [], ev = r.events && r.events.dividends;
     if (ev) Object.keys(ev).forEach(function (k) { var x = ev[k]; if (x && x.amount > 0 && x.date) div.push({ x: Math.floor((x.date + off) / 86400), a: +x.amount }); });
     div.sort(function (p, q) { return p.x - q.x; });
-    /* 종가가 빠진 날은 수정 종가 비율로 메움 (드묾) — 둘 다 없으면 그날은 뺌 */
-    var D = [], V = [], A = [];
+    /* 종가가 빠진 날은 수정 종가 비율로 메움 (드묾, 그날 시가는 버림) — 둘 다 없으면 그날은 뺌 */
+    var D = [], V = [], A = [], O = [];
     for (i = 0; i < d.length; i++) {
-      var c2 = v[i];
-      if (c2 == null) { for (var k2 = i - 1; k2 >= 0 && c2 == null; k2--) if (v[k2] != null && a[k2] != null && a[i] != null) c2 = v[k2] * a[i] / a[k2]; }
+      var c2 = v[i], o2 = o[i];
+      if (c2 == null) { o2 = null; for (var k2 = i - 1; k2 >= 0 && c2 == null; k2--) if (v[k2] != null && a[k2] != null && a[i] != null) c2 = v[k2] * a[i] / a[k2]; }
       if (c2 == null || !(c2 > 0)) continue;
-      D.push(d[i]); V.push(c2); A.push(a[i]);
+      D.push(d[i]); V.push(c2); A.push(a[i]); O.push(o2);
     }
-    return D.length ? { d: D, v: V, adj: A, div: div, cur: String((r.meta && r.meta.currency) || 'USD').toUpperCase() } : null;
+    return D.length ? { d: D, v: V, adj: A, o: O, div: div, cur: String((r.meta && r.meta.currency) || 'USD').toUpperCase() } : null;
   }
   function parseFx(j) {
     if (!j || !j.c || !j.dd || j.c.length !== j.dd.length + 1) return null;
     var d = [j.d0]; for (var i = 0; i < j.dd.length; i++) d.push(d[i] + j.dd[i]);
     return { d: d, v: j.c };
   }
-  /* 국내: 네이버 수정주가 + 분배 이력 → 실제 종가 p · 분배 목록(세금 포함)
-     rec: [[분배락일 YYYYMMDD, 분배금, 주당 과세표준|null, 분배락 전날 종가|null], ...] · z: [마지막 거래일, 그날 종가] */
-  function prepK(s, dist) {
-    var d = s.d, a = s.v, n = d.length, rec = (dist && dist.r) || [], z = dist && dist.z;
+  /* 국내 ETF 실제 거래 가격 (분배 반영 안 된 시가·종가 — Worker m=kr: 야후 일봉 · m=kp: 네이버 일별 시세 한 쪽)
+     txt: "YYYYMMDD,시가,종가" 줄 → { 일수: [시가|null, 종가] } (map 을 주면 거기에 더함) */
+  function parseExact(txt, map) {
+    map = map || {};
+    String(txt || '').split('\n').forEach(function (ln) {
+      var m = /^(\d{8}),(\d+(?:\.\d+)?)?,(\d+(?:\.\d+)?)$/.exec(ln.trim()); if (!m || !(+m[3] > 0)) return;
+      map[dayOfInt(+m[1])] = [+m[2] > 0 ? +m[2] : null, +m[3]];
+    });
+    return map;
+  }
+  /* 국내 ETF 호가 단위에 맞춤 (2,000원 이상 5원 · 미만 1원) — 실제 가격을 받지 못한 날의 근사에만 씀 */
+  function snapK(x) { var t = x >= 2000 ? 5 : 1; return Math.round(x / t) * t; }
+  /* 국내: 네이버 수정주가 + 분배 이력 + 실제 거래 가격(ex) → 실제 종가 p · 시가 po · 정확 여부 xc/xo · 분배 목록(세금 포함)
+     rec: [[분배락일 YYYYMMDD, 분배금, 주당 과세표준|null, 분배락 전날 종가|null], ...] · z: [마지막 거래일, 그날 종가] · ex: parseExact 결과
+     실제 가격 고르는 순서: 마지막 분배락 뒤 구간(수정주가 = 실제) → 실제 거래 가격(ex) → 분배락 전날 종가(rec) → 수정주가 역산(호가 단위 근사, 정확 아님 표시) */
+  function prepK(s, dist, ex) {
+    var d = s.d, a = s.v, ao = s.o || [], n = d.length, rec = (dist && dist.r) || [], z = dist && dist.z;
     var R = [];
     rec.forEach(function (r) {
       var x = dayOfInt(r[0]), i = idxGE(d, x);
@@ -5946,8 +5974,8 @@ var TAX = (function () {
     }
     /* 구간 비율 q (수정주가 ÷ 실제 종가): 마지막 분배락일 뒤 = 1 · 그 전 구간 = 분배락 전날 수정주가 ÷ 분배락 전날 실제 종가
        전날 실제 종가를 모르는 회차만 표준 공식(1 − 분배금 ÷ 전날 종가)으로 앞 구간에서 이어 계산 */
-    var q = new Array(n), qa = 1;
-    for (var t = 0; t < n; t++) q[t] = 1;
+    var q = new Array(n), qa = 1, t;
+    for (t = 0; t < n; t++) q[t] = 1;
     for (var k = R.length - 1; k >= 0; k--) {
       var i0 = R[k].i, prev = a[i0 - 1], qk = null;
       if (R[k].rp > 0) { qk = prev / R[k].rp; if (!(qk > 0.05 && qk <= qa * 1.0005)) qk = null; }
@@ -5956,8 +5984,14 @@ var TAX = (function () {
       for (t = lo; t < i0; t++) q[t] = qk;
       qa = qk;
     }
-    var p = new Array(n);
-    for (t = 0; t < n; t++) p[t] = a[t] / q[t];
+    var rpAt = {}; R.forEach(function (r) { if (r.rp > 0) rpAt[r.i - 1] = r.rp; });
+    var p = new Array(n), po = new Array(n), xc = new Array(n), xo = new Array(n);
+    for (t = 0; t < n; t++) {
+      var e = ex && ex[d[t]], o0 = ao[t] > 0 ? ao[t] : null;
+      if (q[t] === 1) { p[t] = a[t]; xc[t] = 1; po[t] = o0; xo[t] = o0 != null ? 1 : 0; continue; }
+      if (e && e[1] > 0) { p[t] = e[1]; xc[t] = 1; } else if (rpAt[t] > 0) { p[t] = rpAt[t]; xc[t] = 1; } else { p[t] = snapK(a[t] / q[t]); xc[t] = 0; }
+      if (e && e[0] > 0) { po[t] = e[0]; xo[t] = 1; } else if (o0 != null) { po[t] = snapK(o0 / q[t]); xo[t] = 0; } else { po[t] = null; xo[t] = 0; }
+    }
     /* 세금: 과세표준 × 15.4% · 과세표준을 모르면 같은 ETF 공개 회차 평균 비율, 공개 회차가 없으면 분배금 전액 */
     var sa = 0, st = 0;
     R.forEach(function (r) { if (r.tb != null && !r.est) { sa += r.a; st += r.tb; } });
@@ -5966,9 +6000,10 @@ var TAX = (function () {
       var kind = r.tb != null ? 'k' : ratio != null ? 'a' : 'f', base = r.tb != null ? r.tb : r.a * (ratio != null ? ratio : 1);
       return { x: d[r.i], i: r.i, a: r.a, t: Math.max(0, base) * TAX_K, k: kind, est: !!r.est };
     });
-    return { d: d, p: p, dv: dv, cur: 'KRW', pend: pend, ratio: ratio };
+    var adjd = q.some(function (x) { return x !== 1; });                    /* 수정주가가 실제 가격과 다른 구간이 있는가 (실제 거래 가격 자료가 필요) */
+    return { d: d, p: p, po: po, xc: xc, xo: xo, dv: dv, cur: 'KRW', pend: pend, ratio: ratio, adjd: adjd };
   }
-  /* 미국: Yahoo 종가 + 분배 → 분배 목록(세금 15.4% — 보수적 가정) */
+  /* 미국: Yahoo 종가·시가(실제 가격) + 분배 → 분배 목록(세금 15.4% — 보수적 가정) */
   function prepU(s) {
     var d = s.d, dv = [];
     (s.div || []).forEach(function (x) {
@@ -5976,21 +6011,34 @@ var TAX = (function () {
       if (dv.length && dv[dv.length - 1].i === i) { dv[dv.length - 1].a += x.a; dv[dv.length - 1].t = dv[dv.length - 1].a * TAX_U; return; }
       dv.push({ x: d[i], i: i, a: x.a, t: x.a * TAX_U, k: 'u' });
     });
-    return { d: d, p: s.v, dv: dv, cur: s.cur || 'USD', pend: false, ratio: null };
+    return { d: d, p: s.v, po: s.o || [], dv: dv, cur: s.cur || 'USD', pend: false, ratio: null };
   }
+  /* 지수: 종가·시가 그대로 (분배 없음) */
+  function prepI(s) { return { d: s.d, p: s.v, po: s.o || [], dv: [], cur: s.cur || 'KRW', pend: false, ratio: null }; }
   /* 원/달러: 날짜마다 그날(없으면 그 전 마지막 날) 환율 · 환율이 없는 날은 null */
   function fxAlign(s, fx) {
     var out = new Array(s.d.length);
     for (var i = 0; i < s.d.length; i++) { var k = idxLE(fx.d, s.d[i]); out[i] = k < 0 ? null : fx.v[k]; }
     return out;
   }
-  /* 가치 흐름 (처음 넣은 돈 = 1) · mode: 'px' 시장가(종가 변화만) · 'nav' 기준가(세금·재투자 수수료를 뗀 분배금을 재투자)
-     둘 다 평가 가치 — 처음 매수·마지막 매도 수수료와 매도 차익 세금은 빼지 않음
-     o: { fee: 재투자 매수 수수료(비율), fx: 원/달러 배열(미국 원화 환산) } → { v: 날짜별 가치(bi~ei), tax, fee, n: 분배 횟수, nk/na/nf: 과세표준 공개·평균 비율·전액 } */
+  /* 기준 가격: open(시작일 시가 기준)이면 그날 시가 — 시가가 없으면 전날 종가, 그것도 없으면 그날 종가 · 아니면 그날 종가
+     → { p0: 가격, day: 가격의 날짜, kind: 'o' 시가 · 'c' 종가, x: 실제 가격으로 확인된 값인가 } */
+  function baseOf(s, bi, open) {
+    var ex = function (arr, i) { return !arr || !!arr[i]; };
+    if (open) {
+      var o = s.po && s.po[bi];
+      if (o > 0) return { p0: o, day: s.d[bi], kind: 'o', x: ex(s.xo, bi) };
+      if (bi > 0) return { p0: s.p[bi - 1], day: s.d[bi - 1], kind: 'c', x: ex(s.xc, bi - 1) };
+    }
+    return { p0: s.p[bi], day: s.d[bi], kind: 'c', x: ex(s.xc, bi) };
+  }
+  /* 가치 흐름 (기준 가격 p0 = 1) · mode: 'px' 시장가(종가 변화만) · 'nav' 기준가(세금·재투자 수수료를 뗀 분배금을 재투자)
+     둘 다 평가 가치 — 처음 매수·마지막 매도 수수료와 매도 차익 세금은 빼지 않음 · 기준일(bi)과 같은 날 분배락인 분배는 받지 못함
+     o: { p0: 기준 가격, fee: 재투자 매수 수수료(비율), fx: 원/달러 배열(미국 원화 환산) } → { v: 날짜별 가치(bi~ei), tax, fee, n: 분배 횟수, nk/na/nf: 과세표준 공개·평균 비율·전액 } */
   function valueSeries(s, bi, ei, mode, o) {
-    var p = s.p, fx = o && o.fx, nav = mode === 'nav', phi = nav ? ((o && o.fee) || 0) : 0, v = new Array(ei - bi + 1);
+    var p = s.p, fx = o && o.fx, nav = mode === 'nav', phi = nav ? ((o && o.fee) || 0) : 0, v = new Array(ei - bi + 1), p0 = (o && o.p0 > 0) ? o.p0 : p[bi];
     var fx0 = fx ? fx[bi] : 1, fxr = function (t) { return fx ? fx[t] / fx0 : 1; };
-    var u = 1 / p[bi], tax = 0, fee = 0, n = 0, nk = 0, na = 0, nf = 0, j = 0, dv = s.dv;
+    var u = 1 / p0, tax = 0, fee = 0, n = 0, nk = 0, na = 0, nf = 0, j = 0, dv = s.dv;
     while (j < dv.length && dv[j].i <= bi) j++;
     for (var t = bi; t <= ei; t++) {
       while (j < dv.length && dv[j].i === t) {
@@ -6003,46 +6051,57 @@ var TAX = (function () {
           u += buy / X;
         }
       }
-      v[t - bi] = (nav ? u * p[t] : p[t] / p[bi]) * fxr(t);
+      v[t - bi] = (nav ? u * p[t] : p[t] / p0) * fxr(t);
     }
     return { v: v, tax: tax, fee: fee, n: n, nk: nk, na: na, nf: nf };
   }
-  /* 기간 → 기준일(S)·종료일(E) · arr: [{d}] */
+  /* 기간 → 기준일(S)·종료일(E) · open: 시작일 시가 기준(MAX·기간설정) — 1M·3M·6M·1Y·YTD 는 기준일 종가 기준 · arr: [{d}] */
   function window_(arr, per, from, to) {
     var firsts = arr.map(function (s) { return s.d[0]; }), lasts = arr.map(function (s) { return s.d[s.d.length - 1]; });
-    var E = Math.max.apply(null, lasts), S;
+    var E = Math.max.apply(null, lasts), S, open = per === 'MAX' || per === 'C';
     if (per === 'MAX') S = Math.max.apply(null, firsts);
     else if (per === 'YTD') S = Math.round(Date.UTC(new Date(E * DAY).getUTCFullYear() - 1, 11, 31) / DAY);
-    else if (per === 'C') { if (from == null || to == null || from >= to) return { err: 'range' }; S = from; E = Math.min(to, E); if (E <= S) return { err: 'nodata' }; }
+    else if (per === 'C') { if (from == null || to == null || from >= to) return { err: 'range' }; S = from; E = Math.min(to, E); if (E < S) return { err: 'nodata' }; }
     else S = addMonths(E, -(PERS[per] || 12));
-    return { S: S, E: E, minFirst: Math.min.apply(null, firsts), maxLast: E };
+    return { S: S, E: E, open: open, minFirst: Math.min.apply(null, firsts), maxLast: E };
   }
-  /* 한 종목의 기간 성과 (모드별 가치 흐름) */
-  function stats(s, S, E, mode, o) {
-    var d = s.d, ei = idxLE(d, E);
+  /* 한 종목의 기간 성과 (모드별 가치 흐름)
+     open = false(1M~YTD): 기준 = S 당일 또는 그 전 마지막 거래일 종가 · S 뒤에 상장했으면 상장일 시가
+     open = true(MAX·기간설정): 기준 = S 당일 또는 그 뒤 첫 거래일 시가 · 끝 = E 당일 또는 그 전 마지막 거래일 종가 */
+  function stats(s, S, E, mode, o, open) {
+    var d = s.d, n = d.length, ei = idxLE(d, E), bi, late = false, ob = !!open;
     if (ei < 0) return { skip: 'after' };                                   /* 종료일 뒤에 상장 */
-    var bi = idxLE(d, S), late = false;
-    if (bi < 0) { bi = 0; late = true; }                                    /* 기간 시작 뒤에 상장 → 상장일 종가가 기준 */
-    if (ei <= bi) return { skip: d[ei] < S ? 'before' : 'short' };          /* 기간 전에 끝남 · 하루뿐 */
-    if (o && o.fx) { while (bi < ei && o.fx[bi] == null) bi++; if (o.fx[bi] == null || ei <= bi) return { skip: 'short' }; }
-    var vs = valueSeries(s, bi, ei, mode, o), v = vs.v, last = v[v.length - 1], span = d[ei] - d[bi], pk = v[0], mdd = 0, cnt = 0, sum = 0, sq = 0;
+    if (ob) {
+      bi = idxGE(d, S); late = d[0] > S;
+      if (bi >= n || bi > ei) return { skip: d[n - 1] < S ? 'before' : 'short' };
+    } else {
+      bi = idxLE(d, S);
+      if (bi < 0) { bi = 0; late = true; ob = true; }                       /* 기간 시작 뒤에 상장 → 상장일 시가가 기준 */
+      if (ei < bi || (!ob && ei === bi)) return { skip: d[ei] < S ? 'before' : 'short' };   /* 기간 전에 끝남 · 하루뿐 */
+    }
+    if (o && o.fx) { while (bi < ei && o.fx[bi] == null) bi++; if (o.fx[bi] == null || ei < bi || (!ob && ei === bi)) return { skip: 'short' }; }   /* 환율이 있는 날부터 */
+    var b = baseOf(s, bi, ob), oo = {}; for (var kk in o || {}) oo[kk] = o[kk]; oo.p0 = b.p0;
+    var vs = valueSeries(s, bi, ei, mode, oo), v = vs.v, last = v[v.length - 1], span = d[ei] - b.day + (b.kind === 'o' ? 1 : 0), pk = 1, mdd = 0, cnt = 0, sum = 0, sq = 0;
     for (var t = 0; t < v.length; t++) { if (v[t] > pk) pk = v[t]; var dd = v[t] / pk - 1; if (dd < mdd) mdd = dd; if (t > 0) { var r = Math.log(v[t] / v[t - 1]); cnt++; sum += r; sq += r * r; } }
     var ret = last - 1;
-    return { bi: bi, ei: ei, late: late, baseDay: d[bi], endDay: d[ei], first: d[0], ret: ret, v: v,
+    return { bi: bi, ei: ei, late: late, open: ob, baseDay: d[bi], endDay: d[ei], first: d[0], p0: b.p0, pDay: b.day, pKind: b.kind, pE: s.p[ei],
+             xb: b.x, xe: !s.xc || !!s.xc[ei], x0: ob ? d[bi] - 0.5 : d[bi], ret: ret, v: v,
              cagr: span >= 365 && last > 0 ? Math.pow(last, 365.25 / span) - 1 : null, ann: span > 0 ? ret * 365.25 / span : null,
              mdd: mdd, vol: cnt >= 5 ? Math.sqrt(Math.max(0, (sq - sum * sum / cnt) / (cnt - 1))) * Math.sqrt(252) : null,
              tax: vs.tax, fee: vs.fee, n: vs.n, nk: vs.nk, na: vs.na, nf: vs.nf };
   }
   /* 차트 점: 모든 종목 날짜의 합집합 위에서 각자 직전 값 이어 그리기 → 점이 많으면 칸(bucket)마다 첫 점 + 종목별 최저·최고 점만 남김 (극값 보존)
+     시가 기준 종목은 기준일 반나절 앞(x0 = 기준일 − 0.5)에 0% 점을 둠 (그날 시가 → 종가 움직임까지 보임)
      모든 종목이 같은 x 배열을 쓰므로 툴팁(mode:index)이 같은 날짜의 값을 함께 보여 줌 */
   function points(list, buckets) {
     var set = {}, U = [];
-    list.forEach(function (o) { for (var i = o.st.bi; i <= o.st.ei; i++) set[o.s.d[i]] = 1; });
+    list.forEach(function (o) { set[o.st.x0] = 1; for (var i = o.st.bi; i <= o.st.ei; i++) set[o.s.d[i]] = 1; });
     Object.keys(set).forEach(function (k) { U.push(+k); }); U.sort(function (a, b) { return a - b; });
     var Y = list.map(function (o) {
       var y = new Array(U.length), j = o.st.bi, d = o.s.d, v = o.st.v;
       for (var t = 0; t < U.length; t++) {
-        if (U[t] < o.st.baseDay) { y[t] = null; continue; }                 /* 기준일 전은 비움 · 마지막 거래일 뒤(다른 시장만 열린 날)는 직전 값 유지 */
+        if (U[t] < o.st.x0) { y[t] = null; continue; }                      /* 기준 전은 비움 · 마지막 거래일 뒤(다른 시장만 열린 날)는 직전 값 유지 */
+        if (U[t] < d[o.st.bi]) { y[t] = 0; continue; }                      /* 시가 기준: 기준일 시가 = 0% */
         while (j + 1 <= o.st.ei && d[j + 1] <= U[t]) j++;
         y[t] = (v[j - o.st.bi] - 1) * 100;
       }
@@ -6057,18 +6116,18 @@ var TAX = (function () {
         Y.forEach(function (y) { var lo = -1, hi = -1; for (var t = a; t < b; t++) { if (y[t] == null) continue; if (lo < 0 || y[t] < y[lo]) lo = t; if (hi < 0 || y[t] > y[hi]) hi = t; } if (lo >= 0) keep[lo] = 1; if (hi >= 0) keep[hi] = 1; });
       }
       keep[U.length - 1] = 1;
-      list.forEach(function (o) { var t = idxLE(U, o.st.baseDay); if (t >= 0) keep[t] = 1; });   /* 각 종목의 출발점 */
+      list.forEach(function (o) { var t = idxLE(U, o.st.x0); if (t >= 0) keep[t] = 1; t = idxLE(U, o.st.baseDay); if (t >= 0) keep[t] = 1; });   /* 각 종목의 출발점 */
     }
     var idx = Object.keys(keep).map(Number).sort(function (a, b) { return a - b; });
     return { x: idx.map(function (t) { return U[t]; }), y: Y.map(function (y) { return idx.map(function (t) { return y[t] == null ? null : Math.round(y[t] * 100) / 100; }); }), n: U.length };
   }
-  /* 한 번에: 종목들 → 기간·성과·차트 점 · arr[i] = 준비된 종목(prepK/prepU) 또는 null · opts[i] = valueSeries 옵션 */
+  /* 한 번에: 종목들 → 기간·성과·차트 점 · arr[i] = 준비된 종목(prepK/prepU/prepI) 또는 null · opts[i] = valueSeries 옵션 */
   function calc(arr, per, from, to, buckets, mode, opts) {
     var ok = arr.filter(function (s) { return s && s.d && s.d.length >= 2; });
     if (!ok.length) return { err: 'empty' };
     var w = window_(ok, per, from, to); if (w.err) return w;
     var list = [], skipped = [];
-    arr.forEach(function (s, i) { if (!s || !s.d || s.d.length < 2) return; var st = stats(s, w.S, w.E, mode || 'px', opts && opts[i]); if (st.skip) skipped.push({ i: i, why: st.skip }); else list.push({ i: i, s: s, st: st }); });
+    arr.forEach(function (s, i) { if (!s || !s.d || s.d.length < 2) return; var st = stats(s, w.S, w.E, mode || 'px', opts && opts[i], w.open); if (st.skip) skipped.push({ i: i, why: st.skip }); else list.push({ i: i, s: s, st: st }); });
     if (!list.length) return { err: 'nodata', w: w, skipped: skipped };
     var P = points(list, buckets || 600);
     return { w: w, list: list, skipped: skipped, pts: P };
@@ -6146,7 +6205,7 @@ var TAX = (function () {
       return (x - y) * dir || a.i - b.i;
     }).map(function (o) { return o.r; });
   }
-  window.ECX = { calc: calc, parseK: parseK, parseU: parseU, parseFx: parseFx, prepK: prepK, prepU: prepU, fxAlign: fxAlign, valueSeries: valueSeries, stats: stats,
+  window.ECX = { calc: calc, parseK: parseK, parseU: parseU, parseFx: parseFx, parseExact: parseExact, prepK: prepK, prepU: prepU, prepI: prepI, fxAlign: fxAlign, valueSeries: valueSeries, stats: stats, baseOf: baseOf, snapK: snapK,
                  addMonths: addMonths, dayOf: dayOf, dayOfInt: dayOfInt, ymdOf: ymdOf, idxLE: idxLE, idxGE: idxGE, search: search, buildList: buildList,
                  directKey: directKey, shardOf: shardOf, sortRows: sortRows, idxList: idxList, IDX: IDX, TAX_K: TAX_K, TAX_U: TAX_U, MAXN: MAXN };
 
@@ -6157,7 +6216,7 @@ var TAX = (function () {
   var Lx = typeof L === 'function' ? L : function (ko) { return ko; };
   var TABS = { 1: Lx('국내 시장지수', 'Korea market index'), 2: Lx('국내 업종·테마', 'Korea sector/theme'), 3: Lx('국내 파생', 'Korea derivatives'), 4: Lx('해외 주식', 'Overseas equity'), 5: Lx('원자재', 'Commodities'), 6: Lx('채권', 'Bonds'), 7: Lx('기타', 'Other') };
   var S = { L: null, by: {}, sel: [], per: '1Y', from: null, to: null, fx: false, mode: 'px', feeK: FEE_K, feeU: FEE_U, sort: null,
-            data: {}, err: {}, pend: {}, dist: {}, distP: {}, distErr: {}, fxd: null, fxp: null, prep: {}, chart: null, mk: 'all', sugs: [], sugIdx: -1,
+            data: {}, err: {}, pend: {}, dist: {}, distP: {}, distErr: {}, ex: {}, exP: {}, exErr: {}, pgP: {}, pgDone: {}, pgG: {}, pgN: {}, pgQ: [], pgRun: 0, pgT: null, fxd: null, fxp: null, prep: {}, chart: null, mk: 'all', sugs: [], sugIdx: -1,
             ready: false, listErr: false, last: null, hash: null };
   var PRESETS = [
     [Lx('국내·미국 대표 지수', 'Major indices'), ['IKOSPI', 'IKOSDAQ', 'ISPX', 'ICOMP', 'INDX', 'IDJI']],
@@ -6180,6 +6239,12 @@ var TAX = (function () {
   function fmtD(day) { return SITE_EN ? ymdOf(day) : ymdOf(day).replace(/-/g, '.'); }
   function pct(x, dg) { if (x == null || !isFinite(x)) return '—'; var v = x * 100, s = v.toFixed(dg == null ? 2 : dg); if (+s === 0) s = (0).toFixed(dg == null ? 2 : dg); return (+s > 0 ? '+' : +s < 0 ? '−' : '') + s.replace('-', '') + '%'; }
   function cls(x) { return x == null ? '' : x > 0.00005 ? 'ecx-up' : x < -0.00005 ? 'ecx-dn' : ''; }
+  /* 계산에 쓴 가격 (국내 ETF 원 · 미국 달러 · 지수 포인트) — 소수점이 없으면 정수로 */
+  function fmtP(x, it) {
+    if (x == null || !isFinite(x)) return '—';
+    var r = Math.abs(x - Math.round(x)) < 1e-6, t = x.toLocaleString(SITE_EN ? 'en-US' : 'ko-KR', { minimumFractionDigits: r ? 0 : 2, maximumFractionDigits: r ? 0 : 2 });
+    return it.k === 'K' ? Lx(t + '원', '₩' + t) : it.k === 'U' ? '$' + t : t;
+  }
   function toast(t) { var el = $('ecx-toast'); if (!el) { el = document.createElement('div'); el.id = 'ecx-toast'; el.className = 'ecx-toast'; el.setAttribute('role', 'status'); document.body.appendChild(el); } el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { el.hidden = true; }, 2600); }
   function errText(e) { return { range: Lx('시작일이 종료일보다 앞이어야 합니다.', 'The start date must be before the end date.'), nodata: Lx('고른 기간에 가격 자료가 없습니다.', 'No price data in the selected period.'), empty: Lx('비교할 자료가 없습니다.', 'No data to compare.') }[e] || e; }
   var SITE_EN = typeof window.SITE_EN === 'boolean' ? window.SITE_EN : (document.documentElement.getAttribute('lang') || '').indexOf('en') === 0;
@@ -6249,12 +6314,63 @@ var TAX = (function () {
       var sh = shardOf(it.c);
       if (!S.dist[sh] && !S.distErr[sh]) return null;
       var dist = S.dist[sh] ? S.dist[sh][it.c] : null;
-      if (!S.prep[key] || S.prep[key].src !== s) S.prep[key] = { src: s, v: prepK(s, dist), noDist: !S.dist[sh] };
-      return S.prep[key].v;
+      if (!S.prep[key] || S.prep[key].src !== s) S.prep[key] = { src: s, v: prepK(s, dist, S.ex[key] || null), noDist: !S.dist[sh] };
+      var v = S.prep[key].v;
+      /* 분배로 수정주가가 실제 가격과 달라진 ETF → 실제 거래 가격(야후 일봉)을 받아 다시 준비 (받기 전에는 계산하지 않음 — 근사값이 잠깐 보였다 바뀌지 않게) */
+      if (v.adjd && !S.ex[key] && !S.exErr[key]) { fetchExact(it); return null; }
+      return v;
     }
-    if (!S.prep[key] || S.prep[key].src !== s) S.prep[key] = { src: s, v: it.k === 'I' ? { d: s.d, p: s.v, dv: [], cur: s.cur || 'KRW', pend: false, ratio: null } : prepU(s) };   /* 지수: 분배 없음 */
+    if (!S.prep[key] || S.prep[key].src !== s) S.prep[key] = { src: s, v: it.k === 'I' ? prepI(s) : prepU(s) };   /* 지수: 분배 없음 */
     return S.prep[key].v;
   }
+  /* 국내 ETF 실제 거래 가격 — Worker m=kr (야후 일봉의 실제 시가·종가, 분배 반영 안 됨) · 실패하면 수정주가 역산(근사)으로 계산 */
+  function fetchExact(it) {
+    var key = it.k + it.c; if (S.exP[key]) return S.exP[key];
+    var p = endpoint().then(function (ep) { if (!ep) throw new Error('no endpoint'); return xhr(ep + '/etf?m=kr&s=' + encodeURIComponent(it.c), 25000); })
+      .then(function (txt) { var m = parseExact(txt); if (!Object.keys(m).length) throw new Error('nodata'); S.ex[key] = m; }, function () {})
+      .catch(function () {}).then(function () { if (!S.ex[key]) S.exErr[key] = true; delete S.exP[key]; delete S.prep[key]; render(); });
+    S.exP[key] = p;
+    return p;
+  }
+  /* 기간 안에서 실제 가격을 확인하지 못한 날(야후 빈 날 — 해마다 몇 날 · 오래된 ETF 는 초기 몇 년) → 네이버 일별 시세 쪽을 받아 채움
+     기준·끝날 먼저 · 추정 쪽(60거래일)마다 한 날만 · 이미 받은 쪽 범위의 날은 다시 받지 않음 → need[요청 키] = { it, s, day } */
+  function wantExact(it, s, st, need) {
+    if (!s.xc) return;
+    var key = it.k + it.c, n = s.d.length, seen = {};
+    var add = function (t) { if (t < 0 || t >= n || S.pgDone[key + ':' + s.d[t]]) return; var g = Math.floor((n - 1 - t) / 60) + 1; if (seen[g]) return; seen[g] = 1; need[key + ':' + s.d[t]] = { it: it, s: s, day: s.d[t] }; };
+    if (!st.xb) add(idxLE(s.d, st.pDay));
+    if (!st.xe) add(st.ei);
+    for (var t = st.bi; t <= st.ei; t++) if (!s.xc[t]) add(t);
+  }
+  /* 이번 화면에 필요한 쪽만 받기: 기다리던(아직 시작 안 한) 요청 중 기간이 바뀌어 필요 없어진 것은 버리고, 새로 필요한 것을 줄 세움 */
+  function syncPages(need) {
+    S.pgQ = S.pgQ.filter(function (q) { if (need[q.rk]) return true; delete S.pgP[q.rk]; delete S.pgG[q.gk]; S.pgN[q.key]--; return false; });
+    Object.keys(need).forEach(function (rk) { var x = need[rk]; fetchPage(x.it, x.s, x.day); });
+  }
+  /* 네이버 일별 시세 한 쪽 (Worker m=kp · g = 1쪽 = 가장 최근 60거래일 기준 추정 쪽 — Worker 가 그 날짜가 든 쪽을 찾아 줌)
+     동시에 3개까지 · 종목마다 최대 120쪽 · 받을 때마다 다시 그림(마지막 쪽은 바로, 나머지는 잠깐 모아서) · 실패하면 그 쪽 날들은 다시 받지 않음(근사로 표시) */
+  function fetchPage(it, s, day) {
+    var key = it.k + it.c, rk = key + ':' + day; if (S.pgDone[rk] || S.pgP[rk]) return;
+    var n = s.d.length, t = idxLE(s.d, day); if (t < 0) return;
+    var g = Math.floor((n - 1 - t) / 60) + 1, gk = key + ':g' + g;
+    if (S.pgG[gk] || (S.pgN[key] || 0) >= 120) return;
+    S.pgG[gk] = 1; S.pgN[key] = (S.pgN[key] || 0) + 1; S.pgP[rk] = 1;
+    var mark = function (lo, hi) { for (var i = Math.max(0, lo); i <= hi && i < n; i++) S.pgDone[key + ':' + s.d[i]] = 1; };
+    S.pgQ.push({ rk: rk, gk: gk, key: key, run: function () {
+      return endpoint().then(function (ep) { if (!ep) throw new Error('no endpoint'); return xhr(ep + '/etf?m=kp&s=' + encodeURIComponent(it.c) + '&d=' + ymdOf(day).replace(/-/g, '') + '&g=' + g, 20000); })
+        .then(function (txt) {
+          var m = parseExact(txt, {}), ds = Object.keys(m).map(Number); if (!ds.length) throw new Error('empty');
+          var ex = S.ex[key] || (S.ex[key] = {}); for (var k in m) ex[k] = m[k];
+          mark(idxGE(s.d, Math.min.apply(null, ds)), idxLE(s.d, Math.max.apply(null, ds)));   /* 이 쪽 범위의 날은 다시 받지 않음 (일별 시세에도 없는 날 포함) */
+        }).catch(function () { mark(n - g * 60, n - 1 - (g - 1) * 60); })
+        .then(function () {
+          delete S.pgP[rk]; delete S.pgG[gk]; S.pgDone[rk] = 1; delete S.prep[key];
+          clearTimeout(S.pgT); if (Object.keys(S.pgP).length) S.pgT = setTimeout(render, 200); else render();
+        });
+    } });
+    pump();
+  }
+  function pump() { var f = function () { S.pgRun--; pump(); }; while (S.pgRun < 3 && S.pgQ.length) { S.pgRun++; S.pgQ.shift().run().then(f, f); } }
   function optOf(it, s) {
     var o = { fee: (rgOf(it) === 'K' ? S.feeK : S.feeU) / 100 };
     if (S.fx && rgOf(it) === 'U' && S.fxd) { if (!s._fx || s._fxd !== S.fxd) { s._fx = fxAlign(s, S.fxd); s._fxd = S.fxd; } o.fx = s._fx; }
@@ -6357,11 +6473,13 @@ var TAX = (function () {
     var hasU = S.sel.some(function (it) { return rgOf(it) === 'U'; });
     if (S.fx && !S.fxd && hasU) fxSeries().catch(function () { S.fx = false; toast(Lx('원/달러 환율 자료를 불러오지 못해 원화 환산을 껐습니다.', 'Could not load USD/KRW rates; KRW conversion turned off.')); render(); });
     var items = S.sel.map(function (it) { var s = prepOf(it); return { it: it, s: s, o: s ? optOf(it, s) : null }; });
-    var loading = S.sel.some(function (it) { return S.pend[it.k + it.c] || (it.k === 'K' && S.data[it.k + it.c] && !prepOf(it)); }) || (S.fx && !S.fxd && hasU);
+    var waiting = S.sel.some(function (it) { return S.pend[it.k + it.c] || (it.k === 'K' && S.data[it.k + it.c] && !prepOf(it)); }) || (S.fx && !S.fxd && hasU);   /* 종목 자료가 아직 오는 중 */
+    var loading = waiting || Object.keys(S.pgP).length > 0;
     var narrow = (canvas.parentNode.clientWidth || 800) < 520, B = narrow ? 800 : 2500, arr = items.map(function (o) { return o.s; }), opts = items.map(function (o) { return o.o; }), R;
     if (S.per === 'C' && (S.from == null || S.to == null)) {                /* 기간설정을 처음 누름 → 지금(1Y) 범위로 채워 시작 */
       R = calc(arr, '1Y', null, null, B, S.mode, opts); if (R.w && !R.err) { S.from = R.w.S; S.to = R.w.E; R = calc(arr, 'C', S.from, S.to, B, S.mode, opts); }
     } else R = calc(arr, S.per, S.from, S.to, B, S.mode, opts);
+    if (R.list && !waiting) { var need = {}; R.list.forEach(function (o) { var it = items[o.i].it; if (it.k === 'K') wantExact(it, o.s, o.st, need); }); syncPages(need); }   /* 국내 ETF: 실제 가격을 확인 못 한 날 → 일별 시세로 채움 (자료가 다 온 뒤의 기간으로만) */
     S.last = R;
     if (S.chart) { S.chart.destroy(); S.chart = null; }
     if (!S.sel.length) {
@@ -6398,7 +6516,7 @@ var TAX = (function () {
           interaction: { mode: 'index', intersect: false },
           plugins: { legend: { display: false },
             tooltip: { itemSort: function (a, b) { return b.parsed.y - a.parsed.y; }, filter: function (c) { return c.parsed.y != null; },
-              callbacks: { title: function (it) { return it.length ? fmtD(it[0].parsed.x) : ''; }, label: function (c) { var y = c.parsed.y; return ' ' + c.dataset.label + '  ' + (y > 0 ? '+' : y < 0 ? '−' : '') + Math.abs(y).toFixed(2) + '%'; } } } },
+              callbacks: { title: function (it) { if (!it.length) return ''; var x = it[0].parsed.x; return x % 1 ? fmtD(Math.ceil(x)) + Lx(' 시가', ' open') : fmtD(x); }, label: function (c) { var y = c.parsed.y; return ' ' + c.dataset.label + '  ' + (y > 0 ? '+' : y < 0 ? '−' : '') + Math.abs(y).toFixed(2) + '%'; } } } },
           scales: {
             x: { type: 'linear', min: xmin, max: xmax, grid: { display: false }, border: { color: fgA(0.25) },
                  /* 눈금: 2년 넘으면 1월 1일(1·2·5·10년 간격) · 2개월~2년은 매월 1일(1·2·3·6개월 간격) · 그보다 짧으면 월요일 */
@@ -6431,8 +6549,9 @@ var TAX = (function () {
       var nm = '<div class="n"><i style="background:' + it.color + '"></i><b>' + esc(labelOf(it)) + (top ? '<span class="ecx-best">' + Lx('최고', 'Best') + '</span>' : '') + '<small title="' + esc(subOf(it)) + '">' + mkt(it.k) + ' · ' + esc(subOf(it)) + (S.fx && rgOf(it) === 'U' ? Lx(' · 원화 환산', ' · in KRW') : '') + '</small>' + (info ? '<small class="ecx-info" title="' + esc(info) + '">' + esc(info) + '</small>' : '') + '</b></div>';
       if (!x.r) return '<tr><td>' + nm + '</td><td colspan="6" class="ecx-empty ecx-why">' + esc(why(x)) + '</td></tr>';
       return '<tr' + (top ? ' class="best"' : '') + '><td>' + nm + '</td>' + COLS.map(function (c) { var v = st[c[0]]; return '<td class="' + (c[0] === 'ret' || c[0] === 'cagr' || c[0] === 'ann' ? cls(v) : '') + '">' + cell(v, c[0]) + '</td>'; }).join('') +
-        '<td class="d">' + fmtD(st.baseDay) + ' → ' + fmtD(st.endDay) + '<br>' + (it.k === 'I' ? (st.late ? '<em>' + Lx('기간 중 자료 시작 · ', 'Data starts in period · ') + fmtD(st.first) + '</em>' : Lx('자료 시작 ', 'Data from ') + fmtD(st.first))
-          : st.late ? '<em>' + Lx('기간 중 상장 · ', 'Listed in period · ') + fmtD(st.first) + '</em>' : Lx('자료 시작(상장) ', 'Data from (listing) ') + fmtD(st.first)) + '</td></tr>';
+        '<td class="d"><span class="ecx-px">' + fmtD(st.pDay) + ' ' + (st.pKind === 'o' ? Lx('시가', 'open') : Lx('종가', 'close')) + ' <b>' + fmtP(st.p0, it) + '</b></span><br><span class="ecx-px">→ ' + fmtD(st.endDay) + ' ' + Lx('종가', 'close') + ' <b>' + fmtP(st.pE, it) + '</b></span><br><small>'
+          + (it.k === 'I' ? (st.late ? '<em>' + Lx('기간 중 자료 시작 · ', 'Data starts in period · ') + fmtD(st.first) + '</em>' : Lx('자료 시작 ', 'Data from ') + fmtD(st.first))
+          : st.late ? '<em>' + Lx('기간 중 상장 · ', 'Listed in period · ') + fmtD(st.first) + '</em>' : Lx('자료 시작(상장) ', 'Data from (listing) ') + fmtD(st.first)) + '</small></td></tr>';
     }).join('');
     tb.parentNode.classList.remove('is-empty');
     var ts = tb.parentNode.parentNode; $('ecx-swipe').hidden = !(ts.scrollWidth > ts.clientWidth + 2);   /* 표가 화면보다 넓을 때만 '옆으로 밀기' 안내 */
@@ -6443,14 +6562,23 @@ var TAX = (function () {
     var youngest = S.per === 'MAX' ? R.list.reduce(function (m, o) { return !m || o.s.d[0] > m.s.d[0] ? o : m; }, null) : null, yI = youngest && items[youngest.i].it.k === 'I';
     var pend = R.list.filter(function (o) { return o.s.pend; }).map(function (o) { return labelOf(items[o.i].it); });
     var noDist = items.filter(function (o) { return o.it.k === 'K' && o.s && S.prep[o.it.k + o.it.c] && S.prep[o.it.k + o.it.c].noDist; }).map(function (o) { return labelOf(o.it); });
-    note.innerHTML = (typeof zpHint === 'function' && S.chart ? zpHint() + '<br>' : '') + '<b>' + lab + '</b> · ' + Lx('기준 ', 'From ') + fmtD(w.S) + ' → ' + fmtD(w.E) +
-      (youngest ? (yI ? Lx(' · 자료가 가장 늦게 시작하는 <b>' + esc(labelOf(items[youngest.i].it)) + '</b>의 첫 거래일(' + fmtD(youngest.s.d[0]) + ')부터 모두 같은 출발선', ' · all start on the first trading day (' + fmtD(youngest.s.d[0]) + ') of <b>' + esc(labelOf(items[youngest.i].it)) + '</b>, whose data starts last')
-        : Lx(' · 가장 늦게 상장한 <b>' + esc(labelOf(items[youngest.i].it)) + '</b>의 첫 거래일(' + fmtD(youngest.s.d[0]) + ')부터 모두 같은 출발선', ' · all start on the first trading day (' + fmtD(youngest.s.d[0]) + ') of the most recently listed ETF, <b>' + esc(labelOf(items[youngest.i].it)) + '</b>')) : '') +
-      (late.length && S.per !== 'MAX' ? '<br>' + Lx('기간 중 상장: ', 'Listed during the period: ') + esc(late.join(', ')) + Lx(' — 상장일 종가부터 그렸습니다', ' — drawn from the listing-day close') : '') +
-      (lateI.length && S.per !== 'MAX' ? '<br>' + Lx('기간 중 자료 시작: ', 'Data starting during the period: ') + esc(lateI.join(', ')) + Lx(' — 자료 첫날 종가부터 그렸습니다', ' — drawn from the first available close') : '') +
+    /* 국내 ETF 중 실제 거래 가격을 확인하지 못한 날(받는 중이면 '확인 중', 다 받았는데도 남으면 근사한 날 수를 밝힘) */
+    var checking = Object.keys(S.pgP).length > 0;
+    var inexact = R.list.filter(function (o) { return items[o.i].it.k === 'K' && o.s.xc; }).map(function (o) {
+      var c = 0; for (var t = o.st.bi; t <= o.st.ei; t++) if (!o.s.xc[t]) c++;
+      if (!o.st.xb && (o.st.pKind === 'o' || o.st.pDay < o.st.baseDay)) c++;
+      return c ? labelOf(items[o.i].it) + ' ' + c + Lx('일', ' day' + (c === 1 ? '' : 's')) : '';
+    }).filter(Boolean);
+    note.innerHTML = (typeof zpHint === 'function' && S.chart ? zpHint() + '<br>' : '') + '<b>' + lab + '</b> · ' + Lx('기준 ', 'From ') + fmtD(w.S) + (w.open ? Lx('(그날 또는 그 뒤 첫 거래일) 시가', ' (or the next trading day) open') : Lx('(그날 또는 그 전 마지막 거래일) 종가', ' (or the last trading day before) close')) + ' → ' + fmtD(w.E) + Lx(' 종가', ' close') +
+      (youngest ? (yI ? Lx(' · 자료가 가장 늦게 시작하는 <b>' + esc(labelOf(items[youngest.i].it)) + '</b>의 첫 거래일(' + fmtD(youngest.s.d[0]) + ') 시가부터 모두 같은 출발선', ' · all start at the open of the first trading day (' + fmtD(youngest.s.d[0]) + ') of <b>' + esc(labelOf(items[youngest.i].it)) + '</b>, whose data starts last')
+        : Lx(' · 가장 늦게 상장한 <b>' + esc(labelOf(items[youngest.i].it)) + '</b>의 첫 거래일(' + fmtD(youngest.s.d[0]) + ') 시가부터 모두 같은 출발선', ' · all start at the open of the first trading day (' + fmtD(youngest.s.d[0]) + ') of the most recently listed ETF, <b>' + esc(labelOf(items[youngest.i].it)) + '</b>')) : '') +
+      (late.length && S.per !== 'MAX' ? '<br>' + Lx('기간 중 상장: ', 'Listed during the period: ') + esc(late.join(', ')) + Lx(' — 상장일 시가부터 그렸습니다', ' — drawn from the listing-day open') : '') +
+      (lateI.length && S.per !== 'MAX' ? '<br>' + Lx('기간 중 자료 시작: ', 'Data starting during the period: ') + esc(lateI.join(', ')) + Lx(' — 자료 첫날 시가부터 그렸습니다', ' — drawn from the first available open') : '') +
       '<br>' + modeNote(hasU) +
       (pend.length ? '<br><span class="ecx-warn">' + Lx('최근 분배가 아직 자료에 없어 추정으로 반영: ', 'A very recent distribution is estimated until the data updates: ') + esc(pend.join(', ')) + '</span>' : '') +
       (noDist.length ? '<br><span class="ecx-warn">' + Lx('분배 이력을 불러오지 못해 분배를 반영하지 못함: ', 'Could not load distribution history for: ') + esc(noDist.join(', ')) + '</span>' : '') +
+      (checking ? '<br>' + Lx('실제 거래 가격 확인 중… (차트·표가 곧 확인된 가격으로 바뀝니다)', 'Checking actual trade prices… (the chart and table will update)')
+        : inexact.length ? '<br><span class="ecx-warn">' + Lx('실제 거래 가격을 받지 못해 수정주가로 근사한 날(호가 1단위 안팎): ', 'Days approximated from adjusted prices (about one tick) because actual prices could not be loaded: ') + esc(inexact.join(', ')) + '</span>' : '') +
       (R.list.length > 1 ? Lx(' · 표에서 기간 수익률이 가장 높은 ETF에 ‘최고’ 표시', ' · “Best” marks the highest return in the table') : '');
   }
   function modeNote(hasU) {
@@ -6479,7 +6607,7 @@ var TAX = (function () {
     tr.innerHTML = '<th>ETF</th>' + COLS.map(function (c) {
       var on = S.sort && S.sort.k === c[0], ar = on ? (S.sort.dir < 0 ? ' ▼' : ' ▲') : ' ↕';   /* ↕ = 누를 수 있다는 표시(흐리게) */
       return '<th aria-sort="' + (on ? (S.sort.dir < 0 ? 'descending' : 'ascending') : 'none') + '"><button type="button" class="ecx-sort' + (on ? ' on' : '') + '" data-sort="' + c[0] + '" title="' + Lx('누르면 내림차순 · 한 번 더 누르면 오름차순', 'Click to sort descending, again for ascending') + '">' + esc(c[1]) + '<span aria-hidden="true">' + ar + '</span></button></th>';
-    }).join('') + '<th>' + Lx('기준일 · 상장일', 'Period · listing') + '</th>';
+    }).join('') + '<th>' + Lx('기준 가격 → 끝 가격', 'Start → end price') + '</th>';
   }
   function bounds(w) {
     var f = $('ecx-from'), t = $('ecx-to');

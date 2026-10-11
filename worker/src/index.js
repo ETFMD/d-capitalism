@@ -248,8 +248,25 @@ async function kr(req, env, url, json) {
 
 /* ── ETF 차트 비교: 일봉 원문 중계 + 30분 보관 ── */
 const ETF_TTL = 1800;   // 초
+const KP_TTL = 6 * 86400;   // 지난 날의 실제 가격(네이버 일별 시세 한 쪽)은 바뀌지 않음 → 길게 (보관본은 7일 지나면 정리)
+const numK = (x) => parseFloat(String(x == null ? '' : x).replace(/,/g, ''));
+/* 야후 일봉 → "YYYYMMDD,시가,종가" 줄 (국내 ETF 실제 거래 가격 — 분배로 낮춰 잡은 수정주가가 아님) */
+function yahooRows(v) {
+  const j = JSON.parse(v), r = j && j.chart && j.chart.result && j.chart.result[0];
+  if (!r || !r.timestamp || !r.indicators || !r.indicators.quote) return '';
+  const off = (r.meta && +r.meta.gmtoffset) || 0, q = r.indicators.quote[0] || {}, out = [];
+  r.timestamp.forEach((t, i) => {
+    const c = q.close && q.close[i], o = q.open && q.open[i];
+    if (c > 0) out.push(new Date((t + off) * 1000).toISOString().slice(0, 10).replace(/-/g, '') + ',' + (o > 0 ? +o.toFixed(4) : '') + ',' + +c.toFixed(4));
+  });
+  return out.join('\n');
+}
 function etfSource(m, s) {
   const now = Math.floor(Date.now() / 1000);
+  if (m === 'kr' && /^[0-9][0-9A-Z]{5}$/.test(s)) {                       // 국내 ETF 실제 시가·종가 (야후 일봉, 분배 반영 안 됨)
+    return { url: `https://query1.finance.yahoo.com/v8/finance/chart/${s}.KS?period1=315532800&period2=${now + 86400}&interval=1d&includePrePost=false`,
+             ok: (v) => v.indexOf('"timestamp"') >= 0, ref: 'https://finance.yahoo.com/', out: yahooRows };
+  }
   if (m === 'k' && /^[0-9A-Z]{5,6}$/.test(s)) {                            // 국내 ETF 6자리 · 국내 지수(KOSPI·KOSDAQ·KPI200)
     const end = new Date(Date.now() + 9 * 3600e3 + 86400e3).toISOString().slice(0, 10).replace(/-/g, '');   // 한국 날짜 + 1일 (오늘 장중 값 포함)
     return { url: `https://api.finance.naver.com/siseJson.naver?symbol=${encodeURIComponent(s)}&requestType=1&startTime=19900101&endTime=${end}&timeframe=day`,
@@ -262,9 +279,42 @@ function etfSource(m, s) {
   }
   return null;
 }
+/* 네이버 일별 시세 한 쪽(60거래일, 1쪽 = 가장 최근)의 실제 시가·종가 — 야후에 빠진 날을 정확히 채울 때 (m=kp&s=코드&d=YYYYMMDD&g=추정 쪽)
+   추정 쪽에 그 날짜가 없으면 앞뒤 쪽으로 옮겨 최대 4번 · 결과는 그 쪽 전체 "YYYYMMDD,시가,종가" 줄 */
+async function etfPage(env, url, cors, json) {
+  const s = (url.searchParams.get('s') || '').toUpperCase(), d = url.searchParams.get('d') || '';
+  let g = Math.max(1, Math.min(500, parseInt(url.searchParams.get('g'), 10) || 1));
+  if (!/^[0-9][0-9A-Z]{5}$/.test(s) || !/^\d{8}$/.test(d)) return json({ error: 'bad symbol' }, 400);
+  const key = 'etf:kp:' + s + ':' + d, now = Math.floor(Date.now() / 1000);
+  const row = await env.DB.prepare('SELECT t, v FROM cache WHERE k = ?').bind(key).first();
+  const send = (v, how) => new Response(v, { headers: { ...cors.headers, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'private, max-age=3600', 'X-Etf-Cache': how,
+    'Access-Control-Expose-Headers': 'X-Etf-Cache' } });
+  if (row && now - row.t < KP_TTL) return send(row.v, 'hit');
+  try {
+    for (let k = 0; k < 4; k++) {
+      const r = await fetch(`https://m.stock.naver.com/api/stock/${s}/price?pageSize=60&page=${g}`, { headers: { 'User-Agent': CNN_UA, Accept: 'application/json', Referer: 'https://m.stock.naver.com/' } });
+      if (!r.ok) throw new Error('upstream ' + r.status);
+      const a = await r.json();
+      const rows = (Array.isArray(a) ? a : []).map((x) => [String(x.localTradedAt || '').replace(/-/g, ''), numK(x.openPrice), numK(x.closePrice)]).filter((x) => /^\d{8}$/.test(x[0]) && x[2] > 0);
+      if (!rows.length) break;
+      const hi = rows[0][0], lo = rows[rows.length - 1][0];
+      if (d > hi) { if (g === 1) break; g--; continue; }                     // 더 최근 쪽
+      if (d < lo) { g++; continue; }                                          // 더 옛날 쪽
+      const v = rows.map((x) => x[0] + ',' + (x[1] > 0 ? x[1] : '') + ',' + x[2]).join('\n');
+      await env.DB.prepare('INSERT INTO cache (k, t, v) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET t = excluded.t, v = excluded.v').bind(key, now, v).run();
+      return send(v, 'miss');
+    }
+    if (row) return send(row.v, 'stale');
+    return json({ error: 'not found' }, 404);
+  } catch (e) {
+    if (row) return send(row.v, 'stale');
+    return json({ error: 'upstream', detail: String(e && e.message || e).slice(0, 120) }, 502);
+  }
+}
 async function etfChart(env, url, cors, json) {
   if (!cors.ok) return json({ error: 'origin' }, 403);
   const m = url.searchParams.get('m') || '', s = (url.searchParams.get('s') || '').toUpperCase();
+  if (m === 'kp') return etfPage(env, url, cors, json);
   const src = etfSource(m, s);
   if (!src) return json({ error: 'bad symbol' }, 400);
   const key = 'etf:' + (m === 'u' ? 'u2' : m) + ':' + s, now = Math.floor(Date.now() / 1000);   // u2: 분배 내역이 들어간 응답 (예전 보관본과 섞이지 않게)
@@ -274,11 +324,12 @@ async function etfChart(env, url, cors, json) {
   if (row && now - row.t < ETF_TTL) return send(row.v, 'hit');
   try {
     const r = await fetch(src.url, { headers: { 'User-Agent': CNN_UA, Accept: 'application/json, text/plain, */*', 'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8', Referer: src.ref } });
-    const v = await r.text();
+    let v = await r.text();
     if (!r.ok || !src.ok(v)) {
       if (r.status === 404 || /No data found|delisted/i.test(v)) { if (!row) return json({ error: 'not found' }, 404); }
       throw new Error('upstream ' + r.status);
     }
+    if (src.out) { v = src.out(v); if (!v) { if (!row) return json({ error: 'not found' }, 404); throw new Error('empty'); } }   // 줄 형식으로 줄여 보관
     if (v.length < 1900000) await env.DB.prepare('INSERT INTO cache (k, t, v) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET t = excluded.t, v = excluded.v').bind(key, now, v).run();
     return send(v, 'miss');
   } catch (e) {

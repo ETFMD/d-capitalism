@@ -9,17 +9,21 @@
   5. 나의 직업 수명 — 776개 직업·21분야 데이터·모델 방향·연구 순서·검색·순위·주소·공유
   4. 무한매수법 — 라오어 카페 원문 예시 숫자로 계산 엔진 검사, 기록 화면 그리기, 가이드북(23장 · 용어 31개 · 자동 숫자 · 장 열기 · 3-6 실제 일봉 백테스트 표)
   6. ETF 차트 비교 — 보기 2가지(시장가·기준가) · 기간(1M·3M·6M·YTD·1Y·MAX·기간설정) 기준일 · MAX = 가장 늦게 상장한 ETF 첫 거래일 ·
-     수익률·세금·재투자 수수료·CAGR·연환산 계산 · 표 정렬 · 수수료 입력 · 검색 · 최대 10개 · 국내·미국 지수 · 원화 환산 · 주소(#e=…) 복원 · 묶음 버튼 · 자료 없음 표시 · 영어판
-     (로컬 검사는 Worker /etf 와 국내 분배 이력 묶음을 합성 자료로 대신해 숫자까지 맞춰 봄)
+     기준 가격(1M~1Y·YTD = 기준일 종가 · MAX·기간설정 = 시작일 시가 · 끝 = 끝날 종가) · 국내 ETF 는 실제 거래 가격(수정주가 역산 아님) ·
+     수익률·세금·재투자 수수료·CAGR·연환산·최대 낙폭·변동성 계산 · 표의 기준·끝 가격 · 표 정렬 · 수수료 입력 · 검색 · 최대 10개 · 국내·미국 지수 ·
+     원화 환산 · 주소(#e=…) 복원 · 묶음 버튼 · 자료 없음 표시 · 영어판
+     (로컬 검사는 Worker /etf 와 국내 분배 이력 묶음을 합성 자료로 대신해 숫자까지 맞춰 봄 — 네이버 수정주가의 반올림·조정 오차까지 넣어 역산하면 틀리게 만듦)
+  7. --etf-audit (배포된 사이트 · 매일 Actions) — ETF 차트 비교 화면의 기준·끝 가격을 독립 출처의 실제 가격(네이버 일별 시세 · 야후 일봉)과 맞춰 봄
 
 사용법
   pip install playwright && python -m playwright install chromium
   python tests/run_regression.py              # 저장소 루트를 임시 서버로 띄워 검사
   python tests/run_regression.py --base https://d-capitalism.com/   # 배포된 사이트 검사
   python tests/run_regression.py --quick      # 화면 폭 4개만
+  python tests/run_regression.py --base https://d-capitalism.com/ --etf-audit   # ETF 차트 비교 실제 가격 점검만
 실패가 하나라도 있으면 종료 코드 1
 """
-import re, argparse, functools, http.server, json, os, socketserver, sys, threading, time, urllib.parse
+import re, argparse, functools, http.server, json, os, socketserver, sys, threading, time, urllib.parse, urllib.request
 
 from playwright.sync_api import sync_playwright
 
@@ -110,13 +114,21 @@ ETF_JS = """async () => {
   const R = [], ok = (name, c, info) => R.push({ name, ok: !!c, info }), W = ms => new Promise(r => setTimeout(r, ms));
   const S = window.ECXdebug && ECXdebug.S, X = window.ECX, $ = id => document.getElementById(id);
   if (!S || !X || !S.L) return { R: [{ name: 'ECX·ECXdebug·목록 없음', ok: false }], m: {}, S1y: 0, maxS: 0, late: false, ix: {} };
-  const done = async () => { for (let i = 0; i < 450; i++) { if (!Object.keys(S.pend).length && !Object.keys(S.distP).length && (!S.fx || S.fxd) && S.sel.every(s => !S.data[s.k + s.c] || ECXdebug.prepOf(s))) return; await W(100); } };
+  const done = async () => { for (let i = 0; i < 450; i++) { if (!Object.keys(S.pend).length && !Object.keys(S.distP).length && !Object.keys(S.exP).length && !Object.keys(S.pgP).length && (!S.fx || S.fxd) && S.sel.every(s => !S.data[s.k + s.c] || ECXdebug.prepOf(s))) return; await W(100); } };
   const keys = () => S.sel.map(s => s.k + s.c), last = () => S.last, click = q => document.querySelector(q).click();
   const type = async q => { const i = $('ecx-q'); i.focus(); i.value = q; i.dispatchEvent(new Event('input', { bubbles: true })); await W(60); };
   const enter = async () => { $('ecx-q').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await W(80); };
   const per = async p => { click('#ecx-per [data-per="' + p + '"]'); await W(60); };
   const mode = async m => { click('#ecx-mode [data-m="' + m + '"]'); await W(60); };
-  const rets = () => { const o = {}; last().list.forEach(x => { o[S.sel[x.i].k + S.sel[x.i].c] = { ret: x.st.ret, cagr: x.st.cagr, ann: x.st.ann, tax: x.st.tax, fee: x.st.fee, n: x.st.n, nk: x.st.nk, na: x.st.na, nf: x.st.nf }; }); return o; };
+  const rets = () => { const o = {}; last().list.forEach(x => { const t = x.st; o[S.sel[x.i].k + S.sel[x.i].c] = { ret: t.ret, cagr: t.cagr, ann: t.ann, tax: t.tax, fee: t.fee, n: t.n, nk: t.nk, na: t.na, nf: t.nf,
+    mdd: t.mdd, vol: t.vol, p0: t.p0, pE: t.pE, pDay: t.pDay, pKind: t.pKind, endDay: t.endDay, xb: t.xb, xe: t.xe, open: t.open }; }); return o; };
+  // 표 '기준 가격 → 끝 가격' 칸 = 계산에 쓴 날짜·시가/종가·가격 (정렬 안 한 표는 고른 순서대로) → 틀린 칸 목록
+  const P2 = x => Math.round(x * 100) / 100, num2 = t => +t.replace(/,/g, '');
+  const cellBad = () => last().list.filter(o => { const tr = [...document.querySelectorAll('#ecx-stats tr')][o.i], c = tr && tr.cells[6], st = o.st;
+    const m = c && /^(\\d{4})[.-](\\d\\d)[.-](\\d\\d) (시가|종가|open|close) [$₩]?([\\d,]+(?:\\.\\d+)?)원?→ (\\d{4})[.-](\\d\\d)[.-](\\d\\d) (종가|close) [$₩]?([\\d,]+(?:\\.\\d+)?)/.exec(c.textContent);
+    return !m || m[1] + '-' + m[2] + '-' + m[3] !== X.ymdOf(st.pDay) || /시가|open/.test(m[4]) !== (st.pKind === 'o') || Math.abs(num2(m[5]) - P2(st.p0)) > 1e-9
+      || m[6] + '-' + m[7] + '-' + m[8] !== X.ymdOf(st.endDay) || Math.abs(num2(m[10]) - P2(st.pE)) > 1e-9; }).map(o => { const tr = [...document.querySelectorAll('#ecx-stats tr')][o.i]; return tr && tr.cells[6] ? tr.cells[6].textContent.slice(0, 90) : o.i; });
+  const isK = o => S.sel[o.i].k === 'K';
   await done();
   // 1. 처음 화면: 기본 4개 · 1Y · 시장가
   const rows = () => [...document.querySelectorAll('#ecx-stats tr')];
@@ -132,6 +144,9 @@ ETF_JS = """async () => {
   const kr = /과세표준 (운용사 공개 \\d+회|공개 \\d+\\/\\d+회)|taxable base (published ×\\d+|\\d+\\/\\d+ published)/, avg = /나머지는 공개 회차 평균 비율|rest at the published average ratio/, nOf = i => M.px[keys()[i]].n;
   ok('표 이름 아래 — 시장가: 분배 n회 제외 · 기준가: 재투자 회차·과세표준 공개 회차(모르는 회차는 평균 비율 표시)·미국 배당세 15.4%·원금 대비 세금·재투자 수수료', iPx.every((t, i) => nOf(i) === 0 ? t === '' : /^분배 \\d+회 제외$|^\\d+ distributions? excluded$/.test(t)) && [0, 1].every(i => nOf(i) === 0 || (kr.test(iNav[i]) && avg.test(iNav[i]) === (M.nav[keys()[i]].na > 0))) && [2, 3].every(i => nOf(i) === 0 || /배당세 15\\.4%|15\\.4% dividend tax/.test(iNav[i])) && iNav.every((t, i) => nOf(i) === 0 ? t === '' : /원금 대비 세금 (\\d+\\.\\d\\d%|0\\.01% 미만) · 재투자 수수료 (\\d+\\.\\d\\d%|0\\.01% 미만)$|tax (\\d+\\.\\d\\d%|under 0\\.01%) · reinvestment fees (\\d+\\.\\d\\d%|under 0\\.01%) of principal$/.test(t)), [iPx, iNav]);
   const pts = r.pts; ok('차트: 같은 날짜 축 · 끝 = 표 수익률', pts.y.every(y => y.length === pts.x.length) && r.list.every((o, k) => { const y = pts.y[k]; return Math.abs(y[y.length - 1] - Math.round(o.st.ret * 1e4) / 100) < 0.011; }), '');
+  ok('1Y: 기준 = 기준일(그날 또는 그 전 마지막 거래일) 종가 · 끝 = 마지막 거래일 종가 · 시장가 수익률 = 끝 가격 ÷ 기준 가격 − 1', r.list.every(o => !o.st.open && o.st.pKind === 'c' && o.st.pDay === o.st.baseDay && o.st.baseDay <= r.w.S && o.st.endDay === o.s.d[o.s.d.length - 1] && Math.abs(o.st.ret - (o.st.pE / o.st.p0 - 1)) < 1e-12), r.list.map(o => [X.ymdOf(o.st.pDay), o.st.pKind, o.st.p0, o.st.pE]));
+  ok('국내 ETF 기준·끝 가격 = 실제 거래 가격으로 확인됨(수정주가 역산 아님)', r.list.filter(isK).every(o => o.st.xb && o.st.xe), r.list.filter(isK).map(o => [S.sel[o.i].c, o.st.xb, o.st.xe]));
+  ok('표: 머리 "기준 가격 → 끝 가격" · 칸 = 계산에 쓴 날짜·종가·가격', /기준 가격 → 끝 가격|Start → end price/.test(document.querySelectorAll('#ecx-head th')[6].textContent) && cellBad().length === 0, cellBad());
   const S1y = r.w.S;
   // 2. 정렬: 표 머리 → 내림차순 → 오름차순 · 값 없는 줄은 맨 뒤
   const col = k => rows().map(tr => { const t = tr.cells[1 + ['ret', 'cagr', 'ann', 'mdd', 'vol'].indexOf(k)]; return t ? t.textContent : ''; });
@@ -176,20 +191,22 @@ ETF_JS = """async () => {
   ECXdebug.remove('IKOSPI'); ECXdebug.remove('ISPX');
   // 5. MAX = 고른 ETF 중 가장 늦게 상장한 ETF 의 첫 거래일
   await per('MAX'); r = last(); const firsts = r.list.map(o => o.s.d[0]), maxS = r.w.S;
-  ok('MAX: 기준일 = 가장 늦게 상장한 ETF 첫 거래일 · 모두 그날(또는 직전 거래일)부터', maxS === Math.max(...firsts) && r.list.length === 5 && r.list.every(o => !o.st.late && o.st.baseDay <= maxS && maxS - o.st.baseDay < 7), [X.ymdOf(maxS), firsts.map(X.ymdOf)]);
+  ok('MAX: 기준일 = 가장 늦게 상장한 ETF 첫 거래일 · 모두 그날(또는 그 뒤 첫 거래일) 시가부터', maxS === Math.max(...firsts) && r.list.length === 5 && r.list.every(o => !o.st.late && o.st.open && o.st.baseDay >= maxS && o.st.baseDay - maxS < 7 && (o.st.pKind === 'o' ? o.st.pDay === o.st.baseDay : o.st.pDay < o.st.baseDay)), [X.ymdOf(maxS), firsts.map(X.ymdOf), r.list.map(o => [X.ymdOf(o.st.pDay), o.st.pKind])]);
+  ok('MAX: 차트는 기준일 반나절 앞(시가) 0% 에서 출발 · 표 칸 = 시가·가격', r.list.every((o, k) => { const t = r.pts.x.indexOf(o.st.x0); return o.st.x0 === o.st.baseDay - 0.5 && t >= 0 && r.pts.y[k][t] === 0 && (t === 0 || r.pts.y[k][t - 1] == null); }) && r.pts.x[0] === Math.min(...r.list.map(o => o.st.x0)) && cellBad().length === 0, cellBad());
   ok('MAX: 설명에 가장 늦게 상장한 ETF·첫 거래일', /가장 늦게 상장한|most recently listed/.test($('ecx-range').textContent) && $('ecx-range').textContent.indexOf(X.ymdOf(maxS).replace(/-/g, '.')) >= 0, $('ecx-range').textContent.slice(0, 160));
   // 6. 1M·3M·6M·YTD·1Y
   for (const [p, n] of [['1M', 1], ['3M', 3], ['6M', 6]]) { await per(p); r = last(); ok(p + ': S = E 의 ' + n + '개월 전 · 버튼 표시', r.w.S === X.addMonths(r.w.E, -n) && document.querySelector('#ecx-per .chart-tab.active').dataset.per === p, X.ymdOf(r.w.S)); }
   await per('YTD'); r = last(); const y0 = new Date(r.w.E * 864e5).getUTCFullYear() - 1;
-  ok('YTD: S = 지난해 12월 31일 · 기준가 = 그날 또는 그 전 마지막 거래일', X.ymdOf(r.w.S) === y0 + '-12-31' && r.list.filter(o => !o.st.late).every(o => X.ymdOf(o.st.baseDay).slice(0, 4) === String(y0)), X.ymdOf(r.w.S));
+  ok('YTD: S = 지난해 12월 31일 · 기준 = 그날 또는 그 전 마지막 거래일 종가', X.ymdOf(r.w.S) === y0 + '-12-31' && r.list.filter(o => !o.st.late).every(o => X.ymdOf(o.st.baseDay).slice(0, 4) === String(y0) && o.st.pKind === 'c' && o.st.pDay === o.st.baseDay), X.ymdOf(r.w.S));
   ok('YTD: 1년 미만 → CAGR 없음(—) · 연환산 있음', r.list.every(o => o.st.cagr === null && o.st.ann !== null), '');
   await per('1Y'); r = last(); const late = r.list.some(o => o.st.late);
-  ok('1Y: 기간 시작 뒤 상장한 ETF 는 상장일부터(표에 기간 중 상장)', r.list.every(o => o.st.late === (o.s.d[0] > r.w.S)) && (!late || /기간 중 상장|Listed in period/.test($('ecx-stats').textContent)), '');
+  ok('1Y: 기간 시작 뒤 상장한 ETF 는 상장일 시가부터(표에 기간 중 상장) · 나머지는 기준일 종가', r.list.every(o => o.st.late === (o.s.d[0] > r.w.S) && (o.st.late ? o.st.pKind === 'o' && o.st.pDay === o.s.d[0] : o.st.pKind === 'c')) && (!late || /기간 중 상장|Listed in period/.test($('ecx-stats').textContent)) && cellBad().length === 0, cellBad());
   // 7. 기간설정
   await per('C'); ok('기간설정 → 날짜 칸 보임 · 지금 범위로 채움', getComputedStyle($('ecx-custom')).display !== 'none' && $('ecx-from').value === X.ymdOf(last().w.S), [$('ecx-from').value, $('ecx-to').value]);
   const f = X.ymdOf(X.addMonths(last().w.E, -5)), t = X.ymdOf(X.addMonths(last().w.E, -1));
   $('ecx-from').value = f; $('ecx-to').value = t; click('#ecx-apply'); await W(60); r = last();
-  ok('기간설정 적용 → 기준·끝 · 주소', X.ymdOf(r.w.S) === f && X.ymdOf(r.w.E) === t && r.list.every(o => o.st.endDay <= r.w.E) && location.hash.indexOf('&p=C' + f.replace(/-/g, '') + '-' + t.replace(/-/g, '')) > 0, [X.ymdOf(r.w.S), X.ymdOf(r.w.E), location.hash]);
+  await done(); r = last();
+  ok('기간설정 적용 → 기준(시작일 또는 그 뒤 첫 거래일 시가)·끝(끝날 또는 그 전 종가) · 주소', X.ymdOf(r.w.S) === f && X.ymdOf(r.w.E) === t && r.list.every(o => o.st.open && o.st.pKind === 'o' && o.st.baseDay >= r.w.S && o.st.endDay <= r.w.E) && location.hash.indexOf('&p=C' + f.replace(/-/g, '') + '-' + t.replace(/-/g, '')) > 0, [X.ymdOf(r.w.S), X.ymdOf(r.w.E), location.hash]);
   $('ecx-from').value = t; $('ecx-to').value = f; click('#ecx-apply'); await W(60);
   ok('기간설정: 시작 ≥ 끝 → 안내 · 이전 범위 유지', /앞이어야|must be before/.test($('ecx-err').textContent) && X.ymdOf(last().w.S) === f, $('ecx-err').textContent);
   await per('1Y');
@@ -214,27 +231,61 @@ ETF_JS = """async () => {
   const sp = top('s&p500', 'all', 6); ok('검색 "s&p500": 국내·미국이 함께', sp.some(k => k[0] === 'K') && sp.some(k => k[0] === 'U'), sp);
   ok('검색: 지수 이름·별칭이 먼저 (코스피·S&P500·나스닥·나스닥 100·다우)', top('코스피')[0] === 'IKOSPI' && top('S&P500')[0] === 'ISPX' && top('나스닥')[0] === 'ICOMP' && top('나스닥 100')[0] === 'INDX' && top('다우')[0] === 'IDJI' && top('코스피', 'U').indexOf('IKOSPI') < 0, [top('코스피')[0], top('S&P500')[0], top('나스닥')[0]]);
   ok('목록: 국내 1,000개 이상 · 미국 3,000개 이상', S.L.filter(x => x.k === 'K').length > 1000 && S.L.filter(x => x.k === 'U').length > 3000, '');
-  return { R, m: M, S1y, maxS, late, ix: IX };
+  // 10. 기간설정(시가 기준) 주소로 열기 — 국내 ETF 3 · 미국 1 · 지수 1 (야후에 빠진 기준·끝날은 네이버 일별 시세 한 쪽으로 채워 실제 가격 확인)
+  S.sort = null; location.hash = '#e=K069500,K360750,K498400,USPY,IKOSPI&p=C20260509-20260909'; await W(200); await done(); r = last();
+  const C = rets(), KC = r.list.filter(isK);
+  ok('주소로 기간설정 열기 → 5개 · 시작일(또는 그 뒤 첫 거래일) 시가 → 끝날(또는 그 전 마지막 거래일) 종가', keys().join() === 'K069500,K360750,K498400,USPY,IKOSPI' && S.per === 'C' && r.list.length === 5 && r.list.every(o => o.st.open && o.st.pKind === 'o' && o.st.pDay === o.st.baseDay && o.st.baseDay >= r.w.S && o.st.endDay <= r.w.E), [keys(), S.per, r.list.map(o => [X.ymdOf(o.st.pDay), o.st.pKind, X.ymdOf(o.st.endDay)])]);
+  ok('기간설정: 국내 ETF 기준·끝 가격 모두 실제 거래 가격으로 확인 · 표 칸 = 계산 가격 · 시장가 수익률 = 끝 ÷ 기준 − 1', KC.length === 3 && KC.every(o => o.st.xb && o.st.xe) && cellBad().length === 0 && r.list.every(o => Math.abs(o.st.ret - (o.st.pE / o.st.p0 - 1)) < 1e-12), [KC.map(o => [S.sel[o.i].c, o.st.xb, o.st.xe]), cellBad()]);
+  // 11. 사용자가 찾은 사례(2026-10): 분배가 잦은 국내 ETF + 코스피 · MAX → 둘 다 그 ETF 상장일 시가 → 마지막 거래일 종가
+  location.hash = '#e=K498400,IKOSPI&p=MAX'; await W(200); await done(); r = last();
+  const XM = rets(), tt = S.chart && S.chart.options.plugins.tooltip.callbacks.title, x0 = r.w.S - 0.5;
+  ok('MAX(분배 잦은 국내 ETF + 코스피): 둘 다 상장일 시가 → 마지막 거래일 종가 · 실제 가격 확인 · 표 칸 = 계산 가격', r.list.length === 2 && r.list.every(o => o.st.pKind === 'o' && o.st.pDay === r.w.S && o.st.endDay === o.s.d[o.s.d.length - 1] && Math.abs(o.st.ret - (o.st.pE / o.st.p0 - 1)) < 1e-12) && r.list[0].st.xb && r.list[0].st.xe && cellBad().length === 0, [r.list.map(o => [X.ymdOf(o.st.pDay), o.st.pKind, o.st.p0, o.st.pE, o.st.xb, o.st.xe]), cellBad()]);
+  ok('MAX 차트: 상장일 반나절 앞 0% 에서 출발 · 툴팁 "… 시가"', r.pts.x[0] === x0 && r.pts.y.every(y => y[0] === 0) && !!tt && /시가|open/.test(tt([{ parsed: { x: x0 } }])) && !/시가|open/.test(tt([{ parsed: { x: r.w.S } }])), [r.pts.x[0], x0, tt && tt([{ parsed: { x: x0 } }])]);
+  return { R, m: M, S1y, maxS, late, ix: IX, c: C, xm: XM };
 }"""
 
 # ── ETF 차트 비교: 로컬 검사용 합성 자료 (Worker /etf · 국내 분배 이력 묶음 data/etfdist 대신) ──
-#   실제 종가·분배금이 정해져 있어 두 가지 보기(시장가·기준가)의 기대값을 여기서 직접 계산해 화면 숫자와 맞춰 봄
-#   · 국내는 2025-10-03~09·2026-10-09 휴장(실제 달력과 같게) · 수정주가 = 실제 종가 × (그 뒤 분배락마다 1 − 분배금 ÷ 전날 종가)
-#   · K069500: 4회마다 과세표준 비공개(→ 같은 ETF 공개 회차 평균 비율로 계산) · K360750: 과세표준 = 분배금 · 미국: 배당 15.4%
+#   실제 시가·종가·분배금이 정해져 있어 두 가지 보기(시장가·기준가)의 기대값을 여기서 직접 계산해 화면 숫자와 맞춰 봄
+#   · 국내는 2025-10-03~09·2026-10-09 휴장(실제 달력과 같게)
+#   · 국내 ETF 실제 가격 = 호가 단위(2,000원 이상 5원) 정수 · 네이버 수정주가(m=k) = 실제 가격 × 분배 조정 비율을 정수로 반올림하고
+#     조정 오차(±0.05%)까지 넣음 → 수정주가 ÷ 구간 비율로 되살리면 틀린 가격이 나옴 (2026-10 사용자가 찾은 오류를 그대로 재현)
+#     화면은 실제 거래 가격(m=kr 야후 일봉 · 빠진 날은 m=kp 네이버 일별 시세 한 쪽)을 써야 숫자가 맞음
+#   · 야후(m=kr)에 빠진 날 ETF_YGAP: 1Y 기준일(K069500 2025-10-02 종가) · 기간설정 기준일(K360750 2026-05-11 시가)·끝날(K498400 2026-09-09 종가)
+#     → 화면이 그 날짜의 쪽만 m=kp 로 받아 채워야 함 · 2010-06-15(어느 기간의 기준·끝도 아님)는 받지 않아야 함
+#   · K069500: 4회마다 과세표준 비공개(→ 같은 ETF 공개 회차 평균 비율로 계산) · K360750: 과세표준 = 분배금
+#     K498400: 21거래일마다 큰 분배(전날 종가의 1.2%, 과세표준 10% · 5회마다 비공개) · 미국: 배당 15.4%
 import datetime as _dt, math as _math
 ETF_END = _dt.date(2026, 10, 9)
 ETF_FIRST = {'K069500': _dt.date(2002, 10, 14), 'K360750': _dt.date(2020, 8, 7), 'USPY': _dt.date(1993, 1, 29),
-             'UQQQ': _dt.date(1999, 3, 10), 'K0167A0': _dt.date(2026, 3, 17)}
-ETF_DIV = {'K069500', 'K360750', 'USPY', 'UQQQ'}
+             'UQQQ': _dt.date(1999, 3, 10), 'K0167A0': _dt.date(2026, 3, 17), 'K498400': _dt.date(2024, 12, 3)}
+ETF_DIV = {'K069500': (30, 63, 0.006), 'K360750': (30, 63, 0.006), 'USPY': (30, 63, 0.006), 'UQQQ': (30, 63, 0.006),
+           'K498400': (8, 21, 0.012)}   # (첫 분배락 거래일 번호, 간격(거래일), 분배금 ÷ 전날 종가)
 ETF_KR_OFF = {_dt.date(2025, 10, d) for d in range(3, 10)} | {_dt.date(2026, 10, 9)}
 ETF_NODATA = {'UNODATA'}
 ETF_FEE = {'K': 0.015 / 100, 'U': 0.25 / 100}
+ETF_YGAP = {'K069500': {_dt.date(2010, 6, 15), _dt.date(2025, 10, 2)}, 'K360750': {_dt.date(2026, 5, 11)}, 'K498400': {_dt.date(2026, 9, 9)}}
+ETF_LOG = []   # 화면이 부른 실제 가격 주소 (m, 코드, 날짜, 화면이 추정한 쪽, 실제 쪽)
+KR_ETF = re.compile(r'^K[0-9][0-9A-Z]{5}$')
 _EP = _dt.date(1970, 1, 1)
 
 
+def _seed(key):
+    return sum(ord(c) * (i + 1) for i, c in enumerate(key))
+
+
+def _tick(x):
+    """국내 ETF 호가 단위 (2,000원 이상 5원 · 미만 1원)"""
+    t = 5 if x >= 2000 else 1
+    return int(_math.floor(x / t + 0.5)) * t
+
+
+def _px(key, x):
+    return _tick(x) if KR_ETF.match(key) else round(x, 2 if key[0] == 'K' else 4)   # 국내 ETF 정수 · 국내 지수 소수 2자리 · 미국 4자리
+
+
 def etf_series(key):
-    """key = 'K069500' · 'USPY' … → (날짜 목록, 실제 종가 목록) · 목록에 없는 종목도 이름으로 정해지는 합성 값"""
-    seed = sum(ord(c) * (i + 1) for i, c in enumerate(key))
+    """key = 'K069500' · 'USPY' · 'KKOSPI'(국내 지수) … → (날짜 목록, 실제 종가 목록) · 목록에 없는 종목도 이름으로 정해지는 합성 값"""
+    seed = _seed(key)
     d0 = ETF_FIRST.get(key) or _dt.date(2004 + seed % 16, 1 + seed % 12, 1 + seed % 27)
     days, d = [], d0
     while d <= ETF_END:
@@ -243,45 +294,67 @@ def etf_series(key):
         d += _dt.timedelta(1)
     a, b, c = 0.00015 + (seed % 7) * 0.00004, 0.06 + (seed % 5) * 0.02, 35 + (seed % 11) * 4
     k = 100.0 if key[0] == 'K' else 1.0
-    return days, [round(100 * k * _math.exp(a * t + b * _math.sin(t / c + seed)), 4) for t in range(len(days))]
+    return days, [_px(key, 100 * k * _math.exp(a * t + b * _math.sin(t / c + seed))) for t in range(len(days))]
+
+
+def etf_opens(key, raw):
+    """실제 시가 — 전날 종가에서 ±0.4% 안쪽으로 출발 (상장일 시가는 그날 종가보다 약 1% 낮게)"""
+    seed = _seed(key)
+    return [_px(key, (raw[t - 1] if t else raw[0] * 0.99) * (1 + 0.004 * _math.sin(t * 1.7 + seed))) for t in range(len(raw))]
 
 
 def etf_dists(key, raw):
-    """[(분배락일 인덱스, 분배금, 주당 과세표준|None)] — 63거래일마다, 분배금 = 전날 종가의 0.6%"""
+    """[(분배락일 인덱스, 분배금, 주당 과세표준|None)]"""
     if key not in ETF_DIV: return []
+    i0, step, rate = ETF_DIV[key]
     out = []
-    for n, i in enumerate(range(30, len(raw), 63)):
-        amt = round(raw[i - 1] * 0.006, 0 if key[0] == 'K' else 4)
-        tax = None if key[0] == 'U' else (amt if key == 'K360750' else (None if n % 4 == 3 else round(amt * 0.8, 1)))
+    for n, i in enumerate(range(i0, len(raw), step)):
+        amt = round(raw[i - 1] * rate, 0 if key[0] == 'K' else 4)
+        tax = (None if key[0] == 'U' else amt if key == 'K360750' else (None if n % 5 == 4 else round(amt * 0.1, 1)) if key == 'K498400'
+               else (None if n % 4 == 3 else round(amt * 0.8, 1)))
         out.append((i, amt, tax))
     return out
 
 
-def etf_adj(raw, dv):
-    f, out, j = 1.0, [0.0] * len(raw), len(dv) - 1
+def etf_factors(raw, dv):
+    """분배 조정 비율 (그날 뒤의 분배락마다 × (1 − 분배금 ÷ 분배락 전날 종가)) — 마지막 분배락 뒤 = 1"""
+    f, out, j = 1.0, [1.0] * len(raw), len(dv) - 1
     for t in range(len(raw) - 1, -1, -1):
         while j >= 0 and dv[j][0] > t: f *= 1 - dv[j][1] / raw[dv[j][0] - 1]; j -= 1
-        out[t] = round(raw[t] * f, 6)
+        out[t] = f
     return out
 
 
 def etf_body(key):
     days, raw = etf_series(key)
-    dv = etf_dists(key, raw)
-    adj = etf_adj(raw, dv)
-    if key[0] == 'K':   # 네이버 siseJson 모양 (수정주가)
+    op, dv = etf_opens(key, raw), etf_dists(key, raw)
+    f = etf_factors(raw, dv)
+    if key[0] == 'K':   # 네이버 siseJson 모양 — 국내 ETF 는 수정주가(정수 반올림 + 조정 오차, 마지막 분배락 뒤는 실제 가격 그대로) · 지수는 그대로
+        if KR_ETF.match(key):
+            seed = _seed(key)
+            adj = lambda t, x: x if f[t] == 1 else int(_math.floor(x * f[t] * (1 + 0.0005 * _math.sin(t * 0.37 + seed)) + 0.5))
+            ac, ao = [adj(t, x) for t, x in enumerate(raw)], [adj(t, x) for t, x in enumerate(op)]
+        else:
+            ac, ao = raw, op
         return '[["날짜", "시가", "고가", "저가", "종가", "거래량", "외국인소진율"],\n' + ',\n'.join(
-            '["%s", %s, %s, %s, %s, 1000, 0.0]' % (d.strftime('%Y%m%d'), v, v, v, v) for d, v in zip(days, adj)) + ']'
+            '["%s", %s, %s, %s, %s, 1000, 0.0]' % (d.strftime('%Y%m%d'), o, max(o, c), min(o, c), c) for d, o, c in zip(days, ao, ac)) + ']'
     ts = [(d - _EP).days * 86400 + 48600 for d in days]   # 뉴욕 09:30 = UTC 13:30, gmtoffset −4시간
     ev = {str(ts[i]): {'amount': amt, 'date': ts[i]} for i, amt, tax in dv}
     return json.dumps({'chart': {'result': [{'meta': {'currency': 'USD', 'symbol': key[1:], 'gmtoffset': -14400}, 'timestamp': ts,
-                       'events': {'dividends': ev}, 'indicators': {'quote': [{'close': raw}], 'adjclose': [{'adjclose': adj}]}}], 'error': None}})
+                       'events': {'dividends': ev}, 'indicators': {'quote': [{'open': op, 'close': raw}],
+                       'adjclose': [{'adjclose': [round(x * f[t], 6) for t, x in enumerate(raw)]}]}}], 'error': None}})
+
+
+def etf_exact(key):
+    """국내 ETF 실제 거래 가격 줄 [(YYYYMMDD, 시가, 종가)] — Worker m=kr(야후)·m=kp(네이버 일별 시세)가 주는 값"""
+    days, raw = etf_series(key)
+    return [(d.strftime('%Y%m%d'), o, c) for d, o, c in zip(days, etf_opens(key, raw), raw)]
 
 
 def etf_shard(i):
     """국내 분배 이력 묶음 i (화면과 같은 묶음 번호 = 글자 코드 합 % 8)"""
     e = {}
-    for key in sorted(k for k in ETF_FIRST if k[0] == 'K'):
+    for key in sorted(k for k in ETF_FIRST if KR_ETF.match(k)):
         c = key[1:]
         if sum(ord(x) for x in c) % 8 != i: continue
         days, raw = etf_series(key)
@@ -291,12 +364,29 @@ def etf_shard(i):
 
 
 def etf_route(route):
-    m = re.search(r'[?&]m=([ku])&s=([^&]+)', route.request.url)
-    key = (m.group(1).upper() + urllib.parse.unquote(m.group(2))) if m else ''   # 지수: KKOSPI · U^GSPC
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(route.request.url).query)
+    g1 = lambda k: (q.get(k) or [''])[0]
+    m, s = g1('m'), g1('s')
     hd = {'Access-Control-Allow-Origin': '*', 'Content-Type': 'text/plain; charset=utf-8'}
-    if not m or key in ETF_NODATA:
-        return route.fulfill(status=404, headers=hd, body='{"error":"not found"}')
-    route.fulfill(status=200, headers=hd, body=etf_body(key))
+    nf = lambda: route.fulfill(status=404, headers=hd, body='{"error":"not found"}')
+    if m in ('k', 'u'):   # 일봉 원문 (지수: KKOSPI · U^GSPC)
+        key = m.upper() + s
+        return nf() if not s or key in ETF_NODATA else route.fulfill(status=200, headers=hd, body=etf_body(key))
+    key = 'K' + s
+    if m not in ('kr', 'kp') or not KR_ETF.match(key):
+        return route.fulfill(status=400, headers=hd, body='{"error":"bad symbol"}')
+    rows = etf_exact(key)
+    if m == 'kr':   # 야후 일봉의 실제 시가·종가 — 빠진 날(ETF_YGAP)이 있음
+        ETF_LOG.append(('kr', s, '', '', ''))
+        gap = {d.strftime('%Y%m%d') for d in ETF_YGAP.get(key, ())}
+        return route.fulfill(status=200, headers=hd, body='\n'.join('%s,%s,%s' % r for r in rows if r[0] not in gap))
+    d, n = g1('d'), len(rows)   # m=kp: 그 날짜가 든 네이버 일별 시세 한 쪽(60거래일 · 1쪽 = 가장 최근) — Worker 가 쪽을 맞춰 찾은 결과
+    t = max([i for i, r in enumerate(rows) if r[0] <= d] or [-1])
+    if t < 0 or rows[t][0] != d:
+        ETF_LOG.append(('kp', s, d, g1('g'), '')); return nf()
+    g = (n - 1 - t) // 60 + 1
+    ETF_LOG.append(('kp', s, d, g1('g'), str(g)))
+    return route.fulfill(status=200, headers=hd, body='\n'.join('%s,%s,%s' % r for r in rows[max(0, n - g * 60): n - (g - 1) * 60][::-1]))
 
 
 def etf_dist_route(route):
@@ -304,36 +394,176 @@ def etf_dist_route(route):
     route.fulfill(status=200, headers={'Content-Type': 'application/json'}, body=etf_shard(int(m.group(1))) if m else '{}')
 
 
-def etf_expect(keys, S, mode):
-    """기대값 {종목: {ret, tax, fee, n, nk, na, nf, span}} — 화면 valueSeries 와 같은 규칙을 여기서 따로 구현
-       기준일 = S(1970-01-01 기준 일수) 이하 마지막 거래일(없으면 첫 거래일) → 마지막 거래일
-       mode: px 시장가(종가 변화만, 세금·수수료 없음) · nav 기준가(분배금에서 세금을 떼고 재투자 수수료를 뺀 만큼 분배락 전날 종가 − 분배금에 재투자,
+def etf_expect(keys, S, mode, E=None, open_=False):
+    """기대값 {종목: {ret, tax, fee, n, nk, na, nf, span, mdd, vol, p0, pE, pDay, pKind, endDay}} — 화면 stats·valueSeries 와 같은 규칙을 따로 구현
+       S·E: 1970-01-01 기준 일수 (E 없으면 마지막 거래일)
+       open_=False (1M·3M·6M·1Y·YTD): 기준 = S 이하 마지막 거래일 종가 (S 뒤에 상장했으면 상장일 시가)
+       open_=True  (MAX·기간설정)    : 기준 = S 이상 첫 거래일 시가 · 끝 = E 이하 마지막 거래일 종가
+       mode: px 시장가(실제 가격 변화만, 세금·수수료 없음) · nav 기준가(분배금에서 세금을 떼고 재투자 수수료를 뺀 만큼 분배락 전날 종가 − 분배금에 재투자,
              국내 과세표준 × 15.4% · 미국 배당 × 15.4% · 처음 매수·마지막 매도 수수료 없음)"""
     out = {}
     for k in keys:
         days, raw = etf_series(k)
+        op = etf_opens(k, raw)
         dn = [(d - _EP).days for d in days]
-        bi = max([i for i, x in enumerate(dn) if x <= S] or [0]); ei = len(raw) - 1
+        ei = max(i for i, x in enumerate(dn) if x <= (dn[-1] if E is None else E))
+        if open_:
+            bi, ob = min(i for i, x in enumerate(dn) if x >= S), True
+        else:
+            le = [i for i, x in enumerate(dn) if x <= S]
+            bi, ob = (le[-1], False) if le else (0, True)
+        p0 = op[bi] if ob else raw[bi]
         alld = etf_dists(k, raw)
         dv = [(i, a, t) for i, a, t in alld if bi < i <= ei]
         known = [(a, t) for i, a, t in alld if t is not None]
         ratio = sum(t for a, t in known) / sum(a for a, t in known) if known else None
-        o = {'n': len(dv), 'nk': 0, 'na': 0, 'nf': 0, 'tax': 0.0, 'fee': 0.0, 'span': dn[ei] - dn[bi]}
+        o = {'n': len(dv), 'nk': 0, 'na': 0, 'nf': 0, 'tax': 0.0, 'fee': 0.0, 'span': dn[ei] - dn[bi] + (1 if ob else 0),
+             'p0': p0, 'pE': raw[ei], 'pDay': dn[bi], 'pKind': 'o' if ob else 'c', 'endDay': dn[ei]}
         if k[0] == 'K':
             for i, a, t in dv:
                 o['nk' if t is not None else 'na' if ratio is not None else 'nf'] += 1
-        if mode == 'px':
-            o['ret'] = raw[ei] / raw[bi] - 1; out[k] = o; continue
-        fee, u = ETF_FEE[k[0]], 1 / raw[bi]
-        for i, a, t in dv:
-            x = raw[i - 1] - a
-            tax = a * 0.154 if k[0] == 'U' else (t if t is not None else a * (ratio if ratio is not None else 1.0)) * 0.154
-            cash = u * (a - tax); buy = cash / (1 + fee)
-            o['tax'] += u * tax; o['fee'] += cash - buy
-            u += buy / x
-        o['ret'] = u * raw[ei] - 1
+        fee, u, j, v = ETF_FEE[k[0]], 1 / p0, 0, []
+        for t in range(bi, ei + 1):
+            while j < len(dv) and dv[j][0] == t:
+                i, a, tx = dv[j]; j += 1
+                if mode == 'nav':
+                    x = raw[i - 1] - a
+                    tax = a * 0.154 if k[0] == 'U' else (tx if tx is not None else a * (ratio if ratio is not None else 1.0)) * 0.154
+                    cash = u * (a - tax); buy = cash / (1 + fee)
+                    o['tax'] += u * tax; o['fee'] += cash - buy
+                    u += buy / x
+            v.append(u * raw[t] if mode == 'nav' else raw[t] / p0)
+        pk, mdd, cnt, sm, sq = 1.0, 0.0, 0, 0.0, 0.0
+        for t, x in enumerate(v):
+            pk = max(pk, x); mdd = min(mdd, x / pk - 1)
+            if t > 0:
+                r = _math.log(x / v[t - 1]); cnt += 1; sm += r; sq += r * r
+        o['ret'], o['mdd'] = v[-1] - 1, mdd
+        o['vol'] = _math.sqrt(max(0.0, (sq - sm * sm / cnt) / (cnt - 1))) * _math.sqrt(252) if cnt >= 5 else None
         out[k] = o
     return out
+
+
+def etf_cmp(fail, where, got, exp, fields=('ret', 'tax', 'fee', 'mdd', 'vol', 'p0', 'pE', 'pDay', 'pKind', 'endDay')):
+    """화면 값(got)과 기대값(exp) 비교 · 수익률·CAGR·연환산·분배 횟수까지"""
+    for f in fields:
+        g, e = got.get(f), exp.get(f)
+        if isinstance(e, str) or e is None or g is None:
+            if g != e: fail('etf-compare', '%s %s: 화면 %s · 기대 %s' % (where, f, g, e))
+        elif abs(g - e) > 1e-9 * max(1.0, abs(e)):
+            fail('etf-compare', '%s %s: 화면 %.10f · 기대 %.10f' % (where, f, g, e))
+    if [got.get('n'), got.get('nk'), got.get('na'), got.get('nf')] != [exp['n'], exp['nk'], exp['na'], exp['nf']]:
+        fail('etf-compare', '%s 분배 횟수(전체·공개·평균·전액) 화면 %s · 기대 %s' % (where, [got.get('n'), got.get('nk'), got.get('na'), got.get('nf')], [exp['n'], exp['nk'], exp['na'], exp['nf']]))
+    cg = (1 + exp['ret']) ** (365.25 / exp['span']) - 1 if exp['span'] >= 365 else None
+    an = exp['ret'] * 365.25 / exp['span']
+    if (got.get('cagr') is None) != (cg is None) or (cg is not None and abs(got['cagr'] - cg) > 1e-9) or got.get('ann') is None or abs(got['ann'] - an) > 1e-9:
+        fail('etf-compare', '%s CAGR·연환산: 화면 %s · %s · 기대 %s · %s' % (where, got.get('cagr'), got.get('ann'), cg, an))
+
+
+# ── ETF 차트 비교 실제 가격 점검 (--etf-audit · 배포된 사이트) ──
+#   화면이 표에 보여 주고 계산에 쓴 기준·끝 가격을 독립 출처와 맞춰 봄: 국내 ETF·지수 = 네이버 일별 시세(m.stock) · 미국 = 야후 일봉
+#   (화면은 국내 ETF 실제 가격을 야후 일봉(Worker m=kr)으로, 빠진 날만 네이버 일별 시세(m=kp)로 받음 → 출처가 달라도 같아야 함)
+#   (조합, {종목: (기준 날짜, 시가 o·종가 c)} 정답) — 2024-12-03 = KODEX 200타겟위클리커버드콜(498400) 상장일
+ETF_AUDIT = [('#e=K498400,IKOSPI&p=MAX', {'K498400': ('2024-12-03', 'o'), 'IKOSPI': ('2024-12-03', 'o')}),
+             ('#e=K069500,K360750,K498400,USPY,ISPX&p=1Y', None),
+             ('#e=K069500,K498400,IKOSPI,USPY&p=C20250102-20250630', None)]
+ETF_AUDIT_JS = """() => { const S = window.ECXdebug && ECXdebug.S, R = S && S.last, X = window.ECX; if (!R || !R.list) return null;
+  const tr = [...document.querySelectorAll('#ecx-stats tr')];
+  return { per: S.per, mode: S.mode, err: R.err || null, n: S.sel.length, rows: R.list.map(o => { const it = S.sel[o.i], x = S.by[it.k + it.c] || {}, st = o.st;
+    return { key: it.k + it.c, k: it.k, c: it.c, sym: x.sym || '', rg: x.rg || it.k, pDay: X.ymdOf(st.pDay), pKind: st.pKind, p0: st.p0, endDay: X.ymdOf(st.endDay), pE: st.pE,
+             xb: st.xb, xe: st.xe, ret: st.ret, cell: tr[o.i] && tr[o.i].cells[6] ? tr[o.i].cells[6].textContent : '' }; }) }; }"""
+
+
+def http_text(url, tries=3):
+    for i in range(tries):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'}), timeout=30) as r:
+                return r.read().decode('utf-8', 'replace')
+        except Exception:
+            if i == tries - 1: raise
+            time.sleep(2 + i * 3)
+
+
+class Actual:
+    """독립 출처의 실제 가격 {YYYYMMDD: (시가, 종가)} — 국내 ETF: m.stock api/stock · 국내 지수: api/index · 미국: 야후 일봉"""
+    def __init__(self):
+        self.c = {}
+
+    def kr(self, kind, sym, ymd):
+        m = self.c.setdefault((kind, sym), {'rows': {}, 'g': 0, 'end': False})
+        f = lambda v: float(str(v).replace(',', '')) if v not in (None, '') else None
+        while ymd not in m['rows'] and not m['end'] and m['g'] < 60 and (not m['rows'] or min(m['rows']) > ymd):   # 1쪽 = 가장 최근 → 그 날짜가 나올 때까지 옛날 쪽으로
+            m['g'] += 1
+            a = json.loads(http_text('https://m.stock.naver.com/api/%s/%s/price?pageSize=60&page=%d' % (kind, sym, m['g'])))
+            if not a: m['end'] = True; break
+            for x in a:
+                m['rows'][str(x.get('localTradedAt', '')).replace('-', '')] = (f(x.get('openPrice')), f(x.get('closePrice')))
+        return m['rows'].get(ymd)
+
+    def us(self, sym, ymd):
+        if sym not in self.c:
+            try:
+                now = int(time.time())
+                j = json.loads(http_text('https://query1.finance.yahoo.com/v8/finance/chart/%s?period1=%d&period2=%d&interval=1d&includePrePost=false'
+                                         % (urllib.parse.quote(sym), now - 3 * 366 * 86400, now + 86400)))
+                r = j['chart']['result'][0]; off = r['meta'].get('gmtoffset') or 0; q = r['indicators']['quote'][0]
+                self.c[sym] = {time.strftime('%Y%m%d', time.gmtime(t + off)): (o, c) for t, o, c in zip(r['timestamp'], q['open'], q['close']) if c}
+            except Exception as e:
+                print('  ! 야후 %s 받기 실패 (미국 가격 대조 건너뜀): %s' % (sym, str(e)[:80]), flush=True)
+                self.c[sym] = None
+        return 'skip' if self.c[sym] is None else self.c[sym].get(ymd)
+
+
+def etf_audit(page, base, fail):
+    """배포된 /etf-compare/ — 기준·끝 가격이 실제 거래 가격과 같은지 · 날짜·시가/종가 규칙 · 수익률 = 끝 ÷ 기준 − 1 · 표 칸 표시"""
+    A, n = Actual(), 0
+    ready = ("() => window.ECXdebug && ECXdebug.S.ready && ECXdebug.S.sel.length && !Object.keys(ECXdebug.S.pend).length && !Object.keys(ECXdebug.S.distP).length"
+             " && !Object.keys(ECXdebug.S.exP).length && !Object.keys(ECXdebug.S.pgP).length && ECXdebug.S.last && ECXdebug.S.last.list")
+    for h, want in ETF_AUDIT:
+        x = None
+        for tryn in range(2):   # 원본 일시 오류 대비 한 번 더
+            page.goto('about:blank'); page.goto(base + 'etf-compare/' + h, wait_until='load', timeout=60000)
+            try:
+                page.wait_for_function(ready, timeout=60000); page.wait_for_timeout(500)
+                x = page.evaluate(ETF_AUDIT_JS)
+            except Exception as e:
+                x = None; print('  ! %s 준비 안 됨 (%s)' % (h, str(e)[:80]), flush=True)
+            if x and x['n'] == len(x['rows']) and all(r['k'] != 'K' or (r['xb'] and r['xe']) for r in x['rows']): break
+            page.wait_for_timeout(20000)
+        where = 'etf-audit ' + h
+        if not x or x.get('err') or x['n'] != len(x['rows']):
+            fail(where, '표를 그리지 못함: %s' % (x and {k: x[k] for k in ('err', 'n')})); continue
+        for r in x['rows']:
+            tag = '%s %s' % (r['key'], h.split('&p=')[1])
+            if want and r['key'] in want and (r['pDay'], r['pKind']) != want[r['key']]:
+                fail(where, '%s 기준 %s %s (기대 %s %s)' % (r['key'], r['pDay'], r['pKind'], *want[r['key']]))
+            if abs(r['ret'] - (r['pE'] / r['p0'] - 1)) > 1e-12:
+                fail(where, '%s 시장가 수익률 %.8f ≠ 끝 ÷ 기준 − 1 (%.8f)' % (r['key'], r['ret'], r['pE'] / r['p0'] - 1))
+            if r['k'] == 'K' and not (r['xb'] and r['xe']):
+                fail(where, '%s 기준·끝 가격을 실제 거래 가격으로 확인하지 못함 (xb %s · xe %s) — 수정주가 역산 근사로 계산됨' % (r['key'], r['xb'], r['xe']))
+            d0, d1 = r['pDay'].replace('-', ''), r['endDay'].replace('-', '')
+            if r['k'] == 'K' or (r['k'] == 'I' and r['rg'] == 'K'):
+                kind, sym, tol = ('stock', r['c'], 1e-9) if r['k'] == 'K' else ('index', r['sym'], 0.005)
+                try:
+                    a0, a1 = A.kr(kind, sym, d0), A.kr(kind, sym, d1)
+                except Exception as e:
+                    print('  ! 네이버 일별 시세 %s 받기 실패 (대조 건너뜀): %s' % (sym, str(e)[:80]), flush=True); continue
+            else:   # 미국 ETF·지수: 야후 일봉 (소수 가격 → 상대 오차 1e-6)
+                sym, tol = (r['sym'] if r['k'] == 'I' else r['c']), 1e-6 * max(r['p0'], r['pE'])
+                a0, a1 = A.us(sym, d0), A.us(sym, d1)
+                if a0 == 'skip' or a1 == 'skip': continue
+            if not a0 or not a1:
+                fail(where, '%s 독립 출처에 %s · %s 가격 없음' % (tag, r['pDay'], r['endDay'])); continue
+            e0 = a0[0] if r['pKind'] == 'o' else a0[1]
+            if e0 is None or abs(r['p0'] - e0) > tol:
+                fail(where, '%s 기준 %s %s 가격: 화면 %s · 실제 %s' % (tag, r['pDay'], '시가' if r['pKind'] == 'o' else '종가', r['p0'], e0))
+            if abs(r['pE'] - a1[1]) > tol:
+                fail(where, '%s 끝 %s 종가: 화면 %s · 실제 %s' % (tag, r['endDay'], r['pE'], a1[1]))
+            if not re.match(r'^%s (시가|종가) [₩$]?[\d,.]+원?→ %s 종가' % (re.escape(r['pDay'].replace('-', '.')), re.escape(r['endDay'].replace('-', '.'))), r['cell']):
+                fail(where, '%s 표 칸 표시 이상: %s' % (tag, r['cell'][:90]))
+            n += 1
+            print('  %s %s %s %s → %s %s · 실제 가격 일치' % (tag, r['pDay'], '시가' if r['pKind'] == 'o' else '종가', r['p0'], r['endDay'], r['pE']), flush=True)
+    return n
 
 
 class Quiet(http.server.SimpleHTTPRequestHandler):
@@ -355,6 +585,7 @@ def main():
     ap.add_argument('--quick', action='store_true', help='화면 폭 4개만')
     ap.add_argument('--only', help='이 문자열이 들어간 경로만')
     ap.add_argument('--selftest', action='store_true', help='일부러 넘침·콘솔 오류를 넣어 검사가 잡아내는지 확인')
+    ap.add_argument('--etf-audit', action='store_true', help='배포된 사이트의 ETF 차트 비교 기준·끝 가격을 실제 거래 가격과 대조 (--base 필요)')
     a = ap.parse_args()
     httpd = None
     base = a.base
@@ -363,6 +594,8 @@ def main():
     if not base.endswith('/'):
         base += '/'
     local = base.startswith('http://127.0.0.1') or base.startswith('http://localhost')
+    if a.etf_audit and local:
+        print('--etf-audit 는 배포된 사이트 주소(--base)가 필요합니다 (로컬은 합성 자료라 실제 가격과 대조할 수 없음)'); sys.exit(2)
 
     cfg = json.load(open(os.path.join(ROOT, 'scripts', 'routes.json'), encoding='utf-8'))
     routes = cfg['routes']
@@ -429,6 +662,13 @@ def main():
         page.on('response', bad_resp)
         page.on('requestfailed', lambda q: errs.append(('요청 실패 %s %s' % (q.failure, q.url[:160]), base))
                 if 'ERR_ABORTED' not in str(q.failure) and not any(d in q.url for d in THIRD) and not (local and ('workers.dev' in q.url or 'raw.githubusercontent' in q.url)) else None)
+
+        if a.etf_audit:
+            print('[ETF 실제 가격 점검] %s' % base, flush=True)
+            k = etf_audit(page, base, fail)
+            br.close()
+            print('\n대조 %d줄 · %.0f초 · 실패 %d건' % (k, time.time() - t0, len(fails)))
+            sys.exit(1 if fails or not k else 0)
 
         if a.selftest:
             page.goto(base + 'muhan/', wait_until='load'); page.wait_for_timeout(800); errs.clear()
@@ -674,7 +914,9 @@ def main():
             errs.clear()
             epoch = _dt.date(1970, 1, 1)
             ready = ("() => window.ECXdebug && ECXdebug.S.ready && ECXdebug.S.sel.length && !Object.keys(ECXdebug.S.pend).length"
-                     " && !Object.keys(ECXdebug.S.distP).length && (!ECXdebug.S.fx || ECXdebug.S.fxd)")
+                     " && !Object.keys(ECXdebug.S.distP).length && !Object.keys(ECXdebug.S.exP).length && !Object.keys(ECXdebug.S.pgP).length"
+                     " && (!ECXdebug.S.fx || ECXdebug.S.fxd)")
+            del ETF_LOG[:]
             page.set_viewport_size({'width': 1280, 'height': 900})
             page.goto('about:blank'); page.goto(base + 'etf-compare/', wait_until='load')
             try:
@@ -685,7 +927,8 @@ def main():
             for t in x['R']:
                 if not t['ok']:
                     fail('etf-compare', '%s: %s' % (t['name'], json.dumps(t.get('info'), ensure_ascii=False)))
-            if local:   # 합성 일봉·분배 → 숫자까지 (실제 달력처럼 국내 2025-10-03~09 휴장 → 1Y 기준가는 10-02 종가)
+            if local:   # 합성 일봉·분배 → 숫자까지 (실제 달력처럼 국내 2025-10-03~09 휴장 → 1Y 기준은 10-02 종가)
+                log = list(ETF_LOG)
                 if x['S1y'] != (_dt.date(2025, 10, 9) - epoch).days:
                     fail('etf-compare', '1Y 기준일 %s (기대 2025-10-09)' % x['S1y'])
                 keys = ['K069500', 'K360750', 'USPY', 'UQQQ']
@@ -694,15 +937,7 @@ def main():
                     if sorted(got) != sorted(keys):
                         fail('etf-compare', '%s 1Y 표 종목 %s (기대 %s)' % (mode, sorted(got), keys)); continue
                     for k in keys:
-                        g, e = got[k], exp[k]
-                        for f in ('ret', 'tax', 'fee'):
-                            if abs(g[f] - e[f]) > 1e-9:
-                                fail('etf-compare', '%s 1Y %s %s: 화면 %.10f · 기대 %.10f' % (mode, k, f, g[f], e[f]))
-                        if [g['n'], g['nk'], g['na'], g['nf']] != [e['n'], e['nk'], e['na'], e['nf']]:
-                            fail('etf-compare', '%s 1Y %s 분배 횟수(전체·공개·평균·전액) 화면 %s · 기대 %s' % (mode, k, [g['n'], g['nk'], g['na'], g['nf']], [e['n'], e['nk'], e['na'], e['nf']]))
-                        cg = (1 + e['ret']) ** (365.25 / e['span']) - 1 if e['span'] >= 365 else None
-                        if (g['cagr'] is None) != (cg is None) or (cg is not None and abs(g['cagr'] - cg) > 1e-9) or abs(g['ann'] - e['ret'] * 365.25 / e['span']) > 1e-9:
-                            fail('etf-compare', '%s 1Y %s CAGR·연환산: 화면 %s · %s · 기대 %s · %s' % (mode, k, g['cagr'], g['ann'], cg, e['ret'] * 365.25 / e['span']))
+                        etf_cmp(fail, '%s 1Y %s' % (mode, k), got[k], exp[k])
                 n = etf_expect(keys, x['S1y'], 'nav')
                 if not (n['K069500']['nk'] > 0 and n['K069500']['na'] > 0 and n['K360750']['nk'] == n['K360750']['n'] > 0 and n['USPY']['n'] > 0):
                     fail('etf-compare', '합성 자료가 과세표준 공개·평균 비율·미국 배당을 모두 담지 못함: %s' % {k: [v['n'], v['nk'], v['na']] for k, v in n.items()})
@@ -712,6 +947,36 @@ def main():
                         fail('etf-compare', '지수 %s 1Y 수익률: 화면 %s · 기대 %.10f' % (ik, g1 and g1['ret'], e1['ret']))
                 if x['maxS'] != (ETF_FIRST['K0167A0'] - epoch).days or not x['late']:
                     fail('etf-compare', 'MAX 기준일 %s (기대 2026-03-17 = 가장 늦게 상장한 0167A0) · 1Y 기간 중 상장 %s' % (x['maxS'], x['late']))
+                # 기간설정 2026-05-09 ~ 2026-09-09 (시가 기준) — 야후에 빠진 기준일(K360750 05-11)·끝날(K498400 09-09)도 실제 가격으로
+                want = {'K069500': 'K069500', 'K360750': 'K360750', 'K498400': 'K498400', 'USPY': 'USPY', 'IKOSPI': 'KKOSPI'}
+                ce = etf_expect(list(want.values()), (_dt.date(2026, 5, 9) - epoch).days, 'px', E=(_dt.date(2026, 9, 9) - epoch).days, open_=True)
+                if sorted(x.get('c') or {}) != sorted(want):
+                    fail('etf-compare', '기간설정 표 종목 %s (기대 %s)' % (sorted(x.get('c') or {}), sorted(want)))
+                else:
+                    for k, sk in want.items():
+                        etf_cmp(fail, '기간설정 %s' % k, x['c'][k], ce[sk])
+                # 사용자가 찾은 사례: 분배가 잦은 국내 ETF(K498400) + 코스피 · MAX → K498400 상장일(2024-12-03) 시가 → 마지막 거래일 종가
+                me = etf_expect(['K498400', 'KKOSPI'], (ETF_FIRST['K498400'] - epoch).days, 'px', open_=True)
+                if sorted(x.get('xm') or {}) != ['IKOSPI', 'K498400']:
+                    fail('etf-compare', 'MAX(K498400·코스피) 표 종목 %s' % sorted(x.get('xm') or {}))
+                else:
+                    etf_cmp(fail, 'MAX K498400', x['xm']['K498400'], me['K498400']); etf_cmp(fail, 'MAX 코스피', x['xm']['IKOSPI'], me['KKOSPI'])
+                # 합성 자료가 정말 '역산하면 틀리는' 조건인지 (수정주가 ÷ 구간 비율 → 호가 단위 근사가 실제 가격과 다른 날이 기준·끝날에 있음)
+                bad = 0
+                for k in ('K069500', 'K360750', 'K498400'):
+                    days, raw = etf_series(k); f = etf_factors(raw, etf_dists(k, raw))
+                    adj = json.loads(etf_body(k).replace("'", '"'))[1:]
+                    bad += sum(1 for t, r in enumerate(adj) if f[t] != 1 and _tick(r[4] / f[t]) != raw[t])
+                if bad < 50:
+                    fail('etf-compare', '합성 수정주가가 너무 정확해 역산 오류를 재현하지 못함 (틀리는 날 %d)' % bad)
+                # 실제 가격 요청: m=kr = 분배로 수정주가가 달라진 국내 ETF 만(분배 없는 0167A0 은 안 부름) · m=kp = 야후에 빠진 기준·끝날만 (화면이 추정한 쪽 = 실제 쪽)
+                kr = sorted({r[1] for r in log if r[0] == 'kr'}); kp = sorted((r[1], r[2]) for r in log if r[0] == 'kp')
+                if kr != ['069500', '360750', '498400']:
+                    fail('etf-compare', '실제 거래 가격(m=kr) 요청 종목 %s (기대 069500·360750·498400)' % kr)
+                if kp != [('069500', '20251002'), ('360750', '20260511'), ('498400', '20260909')]:
+                    fail('etf-compare', '일별 시세 한 쪽(m=kp) 요청 %s (기대 069500 2025-10-02 · 360750 2026-05-11 · 498400 2026-09-09)' % kp)
+                if any(r[3] != r[4] for r in log if r[0] == 'kp'):
+                    fail('etf-compare', '화면이 추정한 일별 시세 쪽 번호가 실제와 다름: %s' % [r for r in log if r[0] == 'kp'])
             # 주소로 열기(공유 링크): 종목·기간·원화 환산 복원 (로컬은 자료 없는 종목도 섞어 '자료 없음' 표시 확인)
             page.goto('about:blank')
             page.goto(base + 'etf-compare/#e=USPY,K069500,ISPX%s&p=MAX&fx=1&m=tr' % (',UNODATA' if local else ''), wait_until='load')   # 예전 주소의 m=tr → 기준가
@@ -773,13 +1038,15 @@ def main():
                       head: [...document.querySelectorAll('#ecx-head th')].map(t => t.textContent.replace(/[▼▲↕]/g, '').trim()), rows: document.querySelectorAll('#ecx-stats tr').length,
                       list: !!(S.L && S.L.length > 4000), info, range: document.getElementById('ecx-range').textContent, ko: (c.textContent.match(/[가-힣]+/g) || []).slice(0, 8),
                       koInfo: info.some(t => /[가-힣]/.test(t)), presets: [...document.querySelectorAll('#ecx-presets button')].map(b => b.textContent).join('|'),
-                      mk: [...document.querySelectorAll('.ecx-mk button')].map(b => b.textContent.trim()), idxName: (S.by.ISPX || {}).n }; }""")
+                      mk: [...document.querySelectorAll('.ecx-mk button')].map(b => b.textContent.trim()), idxName: (S.by.ISPX || {}).n, cells: [...document.querySelectorAll('#ecx-stats tr')].map(tr => tr.cells[6] ? tr.cells[6].textContent : '') }; }""")
                 if e.get('none'):
                     fail('en/etf-compare', 'ECXdebug·페이지 없음')
                 else:
                     if e['lang'] != 'en': fail('en/etf-compare', 'html lang=%s' % e['lang'])
                     if e['modes'] != ['Market price', 'Reinvested (after tax)']: fail('en/etf-compare', '보기 버튼 %s' % e['modes'])
-                    if e['head'] != ['ETF', 'Return', 'CAGR', 'Annualized', 'Max drawdown', 'Volatility (ann.)', 'Period · listing']: fail('en/etf-compare', '표 머리 %s' % e['head'])
+                    if e['head'] != ['ETF', 'Return', 'CAGR', 'Annualized', 'Max drawdown', 'Volatility (ann.)', 'Start → end price']: fail('en/etf-compare', '표 머리 %s' % e['head'])
+                    if len(e['cells']) != 5 or not all(re.match(r'^\d{4}-\d\d-\d\d (open|close) [₩$]?[\d,.]+→ \d{4}-\d\d-\d\d close [₩$]?[\d,.]+(Data from|Listed in period|Data starts in period)', c) for c in e['cells']):
+                        fail('en/etf-compare', '기준·끝 가격 칸이 영어 형식이 아님: %s' % [c[:80] for c in e['cells']])
                     if not e['list'] or e['rows'] != 5: fail('en/etf-compare', '목록 %s · 표 %d줄 (기대 5)' % (e['list'], e['rows']))
                     if len(e['info']) != 5 or e['koInfo'] or not all('of principal' in t for t in e['info'][:4]) or 'price index' not in e['info'][4]: fail('en/etf-compare', '표 이름 아래 설명이 영어가 아님: %s' % e['info'])
                     if e['mk'] != ['All', 'Korea', 'U.S.', 'Indices'] or e['idxName'] != 'S&P 500': fail('en/etf-compare', '시장 단추·지수 이름이 영어가 아님: %s · %s' % (e['mk'], e['idxName']))

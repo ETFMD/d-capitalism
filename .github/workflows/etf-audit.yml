@@ -1,0 +1,32 @@
+name: ETF 차트 비교 실제 가격 점검
+
+# 배포된 /etf-compare/ 화면이 표에 보여 주고 계산에 쓴 기준·끝 가격이 실제 거래 가격과 같은지 매일 확인
+#  · 독립 출처와 대조: 국내 ETF·국내 지수 = 네이버 일별 시세(m.stock) · 미국 ETF·지수 = 야후 일봉
+#  · 조합: 498400(분배가 잦은 국내 ETF) + 코스피 MAX(상장일 2024-12-03 시가 기준) · 1Y(기준일 종가) · 기간설정(시작일 시가)
+#  · 실패 = 수정주가(분배 반영 가격)를 실제 가격처럼 쓰거나, 기준 날짜·시가/종가 규칙이 틀어지거나,
+#           실제 가격 자료(Worker /etf m=kr 야후 · m=kp 네이버 일별 시세)가 끊긴 경우 → GitHub 이 저장소 주인에게 메일로 알림
+#  · KST 20:50 — 국내·미국 장이 모두 닫혀 있을 때 (장중 값이 섞이지 않게)
+on:
+  schedule:
+    - cron: '50 11 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: etf-audit
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Playwright 설치
+        run: |
+          pip install playwright==1.63.0
+          python -m playwright install --with-deps chromium
+      - name: 배포된 화면의 기준·끝 가격 ↔ 실제 거래 가격
+        run: python tests/run_regression.py --base https://d-capitalism.com/ --etf-audit

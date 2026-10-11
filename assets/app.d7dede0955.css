@@ -1505,6 +1505,8 @@ html[data-theme="light"] #page-muhan,html[data-theme="light"] #page-vr{--m-ac-s:
   .ecx-best { display:inline-block; margin-left:6px; font-size:10px; font-weight:700; color:var(--accent); background:rgba(49,130,246,.12); border-radius:5px; padding:1px 5px; vertical-align:1px; white-space:nowrap; }
   .ecx-tbl td.d { font-family:var(--font); font-size:11.5px; color:var(--text2); line-height:1.5; }
   .ecx-tbl td.d em { font-style:normal; color:#fe9800; }
+  .ecx-tbl td.d .ecx-px b { font-family:var(--mono); font-weight:600; color:var(--text); }
+  .ecx-tbl td.d small { font-size:10.5px; color:var(--text3); }
   .ecx-up { color:#f04452 !important; } .ecx-dn { color:#3182f6 !important; }
   .ecx-empty { text-align:center !important; color:var(--text3) !important; font-family:var(--font) !important; padding:22px 10px !important; white-space:normal !important; }
   .ecx-tbl td.ecx-why { text-align:left !important; padding:10px !important; }
