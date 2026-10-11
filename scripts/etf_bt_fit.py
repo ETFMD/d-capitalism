@@ -801,6 +801,13 @@ def main():
     targets.sort(key=lambda k: ((uni.get(k) or {}).get('start') or 0, k))
     cands = sorted(k for k, v in uni.items() if v.get('n', 0) > 30 and not v.get('err') and k not in EXCLUDE) + sorted(SYN) + ['F:USDKRW', 'X:SPXTR']
     log('대상 %d · 후보 %d' % (len(targets), len(cands)))
+    # 안전장치: 지난 식이 쓰던 Cboe 지수의 절반 넘게 이번 자료에 없으면(Cboe 받기 막힘 + 캐시 없음) 계산하지 않고 멈춤 —
+    #   식·r/C_*.json 이 지난 것 그대로 남아 화면은 계속 맞고, 다음 실행이 다시 받음 (지수 몇 개만 없어진 경우는 그 지수 없이 다시 고름 · --force 로 무시)
+    if not a.only and not a.force:
+        used_c, miss = cboe_missing(load_recipes(a.out), D)
+        if len(used_c) >= 10 and len(miss) * 2 > len(used_c):
+            raise SystemExit('지난 식이 쓰던 Cboe 지수 %d개 중 %d개가 이번 자료에 없어 멈춤 (Cboe 받기 실패 의심 · --force 로 무시): %s'
+                             % (len(used_c), len(miss), ' '.join(miss[:10])))
 
     # 달력별 '그날 알 수 있는 값' 기준 후보 초과수익 행렬 (상관으로 후보를 좁힐 때) — float32 · 첫날 전은 NaN
     mats = {}
@@ -1513,6 +1520,24 @@ def _ser(d, vals, nd):
     return {'d0': d[0], 'dd': [d[i] - d[i - 1] for i in range(1, len(d))], 'v': [round(float(x), nd) for x in vals]}
 
 
+def cboe_missing(old, D):
+    """지난 식들이 쓰던 Cboe 지수 → (그 목록, 그중 이번 자료에 없는 것 — 받기 실패·캐시 없음)"""
+    used = sorted({f[0] for r in old.values() for f in r['m'] if f[0].startswith('C:')})
+    miss = [k for k in used if (D.uni.get(k) or {}).get('err') or (D.uni.get(k) or {}).get('n', 0) <= 30 or D.series(k) is None]
+    return used, miss
+
+
+def load_recipes(out):
+    """지난 실행이 쓴 식 (묶음 파일 0~15.json) → {키: 식}"""
+    old = {}
+    for i in range(NSHARD):
+        try:
+            old.update(json.load(open(os.path.join(out, '%d.json' % i), encoding='utf-8'))['e'])
+        except Exception:
+            pass
+    return old
+
+
 def write_out(out, recipes, D, only, force=False):
     os.makedirs(out, exist_ok=True)
     os.makedirs(os.path.join(out, 'r'), exist_ok=True)
@@ -1520,12 +1545,7 @@ def write_out(out, recipes, D, only, force=False):
         print(json.dumps(recipes, ensure_ascii=False, indent=1)[:8000])
         return
     # 안전장치: 자료 받기가 크게 실패해 식이 지금 것의 90% 아래로 줄면 쓰지 않음 (화면의 백테스트가 한꺼번에 사라지지 않게 · --force 로 무시)
-    old_n = 0
-    for i in range(NSHARD):
-        try:
-            old_n += len(json.load(open(os.path.join(out, '%d.json' % i), encoding='utf-8'))['e'])
-        except Exception:
-            pass
+    old_n = len(load_recipes(out))
     if not force and old_n >= 1000 and len(recipes) < 0.9 * old_n:
         raise SystemExit('식이 %d → %d 로 크게 줄어 쓰지 않음 (자료 받기 실패 의심 · --force 로 무시)' % (old_n, len(recipes)))
     shards = [{} for _ in range(NSHARD)]
