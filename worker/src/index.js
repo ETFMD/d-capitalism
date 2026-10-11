@@ -250,14 +250,14 @@ async function kr(req, env, url, json) {
 const ETF_TTL = 1800;   // 초
 function etfSource(m, s) {
   const now = Math.floor(Date.now() / 1000);
-  if (m === 'k' && /^[0-9A-Z]{6}$/.test(s)) {
+  if (m === 'k' && /^[0-9A-Z]{5,6}$/.test(s)) {                            // 국내 ETF 6자리 · 국내 지수(KOSPI·KOSDAQ·KPI200)
     const end = new Date(Date.now() + 9 * 3600e3 + 86400e3).toISOString().slice(0, 10).replace(/-/g, '');   // 한국 날짜 + 1일 (오늘 장중 값 포함)
-    return { url: `https://api.finance.naver.com/siseJson.naver?symbol=${s}&requestType=1&startTime=19900101&endTime=${end}&timeframe=day`,
+    return { url: `https://api.finance.naver.com/siseJson.naver?symbol=${encodeURIComponent(s)}&requestType=1&startTime=19900101&endTime=${end}&timeframe=day`,
              ok: (v) => /\["\d{8}",/.test(v), ref: 'https://finance.naver.com/' };
   }
-  if (m === 'u' && /^[A-Z][A-Z0-9-]{0,9}$/.test(s)) {
+  if (m === 'u' && /^\^?[A-Z][A-Z0-9-]{0,9}$/.test(s)) {                 // 미국 ETF 티커 · 미국 지수(^GSPC·^SP500TR 등)
     // events=div: 분배금(배당) 내역 — 화면의 '가격(분배금 제외)·세후' 계산에 씀 (quote.close = 분배 미반영 종가, adjclose = 분배 재투자)
-    return { url: `https://query1.finance.yahoo.com/v8/finance/chart/${s}?period1=315532800&period2=${now + 86400}&interval=1d&includePrePost=false&events=div`,
+    return { url: `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?period1=315532800&period2=${now + 86400}&interval=1d&includePrePost=false&events=div`,
              ok: (v) => v.indexOf('"timestamp"') >= 0 && v.indexOf('"adjclose"') >= 0, ref: 'https://finance.yahoo.com/' };
   }
   return null;

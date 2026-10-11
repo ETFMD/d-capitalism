@@ -249,14 +249,14 @@
       "path": "etf-compare",
       "tab": "etfcmp",
       "group": "invest",
-      "title": "ETF 차트 비교 — 국내·미국 ETF 수익률 비교 (KODEX·TIGER·SPY·QQQ)",
+      "title": "ETF 차트 비교 — 국내·미국 ETF·지수 수익률 비교 (KODEX·SPY·코스피·S&P500)",
       "short": "ETF 차트 비교",
       "share": "국내 ETF vs 미국 ETF, 수익률을 한 차트로 — ETF 차트 비교",
-      "desc": "국내·미국 상장 ETF 최대 10개를 시장가(종가)와 기준가(분배금 세후 재투자)로 한 차트에서 비교합니다.",
+      "desc": "국내·미국 상장 ETF와 코스피·S&P500 등 대표 지수 최대 10개를 시장가·기준가(분배금 세후 재투자)로 한 차트에서 비교합니다.",
       "en": {
         "short": "ETF Chart Comparison",
-        "title": "ETF Chart Comparison — Korean & U.S. ETF Returns, Price or Reinvested",
-        "desc": "Compare up to 10 Korea- and U.S.-listed ETFs on one chart by market price or with distributions reinvested after tax and fees, with CAGR and drawdown."
+        "title": "ETF Chart Comparison — Korean & U.S. ETFs and Indices, Price or Reinvested",
+        "desc": "Compare up to 10 Korea- and U.S.-listed ETFs and indices (KOSPI, S&P 500, Nasdaq) on one chart by market price or with distributions reinvested after tax."
       }
     },
     {

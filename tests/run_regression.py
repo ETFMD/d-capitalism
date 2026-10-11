@@ -9,7 +9,7 @@
   5. 나의 직업 수명 — 776개 직업·21분야 데이터·모델 방향·연구 순서·검색·순위·주소·공유
   4. 무한매수법 — 라오어 카페 원문 예시 숫자로 계산 엔진 검사, 기록 화면 그리기, 가이드북(23장 · 용어 31개 · 자동 숫자 · 장 열기 · 3-6 실제 일봉 백테스트 표)
   6. ETF 차트 비교 — 보기 2가지(시장가·기준가) · 기간(1M·3M·6M·YTD·1Y·MAX·기간설정) 기준일 · MAX = 가장 늦게 상장한 ETF 첫 거래일 ·
-     수익률·세금·재투자 수수료·CAGR·연환산 계산 · 표 정렬 · 수수료 입력 · 검색 · 최대 10개 · 원화 환산 · 주소(#e=…) 복원 · 묶음 버튼 · 자료 없음 표시 · 영어판
+     수익률·세금·재투자 수수료·CAGR·연환산 계산 · 표 정렬 · 수수료 입력 · 검색 · 최대 10개 · 국내·미국 지수 · 원화 환산 · 주소(#e=…) 복원 · 묶음 버튼 · 자료 없음 표시 · 영어판
      (로컬 검사는 Worker /etf 와 국내 분배 이력 묶음을 합성 자료로 대신해 숫자까지 맞춰 봄)
 
 사용법
@@ -19,7 +19,7 @@
   python tests/run_regression.py --quick      # 화면 폭 4개만
 실패가 하나라도 있으면 종료 코드 1
 """
-import re, argparse, functools, http.server, json, os, socketserver, sys, threading, time
+import re, argparse, functools, http.server, json, os, socketserver, sys, threading, time, urllib.parse
 
 from playwright.sync_api import sync_playwright
 
@@ -109,7 +109,7 @@ MUHAN_JS = """async () => {
 ETF_JS = """async () => {
   const R = [], ok = (name, c, info) => R.push({ name, ok: !!c, info }), W = ms => new Promise(r => setTimeout(r, ms));
   const S = window.ECXdebug && ECXdebug.S, X = window.ECX, $ = id => document.getElementById(id);
-  if (!S || !X || !S.L) return { R: [{ name: 'ECX·ECXdebug·목록 없음', ok: false }], m: {}, S1y: 0, maxS: 0, late: false };
+  if (!S || !X || !S.L) return { R: [{ name: 'ECX·ECXdebug·목록 없음', ok: false }], m: {}, S1y: 0, maxS: 0, late: false, ix: {} };
   const done = async () => { for (let i = 0; i < 450; i++) { if (!Object.keys(S.pend).length && !Object.keys(S.distP).length && (!S.fx || S.fxd) && S.sel.every(s => !S.data[s.k + s.c] || ECXdebug.prepOf(s))) return; await W(100); } };
   const keys = () => S.sel.map(s => s.k + s.c), last = () => S.last, click = q => document.querySelector(q).click();
   const type = async q => { const i = $('ecx-q'); i.focus(); i.value = q; i.dispatchEvent(new Event('input', { bubbles: true })); await W(60); };
@@ -161,6 +161,19 @@ ETF_JS = """async () => {
   ok('11번째 → 최대 10개 안내 · 그대로 10개', /최대 10개|Up to 10/.test($('ecx-toast').textContent) && S.sel.length === 10, $('ecx-toast').textContent);
   $('ecx-q').value = ''; $('ecx-q').dispatchEvent(new Event('input', { bubbles: true })); $('ecx-q').blur();
   ['UVOO', 'UIVV', 'UQQQM', 'UDIA', 'USCHD'].forEach(k => ECXdebug.remove(k));
+  // 4b. 지수: 시장 단추 '지수' · 검색 · 추가 · 칩·표 표시 · 시장가 = 기준가 · 주소
+  const idxN = S.L.filter(x => x.k === 'I');
+  ok('지수 12개(국내 3 · 미국 9) 목록에 들어 있음 · 소개 문구 숫자', idxN.length === 12 && idxN.filter(x => x.rg === 'K').length === 3 && $('ecx-nidx').textContent === '12', idxN.map(x => x.key));
+  click('.ecx-mk button[data-mk="I"]'); await type('코스피');
+  const sugI = [...document.querySelectorAll('#ecx-sug li[data-key]')].map(l => l.dataset.key);
+  ok('지수 단추 + "코스피" → 지수만 · 첫 줄 코스피', sugI.length > 0 && sugI.every(k => k[0] === 'I') && sugI[0] === 'IKOSPI', sugI);
+  await enter(); click('.ecx-mk button[data-mk="all"]'); $('ecx-q').value = ''; $('ecx-q').blur(); ECXdebug.add('ISPX'); await done();
+  const idxRows = () => rows().filter(tr => /가격 지수|price index/.test(tr.textContent));
+  ok('지수 2개 추가 → 7개 · 칩 배지 "지수" · 표: 가격 지수·배당 미포함 · 자료 시작(상장 아님) · 주소', JSON.stringify(keys().slice(-2)) === '["IKOSPI","ISPX"]' && keys().length === 7 && document.querySelectorAll('#ecx-sel .ecx-mkb.I').length === 2 && idxRows().length === 2 && idxRows().every(tr => /자료 시작|Data from/.test(tr.cells[6].textContent) && !/상장|listing/.test(tr.cells[6].textContent)) && /,IKOSPI,ISPX&/.test(location.hash), [keys(), location.hash]);
+  const IX = { px: rets() }; await mode('nav'); IX.nav = rets(); await mode('px');
+  ok('지수: 시장가 = 기준가 · 세금·수수료 0 · 분배 0', ['IKOSPI', 'ISPX'].every(k => IX.px[k] && IX.nav[k] && Math.abs(IX.px[k].ret - IX.nav[k].ret) < 1e-12 && IX.nav[k].tax === 0 && IX.nav[k].fee === 0 && IX.nav[k].n === 0), [IX.px.IKOSPI, IX.nav.ISPX]);
+  ok('지수 있을 때 차트 아래 설명: 직접 살 수 없는 기준 지표 · 가격 지수 배당 미포함', /직접 살 수 없는 기준 지표|benchmarks you cannot buy/.test($('ecx-range').textContent), $('ecx-range').textContent.slice(-200));
+  ECXdebug.remove('IKOSPI'); ECXdebug.remove('ISPX');
   // 5. MAX = 고른 ETF 중 가장 늦게 상장한 ETF 의 첫 거래일
   await per('MAX'); r = last(); const firsts = r.list.map(o => o.s.d[0]), maxS = r.w.S;
   ok('MAX: 기준일 = 가장 늦게 상장한 ETF 첫 거래일 · 모두 그날(또는 직전 거래일)부터', maxS === Math.max(...firsts) && r.list.length === 5 && r.list.every(o => !o.st.late && o.st.baseDay <= maxS && maxS - o.st.baseDay < 7), [X.ymdOf(maxS), firsts.map(X.ymdOf)]);
@@ -191,14 +204,17 @@ ETF_JS = """async () => {
   click('#ecx-fx'); await W(60);
   // 9. 묶음 버튼 · 검색 순서 · 목록
   const pb = [...document.querySelectorAll('#ecx-presets button[data-p]')];
-  ok('자주 비교하는 조합 8개', pb.length === 8, pb.length);
+  ok('자주 비교하는 조합 9개', pb.length === 9, pb.length);
+  const ip = pb.find(b => /국내·미국 대표 지수|Major indices/.test(b.textContent)); if (ip) { ip.click(); await done(); }
+  ok('묶음 "국내·미국 대표 지수" → 지수 6개', JSON.stringify(keys()) === '["IKOSPI","IKOSDAQ","ISPX","ICOMP","INDX","IDJI"]' && last().list.length === 6, keys());
   const kp = pb.find(b => /코스피 vs S&P500|KOSPI vs S&P 500/.test(b.textContent)); if (kp) { kp.click(); await done(); }
   ok('묶음 "코스피 vs S&P500" → 3개', JSON.stringify(keys()) === '["K069500","K360750","USPY"]', keys());
   const top = (q, mk, n) => X.search(S.L, q, mk || 'all', n || 30).map(x => x.k + x.c);
   ok('검색: 티커·코드 정확히 먼저 · 한글 별칭 · 띄어 쓴 낱말', top('SPY')[0] === 'USPY' && top('069500')[0] === 'K069500' && top('슈드')[0] === 'USCHD' && top('kodex 200')[0] === 'K069500' && top('나스닥 3배').indexOf('UTQQQ') >= 0, [top('SPY')[0], top('슈드')[0], top('나스닥 3배').slice(0, 3)]);
   const sp = top('s&p500', 'all', 6); ok('검색 "s&p500": 국내·미국이 함께', sp.some(k => k[0] === 'K') && sp.some(k => k[0] === 'U'), sp);
+  ok('검색: 지수 이름·별칭이 먼저 (코스피·S&P500·나스닥·나스닥 100·다우)', top('코스피')[0] === 'IKOSPI' && top('S&P500')[0] === 'ISPX' && top('나스닥')[0] === 'ICOMP' && top('나스닥 100')[0] === 'INDX' && top('다우')[0] === 'IDJI' && top('코스피', 'U').indexOf('IKOSPI') < 0, [top('코스피')[0], top('S&P500')[0], top('나스닥')[0]]);
   ok('목록: 국내 1,000개 이상 · 미국 3,000개 이상', S.L.filter(x => x.k === 'K').length > 1000 && S.L.filter(x => x.k === 'U').length > 3000, '');
-  return { R, m: M, S1y, maxS, late };
+  return { R, m: M, S1y, maxS, late, ix: IX };
 }"""
 
 # ── ETF 차트 비교: 로컬 검사용 합성 자료 (Worker /etf · 국내 분배 이력 묶음 data/etfdist 대신) ──
@@ -276,7 +292,7 @@ def etf_shard(i):
 
 def etf_route(route):
     m = re.search(r'[?&]m=([ku])&s=([^&]+)', route.request.url)
-    key = (m.group(1).upper() + m.group(2)) if m else ''
+    key = (m.group(1).upper() + urllib.parse.unquote(m.group(2))) if m else ''   # 지수: KKOSPI · U^GSPC
     hd = {'Access-Control-Allow-Origin': '*', 'Content-Type': 'text/plain; charset=utf-8'}
     if not m or key in ETF_NODATA:
         return route.fulfill(status=404, headers=hd, body='{"error":"not found"}')
@@ -665,7 +681,7 @@ def main():
                 page.wait_for_function(ready, timeout=45000)
                 x = page.evaluate(ETF_JS)
             except Exception as ex:
-                x = {'R': [{'name': '화면 준비·검사 실행', 'ok': False, 'info': str(ex)[:200]}], 'm': {}, 'S1y': 0, 'maxS': 0, 'late': False}
+                x = {'R': [{'name': '화면 준비·검사 실행', 'ok': False, 'info': str(ex)[:200]}], 'm': {}, 'S1y': 0, 'maxS': 0, 'late': False, 'ix': {}}
             for t in x['R']:
                 if not t['ok']:
                     fail('etf-compare', '%s: %s' % (t['name'], json.dumps(t.get('info'), ensure_ascii=False)))
@@ -690,11 +706,15 @@ def main():
                 n = etf_expect(keys, x['S1y'], 'nav')
                 if not (n['K069500']['nk'] > 0 and n['K069500']['na'] > 0 and n['K360750']['nk'] == n['K360750']['n'] > 0 and n['USPY']['n'] > 0):
                     fail('etf-compare', '합성 자료가 과세표준 공개·평균 비율·미국 배당을 모두 담지 못함: %s' % {k: [v['n'], v['nk'], v['na']] for k, v in n.items()})
+                for ik, rk in (('IKOSPI', 'KKOSPI'), ('ISPX', 'U^GSPC')):   # 지수: 네이버 KOSPI · 야후 ^GSPC 합성 일봉의 종가 비율
+                    e1, g1 = etf_expect([rk], x['S1y'], 'px')[rk], (x.get('ix') or {}).get('px', {}).get(ik)
+                    if not g1 or abs(g1['ret'] - e1['ret']) > 1e-9 or abs(((x.get('ix') or {}).get('nav', {}).get(ik) or {}).get('ret', 9) - e1['ret']) > 1e-9:
+                        fail('etf-compare', '지수 %s 1Y 수익률: 화면 %s · 기대 %.10f' % (ik, g1 and g1['ret'], e1['ret']))
                 if x['maxS'] != (ETF_FIRST['K0167A0'] - epoch).days or not x['late']:
                     fail('etf-compare', 'MAX 기준일 %s (기대 2026-03-17 = 가장 늦게 상장한 0167A0) · 1Y 기간 중 상장 %s' % (x['maxS'], x['late']))
             # 주소로 열기(공유 링크): 종목·기간·원화 환산 복원 (로컬은 자료 없는 종목도 섞어 '자료 없음' 표시 확인)
             page.goto('about:blank')
-            page.goto(base + 'etf-compare/#e=USPY,K069500%s&p=MAX&fx=1&m=tr' % (',UNODATA' if local else ''), wait_until='load')   # 예전 주소의 m=tr → 기준가
+            page.goto(base + 'etf-compare/#e=USPY,K069500,ISPX%s&p=MAX&fx=1&m=tr' % (',UNODATA' if local else ''), wait_until='load')   # 예전 주소의 m=tr → 기준가
             try:
                 page.wait_for_function(ready, timeout=45000)
             except Exception:
@@ -703,7 +723,7 @@ def main():
                 return { sel: S.sel.map(s => s.k + s.c), per: S.per, fx: S.fx, box: document.getElementById('ecx-fx').checked, mode: S.mode, hash: location.hash,
                   active: [...document.querySelectorAll('#ecx-per .chart-tab.active')].map(b => b.dataset.per), S: r && r.w ? r.w.S : null,
                   firsts: r && r.list ? r.list.map(o => o.s.d[0]) : [], chips: document.getElementById('ecx-sel').innerText, tbl: document.getElementById('ecx-stats').innerText }; }""")
-            want = ['USPY', 'K069500'] + (['UNODATA'] if local else [])
+            want = ['USPY', 'K069500', 'ISPX'] + (['UNODATA'] if local else [])
             if h.get('sel') != want or h.get('per') != 'MAX' or not h.get('fx') or not h.get('box') or h.get('active') != ['MAX'] or h.get('mode') != 'nav' or '&m=nav' not in (h.get('hash') or ''):
                 fail('etf-compare', '주소 복원 실패: %s' % json.dumps({k: h.get(k) for k in ('sel', 'per', 'fx', 'box', 'active', 'mode', 'hash')}, ensure_ascii=False))
             if not h.get('firsts') or h.get('S') != max(h['firsts']):
@@ -720,12 +740,20 @@ def main():
             if hc != [['UQQQ'], '3M', False, 'px', '#e=UQQQ&p=3M']:
                 fail('etf-compare', '주소의 #e= 만 바꾼 경우 반영 안 됨: %s' % hc)
             # 좁은 화면: 표는 옆으로 밀기(이름 칸 고정) + 안내 · 넓은 화면은 안내 없음
-            page.set_viewport_size({'width': 390, 'height': 844}); page.wait_for_timeout(600)
+            page.set_viewport_size({'width': 390, 'height': 844})
+            try:   # 창 크기 바뀜 → 250ms 뒤 다시 그림 (CI 가 느려도 고정 대기 대신 상태를 기다림)
+                page.wait_for_function("() => !document.getElementById('ecx-swipe').hidden", timeout=8000)
+            except Exception:
+                pass
             m = page.evaluate("""() => ({ hint: !document.getElementById('ecx-swipe').hidden, sticky: getComputedStyle(document.querySelector('#ecx-stats td')).position,
                   scroll: (s => s.scrollWidth > s.clientWidth)(document.querySelector('#page-etfcmp .table-scroll')) })""")
             if not (m['hint'] and m['sticky'] == 'sticky' and m['scroll']):
                 fail('etf-compare', '390px 표 옆으로 밀기·이름 고정·안내 이상: %s' % m)
-            page.set_viewport_size({'width': 1280, 'height': 900}); page.wait_for_timeout(600)
+            page.set_viewport_size({'width': 1280, 'height': 900})
+            try:
+                page.wait_for_function("() => document.getElementById('ecx-swipe').hidden", timeout=8000)
+            except Exception:
+                pass
             if not page.evaluate("document.getElementById('ecx-swipe').hidden"):
                 fail('etf-compare', '1280px 에서 옆으로 밀기 안내가 보임')
             for t in [t for t, u in errs if not ignorable(t, u)][:3]:
@@ -733,7 +761,7 @@ def main():
             # 영어판 /en/etf-compare/ — 언어·보기 버튼·표 머리·표 설명·기간 설명이 영어 · 목록·표가 그려짐 · 종목 이름 말고는 한글 없음
             if os.path.isdir(os.path.join(ROOT, 'en', 'etf-compare')):
                 errs.clear()
-                page.goto('about:blank'); page.goto(base + 'en/etf-compare/#e=K069500,K360750,USPY,UQQQ&p=1Y&m=nav', wait_until='load')
+                page.goto('about:blank'); page.goto(base + 'en/etf-compare/#e=K069500,K360750,USPY,UQQQ,ISPX&p=1Y&m=nav', wait_until='load')
                 try:
                     page.wait_for_function(ready, timeout=45000)
                 except Exception:
@@ -744,15 +772,17 @@ def main():
                     return { lang: document.documentElement.lang, modes: [...document.querySelectorAll('#ecx-mode button')].map(b => b.textContent.trim()),
                       head: [...document.querySelectorAll('#ecx-head th')].map(t => t.textContent.replace(/[▼▲↕]/g, '').trim()), rows: document.querySelectorAll('#ecx-stats tr').length,
                       list: !!(S.L && S.L.length > 4000), info, range: document.getElementById('ecx-range').textContent, ko: (c.textContent.match(/[가-힣]+/g) || []).slice(0, 8),
-                      koInfo: info.some(t => /[가-힣]/.test(t)), presets: [...document.querySelectorAll('#ecx-presets button')].map(b => b.textContent).join('|') }; }""")
+                      koInfo: info.some(t => /[가-힣]/.test(t)), presets: [...document.querySelectorAll('#ecx-presets button')].map(b => b.textContent).join('|'),
+                      mk: [...document.querySelectorAll('.ecx-mk button')].map(b => b.textContent.trim()), idxName: (S.by.ISPX || {}).n }; }""")
                 if e.get('none'):
                     fail('en/etf-compare', 'ECXdebug·페이지 없음')
                 else:
                     if e['lang'] != 'en': fail('en/etf-compare', 'html lang=%s' % e['lang'])
                     if e['modes'] != ['Market price', 'Reinvested (after tax)']: fail('en/etf-compare', '보기 버튼 %s' % e['modes'])
                     if e['head'] != ['ETF', 'Return', 'CAGR', 'Annualized', 'Max drawdown', 'Volatility (ann.)', 'Period · listing']: fail('en/etf-compare', '표 머리 %s' % e['head'])
-                    if not e['list'] or e['rows'] != 4: fail('en/etf-compare', '목록 %s · 표 %d줄 (기대 4)' % (e['list'], e['rows']))
-                    if len(e['info']) != 4 or e['koInfo'] or not all('of principal' in t for t in e['info']): fail('en/etf-compare', '표 이름 아래 설명이 영어가 아님: %s' % e['info'])
+                    if not e['list'] or e['rows'] != 5: fail('en/etf-compare', '목록 %s · 표 %d줄 (기대 5)' % (e['list'], e['rows']))
+                    if len(e['info']) != 5 or e['koInfo'] or not all('of principal' in t for t in e['info'][:4]) or 'price index' not in e['info'][4]: fail('en/etf-compare', '표 이름 아래 설명이 영어가 아님: %s' % e['info'])
+                    if e['mk'] != ['All', 'Korea', 'U.S.', 'Indices'] or e['idxName'] != 'S&P 500': fail('en/etf-compare', '시장 단추·지수 이름이 영어가 아님: %s · %s' % (e['mk'], e['idxName']))
                     if 'From' not in e['range'] or 'Reinvested (after tax)' not in e['range']: fail('en/etf-compare', '기간 설명이 영어가 아님: %s' % e['range'][:160])
                     if e['ko']: fail('en/etf-compare', '영어 화면에 한글 남음: %s' % e['ko'])
                     if 'KOSPI vs S&P 500' not in e['presets']: fail('en/etf-compare', '묶음 버튼이 영어가 아님: %s' % e['presets'][:120])
