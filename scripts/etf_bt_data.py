@@ -383,9 +383,13 @@ class Yahoo:
 
 
 # ───────────── ECOS ─────────────
-def ecos_rates():
+def ecos_rates(old=None):
+    """한국은행 ECOS 시장금리(일별) → ({이름: {d, v}}, ECOS 무응답 여부)
+    · 못 받았거나 지난 값보다 크게 짧아진 금리는 지난 값 그대로 (일부만 실패해도 금리가 빠지지 않게)
+    · 두 번 잇따라 실패하면 ECOS 가 응답하지 않는 것으로 보고 나머지는 건너뜀 (금리마다 3분씩 기다리지 않게)"""
     today = datetime.date.today().strftime('%Y%m%d')
-    out = {}
+    out = dict(old or {})
+    fails = 0
     for code, name in ECOS_RATES:
         try:
             j = json.loads(get('https://ecos.bok.or.kr/api/StatisticSearch/%s/json/kr/1/100000/817Y002/D/19900101/%s/%s' % (ECOS_KEY, today, code)))
@@ -400,11 +404,20 @@ def ecos_rates():
                 if dd and x <= dd[-1]:
                     continue
                 dd.append(x); vv.append(v)
+            fails = 0
+            prev = (out.get(name) or {}).get('d') or []
+            if len(dd) < 0.9 * len(prev):
+                log('ECOS', name, '이번 값(%d일)이 지난 값(%d일)보다 크게 짧아 지난 값 그대로' % (len(dd), len(prev)))
+                continue
             out[name] = {'d': dd, 'v': vv}
             log('ECOS', name, len(dd), (EPOCH + datetime.timedelta(dd[0])).isoformat() if dd else '-')
         except Exception as e:
             log('ECOS 실패', name, e)
-    return out
+            fails += 1
+            if fails >= 2:
+                log('ECOS 응답 없음 — 남은 금리·환율은 지난 값 그대로')
+                return out, True
+    return out, False
 
 
 def ecos_fx():
@@ -583,16 +596,31 @@ def main():
 
     # 4. 금리·환율 (ECOS)
     if not a.only and a.src in ('all', 'naver'):
-        r = ecos_rates()
-        if r:
-            json.dump(r, open(os.path.join(a.cache, 'rates.json'), 'w', encoding='utf-8'))
-        try:
-            fx = ecos_fx()
-            if fx:
-                json.dump(fx, open(os.path.join(a.cache, 'fx.json'), 'w', encoding='utf-8'))
-        except Exception as e:
-            log('ECOS 환율 실패', e)
+        update_ecos(a.cache)
     log('완료 %.0fs' % (time.time() - t0))
+
+
+def update_ecos(cache):
+    """캐시의 rates.json(시장금리)·fx.json(원/달러 15:30 종가)을 ECOS 로 갱신 — 못 받은 것·크게 짧아진 것은 지난 값 그대로"""
+    rp, fp = os.path.join(cache, 'rates.json'), os.path.join(cache, 'fx.json')
+    try:
+        old = json.load(open(rp, encoding='utf-8')) if os.path.exists(rp) else {}
+    except Exception:
+        old = {}
+    r, down = ecos_rates(old)
+    if r and r != old:
+        json.dump(r, open(rp, 'w', encoding='utf-8'))
+    if down:
+        return
+    try:
+        fx = ecos_fx()
+        n_old = len(json.load(open(fp, encoding='utf-8'))['USDKRW']['d']) if fx and os.path.exists(fp) else 0
+        if fx and len(fx['USDKRW']['d']) < 0.9 * n_old:
+            log('ECOS 원/달러 이번 값(%d일)이 지난 값(%d일)보다 크게 짧아 지난 값 그대로' % (len(fx['USDKRW']['d']), n_old))
+        elif fx:
+            json.dump(fx, open(fp, 'w', encoding='utf-8'))
+    except Exception as e:
+        log('ECOS 환율 실패', e)
 
 
 if __name__ == '__main__':
