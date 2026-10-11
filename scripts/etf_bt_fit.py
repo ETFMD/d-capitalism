@@ -7,6 +7,7 @@ ETF(대상 T)마다 상장 후 실제 일별 총수익(분배 재투자 수정�
      원/달러는 한국은행 원/달러 종가(15:30) — 국내 ETF 종가와 같은 시각 · 그 밖의 통화는 야후 USD 교차
      w = 노출 배수(레버리지·인버스 포함) · d = 보수·추적 차이(연 단위로 저장)
   후보: 더 오래된 국내·미국 ETF · 지수(네이버·야후 — S&P 500 은 배당 재투자 지수, 1988년 전은 실러 배당으로 이어 붙임)
+        · Cboe 옵션 전략 지수(C: — BuyWrite·PutWrite·칼라·버퍼 등, 커버드콜·버퍼·옵션 인컴 ETF 는 모두 시험)
         · 상위 보유 종목 · 금리로 만든 채권·현금 지수 · (구성 비중 그대로의 '구성종목 바스켓')
   시차: 대상 시장 마감 때 이미 알려진 값(lag) — 국내 ETF ↔ 미국 자산처럼 마감 시각이 다른 후보는 w 를 5거래일 합으로 추정(시차 잡음 제거)
   고르기: 주간 상관으로 후보를 좁힌 뒤 최대 3개 항을 앞으로 하나씩 더하며, 상장 후 기간을 시간 순 3(또는 2)등분한 교차 검증
@@ -33,6 +34,9 @@ MAX_TERMS = 3
 TOPK = 30
 TE_H = 21               # 추적오차를 재는 기간(거래일) — 화면에서 고르는 가장 짧은 기간(1개월)
 NEAR_REL, NEAR_ABS = 0.15, 0.0015    # 이만큼 안이면 '오차가 거의 같음' → 더 먼 과거까지 재현되는 후보
+NEAR_GAIN = 365         # 그 후보가 가장 잘 맞는 후보보다 이 날수 이상 더 먼 과거까지 될 때만
+OFFSET_CORR = 0.9       # 이보다 상관이 큰 두 항을 서로 반대 방향(상쇄)으로 쓰지 않음
+CBOE_WMIN, CBOE_WMAX = 0.2, 1.6   # Cboe 옵션 전략 지수 항의 배수 범위
 ACC_REL, ACC_ABS = 0.92, 0.001       # 항을 더할 때: 오차가 8% 이상 · 0.1%p 이상 줄어야
 RES_K = 15              # 2번째 항부터: 지금 식의 잔차와 상관이 큰 후보를 이만큼 더 시험
 RES_REL, RES_ABS = 0.85, 0.002       # 잔차로 찾은 후보는 더 엄격히(15% · 0.2%p) — 후보가 많아 우연히 맞는 것을 막음
@@ -93,6 +97,8 @@ KR_LIM_DAY, KR_LIM0, KR_LIM1 = (datetime.date(2015, 6, 15) - EPOCH).days, 0.31, 
 def clean_dep(key, d, a):
     """→ (d, a) · 국내(K:·N:)만: 1990-03-02 전은 버림 · 튀었다 돌아온 값은 전날 값으로 · 가격제한폭으로 불가능한 하루 변화(2015-06-15 전 ±31% ·
     그 뒤 ±61%)는 끊김 → 그 전 값을 이어 맞춤 (화면 btClean 과 같은 순서·식) · 미국·해외(야후)는 레버리지·변동성 상품의 실제 급등락과 구분이 어려워 그대로"""
+    if key[:2] == 'C:':
+        return clean_cboe(d, a)
     if key[:2] not in ('K:', 'N:'):
         return d, a
     if len(d) and d[0] < NAVER_FROM:
@@ -116,6 +122,32 @@ def clean_dep(key, d, a):
     for b in np.where(bk)[0][::-1]:
         f = a[b] / a[b - 1]
         a[:b] *= f
+    return d, a
+
+
+CBOE_GAP, CBOE_SPIKE, CBOE_BACK = 10, 0.2, 0.02
+
+
+def clean_cboe(d, a):
+    """Cboe 옵션 전략 지수 일봉 정리 → (d, a) — 화면은 이 결과를 그대로 담은 파일(data/etfbt/r/C_<기호>.json)을 받음
+    · 날 간격이 10일 넘게 비는 마지막 곳 뒤부터(옛 구간이 월말 값뿐인 지수 — PutWrite 1991~2006 등) · 하루 ±20% 넘게 튀었다가 다음 날 2% 안으로
+      돌아온 값은 전날 값으로 (BXY 2013-03-11 −26% → 다음 날 +35% 같은 잘못 찍힌 값)"""
+    n = len(d)
+    if n >= 2:
+        g = np.where(np.diff(np.asarray(d, dtype=np.int64)) > CBOE_GAP)[0]
+        if len(g):
+            d, a = d[g[-1] + 1:], a[g[-1] + 1:]
+            n = len(d)
+    if n < 3:
+        return d, a
+    r = a[1:] / a[:-1] - 1.0
+    sp = np.zeros(n, bool)
+    sp[1:n - 1] = (np.abs(r[:-1]) > CBOE_SPIKE) & (np.abs(a[2:] / a[:-2] - 1.0) < CBOE_BACK)
+    if not sp.any():
+        return d, a
+    a = np.array(a, dtype=np.float64, copy=True)
+    for i in np.where(sp)[0]:
+        a[i] = a[i - 1]
     return d, a
 
 
@@ -874,6 +906,25 @@ def eff_start(recipes, D, k, raw):
     return raw
 
 
+CBOE_OFF = False        # 시험용: Cboe 옵션 전략 지수를 후보에서 뺌
+OPT_BUF_US = re.compile(r'buffer|defined outcome|\bfloor\b|accelerat|barrier|\bcollar|put ?-?write|buy ?-?write|hedged equity|premium|option|'
+                        r'covered call|target income|enhanced growth|yieldmax|income strateg|high income|enhanced (?:dividend )?income|weeklypay', re.I)
+OPT_BUF_KR = re.compile(r'버퍼|커버드콜|프리미엄|옵션|콜매도|풋|인컴|타겟|위클리')
+
+
+def keys_of(mt):
+    return mt['keys']
+
+
+def wants_cboe(D, tk):
+    """커버드콜·버퍼(만기 결과 정의)·옵션 인컴 ETF 인가 — Cboe 옵션 전략 지수를 모두 후보로 시험할지 (이름으로)"""
+    if is_option_etf(D, tk):
+        return True
+    if tk.startswith('K:'):
+        return bool(OPT_BUF_KR.search(D.meta(tk).get('itemName') or ''))
+    return bool(OPT_BUF_US.search((D.info(tk).get('name') or '') + ' ' + (D.meta(tk).get('name') or '')))
+
+
 OPT_KR = re.compile(r'커버드콜|콜매도|프리미엄|위클리|데일리옵션|인컴')
 OPT_US = re.compile(r'covered call|buy-?write|option income|premium income|equity premium|option strateg|income strateg|enhanced income|yieldmax|buywrite|option overlay', re.I)
 
@@ -949,6 +1000,12 @@ def fit_target(D, E, mats, tk, recipes, explain, log):
     M, keys, starts, ends = mt['M'], mt['keys'], mt['starts'], mt['ends']
     # 후보 자격: 상장 15거래일 전부터 자료가 있고(과거를 늘릴 수 있어야) 지금까지 이어짐
     elig = (starts < first - 15) & (ends >= last - 5)
+    cidx = mt.get('cidx')
+    if cidx is None:                                    # Cboe 옵션 전략 지수 열 번호 (한 번만)
+        cidx = mt['cidx'] = np.array([i for i, k in enumerate(keys_of(mt)) if k.startswith('C:')], np.int64)
+    cboe_all = (not CBOE_OFF) and wants_cboe(D, tk)
+    if not cboe_all and len(cidx):                       # Cboe 옵션 전략 지수는 커버드콜·버퍼·옵션 인컴 ETF 에만 (옵션을 쓰지 않는 ETF 에는 우연히 맞는 후보일 뿐 — 시험으로 확인)
+        elig[cidx] = False
     ti_ = mt['kidx'].get(tk)
     if ti_ is not None:
         elig[ti_] = False
@@ -1021,6 +1078,10 @@ def fit_target(D, E, mats, tk, recipes, explain, log):
             j = mt['kidx'].get(hk)
             if j is not None and el[j] and hk not in pool:
                 pool.append(hk)
+        if cboe_all:                                    # 커버드콜·버퍼·옵션 인컴 ETF: Cboe 옵션 전략 지수를 모두 시험
+            for j in cidx:
+                if el[j] and keys[j] not in pool:
+                    pool.append(keys[j])
         folds = make_folds(n, 3 if n >= 180 else 2)
         variants = variants_of(pool, a0)
         # 잔차로 더 찾을 후보는 지수·ETF·금리·환율(넓은 요인)과 보유 종목만 — 수많은 개별 종목 중 우연히 맞는 것을 막음
@@ -1048,14 +1109,15 @@ def fit_target(D, E, mats, tk, recipes, explain, log):
                 variants = variants + new_v
                 ks = set(step_keys) | set(extra)
                 cands_ = [v for v in variants if v[0][0] in ks]
-            scored = []
+            scored, corr_of = [], {}
             for vk, c in cands_:
                 if any(vk[0] == s0[0][0] for s0 in cur_sel):
                     continue                              # 같은 후보를 두 번(환헤지·환노출 · 두 시차) 쓰지 않음
                 with np.errstate(invalid='ignore', divide='ignore'):     # 변동이 없는 열은 상관 NaN → 걸러지지 않음
-                    same = cur_sel and any(abs(float(np.corrcoef(c, c2)[0, 1])) > 0.97 for _, c2 in cur_sel)
-                if same:
+                    cors = [float(np.corrcoef(c, c2)[0, 1]) for _, c2 in cur_sel]
+                if any(abs(x) > 0.97 for x in cors):
                     continue                              # 이미 고른 항과 거의 같은 움직임(같은 지수 ETF·인버스 등) → 배수만 크게 엇갈려 불안정
+                corr_of[vk] = cors
                 X2 = np.column_stack([c2 for _, c2 in cur_sel] + [c])
                 scored.append((evaluate(yt, cash, X2, folds, good, pri([s0[0][0] for s0 in cur_sel] + [vk[0]])), (vk, c)))
             if not scored:
@@ -1083,15 +1145,26 @@ def fit_target(D, E, mats, tk, recipes, explain, log):
                     return False
                 if any(np.any(np.abs(w_) > W_MAX) for w_ in sc_[4]):
                     return False
+                cors, ks = corr_of.get(vk) or [], [s0[0][0] for s0 in cur_sel] + [vk[0]]
+                for w_ in sc_[4]:
+                    # 움직임이 거의 같은(|상관| 0.9 넘는) 두 항을 서로 상쇄하는 방향으로 → 둘의 작은 차이로 잡음을 맞춘 것(과적합)
+                    if any(abs(cj) > OFFSET_CORR and cj * w_[j] * w_[-1] < 0 for j, cj in enumerate(cors)):
+                        return False
+                    # Cboe 옵션 전략 지수는 전략 그대로(0.2~1.6배)만 — 음수·큰 배수는 다른 기초자산을 흉내 낸 우연한 맞춤
+                    if any(kk.startswith('C:') and not (CBOE_WMIN <= w_[j] <= CBOE_WMAX) for j, kk in enumerate(ks)):
+                        return False
                 return all(abs(w_[-1]) >= MIN_W for w_ in sc_[4])
             okz = [z for z in scored if ok_(z)]
             if not okz:
                 break
             best = min(z[0][0] for z in okz)
-            # 오차가 가장 작은 것과 거의 같으면 더 먼 과거까지 재현되는 후보 (체인 포함 시작일)
+            # 오차가 가장 작은 것과 거의 같으면 더 먼 과거까지 재현되는 후보 (체인 포함 시작일) — 1년 넘게 더 먼 과거일 때만 (몇 달 차이로 덜 맞는 후보를 고르지 않게)
             near = [z for z in okz if z[0][0] <= best * (1 + NEAR_REL) + NEAR_ABS]
             sel_start = max([kstart(s0[0][0]) for s0 in cur_sel] or [-10 ** 9])
-            pick = min(near, key=lambda z: (max(sel_start, kstart(z[1][0][0])), z[0][0]))
+            zbest = min(okz, key=lambda z: z[0][0])
+            s_best = max(sel_start, kstart(zbest[1][0][0]))
+            far = [z for z in near if max(sel_start, kstart(z[1][0][0])) <= s_best - NEAR_GAIN]
+            pick = min(far, key=lambda z: (max(sel_start, kstart(z[1][0][0])), z[0][0])) if far else zbest
             if os.environ.get('BT_DEBUG'):
                 print('  step', step, 'cur %.4f' % cur_score[0], 'best %.4f' % best, 'near', [(z[1][0][0], z[1][0][1], z[1][0][2], round(z[0][0], 4), ymd(kstart(z[1][0][0]))) for z in sorted(near, key=lambda z: z[0][0])[:12]],
                       '→', pick[1][0], flush=True)
@@ -1124,8 +1197,8 @@ def fit_target(D, E, mats, tk, recipes, explain, log):
                     unders.append(((k, Engine.known_lag(fmk, cal_name), v), c))
         for vk, c in ([] if unders else R['sel'][:1] + R.get('top', [])):
             key = vk[0]
-            if key in seen_k or len(vk) > 3 or (key[:2] in ('K:', 'U:') and is_option_etf(D, key)):
-                continue
+            if key in seen_k or len(vk) > 3 or key.startswith('C:') or (key[:2] in ('K:', 'U:') and is_option_etf(D, key)):
+                continue                                   # 이미 옵션 전략이 든 후보(콜 매도 ETF · Cboe 옵션 전략 지수)에는 덧씌우지 않음
             seen_k.add(key)
             w1 = est_w(yt - cash, c[:, None], good)
             if w1[0] > 0.2:
@@ -1161,7 +1234,9 @@ def fit_target(D, E, mats, tk, recipes, explain, log):
             return R
         best = min(z[0][0] for z in ok)
         near = [z for z in ok if z[0][0] <= best * (1 + NEAR_REL) + NEAR_ABS]
-        sc2, sel2 = min(near, key=lambda z: (kstart(z[1][0][0][0]), z[0][0]))
+        zb = min(ok, key=lambda z: z[0][0])                # 식 고르기와 같게: 1년 넘게 더 먼 과거까지 될 때만 덜 맞는 기초자산
+        far = [z for z in near if kstart(z[1][0][0][0]) <= kstart(zb[1][0][0][0]) - NEAR_GAIN]
+        sc2, sel2 = min(far, key=lambda z: (kstart(z[1][0][0][0]), z[0][0])) if far else zb
         R = dict(R); R['sel'] = sel2; R['score'] = sc2; R['cc'] = 1
         return R
 
@@ -1242,8 +1317,8 @@ def fee_of(D, key):
 def inc_sig(D, key):
     """후보 시계열에 빠진 수익(배당·이자·선물 롤)을 d0 이 모르는 정도(연)
     · 0: 분배 재투자 수정가(국내 ETF 네이버 · 미국 ETF·종목 야후)·S&P 500 TR·금리 합성·코인 · PI_SIG: 가격 지수·국내 종목(네이버 가격)·선물·환율"""
-    if key in SYN or key == 'X:SPXTR' or key.startswith('U:'):
-        return 0.0
+    if key in SYN or key == 'X:SPXTR' or key.startswith('U:') or key.startswith('C:'):
+        return 0.0                                    # C: Cboe 옵션 전략 지수 = 배당·이자를 담은 총수익 지수
     if key.startswith('K:'):
         return 0.0 if D.info(key).get('kind') == 'etf' else PI_SIG
     if key.startswith('Y:'):
@@ -1306,6 +1381,9 @@ def name_of(D, key):
         return SYN_NAME[key]
     if key.startswith('Y:') or key.startswith('N:'):
         return YIDX_NAMES.get(key[2:]) or key[2:]
+    if key.startswith('C:'):                          # 'Cboe S&P 500 30-Delta BuyWrite(BXMD)' — 영문 지수 이름 그대로(한·영 화면 공통)
+        nm = re.sub(r'\s*\bIndex\b', '', D.info(key).get('name') or key[2:]).strip()
+        return '%s(%s)' % (nm if nm.lower().startswith('cboe') or 'Cboe' in nm else 'Cboe ' + nm, key[2:])
     if key.startswith('K:'):
         m = D.meta(key)
         if m.get('itemName'):
@@ -1458,6 +1536,13 @@ def write_out(out, recipes, D, only, force=False):
         json.dump({'updated': now, 'e': sh}, open(os.path.join(out, '%d.json' % i), 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
     # 화면이 받는 보조 자료 — 금리(현금·채권 지수를 같은 식으로) · 원/달러 15:30 종가 · S&P 500 TR 앞부분
     used = {f[0] for r in recipes.values() for f in r['m']} | {'R:KRW', 'R:USD'}
+    for k in sorted(k for k in used if k.startswith('C:')):   # Cboe 옵션 전략 지수 (정리한 일봉 그대로 — 화면이 같은 값으로 계산)
+        s = D.series(k)
+        if s is None or not len(s['d']):
+            continue
+        j = _ser(s['d'], s['a'], 6)
+        json.dump({'updated': now, 'k': k, 'd0': j['d0'], 'dd': j['dd'], 'a': j['v']},
+                  open(os.path.join(out, 'r', 'C_' + k[2:] + '.json'), 'w', encoding='utf-8'), separators=(',', ':'))
     for k in sorted(used & set(SYN)):
         s = D.series(k)
         if s is None:

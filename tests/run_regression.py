@@ -443,7 +443,7 @@ def bt_check(fail, b, local):
     S_, rows, ds = b.get('s') or {}, b.get('rows') or [], b.get('ds') or []
     if not S_ or not rows:
         return F('화면 값 없음: %s' % json.dumps(b, ensure_ascii=False)[:300])
-    want = ['K133690', 'K122630', 'UTQQQ', 'USSO', 'K091160'] if local else ['K498400', 'K360750', 'UTQQQ']   # 배포: 셋 다 MAX(가장 늦은 백테스트 시작) 뒤에 상장
+    want = ['K133690', 'K122630', 'UTQQQ', 'USSO', 'K091160', 'UQYLD'] if local else ['K498400', 'K360750', 'UTQQQ']   # 배포: 셋 다 MAX(가장 늦은 백테스트 시작) 뒤에 상장
     for k in want:
         s = S_.get(k)
         if not s or not s['bt'] or s['list'] is None or s['first'] >= s['list']:
@@ -529,12 +529,13 @@ def bt_check(fail, b, local):
         F('체인 안 됨: TQQQ 백테스트 시작 %s 가 QLD 상장일(%s) 뒤' % (S_['UTQQQ']['first'], bt_synth.BT_FIRST['UQLD']))
     # 방법 문구: 환 노출 · 콜 매도 · 배수
     want_lab = {'K133690': r'SPY×원/달러 · 예상 오차 연 ±3\.4%p$', 'K122630': r'KODEX 200 0\.90배 \+ 위클리 콜 매도\(커버 33% · 1\.0% OTM\) · 예상 오차 연 ±5\.2%p$',
-                'UTQQQ': r'QLD 1\.5배 · 예상 오차 연 ±1\.1%p \(이어 붙인 앞 구간 ±2\.0%p\)$', 'USSO': r'S&P 500 TR 2\.0배 · 예상 오차 연 ±2\.1%p$'}
+                'UTQQQ': r'QLD 1\.5배 · 예상 오차 연 ±1\.1%p \(이어 붙인 앞 구간 ±2\.0%p\)$', 'USSO': r'S&P 500 TR 2\.0배 · 예상 오차 연 ±2\.1%p$',
+                'UQYLD': r'Cboe NASDAQ-100 BuyWrite V2\(BXNT\) · 예상 오차 연 ±1\.8%p$'}
     for k, pat in want_lab.items():
         if not re.search(pat, (lab.get(k) or {}).get('info', '')):
             F('%s 방법 문구 %r 없음: %s' % (k, pat, (lab.get(k) or {}).get('info', '')[:140]))
     # 색 = 예상 오차(이어 붙인 앞 구간이 더 크면 그것) 연 3% 미만 초록 g · 8% 미만 노랑 m · 그 밖 빨강 b
-    want_cls = {'K133690': 'm', 'K122630': 'm', 'UTQQQ': 'g', 'USSO': 'g'}
+    want_cls = {'K133690': 'm', 'K122630': 'm', 'UTQQQ': 'g', 'USSO': 'g', 'UQYLD': 'g'}
     for k, c in want_cls.items():
         if not (lab.get(k) or {}).get('cls', '').endswith('ecx-bt ' + c):
             F('%s 오차 색 %r 아님: %s' % (k, c, (lab.get(k) or {}).get('cls')))
@@ -1219,7 +1220,7 @@ def main():
                 page.wait_for_function(ready, timeout=45000)
             except Exception:
                 pass
-            hash_ = '#e=K133690,K122630,UTQQQ,USSO,UIWM,K091160&p=MAX' if local else '#e=K498400,K360750,UTQQQ&p=MAX'
+            hash_ = '#e=K133690,K122630,UTQQQ,USSO,UIWM,K091160,UQYLD&p=MAX' if local else '#e=K498400,K360750,UTQQQ&p=MAX'
             try:
                 b = page.evaluate(bt_synth.BT_JS, {'hash': hash_})
             except Exception as ex:

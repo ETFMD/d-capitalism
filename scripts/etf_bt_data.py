@@ -7,6 +7,7 @@
           N:<기호>  국내 지수 (네이버: KOSPI·KOSDAQ·KPI200)
           U:<티커>  미국 상장 ETF·주식 (야후 v8 — c 종가 · a adjclose · 분배 내역)
           Y:<기호>  지수·선물·환율·코인 (야후 — 가격)
+          C:<기호>  Cboe 옵션 전략 지수 (BuyWrite·PutWrite·칼라·버퍼·커버드콜 등 약 200개 · cdn-api.cboe.com 일별 종가 CSV — 매번 전체 기간)
   meta/kr/<코드>.json  네이버 ETF 분석 (기초지수·상장일·총보수·상위 10 구성종목·분배)
   meta/us/<티커>.json  야후 quoteSummary (상위 10 보유 종목·분류·보수)
   rates.json           한국은행 ECOS 시장금리(일별) — CD91·콜·국고채 1~30년·회사채·통안증권
@@ -16,8 +17,9 @@
   python3 scripts/etf_bt_data.py                 # 있는 것은 최근 구간만 이어 받고 새 종목은 처음부터
   python3 scripts/etf_bt_data.py --full          # 모두 처음부터
   python3 scripts/etf_bt_data.py --only U:SPY,K:069500
+  python3 scripts/etf_bt_data.py --skip-meta --src cboe   # Cboe 옵션 전략 지수만
 """
-import argparse, concurrent.futures as cf, datetime, json, os, re, sys, threading, time, urllib.error, urllib.parse, urllib.request
+import argparse, concurrent.futures as cf, datetime, json, math, os, re, sys, threading, time, urllib.error, urllib.parse, urllib.request
 from http import cookiejar
 
 import numpy as np
@@ -239,6 +241,50 @@ def naver_meta(code):
     return {k: j.get(k) for k in keep}
 
 
+# ───────────── Cboe 옵션 전략 지수 (BuyWrite·PutWrite·칼라·버퍼·커버드콜 …) ─────────────
+# 실제 옵션 가격으로 계산한 지수 — 커버드콜·버퍼(만기 결과 정의)·옵션 인컴 ETF 의 재현 후보 · 키 'C:<기호>' · 미국 장 마감 기준
+CBOE_DEF = 'https://cdn-api.cboe.com/api/global/us_indices/definitions/all_indices.json'
+CBOE_CSV = 'https://cdn-api.cboe.com/api/global/us_indices/daily_prices/%s_History.csv'
+CBOE_INC = re.compile(r'buywrite|buy-write|covered call|putwrite|put-write|call writing|defined income|collar|condor|butterfly|risk reversal|'
+                      r'target income|buffer protect|enhanced growth|premium strategy|volatility risk premia', re.I)
+CBOE_EXC = re.compile(r'\bCAD\b|\bJPY\b|UCITS|Intraday Indicative|INAV|Box Rate|Settlement', re.I)
+
+
+def cboe_list():
+    """Cboe 지수 정의 목록에서 옵션 전략 지수만 → {기호: 이름} (캐나다 달러·엔화·UCITS 판·ETF 추정 가치·박스 금리·결제 기호는 뺌)"""
+    out = {}
+    for x in json.loads(get(CBOE_DEF)):
+        s, nm = (x.get('index_symbol') or '').strip(), (x.get('name') or '').strip()
+        if re.match(r'^[A-Z0-9]{2,12}$', s) and CBOE_INC.search(nm) and not CBOE_EXC.search(nm):
+            out[s] = nm
+    return out
+
+
+def cboe_series(sym):
+    """Cboe 일별 종가 CSV ('DATE,…,종가' · 날짜 MM/DD/YYYY) → 일봉 (값은 소수 6자리 — 화면이 받는 파일과 같게)"""
+    t = get(CBOE_CSV % sym).decode('utf-8', 'replace').splitlines()
+    if not t or not t[0].upper().startswith('DATE'):
+        raise ValueError('형식')
+    m = {}
+    for l in t[1:]:
+        f = l.strip().split(',')
+        if len(f) < 2:
+            continue
+        try:
+            mo, dd, yy = f[0].split('/')
+            v = float(f[-1])
+            x = day(datetime.date(int(yy), int(mo), int(dd)))
+        except Exception:
+            continue
+        if v > 0 and math.isfinite(v):
+            m[x] = round(v, 6)
+    d = sorted(m)
+    s = {'d': np.array(d, np.int32), 'c': np.array([m[x] for x in d], np.float64)}
+    s['a'] = s['c'].copy()
+    s['v_d'], s['v_a'] = np.zeros(0, np.int32), np.zeros(0)
+    return s
+
+
 # ───────────── 야후 ─────────────
 class Yahoo:
     def __init__(self):
@@ -386,7 +432,7 @@ def main():
     ap.add_argument('--threads', type=int, default=6)
     ap.add_argument('--skip-meta', action='store_true')
     ap.add_argument('--meta-days', type=int, default=7, help='이 날수보다 오래된 구성 정보만 다시 받음')
-    ap.add_argument('--src', choices=('all', 'yahoo', 'naver'), default='all', help='이 출처의 일봉만')
+    ap.add_argument('--src', choices=('all', 'yahoo', 'naver', 'cboe'), default='all', help='이 출처의 일봉만')
     ap.add_argument('--retry-err', action='store_true', help='지난번 실패한 키만')
     a = ap.parse_args()
     C = Cache(a.cache)
@@ -433,6 +479,17 @@ def main():
         keys['Y:' + s] = ('yahoo', s, mk, cur, 'idx')
     for s, mk, cur, nm in NAVER_IDX:
         keys['N:' + s] = ('naver', s, mk, cur, 'idx')
+    cboe_names = {}
+    if not a.only and a.src in ('all', 'cboe'):
+        try:
+            cboe_names = cboe_list()
+        except Exception as e:
+            log('Cboe 지수 목록 실패 — 지난 목록으로', str(e)[:80])
+            cboe_names = {k[2:]: v.get('name') or k[2:] for k, v in uni.items() if k.startswith('C:') and not v.get('err')}
+    elif a.only:
+        cboe_names = {k[2:]: (uni.get(k) or {}).get('name') or k[2:] for k in a.only.split(',') if k.startswith('C:')}
+    for s, nm in cboe_names.items():
+        keys['C:' + s] = ('cboe', s, 'US', 'USD', 'idx')
     # 상위 보유 종목 (주식) — 국내: 6자리 코드(ETF 목록에 없는 것) · 미국: 야후 기호
     kr_set, us_set = set(kr), set(us)
     for c in kr:
@@ -478,8 +535,8 @@ def main():
         keys = {k: v for k, v in keys.items() if v[0] == a.src}
     if a.retry_err:
         keys = {k: v for k, v in keys.items() if k not in uni or uni[k].get('err')}
-    log('일봉 대상 %d개 (국내 ETF %d · 미국 ETF %d · 지수 등 %d · 주식 %d)' % (len(keys), len(kr), len(us), len(YAHOO_IDX) + len(NAVER_IDX),
-        sum(1 for v in keys.values() if v[4] == 'stk')))
+    log('일봉 대상 %d개 (국내 ETF %d · 미국 ETF %d · 지수 등 %d · Cboe 옵션 전략 지수 %d · 주식 %d)' % (len(keys), len(kr), len(us), len(YAHOO_IDX) + len(NAVER_IDX),
+        sum(1 for v in keys.values() if v[0] == 'cboe'), sum(1 for v in keys.values() if v[4] == 'stk')))
 
     # 3. 일봉
     def series_one(key):
@@ -490,6 +547,9 @@ def main():
             if src == 'naver':
                 st = (EPOCH + datetime.timedelta(last - 15)).strftime('%Y%m%d') if last else '19900101'
                 new, info = naver_series(sym, st), {'cur': cur}
+            elif src == 'cboe':
+                new, info = cboe_series(sym), {'cur': 'USD', 'name': cboe_names.get(sym) or sym}
+                old = None                                            # Cboe CSV 는 늘 전체 기간 → 통째로 바꿈 (지수 회사가 고친 과거 값도 반영)
             else:
                 new, info = Y.series(sym, last)
         except Exception as e:

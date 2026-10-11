@@ -6631,6 +6631,11 @@ var TAX = (function () {
       var d = [j.d0]; for (var i = 0; i < j.dd.length; i++) d.push(d[i] + j.dd[i]);
       return { d: d, a: j.a, base: j.base, cur: 'USD' };
     });
+    else if (t === 'C') p = file().then(function (j) {                       /* Cboe 옵션 전략 지수 (BuyWrite·PutWrite·버퍼 …) — 파이썬이 정리한 일봉 그대로 */
+      if (!j || !j.a || !j.dd || j.a.length !== j.dd.length + 1) throw new Error('cboe');
+      var d = [j.d0]; for (var i = 0; i < j.dd.length; i++) d.push(d[i] + j.dd[i]);
+      return { d: d, a: j.a, cur: 'USD' };
+    });
     else {
       var same = t === 'K' || t === 'U' ? S.data[t + sym] : null;           /* 고른 종목과 같은 일봉이면 그대로 */
       if (same) { S.dep[key] = btClean(key, depOf(same)); return; }

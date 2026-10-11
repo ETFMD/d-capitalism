@@ -22,7 +22,8 @@ _EP = _dt.date(1970, 1, 1)
 NSHARD = 16
 
 BT_FIRST = {'K133690': _dt.date(2010, 10, 18), 'K122630': _dt.date(2010, 2, 22), 'UQLD': _dt.date(2006, 6, 21), 'UTQQQ': _dt.date(2010, 2, 11),
-            'USSO': _dt.date(2006, 6, 21), 'UIWM': _dt.date(2000, 5, 26), 'K091160': _dt.date(2012, 1, 2)}
+            'USSO': _dt.date(2006, 6, 21), 'UIWM': _dt.date(2000, 5, 26), 'K091160': _dt.date(2012, 1, 2), 'UQYLD': _dt.date(2013, 12, 12)}
+CBOE_FROM = _dt.date(1994, 12, 30)                # 합성 Cboe 옵션 전략 지수(C:BXNT) 시작 (미국 달력 안)
 DEP_FIRST = {'K005930': _dt.date(1996, 1, 3)}   # 후보 종목 합성 일봉 시작 (자료 오류를 일부러 넣음 — run_regression.etf_series)
 CAL_FIRST = {'KKOSPI': _dt.date(1995, 1, 3), 'U^GSPC': _dt.date(1985, 1, 2), 'U^SP500TR': _dt.date(1990, 1, 2)}
 SPX_PRE_FROM = _dt.date(1986, 1, 2)          # 앞부분 파일 시작 (^GSPC 달력 안)
@@ -51,6 +52,9 @@ def recipes():
                   'e': [0.004, 0.012, 0.0126, 3], 'k': 'fit', 'ec': 0.0126},
         'U:IWM': {'s': day(BT_FIRST['UIWM']), 'c': 'USD', 'n': 900, 'm': [['U:NODATA', 0, 1.0, 'n', 'USD', 'NODATA']], 'd': 0.0, 'e': [0.001, 0.01, 0.0101, 3],
                   'k': 'fit', 'ec': 0.0101},
+        # Cboe 옵션 전략 지수 후보 — 화면이 data/etfbt/r/C_BXNT.json 을 받아 같은 값으로 계산하는지
+        'U:QYLD': {'s': day(BT_FIRST['UQYLD']), 'c': 'USD', 'n': 900, 'dv': {'y': 0.12, 'f': 12, 'm': list(range(1, 13)), 'dom': 20, 'tx': 1.0},
+                   'm': [['C:BXNT', 0, 0.99, 'n', 'USD', 'Cboe NASDAQ-100 BuyWrite V2(BXNT)']], 'd': -0.004, 'e': [0.0, 0.0105, 0.0105, 3], 'k': 'fit', 'ec': 0.0105},
         # 국내 종목 후보(합성 일봉에 튀었다 돌아온 값·가격제한폭 밖 끊김을 넣음) — 화면이 자료 정리(btClean)를 거쳐 쓰는지
         'K:091160': {'s': day(BT_FIRST['K091160']), 'c': 'KRW', 'n': 900, 'm': [['K:005930', 0, 1.2, 'n', 'KRW', '삼성전자']], 'd': -0.003,
                      'e': [0.002, 0.012, 0.0122, 3], 'k': 'fit', 'ec': 0.0122},
@@ -115,6 +119,11 @@ class Synth:
         a = [math.exp(0.0004 * t + 0.03 * math.sin(t / 50.0)) for t in range(len(d))]
         return {'d': d, 'a': [round(x / a[-1], 12) for x in a]}
 
+    def cboe(self, key):
+        """합성 Cboe 옵션 전략 지수 (미국 달력 · CBOE_FROM 부터 · 소수 6자리 — 실제 파일과 같은 자릿수)"""
+        g = [x for x in self.cal_days('Y:^GSPC') if x >= day(CBOE_FROM)]
+        return {'d': g, 'a': [round(500.0 * math.exp(0.00025 * t + 0.05 * math.sin(t / 61.0) + 0.01 * math.sin(t / 7.0)), 6) for t in range(len(g))]}
+
     def file(self, name):
         """data/etfbt/r/<name> 본문"""
         def ser(d):
@@ -127,6 +136,9 @@ class Synth:
         if name == 'F_USDKRW.json':
             f = self.usdkrw(); d0, dd = ser(f['d'])
             return json.dumps({'updated': up, 'k': 'F:USDKRW', 'd0': d0, 'dd': dd, 'c': f['c']})
+        if name.startswith('C_') and name[2:-5] == 'BXNT':
+            c = self.cboe('C:BXNT'); d0, dd = ser(c['d'])
+            return json.dumps({'updated': up, 'k': 'C:BXNT', 'd0': d0, 'dd': dd, 'a': c['a']})
         if name == 'X_SPXTR.json':
             p = self.spx_pre(); d0, dd = ser(p['d'])
             return json.dumps({'updated': up, 'k': 'X:SPXTR', 'base': 'Y:^SP500TR', 'd0': d0, 'dd': dd, 'a': p['a']})
@@ -154,6 +166,9 @@ def expected(syn):
                 s = {'d': d, 'a': lv, 'c': lv, 'y': y}
             elif key == 'F:USDKRW':
                 f = syn.usdkrw(); s = {'d': np.array(f['d'], np.int64), 'a': np.array(f['c'], np.float64), 'c': np.array(f['c'], np.float64)}
+            elif key.startswith('C:'):
+                c = syn.cboe(key)
+                s = {'d': np.array(c['d'], np.int64), 'a': np.array(c['a'], np.float64), 'c': np.array(c['a'], np.float64)}
             elif key == 'X:SPXTR':
                 pre, base = syn.spx_pre(), self.series('Y:^SP500TR')      # 뒷부분 = 자료 오류를 정리한 ^SP500TR (화면 btSplice 와 같게)
                 k = base['a'][0] / pre['a'][-1]
