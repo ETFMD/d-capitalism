@@ -443,7 +443,7 @@ def bt_check(fail, b, local):
     S_, rows, ds = b.get('s') or {}, b.get('rows') or [], b.get('ds') or []
     if not S_ or not rows:
         return F('화면 값 없음: %s' % json.dumps(b, ensure_ascii=False)[:300])
-    want = ['K133690', 'K122630', 'UTQQQ', 'USSO', 'K091160'] if local else ['K498400', 'K360750', 'USPY']
+    want = ['K133690', 'K122630', 'UTQQQ', 'USSO', 'K091160'] if local else ['K498400', 'K360750', 'UTQQQ']   # 배포: 셋 다 MAX(가장 늦은 백테스트 시작) 뒤에 상장
     for k in want:
         s = S_.get(k)
         if not s or not s['bt'] or s['list'] is None or s['first'] >= s['list']:
@@ -1201,7 +1201,7 @@ def main():
                     if e['lang'] != 'en': fail('en/etf-compare', 'html lang=%s' % e['lang'])
                     if e['modes'] != ['Market price', 'Reinvested (after tax)']: fail('en/etf-compare', '보기 버튼 %s' % e['modes'])
                     if e['head'] != ['ETF', 'Return', 'CAGR', 'Annualized', 'Max drawdown', 'Volatility (ann.)', 'Start → end price']: fail('en/etf-compare', '표 머리 %s' % e['head'])
-                    if len(e['cells']) != 5 or not all(re.match(r'^\d{4}-\d\d-\d\d (open|close) [₩$]?[\d,.]+→ \d{4}-\d\d-\d\d close [₩$]?[\d,.]+(Data from|Listed in period|Data starts in period)', c) for c in e['cells']):
+                    if len(e['cells']) != 5 or not all(re.match(r'^\d{4}-\d\d-\d\d (open|close) [₩$]?[\d,.]+→ \d{4}-\d\d-\d\d close [₩$]?[\d,.]+(Data from|Listed in period|Data starts in period|Listed \d{4}-\d\d-\d\d · backtest (from|starts))', c) for c in e['cells']):
                         fail('en/etf-compare', '기준·끝 가격 칸이 영어 형식이 아님: %s' % [c[:80] for c in e['cells']])
                     if not e['list'] or e['rows'] != 5: fail('en/etf-compare', '목록 %s · 표 %d줄 (기대 5)' % (e['list'], e['rows']))
                     if len(e['info']) != 5 or e['koInfo'] or not all('of principal' in t for t in e['info'][:4]) or 'price index' not in e['info'][4]: fail('en/etf-compare', '표 이름 아래 설명이 영어가 아님: %s' % e['info'])
@@ -1219,7 +1219,7 @@ def main():
                 page.wait_for_function(ready, timeout=45000)
             except Exception:
                 pass
-            hash_ = '#e=K133690,K122630,UTQQQ,USSO,UIWM,K091160&p=MAX' if local else '#e=K498400,K360750,USPY&p=MAX'
+            hash_ = '#e=K133690,K122630,UTQQQ,USSO,UIWM,K091160&p=MAX' if local else '#e=K498400,K360750,UTQQQ&p=MAX'
             try:
                 b = page.evaluate(bt_synth.BT_JS, {'hash': hash_})
             except Exception as ex:
