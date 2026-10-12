@@ -317,6 +317,9 @@ class Data:
                 P, k, l = ZSIM[key]
                 lv = zsim_levels(cal, S, sg, P, k, l)
                 ok = np.where(~np.isnan(lv))[0]
+                # 끝 = 재료 둘 다 값이 있는 마지막 날 (그 뒤 달력 날은 값을 이어 쓴 것일 뿐 — 하루가 '변화 없음'으로 잡히지 않게)
+                i_end = int(np.searchsorted(cal, min(int(su['d'][-1]), int(sv['d'][-1])), side='right')) - 1
+                ok = ok[ok <= i_end]
                 if len(ok) > 30:
                     i0, i1 = int(ok[0]), int(ok[-1])
                     v = np.round(lv[i0:i1 + 1], 6)             # 화면이 받는 파일(r/Z_*.json)과 같은 자릿수
@@ -1069,6 +1072,16 @@ CC_GRID = {'D': (0.0, 0.0025, 0.005, 0.01), 'W': (0.0, 0.005, 0.01, 0.02, 0.03),
 CC_L = (0.8, 1.0, 1.25)
 
 
+def fresh_end(cal, dl, lag, us_cal):
+    """달력 cal 위에서 마지막 값의 날(dl)까지 '다 나온' 마지막 날 번호
+    · 시차 0(같은 시장): dl 이하 마지막 날 · 시차 1(국내 대상의 미국 값 — 그날 값 = 그 전 미국 거래일 종가): dl 다음 미국 거래일 이하 마지막 날
+      (미국 달력이 dl 에서 끝나면 아직 다음 미국 거래일이 없어 끝까지)"""
+    if lag == 0:
+        return int(np.searchsorted(cal, dl, side='right')) - 1
+    i = int(np.searchsorted(us_cal, dl, side='right'))
+    return len(cal) - 1 if i >= len(us_cal) else int(np.searchsorted(cal, int(us_cal[i]), side='right')) - 1
+
+
 def fit_target(D, E, mats, tk, recipes, explain, log):
     cal_name, tcur = ('KR', 'KRW') if is_kr(tk) else ('US', 'USD')
     mt = mats.get(cal_name)
@@ -1116,6 +1129,17 @@ def fit_target(D, E, mats, tk, recipes, explain, log):
         elig[ti_] = False
     if not elig.any():
         return None
+    # 맞추는 구간의 끝 = 옵션 전략 지수 후보(C: Cboe · D: 한국거래소 · Z: 그 재료로 만든 모의)가 모두 값을 낸 마지막 날
+    #   한국거래소 옵션 지수는 저녁에 나와(네이버 ETF 일봉은 15:40 뒤 확정), 그 사이에 받으면 지수의 오늘이 없음 → 맞출 때 '변화 0'으로 이어 써져
+    #   그날 ETF 의 실제 오르내림이 통째로 오차로 잡힘 → 상장이 짧은 ETF 는 교차 검증에서 지수 식이 밀려남(2026-10-12 18:19 KST 실행: 498400 ±2.5 → ±5.6)
+    #   · 시차 1 후보(국내 대상의 미국 지수 — 그날 값 = 그 전 미국 거래일 종가)는 마지막 값의 다음 미국 거래일과 같은 날까지가 '다 나온' 날
+    if np.any(elig[cidx]) or np.any(elig[didx]):
+        cut = min(fresh_end(cal, int(D.series(keys[j])['d'][-1]), E.known_lag(D.info(keys[j]).get('mk') or 'US', cal_name), E.cal['US'])
+                  for j in np.concatenate([cidx, didx]) if elig[j]) + 1
+        if cut < hi:
+            hi = max(cut, lo + 2)
+            n_all = hi - lo
+            base['n'] = n_all
     hold = holdings(D, tk)
     single = single_stock_keys(D.meta(tk).get('itemName') if tk.startswith('K:') else D.info(tk).get('name'), kr=is_kr(tk))
     kstart = lambda k: eff_start(recipes, D, k, int(cal[starts[mt['kidx'][k]]])) if k in mt['kidx'] else 0

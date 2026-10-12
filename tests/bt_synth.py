@@ -333,6 +333,18 @@ def fit_selfcheck():
         u, m = F.hosted_missing(old, FD(True), pre)
         if m or len(u) != 1:
             out.append('안전장치 %s: 쓴 %s · 없음 %s' % (pre, u, m))
+    # 맞추는 구간 끝(fresh_end): 늦게 나오는 지수의 오늘이 없으면 그 전날까지 — 2026-10 국내 달력(9일 한글날 휴장) · 미국 달력
+    kr = np.array([day(_dt.date(2026, 10, x)) for x in (5, 6, 7, 8, 12)], np.int64)
+    us = np.array([day(_dt.date(2026, 10, x)) for x in (5, 6, 7, 8, 9)], np.int64)
+    us2 = np.append(us, day(_dt.date(2026, 10, 12)))
+    for args, want, why in (((kr, day(_dt.date(2026, 10, 8)), 0, us), 3, '국내 지수 8일까지(12일 값 아직) → 8일'),
+                            ((kr, day(_dt.date(2026, 10, 12)), 0, us), 4, '국내 지수 12일까지 → 12일'),
+                            ((kr, day(_dt.date(2026, 10, 9)), 1, us), 4, '미국 지수 9일(미국 달력 끝)까지 → 국내 12일 값(= 9일 종가)도 됨'),
+                            ((kr, day(_dt.date(2026, 10, 8)), 1, us), 3, '미국 지수 8일까지(9일 값 아직) → 국내 8일까지'),
+                            ((kr, day(_dt.date(2026, 10, 9)), 1, us2), 4, '미국 12일 장이 있어도 국내 12일 값은 9일 종가 → 12일')):
+        got = F.fresh_end(*args)
+        if got != want:
+            out.append('맞추는 구간 끝(fresh_end) %s: %s (기대 %s)' % (why, got, want))
     return out
 
 
