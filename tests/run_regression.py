@@ -144,6 +144,14 @@ MUHANBT_JS = """async () => {
   const r2 = res();
   ok('V1.0 SOXL 다시 실행 · 기본값(40분할·10%·큰수 15%) · 주소 갱신', r2.S.ver === '1.0' && r2.S.splits === 40 && r2.S.target === 10 && r2.S.big === 15 && /v=1\\.0/.test(location.hash) && /t=SOXL/.test(location.hash), location.hash);
   ok('실행 기록 저장', (JSON.parse(localStorage.getItem('mbt-history') || '[]')).length >= 2);
+  document.querySelector('#mb-set [data-ver="3.0"]').click(); await W(50);
+  const rb = document.getElementById('mb-rebase');
+  ok('V3.0: 손실이 커지면 1회 매수금 다시 정하기 (원문에 없음 표시 · 기본 꺼짐)', rb && !rb.checked && /원문에 없음/.test(rb.parentElement.textContent));
+  if (rb) { rb.checked = true; document.querySelector('#mb-set [data-act="run"]').click(); }
+  for (let i = 0; i < 120 && !(res() && res().S.ver === '3.0'); i++) await W(250);
+  const r3 = res();
+  ok('V3.0 다시 정하기 켬 → 계산 설정·주소(rb=1)', r3 && r3.S.ver === '3.0' && r3.S.rebase === true && r3.cfg.rebase === true && /rb=1/.test(location.hash), location.hash);
+  ok('실제 자료 기본값: 계산 알림(1주 못 삼·액면 병합·밖에서 낸 세금) 없음', r3 && !r3.net.nob && !r3.net.rs && !r3.net.taxExt && r3.net.rows.every(x => x.cash > -1e-9), r3 && JSON.stringify([r3.net.nob, r3.net.rs, r3.net.taxExt]));
   return R;
 }"""
 
@@ -944,6 +952,13 @@ def main():
     _al = set(re.findall(r"'([a-z0-9-]+)'", _al.group(1))) if _al else set()
     for k in sorted(_ks - _al):
         fail('worker', '계정 저장 키 /udata/%s 가 worker/src/auth.js UDATA_KEYS 에 없음' % k)
+    # 라오어 공식 카페 글 번호: 사용자가 준 원문 PDF 머리글 주소(cafes/30372164/articles/<번호>)로 확인한 번호만 링크
+    #   (㉑ 처음 배포 때 '<번호>?menuid' 의 '?' 를 '2' 로 잘못 읽어 끝에 2가 붙은 번호 8개를 링크했던 것을 바로잡으며 추가)
+    CAFE_OK = {7398, 10092, 10792, 15158, 21554, 21650, 23962, 25600, 27906, 31450, 35632, 36050, 36602, 36699, 36924, 41720, 42247,
+               46445, 48743, 48765, 51593, 52930, 53077, 55636, 59826, 59921, 64842, 66627, 67080, 77247, 79251, 79263, 79264, 79277, 85652,   # 무한매수법
+               30918, 38944, 38945, 38947, 39070, 41908, 45493, 48851, 53752, 54744, 55637, 66498, 67082, 78505, 82129}                          # VR
+    for _id in sorted(set(int(x) for x in re.findall(r'cafe\.naver\.com/infinitebuying/(\d+)', _src)) - CAFE_OK):
+        fail('src', '라오어 카페 글 번호 %d 이(가) 원문 PDF 로 확인한 목록(CAFE_OK)에 없음' % _id)
     # window.fcRegister 를 부르는 모듈은 정의([FC-UI]) 뒤에 있어야 함 — 앞에 두면 공용 스크립트가 거기서 멈춰 모든 페이지가 깨짐
     _def = _src.find('window.fcRegister = function')
     for _m in re.finditer(r"window\.fcRegister\('([a-z0-9]+)'", _src):

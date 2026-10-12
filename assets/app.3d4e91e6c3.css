@@ -1120,7 +1120,7 @@ html[data-theme="light"] #page-muhan,html[data-theme="light"] #page-vr,html[data
 .mb-adv{border-top:1px solid var(--card-border);padding-top:10px;font-size:12px}.mb-adv summary{cursor:pointer;color:var(--m-t2);font-weight:600;margin-bottom:8px}
 .mb-run{width:100%;padding:13px;font-size:15px;margin-top:14px;border-radius:12px}
 .mb-res{min-width:0}.mb-res>.card{margin-bottom:12px}
-.mb-msg{font-size:13px;line-height:1.6;color:var(--m-t2)}.mb-msg.bad{color:var(--m-bad)}.mb-msg.warn{color:var(--m-warn);font-size:12.5px}
+.mb-msg{font-size:13px;line-height:1.6;color:var(--m-t2)}.mb-msg.bad{color:var(--m-bad)}.mb-msg.warn{color:var(--m-warn);font-size:12.5px}.mb-warns p{margin:0 0 6px}.mb-warns p:last-child{margin:0}
 .mb-spin{display:inline-block;width:14px;height:14px;border:2px solid var(--m-ac-b);border-top-color:var(--m-ac);border-radius:50%;animation:mbspin .8s linear infinite;vertical-align:-2px;margin-right:8px}
 @keyframes mbspin{to{transform:rotate(360deg)}}
 .mb-empty b{font-size:14px}.mb-empty ol{margin:10px 0 0;padding-left:18px;font-size:12.5px;line-height:1.8;color:var(--m-t2)}

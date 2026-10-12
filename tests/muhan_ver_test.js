@@ -2,6 +2,7 @@
    · src/index.html 의 [MUHAN-ENGINE](MHE) · [MUHAN-VER](MHV) 를 그대로 꺼내 씀 (브라우저와 같은 코드)
    · 라오어 공식 카페 원문 숫자: 주문표 예시 · 별% 공식 · 반복리 · LABU 2021 사례 · TQQQ 해마다 소진 횟수(2010~2021)
    · V4.0 = 기록 화면 엔진(MHE.backtest)과 날마다 같은 평가금 · 기록 화면 다시 계산(replay) = 백테스트 상태 · 무작위 불변식 · 양도소득세 계산
+   · 가격 단위(상장 전 재현·액면 병합) · 양도세 현금 부족 · V3 반복리 완충 바닥 · 작은 원금(1회 < 1주) · 세금 포함 불변식
    실패가 있으면 'FAIL …' 줄과 종료 코드 1 */
 'use strict';
 const fs = require('fs'), path = require('path');
@@ -139,6 +140,78 @@ function bdays(from, n, skip) { const out = []; let t = Date.parse(from + 'T12:0
   const f = MHV.run(MHV.defaults('2.2', 'TQQQ'), synth(d, c, c.slice()), { from: 1, capital: 1e6, tax: { fx: () => 1000, method: 'fifo' }, rows: false });
   const a = MHV.run(MHV.defaults('2.2', 'TQQQ'), synth(d, c, c.slice()), { from: 1, capital: 1e6, tax: { fx: () => 1000, method: 'avg' }, rows: false });
   check('선입선출·이동평균 모두 계산 (실현 손익 없음 → 0)', f.taxes.every(t => t.tax === 0) && a.taxes.every(t => t.tax === 0)); }
+
+/* ⑨ 상장 전 재현 구간: 가격 수준에 뜻이 없어 사이클 시작가를 $50 단위로 (예전엔 $10~$2000 이면 그대로 써 1회 매수금 < 1주 가격 → 매수가 멈춤)
+      같은 가격이 실제 거래 가격이면 그대로(1주 단위 현실) 두고 '1회 매수금 < 1주 가격' 날을 셈 */
+{ const n = 400, d = bdays('2000-01-03', n), c = d.map((x, i) => 900 * Math.pow(0.997, i) * (1 + 0.05 * Math.sin(i / 7)));
+  const D = { d, c, h: c.map(x => x * 1.01), dv: null, L: 300 };
+  for (const ver of MHV.VERS) {
+    const O = MHV.run(MHV.defaults(ver, 'TQQQ'), D, { from: 1, capital: 10000, rows: true }), buys = O.rows.filter(r => r.i < 300 && r.bq > 0).length;
+    check('상장 전 구간 $50 단위 · 매수 이어짐 V' + ver, buys > 20 && !(O.nobFrom && O.nobFrom < d[300]) && Math.abs(O.cycles[0].k - 50 / c[0]) < 1e-12, 'buys ' + buys + ' nobFrom ' + O.nobFrom + ' k ' + O.cycles[0].k);
+    const O2 = MHV.run(MHV.defaults(ver, 'TQQQ'), Object.assign({}, D, { L: 0 }), { from: 1, capital: 10000, rows: true });
+    check('실제 가격 $900 · 1회 $250 → 단위 그대로 · 1주 못 삼 날 셈 · 현금 ≥ 0 V' + ver, O2.cycles[0].k === 1 && O2.nob > 0 && O2.rows.every(r => r.cash > -1e-9), 'nob ' + O2.nob);
+  } }
+
+/* ⑩ 사이클 안 큰 하락($50 → $0.05) → 액면 병합처럼 단위 10배 (보유 ÷ 10 · 평단 × 10) · 세금 장부도 같은 단위 */
+{ const n = 360, d = bdays('2024-01-02', n), c = d.map((x, i) => i < 250 ? 50 * Math.pow(0.001, i / 250) : 0.05 * Math.pow(1.3, (i - 250) / 4));
+  const D = { d, c, h: c.map(x => x * 1.02), dv: null };
+  for (const ver of ['2.2', '3.0', '4.0']) {
+    const O = MHV.run(Object.assign(MHV.defaults(ver, 'TQQQ'), ver === '4.0' ? {} : { exhaust: 'hold' }), D, { from: 1, capital: 100000, rows: true, tax: { fx: () => 1000, method: 'fifo' } });
+    let mn = Infinity; O.rows.forEach((r, k) => { if (k > 0 && O.rows[k - 1].q > 0) mn = Math.min(mn, D.c[r.i - 1] * r.k); });
+    const rz = O.rows.reduce((s, r) => s + r.rz, 0), g = O.taxes.reduce((s, t) => s + t.gain, 0);
+    check('액면 병합 V' + ver + ' (주문 단위 가격 ≥ $1)', O.rs >= 1 && mn >= 1 - 1e-9, 'rs ' + O.rs + ' min ' + mn);
+    check('액면 병합 뒤 세금 장부 = 실현 손익 × 환율 V' + ver, Math.abs(g - rz * 1000) < 1e-6 * Math.max(1e3, Math.abs(rz * 1000)), 'gain ' + g + ' rz×1000 ' + rz * 1000);
+    check('액면 병합 뒤 평가금 = 현금 + 보유 × 종가 V' + ver, O.rows.every(r => Math.abs(r.cash + r.q * D.c[r.i] * r.k - r.eq) < 1e-6 * Math.max(1, r.eq)));
+  } }
+
+/* ⑪ 5월 말 양도세를 낼 현금이 모자라면 그날 종가에 보유를 팔아 냄 · 다 팔아도 모자라면 밖에서 낸 것으로 (현금은 0 아래로 안 내려감 — 예전엔 음수 현금으로 매수가 멈췄음) */
+{ const d = bdays('2025-01-02', 520), j = d.indexOf('2026-01-02');
+  const path = (low, days) => { const c = d.map((x, i) => { if (i < j) { const ph = i % 60; return ph < 35 ? 100 - ph : 65 + (ph - 35) * 2.2; } const k = i - j; return k < days ? 80 * Math.pow(low / 80, k / days) : low; }); return { d, c, h: c.map(x => x * 1.005), dv: null }; };
+  for (const [low, ext] of [[10, false], [2, true]]) {
+    const D = path(low, 45), O = MHV.run(Object.assign(MHV.defaults('1.0', 'TQQQ'), { exhaust: 'hold' }), D, { from: 1, capital: 1e6, rows: true, fee: 0.001, tax: { fx: () => 1000, method: 'fifo' } });
+    const ts = O.rows.filter(r => r.ts > 0), paid = O.taxes.filter(t => t.usd), last = O.rows[O.rows.length - 1];
+    check('양도세 현금 부족 → 보유 팔아 냄 (최저 $' + low + ')', O.tsell === 1 && ts.length === 1 && ts[0].i === D.d.indexOf(paid[0].paid) && O.rows.every(r => r.cash > -1e-9), JSON.stringify([O.tsell, ts.length, O.taxExt]));
+    check(ext ? '다 팔아도 모자람 → 밖에서 낸 세금만큼 평가금에서 뺌' : '팔아서 다 냄 → 밖에서 낸 세금 없음', ext ? (O.taxExt > 0 && last.q === 0 && Math.abs(last.cash) < 1e-6 && Math.abs(O.final + O.taxExt) < 1e-6 && paid[0].ext > 0) : O.taxExt === 0, JSON.stringify([O.taxExt, last.q, last.cash, O.final]));
+    const rz = O.rows.reduce((s, r) => s + r.rz, 0), fe = O.rows.reduce((s, r) => s + r.fee, 0), un = last.q * (D.c[last.i] - last.avg) * last.k;
+    check('세후 평가금 = 원금 + 실현 + 미실현 − 수수료 − 낸 세금 (최저 $' + low + ')', Math.abs(1e6 + rz + un - fe - O.taxPaid - O.final) < 1e-6 * 1e6, (1e6 + rz + un - fe - O.taxPaid) + ' vs ' + O.final);
+  } }
+
+/* ⑫ V3.0 반복리: 손해가 나도 1회 매수금을 줄이지 않음(원문) → 손실이 남겨 둔 수익 절반보다 크면 전반전부터 '잔금 소진 → 쿼터매도'가 되풀이 — 표시(lack0)하고 '다시 정하기'(선택)로 비교
+      실제 TQQQ·SOXL 2010~ 에서는 한 번도 없음 (헛알림 없음) */
+{ const d = bdays('2025-01-02', 700), j = d.indexOf('2026-01-02');
+  const c = d.map((x, i) => { if (i < j) { const ph = i % 40; return ph < 20 ? 100 - ph * 1.2 : 76 + (ph - 20) * 2.5; } const k = i - j; return k < 60 ? 100 * Math.pow(0.03, k / 60) : k < 260 ? 3 * Math.pow(1 / 0.03, (k - 60) / 200) : 100 + (k - 260) * 0.3 * Math.sin(k); });
+  const D = { d, c, h: c.map(x => x * 1.01), dv: null }, cfg = MHV.defaults('3.0', 'TQQQ');
+  const A = MHV.run(cfg, D, { from: 1, capital: 100000, rows: false }), B = MHV.run(Object.assign({}, cfg, { rebase: true }), D, { from: 1, capital: 100000, rows: false });
+  check('V3 완충 바닥 → 전반전 잔금 소진 셈 · 다시 정하기 켜면 줄어듦', A.lack0 > 0 && B.rebase > 0 && B.rebase === B.over && B.lack0 < A.lack0, JSON.stringify([A.lack0, B.rebase, B.over, B.lack0]));
+  check('전반전 잔금 소진 표시는 V3.0 만 (V2.x 는 1회 매수금이 사이클마다 현금 ÷ 분할)', ['1.0', '2.0', '2.1', '2.2', '4.0'].every(v => MHV.run(MHV.defaults(v, 'TQQQ'), D, { from: 1, capital: 100000, rows: false, tax: { fx: () => 1000, method: 'fifo' } }).lack0 === 0));
+  let fa = 0; for (const [tk, S] of [['TQQQ', TQ], ['SOXL', SX]]) for (const sp of [20, 30, 40]) { const R = MHV.run(Object.assign(MHV.defaults('3.0', tk), { splits: sp }), S, { from: 1, capital: 10000, rows: false }); fa += R.lack0; }
+  check('실제 TQQQ·SOXL V3.0 (20·30·40분할) 전반전 잔금 소진 0일', fa === 0, fa); }
+
+/* ⑬ 1회 매수금 < 1주 가격 (작은 원금): V4.0 도 현금 안에서만 사고(예전엔 주문표의 '최소 1주' 때문에 현금이 음수) · 그런 날을 셈 */
+{ const n = 300, d = bdays('2024-01-02', n), c = d.map((x, i) => 50 * (1 + 0.2 * Math.sin(i / 9)) * Math.pow(0.999, i)), D = { d, c, h: c.map(x => x * 1.01), dv: null };
+  for (const ver of MHV.VERS) { const O = MHV.run(MHV.defaults(ver, 'TQQQ'), D, { from: 1, capital: 600, rows: true, fee: 0.0025 });
+    check('작은 원금 $600 · 1회 < 1주 → 현금 ≥ 0 · 셈 V' + ver, O.rows.every(r => r.cash > -1e-9) && O.nob > 0, 'nob ' + O.nob + ' minCash ' + Math.min.apply(null, O.rows.map(r => r.cash))); } }
+
+/* ⑭ 실제 TQQQ·SOXL 기본값(세금·수수료 포함): 현금은 늘 0 이상 · 알림(1주 못 삼·액면 병합·밖에서 낸 세금) 없음 */
+{ let bad1 = []; for (const [tk, S] of [['TQQQ', TQ], ['SOXL', SX]]) for (const ver of MHV.VERS) {
+    const O = MHV.run(MHV.defaults(ver, tk), S, { from: 1, capital: 10000, rows: true, fee: 0.0007, sec: 0.0000206, divTax: 0.15, tax: { fx: () => 1300, method: 'fifo' } });
+    if (!O.rows.every(r => r.cash > -1e-9) || O.nob || O.rs || O.taxExt) bad1.push(tk + ' ' + ver + ' ' + JSON.stringify([Math.min.apply(null, O.rows.map(r => r.cash)), O.nob, O.rs, O.taxExt])); }
+  check('실제 TQQQ·SOXL 기본값 세금 포함: 현금 ≥ 0 · 알림 없음', bad1.length === 0, bad1.join(' | ')); }
+
+/* ⑮ 무작위 불변식 (세금 포함): 현금 ≥ 0 · 세후 평가금 = 원금 + 실현 + 미실현 − 수수료 + 분배 − 낸 세금 */
+{ let seed = 11; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648; let n = 0, b0 = 0;
+  for (let it = 0; it < 120; it++) {
+    const [tk, S] = rnd() < 0.5 ? ['TQQQ', TQ] : ['SOXL', SX], ver = MHV.VERS[Math.floor(rnd() * 6)], cfg = MHV.defaults(ver, tk);
+    if (ver !== '4.0') { cfg.splits = [20, 30, 40][Math.floor(rnd() * 3)]; const ex = MHV.EXHAUST[ver]; cfg.exhaust = ex[Math.floor(rnd() * ex.length)]; if (ver === '3.0') cfg.rebase = rnd() < 0.5; }
+    const N = S.c.length, from = 1 + Math.floor(rnd() * (N - 600)), to = Math.min(N - 1, from + 500 + Math.floor(rnd() * 3000)), cap = [3000, 20000, 1e6][Math.floor(rnd() * 3)];
+    const O = MHV.run(cfg, { d: S.d, c: S.c, h: S.h, dv: S.dv }, { from, to, capital: cap, fee: 0.0025, sec: 0.0000206, divTax: 0.15, rows: true, tax: { fx: () => 1100 + 300 * rnd(), method: rnd() < 0.5 ? 'fifo' : 'avg', harvest: rnd() < 0.3 } });
+    let err = null, rz = 0, fe = 0, dd = 0; n++;
+    for (const r of O.rows) { if (r.cash < -1e-9) err = 'cash<0'; if (!isFinite(r.eq)) err = 'nan'; rz += r.rz; fe += r.fee; dd += r.dv; }
+    const L = O.rows[O.rows.length - 1], want = cap + rz + L.q * (S.c[L.i] * L.k - L.avg * L.k) - fe + dd - O.taxPaid;
+    if (Math.abs(want - O.final) > 1e-6 * Math.max(cap, Math.abs(O.final))) err = err || 'final ' + want + ' vs ' + O.final;
+    if (err) { b0++; if (b0 < 4) console.log('  세금 불변식', err, tk, ver, cap, S.d[from]); }
+  }
+  check('무작위 불변식 · 세금 포함 (' + n + '번)', b0 === 0, b0 + '건 실패'); }
 
 console.log((bad ? 'FAIL ' : 'OK ') + '무한매수법 버전 엔진 검사 ' + ok + ' / ' + (ok + bad));
 process.exit(bad ? 1 : 0);
