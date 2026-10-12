@@ -1160,6 +1160,17 @@ def main():
             for t in page.evaluate(MUHANBT_JS):
                 if not t['ok']:
                     fail('muhan-backtest', '%s%s' % (t['name'], (' — ' + str(t.get('info'))[:200]) if t.get('info') else ''))
+            # 주소만으로 같은 조건 — 평단 괴리율·취득가액·연말 절세·분배금(V2.1) · T 반올림(V2.2) 이 주소에 남고 다시 열면 그대로
+            for h, want in [('#v=2.1&t=SOXL&c=20000&sp=33&tg=12.5&pt=4&cp=6&bg=10&fe=0.1&ln=5&sh=2&x=hold&r=rsi&ao=-1.5&tm=avg&hv=1&dv=0',
+                             {'ver': '2.1', 'tk': 'SOXL', 'cap': 20000, 'splits': 33, 'target': 12.5, 'part': 4, 'capP': 6, 'big': 10, 'fee': 0.1, 'lines': 5, 'shares': 2, 'exhaust': 'hold', 'restart': 'rsi', 'avgOff': -1.5, 'method': 'avg', 'harvest': True, 'divs': False}),
+                            ('#v=2.2&t=TQQQ&c=10000&sp=40&tg=10&tr=c1&m=simple', {'ver': '2.2', 'tround': 'c1', 'money': 'simple', 'method': 'fifo', 'harvest': False, 'divs': True})]:
+                page.goto('about:blank'); page.goto(base + 'muhan-backtest/' + h, wait_until='load')   # 주소 #만 바뀌면 새로 열리지 않으므로 빈 화면을 거쳐 다시 엶
+                page.wait_for_function('window.MBTdebug && MBTdebug.R() && MBTdebug.R().S', timeout=60000)
+                got = page.evaluate("(() => { const S = MBTdebug.R().S; return { S: S, hash: location.hash }; })()")
+                bad_k = [k for k, v in want.items() if got['S'].get(k) != v]
+                hs = got['hash'].lstrip('#').split('&')
+                if bad_k or any(x not in hs for x in h.lstrip('#').split('&')):
+                    fail('muhan-backtest', '주소 조건 복원/유지 실패 %s — %s · 주소 %s' % (h[:40], ', '.join('%s=%r' % (k, got['S'].get(k)) for k in bad_k), got['hash'][:160]))
             bad = [t for t, u in errs if not ignorable(t, u)]
             for t in bad[:3]:
                 fail('muhan-backtest', '콘솔 오류: ' + t[:200])

@@ -26337,6 +26337,8 @@ window.MBT = (function () {
     if (q.m && /^(compound|simple)$/.test(q.m) && /^(1\.0|2\.0|2\.1|2\.2)$/.test(S.ver)) S.money = q.m;
     if (q.x && (V.EXHAUST[S.ver] || []).indexOf(q.x) >= 0) S.exhaust = q.x;
     if (q.r === 'rsi') S.restart = 'rsi'; S.pre = q.p === '1'; S.tax = q.tx !== '0'; S.ideal = q.id === '1'; S.rebase = q.rb === '1' && S.ver === '3.0';
+    num('ao', 'avgOff', -20, 20); if (q.tr === 'c1' && (S.ver === '2.2' || S.ver === '3.0')) S.tround = 'c1';   /* 평단 괴리율 · T 반올림 · 취득가액 · 연말 절세 · 분배금 — 주소만으로 같은 결과가 나오게 */
+    if (q.tm === 'avg') S.method = 'avg'; S.harvest = q.hv === '1'; if (q.dv === '0') S.divs = false;
   })();
   function tkOf() { return (S.custom || S.tk || 'TQQQ').toUpperCase(); }
   function hashOf() {
@@ -26349,6 +26351,8 @@ window.MBT = (function () {
     if (/^(1\.0|2\.0|2\.1|2\.2)$/.test(S.ver) && S.money !== 'compound') p.push('m=' + S.money);
     if (S.exhaust !== 'official') p.push('x=' + S.exhaust); if (S.restart === 'rsi') p.push('r=rsi');
     if (S.pre) p.push('p=1'); if (!S.tax) p.push('tx=0'); if (S.ideal) p.push('id=1'); if (S.ver === '3.0' && S.rebase) p.push('rb=1');
+    if ((S.ver === '1.0' || S.ver === '2.0' || S.ver === '2.1') && S.avgOff) p.push('ao=' + S.avgOff); if ((S.ver === '2.2' || S.ver === '3.0') && S.tround === 'c1') p.push('tr=c1');
+    if (S.tax && S.method === 'avg') p.push('tm=avg'); if (S.tax && S.harvest) p.push('hv=1'); if (!S.divs) p.push('dv=0');
     return '#' + p.join('&');
   }
   function saveS() { lsSet(LS_SET, S); }
