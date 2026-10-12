@@ -18,7 +18,11 @@ function engine() {
   const MHE = new Function(g('MHE', "if (typeof module !== 'undefined') module.exports = MHE;") + '\nreturn MHE;')();
   return new Function('MHE', g('MHV', "if (typeof module !== 'undefined') module.exports = MHV;") + '\nreturn MHV;')(MHE);
 }
-function dataOf(tk, per) { return JSON.parse(fs.readFileSync(path.join(__dirname, 'data', tk + '_' + per + '.json'), 'utf8')); }
+function dataOf(tk, per) {
+  const D = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', tk + '_' + per + '.json'), 'utf8')), n = Number(process.env.OPT_TRUNC) || 0;
+  if (n > 0) for (const k of ['d', 'c', 'h', 'dv', 'fx']) if (D[k]) D[k] = D[k].slice(0, n);   /* 시험용으로 앞부분만 */
+  return D;
+}
 
 /* 시뮬레이터 cfgOf 와 같게 설정 만들기 */
 function cfgOf(MHV, tk, p) {
@@ -132,13 +136,16 @@ const t0 = Date.now(), log = s => console.log(((Date.now() - t0) / 1000).toFixed
     let bi = 0; res.forEach((r, i) => { if (r.cagr > res[bi].cagr) bi = i; });
     log('격자 ' + (ci + 1) + '/' + COMBOS.length + ' ' + JSON.stringify(COMBOS[ci]) + ' 최고 ' + (res[bi].cagr * 100).toFixed(2) + '% (' + list[bi].splits + '분할 · ' + list[bi].target + '%) · 계산 ' + nEval);
   }
+  const save = () => { fs.mkdirSync(path.join(__dirname, 'out'), { recursive: true }); fs.writeFileSync(path.join(__dirname, 'out', TK + '_' + PER + '_' + VER + '.json'), JSON.stringify(out)); };
+  out.nEval = nEval; out.partial = 'grid'; save();
   /* 격자에서 출발점 고르기 */
   const all = [];
   for (const [k, r] of memo) all.push([k, r]);
   const P = new Map(); for (const [k] of all) { /* 키 → 설정 복원은 격자 목록에서 */ }
   const gridPts = [];
   for (let ci = 0; ci < COMBOS.length; ci++) for (const s of SPLITS) for (const t of TGT_A) { const p = Object.assign({}, base, COMBOS[ci], { splits: s, target: t }); gridPts.push([p, memo.get(keyOf(p))]); }
-  const maxA = Math.max.apply(null, gridPts.map(x => x[1].cagr)), floor = maxA * 0.5;
+  let maxA = -Infinity; for (const g of gridPts) if (g[1].cagr > maxA) maxA = g[1].cagr;   /* (큰 배열에 Math.max.apply 를 쓰면 호출 스택이 넘침) */
+  const floor = maxA * 0.5;
   out.maxA = maxA; out.floor = floor;
   const calmar = r => r.cagr >= floor && r.mdd < 0 ? r.cagr / -r.mdd : -Infinity;
   const OBJ = { cagr: r => r.cagr, calmar };
@@ -218,9 +225,8 @@ const t0 = Date.now(), log = s => console.log(((Date.now() - t0) / 1000).toFixed
   /* 격자 밖에서 계산한 점 (좌표 탐색·세금 방식·이웃) — 프런티어용 · 격자 점은 out.grid */
   out.points = [];
   for (const [k, v] of refPts) { const r = v.r; out.points.push([k, +r.cagr.toFixed(6), +r.mdd.toFixed(6), r.exh, r.nob, r.lack0, r.ext > 0 ? 1 : 0]); }
-  out.nEval = nEval; out.sec = (Date.now() - t0) / 1000;
-  fs.mkdirSync(path.join(__dirname, 'out'), { recursive: true });
-  fs.writeFileSync(path.join(__dirname, 'out', TK + '_' + PER + '_' + VER + '.json'), JSON.stringify(out));
+  out.nEval = nEval; out.sec = (Date.now() - t0) / 1000; delete out.partial;
+  save();
   log('끝 · 계산 ' + nEval + '번');
   workers.forEach(w => w.kill());
 })().catch(e => { console.error(e); workers.forEach(w => w.kill()); process.exit(1); });
