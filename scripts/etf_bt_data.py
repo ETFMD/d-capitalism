@@ -8,6 +8,8 @@
           U:<티커>  미국 상장 ETF·주식 (야후 v8 — c 종가 · a adjclose · 분배 내역)
           Y:<기호>  지수·선물·환율·코인 (야후 — 가격)
           C:<기호>  Cboe 옵션 전략 지수 (BuyWrite·PutWrite·칼라·버퍼·커버드콜 등 약 200개 · cdn-api.cboe.com 일별 종가 CSV — 매번 전체 기간)
+          D:<지수 ID> 한국거래소 옵션 전략 지수 (코스피 200 커버드콜 ATM·위클리 커버드콜·타겟 위클리 커버드콜·고배당·반도체·코스닥 150 커버드콜·
+                    양매도·풋매도·버퍼 등 약 56개 · KRX 지수 누리집(index.krx.co.kr) '파생상품지수 > 옵션' 일별 종가 — 매번 전체 기간)
   meta/kr/<코드>.json  네이버 ETF 분석 (기초지수·상장일·총보수·상위 10 구성종목·분배)
   meta/us/<티커>.json  야후 quoteSummary (상위 10 보유 종목·분류·보수)
   rates.json           한국은행 ECOS 시장금리(일별) — CD91·콜·국고채 1~30년·회사채·통안증권
@@ -18,6 +20,7 @@
   python3 scripts/etf_bt_data.py --full          # 모두 처음부터
   python3 scripts/etf_bt_data.py --only U:SPY,K:069500
   python3 scripts/etf_bt_data.py --skip-meta --src cboe   # Cboe 옵션 전략 지수만
+  python3 scripts/etf_bt_data.py --skip-meta --src krx    # 한국거래소 옵션 전략 지수만
 """
 import argparse, concurrent.futures as cf, datetime, json, math, os, re, sys, threading, time, urllib.error, urllib.parse, urllib.request
 from http import cookiejar
@@ -38,7 +41,7 @@ YAHOO_IDX = [
     ('^SP600', 'US', 'USD', 'S&P 600'), ('^W5000', 'US', 'USD', 'Wilshire 5000'), ('^OEX', 'US', 'USD', 'S&P 100'), ('^DJT', 'US', 'USD', 'Dow Transports'),
     ('^DJU', 'US', 'USD', 'Dow Utilities'), ('^NYFANG', 'US', 'USD', 'NYSE FANG+'), ('^SP500-60', 'US', 'USD', 'S&P 500 Real Estate'), ('^XOI', 'US', 'USD', 'NYSE Arca Oil'),
     ('^HUI', 'US', 'USD', 'Gold Bugs'), ('^BKX', 'US', 'USD', 'KBW Bank'), ('^NBI', 'US', 'USD', 'Nasdaq Biotech'), ('^XAU', 'US', 'USD', 'PHLX Gold/Silver'),
-    ('^SPGSCI', 'US', 'USD', 'S&P GSCI'), ('DX-Y.NYB', 'US', 'USD', 'Dollar Index'), ('^PUT', 'US', 'USD', 'CBOE S&P 500 PutWrite'),
+    ('^SPGSCI', 'US', 'USD', 'S&P GSCI'), ('DX-Y.NYB', 'US', 'USD', 'Dollar Index'), ('^PUT', 'US', 'USD', 'S&P 500 PutWrite'),
     ('^N225', 'AS', 'JPY', 'Nikkei 225'), ('^HSI', 'AS', 'HKD', 'Hang Seng'), ('^HSCE', 'AS', 'HKD', 'Hang Seng China Ent.'), ('000001.SS', 'AS', 'CNY', 'Shanghai Composite'),
     ('399001.SZ', 'AS', 'CNY', 'Shenzhen Component'), ('^TWII', 'AS', 'TWD', 'TAIEX'), ('^STI', 'AS', 'SGD', 'Straits Times'), ('^AXJO', 'AS', 'AUD', 'ASX 200'),
     ('^BSESN', 'AS', 'INR', 'Sensex'), ('^NSEI', 'AS', 'INR', 'Nifty 50'), ('^KS11', 'KR', 'KRW', 'KOSPI (Yahoo)'), ('^KQ11', 'KR', 'KRW', 'KOSDAQ (Yahoo)'),
@@ -285,6 +288,67 @@ def cboe_series(sym):
     return s
 
 
+# ───────────── 한국거래소 옵션 전략 지수 (코스피 200 커버드콜·위클리 커버드콜·양매도·버퍼 …) ─────────────
+# KRX 지수 누리집(로그인 없이 보는 화면)이 쓰는 방식 그대로: 일회용 코드(GenerateOTP) → 표 자료(IDX99000001) · 키 'D:<지수 ID>' · 국내 장 마감 기준
+KRX_IDX = 'https://index.krx.co.kr'
+KRX_LIST_BLD = '/IDX/03/0304/03040100/mkd03040100'         # 파생상품지수 목록 (upclss 02 · midclss 02 = 옵션)
+KRX_HIST_BLD = '/IDX/03/0304/03040101/mkd03040101T2_02'    # 지수 상세 > 데이터 > 일자별 (기간 전체를 한 번에)
+
+
+def krx_grid(bld, params):
+    code = get(KRX_IDX + '/contents/COM/GenerateOTP.jspx?' + urllib.parse.urlencode({'bld': bld, 'name': 'grid'}),
+               headers={'X-Requested-With': 'XMLHttpRequest'}).decode().strip()
+    if not code or len(code) < 10 or code.startswith('<'):
+        raise ValueError('OTP')
+    p = dict(params); p['code'] = code
+    j = json.loads(get(KRX_IDX + '/contents/IDX/99/IDX99000001.jspx', data=urllib.parse.urlencode(p).encode(),
+                       headers={'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'}))
+    if not isinstance(j, dict) or not j:
+        raise ValueError('형식')
+    return j[list(j)[0]] or []
+
+
+def krx_list():
+    """한국거래소 옵션 전략 지수 목록 → {지수 ID: {nm 한글 이름, en 영문 이름, cd 지수 코드(구분+번호), tp 구분}}"""
+    bz = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=9)
+    out = {}
+    for lang in ('ko', 'en'):
+        for x in krx_grid(KRX_LIST_BLD, {'idx_upclss_cd': '02', 'idx_midclss_cd': '02', 'lang': lang, 'add_data_yn': 'N', 'bz_dd': bz.strftime('%Y%m%d')}):
+            iid, tp, ind = (x.get('idx_id') or '').strip(), (x.get('ind_tp_cd') or '').strip(), (x.get('idx_ind_cd') or '').strip()
+            if not re.match(r'^[A-Z0-9]{4,8}$', iid) or not tp or not ind:
+                continue
+            o = out.setdefault(iid, {'cd': tp + ind, 'tp': tp, 'ind': ind})
+            o['nm' if lang == 'ko' else 'en'] = re.sub(r'\s+', ' ', (x.get('idx_nm') or '').strip())
+    out = {k: v for k, v in out.items() if v.get('nm')}
+    if len(out) < 20:
+        raise ValueError('목록 %d개' % len(out))
+    return out
+
+
+def krx_series(info):
+    """지수 하나의 일별 종가 (기준일부터 전체) → 일봉"""
+    today = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=9)).strftime('%Y%m%d')
+    rows = krx_grid(KRX_HIST_BLD, {'idx_cd': info['cd'], 'ind_tp_cd': info['tp'], 'idx_ind_cd': info['ind'], 'add_data_yn': '', 'bz_dd': '',
+                                   'fromdate': '19900101', 'todate': today})
+    m = {}
+    for r in rows:
+        try:
+            yy, mo, dd = (r.get('trd_dd') or '').split('/')
+            v = float((r.get('clsprc_idx') or '').replace(',', ''))
+            x = day(datetime.date(int(yy), int(mo), int(dd)))
+        except Exception:
+            continue
+        if v > 0 and math.isfinite(v):
+            m[x] = round(v, 4)
+    if len(m) < 2:
+        raise ValueError('자료 %d일' % len(m))
+    d = sorted(m)
+    s = {'d': np.array(d, np.int32), 'c': np.array([m[x] for x in d], np.float64)}
+    s['a'] = s['c'].copy()
+    s['v_d'], s['v_a'] = np.zeros(0, np.int32), np.zeros(0)
+    return s
+
+
 # ───────────── 야후 ─────────────
 class Yahoo:
     def __init__(self):
@@ -445,7 +509,7 @@ def main():
     ap.add_argument('--threads', type=int, default=6)
     ap.add_argument('--skip-meta', action='store_true')
     ap.add_argument('--meta-days', type=int, default=7, help='이 날수보다 오래된 구성 정보만 다시 받음')
-    ap.add_argument('--src', choices=('all', 'yahoo', 'naver', 'cboe'), default='all', help='이 출처의 일봉만')
+    ap.add_argument('--src', choices=('all', 'yahoo', 'naver', 'cboe', 'krx'), default='all', help='이 출처의 일봉만')
     ap.add_argument('--retry-err', action='store_true', help='지난번 실패한 키만')
     a = ap.parse_args()
     C = Cache(a.cache)
@@ -503,6 +567,17 @@ def main():
         cboe_names = {k[2:]: (uni.get(k) or {}).get('name') or k[2:] for k in a.only.split(',') if k.startswith('C:')}
     for s, nm in cboe_names.items():
         keys['C:' + s] = ('cboe', s, 'US', 'USD', 'idx')
+    krx_info = {}
+    if not a.only and a.src in ('all', 'krx'):
+        try:
+            krx_info = krx_list()
+        except Exception as e:
+            log('한국거래소 옵션 지수 목록 실패 — 지난 목록으로', str(e)[:80])
+            krx_info = {k[2:]: v['krx'] for k, v in uni.items() if k.startswith('D:') and (v.get('krx') or {}).get('cd')}
+    elif a.only:
+        krx_info = {k[2:]: (uni.get(k) or {}).get('krx') for k in a.only.split(',') if k.startswith('D:') and (uni.get(k) or {}).get('krx')}
+    for s, inf in krx_info.items():
+        keys['D:' + s] = ('krx', s, 'KR', 'KRW', 'idx')
     # 상위 보유 종목 (주식) — 국내: 6자리 코드(ETF 목록에 없는 것) · 미국: 야후 기호
     kr_set, us_set = set(kr), set(us)
     for c in kr:
@@ -548,8 +623,9 @@ def main():
         keys = {k: v for k, v in keys.items() if v[0] == a.src}
     if a.retry_err:
         keys = {k: v for k, v in keys.items() if k not in uni or uni[k].get('err')}
-    log('일봉 대상 %d개 (국내 ETF %d · 미국 ETF %d · 지수 등 %d · Cboe 옵션 전략 지수 %d · 주식 %d)' % (len(keys), len(kr), len(us), len(YAHOO_IDX) + len(NAVER_IDX),
-        sum(1 for v in keys.values() if v[0] == 'cboe'), sum(1 for v in keys.values() if v[4] == 'stk')))
+    log('일봉 대상 %d개 (국내 ETF %d · 미국 ETF %d · 지수 등 %d · Cboe 옵션 전략 지수 %d · 한국거래소 옵션 전략 지수 %d · 주식 %d)' % (
+        len(keys), len(kr), len(us), len(YAHOO_IDX) + len(NAVER_IDX), sum(1 for v in keys.values() if v[0] == 'cboe'),
+        sum(1 for v in keys.values() if v[0] == 'krx'), sum(1 for v in keys.values() if v[4] == 'stk')))
 
     # 3. 일봉
     def series_one(key):
@@ -563,6 +639,10 @@ def main():
             elif src == 'cboe':
                 new, info = cboe_series(sym), {'cur': 'USD', 'name': cboe_names.get(sym) or sym}
                 old = None                                            # Cboe CSV 는 늘 전체 기간 → 통째로 바꿈 (지수 회사가 고친 과거 값도 반영)
+            elif src == 'krx':
+                inf = krx_info[sym]
+                new, info = krx_series(inf), {'cur': 'KRW', 'name': inf.get('nm') or sym, 'name_en': inf.get('en') or '', 'krx': inf}
+                old = None                                            # 기준일부터 전체를 한 번에 받음 → 통째로 바꿈
             else:
                 new, info = Y.series(sym, last)
         except Exception as e:

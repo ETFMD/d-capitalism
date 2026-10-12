@@ -443,7 +443,7 @@ def bt_check(fail, b, local):
     S_, rows, ds = b.get('s') or {}, b.get('rows') or [], b.get('ds') or []
     if not S_ or not rows:
         return F('화면 값 없음: %s' % json.dumps(b, ensure_ascii=False)[:300])
-    want = ['K133690', 'K122630', 'UTQQQ', 'USSO', 'K091160', 'UQYLD'] if local else ['K498400', 'K360750', 'UTQQQ']   # 배포: 셋 다 MAX(가장 늦은 백테스트 시작) 뒤에 상장
+    want = ['K133690', 'K122630', 'UTQQQ', 'USSO', 'K091160', 'UQYLD', 'K289480'] if local else ['K498400', 'K360750', 'UTQQQ']   # 배포: 셋 다 MAX(가장 늦은 백테스트 시작) 뒤에 상장
     for k in want:
         s = S_.get(k)
         if not s or not s['bt'] or s['list'] is None or s['first'] >= s['list']:
@@ -527,15 +527,19 @@ def bt_check(fail, b, local):
     # 체인: TQQQ 백테스트는 QLD 백테스트를 이어 붙여 QQQ 상장일(합성 1999-03-10) 뒤 첫 거래일 무렵까지
     if S_.get('UTQQQ') and S_['UTQQQ']['first'] >= (bt_synth.BT_FIRST['UQLD'] - _EP).days:
         F('체인 안 됨: TQQQ 백테스트 시작 %s 가 QLD 상장일(%s) 뒤' % (S_['UTQQQ']['first'], bt_synth.BT_FIRST['UQLD']))
+    # 한국거래소 옵션 지수 체인: TIGER 200커버드콜(K289480) 백테스트는 지수 식의 재현을 이어 붙여 지수 기준일(합성 2013-01-02) 전까지
+    if S_.get('K289480') and S_['K289480']['first'] >= (bt_synth.KRX_FROM - _EP).days:
+        F('체인 안 됨: K289480 백테스트 시작 %s 가 한국거래소 옵션 지수 기준일(%s) 뒤' % (S_['K289480']['first'], bt_synth.KRX_FROM))
     # 방법 문구: 환 노출 · 콜 매도 · 배수
     want_lab = {'K133690': r'SPY×원/달러 · 예상 오차 연 ±3\.4%p$', 'K122630': r'KODEX 200 0\.90배 \+ 위클리 콜 매도\(커버 33% · 1\.0% OTM\) · 예상 오차 연 ±5\.2%p$',
                 'UTQQQ': r'QLD 1\.5배 · 예상 오차 연 ±1\.1%p \(이어 붙인 앞 구간 ±2\.0%p\)$', 'USSO': r'S&P 500 TR 2\.0배 · 예상 오차 연 ±2\.1%p$',
-                'UQYLD': r'Cboe NASDAQ-100 BuyWrite V2\(BXNT\) · 예상 오차 연 ±1\.8%p$'}
+                'UQYLD': r'^백테스트: NASDAQ-100 BuyWrite V2\(BXNT\) · 예상 오차 연 ±1\.8%p$',
+                'K289480': r'^백테스트: 코스피 200 커버드콜 ATM 지수 · 예상 오차 연 ±1\.4%p \(이어 붙인 앞 구간 ±4\.4%p\)$'}
     for k, pat in want_lab.items():
         if not re.search(pat, (lab.get(k) or {}).get('info', '')):
             F('%s 방법 문구 %r 없음: %s' % (k, pat, (lab.get(k) or {}).get('info', '')[:140]))
     # 색 = 예상 오차(이어 붙인 앞 구간이 더 크면 그것) 연 3% 미만 초록 g · 8% 미만 노랑 m · 그 밖 빨강 b
-    want_cls = {'K133690': 'm', 'K122630': 'm', 'UTQQQ': 'g', 'USSO': 'g', 'UQYLD': 'g'}
+    want_cls = {'K133690': 'm', 'K122630': 'm', 'UTQQQ': 'g', 'USSO': 'g', 'UQYLD': 'g', 'K289480': 'm'}
     for k, c in want_cls.items():
         if not (lab.get(k) or {}).get('cls', '').endswith('ecx-bt ' + c):
             F('%s 오차 색 %r 아님: %s' % (k, c, (lab.get(k) or {}).get('cls')))
@@ -1212,6 +1216,15 @@ def main():
                     if 'KOSPI vs S&P 500' not in e['presets']: fail('en/etf-compare', '묶음 버튼이 영어가 아님: %s' % e['presets'][:120])
                 for t in [t for t, u in errs if not ignorable(t, u)][:3]:
                     fail('en/etf-compare', '콘솔 오류: ' + t[:200])
+                if local:   # 백테스트 방법 문구의 한국거래소 옵션 지수 이름('한글|영문')이 영어판에서 영문으로 (합성 식 K289480 — 체인 포함)
+                    page.goto('about:blank'); page.goto(base + 'en/etf-compare/#e=K289480&p=MAX', wait_until='load')
+                    try:
+                        page.wait_for_function("() => window.ECXdebug && ECXdebug.S.ready && document.querySelector('#ecx-stats .ecx-bt')", timeout=45000)
+                    except Exception:
+                        pass
+                    t_ = page.evaluate("() => (document.querySelector('#ecx-stats .ecx-bt') || {}).textContent || ''")
+                    if not re.match(r'^Backtest: KOSPI 200 Covered Call ATM · expected error ±1\.4pp/yr \(chained earlier part ±4\.4pp\)$', t_):
+                        fail('en/etf-compare', '백테스트 방법 문구(한국거래소 옵션 지수 영문 이름)가 영어가 아님: %s' % t_[:160])
             # 상장 전 백테스트 — 로컬: 합성 식(환 노출·체인·콜 매도 덧씌우기·S&P TR 이어 붙이기·재료 없음)을 파이썬 기준 구현과 숫자까지 · 배포: 실제 식 점검
             print('[ETF] 상장 전 백테스트', flush=True)
             errs.clear()
@@ -1220,7 +1233,7 @@ def main():
                 page.wait_for_function(ready, timeout=45000)
             except Exception:
                 pass
-            hash_ = '#e=K133690,K122630,UTQQQ,USSO,UIWM,K091160,UQYLD&p=MAX' if local else '#e=K498400,K360750,UTQQQ&p=MAX'
+            hash_ = '#e=K133690,K122630,UTQQQ,USSO,UIWM,K091160,UQYLD,K289480&p=MAX' if local else '#e=K498400,K360750,UTQQQ&p=MAX'
             try:
                 b = page.evaluate(bt_synth.BT_JS, {'hash': hash_})
             except Exception as ex:

@@ -6631,10 +6631,10 @@ var TAX = (function () {
       var d = [j.d0]; for (var i = 0; i < j.dd.length; i++) d.push(d[i] + j.dd[i]);
       return { d: d, a: j.a, base: j.base, cur: 'USD' };
     });
-    else if (t === 'C') p = file().then(function (j) {                       /* Cboe 옵션 전략 지수 (BuyWrite·PutWrite·버퍼 …) — 파이썬이 정리한 일봉 그대로 */
-      if (!j || !j.a || !j.dd || j.a.length !== j.dd.length + 1) throw new Error('cboe');
+    else if (t === 'C' || t === 'D') p = file().then(function (j) {         /* 옵션 전략 지수 (C: Cboe 미국 · D: 한국거래소 국내) — 파이썬이 정리한 일봉 그대로 */
+      if (!j || !j.a || !j.dd || j.a.length !== j.dd.length + 1) throw new Error('optidx');
       var d = [j.d0]; for (var i = 0; i < j.dd.length; i++) d.push(d[i] + j.dd[i]);
-      return { d: d, a: j.a, cur: 'USD' };
+      return { d: d, a: j.a, cur: t === 'D' ? 'KRW' : 'USD' };
     });
     else {
       var same = t === 'K' || t === 'U' ? S.data[t + sym] : null;           /* 고른 종목과 같은 일봉이면 그대로 */
@@ -6656,7 +6656,7 @@ var TAX = (function () {
         else if (fc === 'USD' || fc === 'KRW') out[fc === 'USD' ? 'R:USD' : 'R:KRW'] = 1;
       }
       var c0 = t[0].charAt(0);
-      if (depth <= 3 && (c0 === 'K' || c0 === 'U')) {                         /* 이어 붙일 수 있는(오차 5% 이하) 후보 백테스트의 재료까지 */
+      if (depth <= 3 && (c0 === 'K' || c0 === 'U' || c0 === 'D')) {          /* 이어 붙일 수 있는(오차 5% 이하) 후보 백테스트의 재료까지 (D: 한국거래소 옵션 지수의 기준일 전 재현 포함) */
         var sh = btShard(t[0]), fr; if (!S.btS[sh]) { if (!S.btErr[sh]) out['#' + sh] = 1; } else if ((fr = S.btS[sh][t[0]]) && fr.ec != null && fr.ec <= BT_CHAIN_EC) btDeps(fr, depth + 1, out);
       }
     });
@@ -6687,7 +6687,7 @@ var TAX = (function () {
       var xm = S.btMemo[key]; if (xm && xm.b === b) return xm.out;
       var xo = btSplice(raw, b); S.btMemo[key] = { b: b, out: xo }; return xo;
     }
-    if (depth > 3 || (c0 !== 'K' && c0 !== 'U')) return raw;
+    if (depth > 3 || (c0 !== 'K' && c0 !== 'U' && c0 !== 'D')) return raw;     /* ETF · 한국거래소 옵션 지수(기준일 전을 재현한 식이 있으면) */
     var rc = btRc(key); if (!rc || rc.ec == null || rc.ec > BT_CHAIN_EC) return raw;   /* 후보 ETF 의 백테스트가 정확할 때만(연 오차 5% 이하) 이어 붙임 — 파이썬 chain_start 와 같음 */
     var mk = key + '@' + depth, mm = S.btMemo[mk]; if (mm && mm.raw === raw) return mm.out;
     var out = raw, lev = btBuildLevels(rc, depth + 1);
@@ -6735,7 +6735,8 @@ var TAX = (function () {
       seen[id] = { t: t, w: t[2] }; parts.push(seen[id]);
     });
     return parts.map(function (o) {
-      var t = o.t, nm = (SITE_EN && BT_EN[t[0]]) || t[5] || t[0].slice(2), w = o.w, fc = t[4] || rc.c;
+      var t = o.t, n5 = t[5] && t[5].indexOf('|') >= 0 ? t[5].split('|')[SITE_EN ? 1 : 0] : t[5];   /* '한글 이름|영문 이름' (한국거래소 옵션 지수) */
+      var nm = (SITE_EN && BT_EN[t[0]]) || n5 || t[0].slice(2), w = o.w, fc = t[4] || rc.c;
       if (t[6]) {                                                             /* 콜 매도: 주기 · 기초자산 대비 커버 비율 */
         var cov = base[t[0]] ? w / base[t[0]] : w, per = { D: Lx('데일리', 'daily'), W: Lx('위클리', 'weekly'), M: Lx('월간', 'monthly') }[t[6][0]] || '';
         return Lx(per + ' 콜 매도(커버 ' + Math.round(cov * 100) + '%' + (t[6][1] ? ' · ' + (t[6][1] * 100).toFixed(t[6][1] < 0.01 ? 2 : 1) + '% OTM' : '') + ')', per + ' call writing (' + Math.round(cov * 100) + '% covered' + (t[6][1] ? ', ' + (t[6][1] * 100).toFixed(t[6][1] < 0.01 ? 2 : 1) + '% OTM' : '') + ')');

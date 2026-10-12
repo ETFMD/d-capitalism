@@ -10,6 +10,9 @@
   U:TQQQ    QLD 1.5배
   U:SSO     S&P 500 TR 2배 (X:SPXTR = 앞부분 파일 + ^SP500TR)
   U:IWM     자료가 없는 후보(U:NODATA) → 재료를 못 받아 실제 기간만 + 경고
+  U:QYLD    옵션 전략 지수 C:BXNT (data/etfbt/r/C_BXNT.json)
+  D:O2903P  한국거래소 옵션 지수(코스피 200 커버드콜 ATM) 자체의 식 — 코스피 200 + 월간 콜 매도 (지수 기준일 전 재현 · 이 식만 쓰는 재료)
+  K:289480  D:O2903P 1배 ← 체인: 지수 파일(data/etfbt/r/D_O2903P.json)에 지수 식의 백테스트를 이어 붙여 기준일(2013) 전까지 · 이름 '한글|영문'
 """
 import datetime as _dt
 import json
@@ -22,9 +25,12 @@ _EP = _dt.date(1970, 1, 1)
 NSHARD = 16
 
 BT_FIRST = {'K133690': _dt.date(2010, 10, 18), 'K122630': _dt.date(2010, 2, 22), 'UQLD': _dt.date(2006, 6, 21), 'UTQQQ': _dt.date(2010, 2, 11),
-            'USSO': _dt.date(2006, 6, 21), 'UIWM': _dt.date(2000, 5, 26), 'K091160': _dt.date(2012, 1, 2), 'UQYLD': _dt.date(2013, 12, 12)}
+            'USSO': _dt.date(2006, 6, 21), 'UIWM': _dt.date(2000, 5, 26), 'K091160': _dt.date(2012, 1, 2), 'UQYLD': _dt.date(2013, 12, 12),
+            'K289480': _dt.date(2018, 2, 9)}
 CBOE_FROM = _dt.date(1994, 12, 30)                # 합성 Cboe 옵션 전략 지수(C:BXNT) 시작 (미국 달력 안)
-DEP_FIRST = {'K005930': _dt.date(1996, 1, 3)}   # 후보 종목 합성 일봉 시작 (자료 오류를 일부러 넣음 — run_regression.etf_series)
+KRX_FROM = _dt.date(2013, 1, 2)                   # 합성 한국거래소 옵션 지수(D:O2903P) 기준일 (국내 달력 안)
+DEP_FIRST = {'K005930': _dt.date(1996, 1, 3),   # 후보 종목 합성 일봉 시작 (자료 오류를 일부러 넣음 — run_regression.etf_series)
+             'KKPI200': _dt.date(1996, 1, 3)}   # 코스피 200 (한국거래소 옵션 지수 식만 쓰는 후보 — 지수 식의 재료까지 받는지)
 CAL_FIRST = {'KKOSPI': _dt.date(1995, 1, 3), 'U^GSPC': _dt.date(1985, 1, 2), 'U^SP500TR': _dt.date(1990, 1, 2)}
 SPX_PRE_FROM = _dt.date(1986, 1, 2)          # 앞부분 파일 시작 (^GSPC 달력 안)
 
@@ -54,7 +60,13 @@ def recipes():
                   'k': 'fit', 'ec': 0.0101},
         # Cboe 옵션 전략 지수 후보 — 화면이 data/etfbt/r/C_BXNT.json 을 받아 같은 값으로 계산하는지
         'U:QYLD': {'s': day(BT_FIRST['UQYLD']), 'c': 'USD', 'n': 900, 'dv': {'y': 0.12, 'f': 12, 'm': list(range(1, 13)), 'dom': 20, 'tx': 1.0},
-                   'm': [['C:BXNT', 0, 0.99, 'n', 'USD', 'Cboe NASDAQ-100 BuyWrite V2(BXNT)']], 'd': -0.004, 'e': [0.0, 0.0105, 0.0105, 3], 'k': 'fit', 'ec': 0.0105},
+                   'm': [['C:BXNT', 0, 0.99, 'n', 'USD', 'NASDAQ-100 BuyWrite V2(BXNT)']], 'd': -0.004, 'e': [0.0, 0.0105, 0.0105, 3], 'k': 'fit', 'ec': 0.0105},
+        # 한국거래소 옵션 지수 — 지수 자체의 식(기준일 전 재현)과 그 지수를 쓰는 ETF (체인 · 지수 파일 · 한·영 이름)
+        'D:O2903P': {'s': day(KRX_FROM), 'c': 'KRW', 'n': 900, 'm': [['N:KPI200', 0, 0.95, 'n', 'KRW', '코스피 200'],
+                     ['N:KPI200', 0, 0.9, 'n', 'KRW', '코스피 200', ['M', 0.0, 1.0]]], 'd': -0.012, 'e': [0.004, 0.025, 0.0253, 3], 'k': 'fit', 'cc': 1, 'ec': 0.0253},
+        'K:289480': {'s': day(BT_FIRST['K289480']), 'c': 'KRW', 'n': 900, 'dv': {'y': 0.07, 'f': 12, 'm': list(range(1, 13)), 'dom': 28, 'tx': 0.3},
+                     'm': [['D:O2903P', 0, 1.0, 'n', 'KRW', '코스피 200 커버드콜 ATM 지수|KOSPI 200 Covered Call ATM']], 'd': -0.004,
+                     'e': [0.001, 0.008, 0.0081, 3], 'k': 'fit', 'ec': 0.02657},
         # 국내 종목 후보(합성 일봉에 튀었다 돌아온 값·가격제한폭 밖 끊김을 넣음) — 화면이 자료 정리(btClean)를 거쳐 쓰는지
         'K:091160': {'s': day(BT_FIRST['K091160']), 'c': 'KRW', 'n': 900, 'm': [['K:005930', 0, 1.2, 'n', 'KRW', '삼성전자']], 'd': -0.003,
                      'e': [0.002, 0.012, 0.0122, 3], 'k': 'fit', 'ec': 0.0122},
@@ -124,6 +136,11 @@ class Synth:
         g = [x for x in self.cal_days('Y:^GSPC') if x >= day(CBOE_FROM)]
         return {'d': g, 'a': [round(500.0 * math.exp(0.00025 * t + 0.05 * math.sin(t / 61.0) + 0.01 * math.sin(t / 7.0)), 6) for t in range(len(g))]}
 
+    def krx(self, key):
+        """합성 한국거래소 옵션 지수 (국내 달력 · KRX_FROM 부터 · 소수 2자리 — 실제 지수 값 자릿수)"""
+        g = [x for x in self.cal_days('N:KOSPI') if x >= day(KRX_FROM)]
+        return {'d': g, 'a': [round(1000.0 * math.exp(0.0002 * t + 0.04 * math.sin(t / 53.0) + 0.008 * math.sin(t / 5.0)), 2) for t in range(len(g))]}
+
     def file(self, name):
         """data/etfbt/r/<name> 본문"""
         def ser(d):
@@ -139,6 +156,9 @@ class Synth:
         if name.startswith('C_') and name[2:-5] == 'BXNT':
             c = self.cboe('C:BXNT'); d0, dd = ser(c['d'])
             return json.dumps({'updated': up, 'k': 'C:BXNT', 'd0': d0, 'dd': dd, 'a': c['a']})
+        if name == 'D_O2903P.json':
+            c = self.krx('D:O2903P'); d0, dd = ser(c['d'])
+            return json.dumps({'updated': up, 'k': 'D:O2903P', 'd0': d0, 'dd': dd, 'a': c['a']})
         if name == 'X_SPXTR.json':
             p = self.spx_pre(); d0, dd = ser(p['d'])
             return json.dumps({'updated': up, 'k': 'X:SPXTR', 'base': 'Y:^SP500TR', 'd0': d0, 'dd': dd, 'a': p['a']})
@@ -166,8 +186,8 @@ def expected(syn):
                 s = {'d': d, 'a': lv, 'c': lv, 'y': y}
             elif key == 'F:USDKRW':
                 f = syn.usdkrw(); s = {'d': np.array(f['d'], np.int64), 'a': np.array(f['c'], np.float64), 'c': np.array(f['c'], np.float64)}
-            elif key.startswith('C:'):
-                c = syn.cboe(key)
+            elif key.startswith('C:') or key.startswith('D:'):
+                c = syn.cboe(key) if key[0] == 'C' else syn.krx(key)
                 s = {'d': np.array(c['d'], np.int64), 'a': np.array(c['a'], np.float64), 'c': np.array(c['a'], np.float64)}
             elif key == 'X:SPXTR':
                 pre, base = syn.spx_pre(), self.series('Y:^SP500TR')      # 뒷부분 = 자료 오류를 정리한 ^SP500TR (화면 btSplice 와 같게)
@@ -182,7 +202,7 @@ def expected(syn):
             return s
 
         def info(self, key):
-            return {'cur': 'KRW' if key[0] in 'KN' or key in ('R:KRW', 'F:USDKRW') else 'USD'}
+            return {'cur': 'KRW' if key[0] in 'KND' or key in ('R:KRW', 'F:USDKRW') else 'USD'}
 
     D = FakeD()
     E = F.Engine(D)
@@ -197,7 +217,7 @@ def expected(syn):
     def ext(k, depth):
         """후보 k 의 총수익 — 자기 식이 있으면(3단까지) 그 백테스트를 앞에 이어 붙임 (화면 btGet)"""
         base = D.series(k)
-        if depth > 3 or k not in R or k[0] not in 'KU':
+        if depth > 3 or k not in R or k[0] not in 'KUD':
             return base
         r = levels(k, depth + 1)
         if r is None:
@@ -210,7 +230,7 @@ def expected(syn):
         return {'d': np.concatenate([d[:-1], base['d'][i0:]]), 'a': np.concatenate([a[:-1] * kk, base['a'][i0:]])}
 
     for key in R:
-        if key == 'U:IWM':
+        if key == 'U:IWM' or key[0] == 'D':
             continue
         r = levels(key, 1)
         if r is None:
