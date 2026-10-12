@@ -1,0 +1,35 @@
+# 무한매수법 설정 탐색 2단계 — 이웃 중앙값 최대화 (임시 브랜치 muhan-opt 전용 — main 에는 없음)
+name: 무한매수법 설정 탐색 2단계
+on:
+  push:
+    branches: [muhan-opt]
+  workflow_dispatch:
+jobs:
+  rob:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        per: [pre, act]
+        obj: [cagrC, calmarC, cagr, calmar]
+        tk: [UPRO, TQQQ, SOXL, TECL]
+        exclude:
+          - per: act
+            obj: cagrC
+          - per: act
+            obj: calmarC
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 2단계 ${{ matrix.tk }} ${{ matrix.per }} ${{ matrix.obj }}
+        run: nproc && node opt/muhan_rob.js ${{ matrix.tk }} ${{ matrix.per }} ${{ matrix.obj }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rob-${{ matrix.tk }}-${{ matrix.per }}-${{ matrix.obj }}
+          path: opt/out/
+          retention-days: 7

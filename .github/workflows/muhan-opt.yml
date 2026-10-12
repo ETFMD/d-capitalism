@@ -1,9 +1,7 @@
 # 무한매수법 백테스트 설정 탐색 (임시 브랜치 muhan-opt 전용 — main 에는 없음)
 name: 무한매수법 설정 탐색
 on:
-  push:
-    branches: [muhan-opt]
-  workflow_dispatch:
+  workflow_dispatch:   # 1단계는 끝남 — 2단계(muhan-rob.yml)를 올릴 때 다시 돌지 않게 push 로는 안 돎
 jobs:
   opt:
     runs-on: ubuntu-latest
