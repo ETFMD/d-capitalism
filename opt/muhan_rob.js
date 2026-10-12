@@ -79,13 +79,14 @@ async function evalMany(list) {
   const res = await evalBatch(need); nEval += need.length; need.forEach((p, i) => memo.set(keyOf(p), res[i]));
   return list.map(p => memo.get(keyOf(p)));
 }
-const med = a => { const b = a.slice().sort((x, y) => x - y); return b[b.length >> 1]; };
+const med = a => { const b = a.slice().sort((x, y) => x - y), n = b.length; return n % 2 ? b[n >> 1] : (b[n / 2 - 1] + b[n / 2]) / 2; };
 const nb9 = p => { const o = []; for (const ds of [-2, 0, 2]) for (const dt of [-1, 0, 1]) { const s = p.splits + ds, t = Math.round((p.target + dt) * 2) / 2; if (s >= 2 && s <= 100 && t >= 0.5 && t <= 100) o.push(Object.assign({}, p, { splits: s, target: t })); } return o; };
 const nb25 = p => { const o = []; for (const ds of [-2, -1, 0, 1, 2]) for (const dt of [-1, -0.5, 0, 0.5, 1]) { const s = p.splits + ds, t = Math.round((p.target + dt) * 2) / 2; if (s >= 2 && s <= 100 && t >= 0.5 && t <= 100) o.push(Object.assign({}, p, { splits: s, target: t })); } return o; };
-/* 여러 후보의 이웃 9점을 한꺼번에 계산해 매끈한 값 (+ CRED 면 가운데 설정의 재현 믿음도 dh) */
+/* 여러 후보의 이웃 25점(분할 ±2 × 목표 ±1, 0.5 간격)을 한꺼번에 계산해 매끈한 값 (+ CRED 면 가운데 설정의 재현 믿음도 dh)
+   (처음엔 9점이었으나 분할 2~3 끝에서 이웃이 줄어 위쪽 중앙값으로 치우치는 문제가 있어 25점·보통 중앙값으로 바꿈) */
 const CRED = OBJN === 'cagrC' || OBJN === 'calmarC';
 async function smoothMany(cands, nbf) {
-  const groups = cands.map(nbf || nb9), flat = [].concat(...groups);
+  const groups = cands.map(nbf || nb25), flat = [].concat(...groups);
   cands.forEach(p => flat.push(p));   /* 가운데 설정 — 살 수 없는 날(1주 값 > 주문 금액) 있는지 */
   if (CRED) cands.forEach(p => { flat.push(Object.assign({}, p, { ser: 'act' }), Object.assign({}, p, { ser: 'hyb' })); });
   const res = await evalMany(flat);
@@ -112,10 +113,12 @@ const t0 = Date.now(), log = s => console.log(((Date.now() - t0) / 1000).toFixed
       let improved = false;
       for (const dim of DIMS) {
         let cand;
+        /* 1회차는 범위 전체, 2회차부터는 지금 값 앞뒤 12칸 */
+        const win = a => { if (round === 1) return a; const i = a.findIndex(x => Math.abs(x - cur[dim]) < 1e-9); return i < 0 ? a : a.slice(Math.max(0, i - 12), i + 13); };
         if (dim === 'combo') cand = COMBOS.map(c => Object.assign({}, cur, c));
         else if (dim === 'shares' && !(cur.lines > 0)) continue;
-        else if (dim === 'lines') cand = (v === '4.0' ? range(1, 80, 1) : range(0, 80, 1)).map(x => Object.assign({}, cur, { lines: x }));
-        else cand = VALS[dim].map(x => Object.assign({}, cur, { [dim]: x }));
+        else if (dim === 'lines') cand = win(v === '4.0' ? range(1, 80, 1) : range(0, 80, 1)).map(x => Object.assign({}, cur, { lines: x }));
+        else cand = win(VALS[dim]).map(x => Object.assign({}, cur, { [dim]: x }));
         const sm = await smoothMany(cand);
         let bi = -1, bs = OBJ[obj](curS);
         sm.forEach((s, i) => { const sc = OBJ[obj](s); if (sc > bs + 1e-12) { bs = sc; bi = i; } });
@@ -126,7 +129,7 @@ const t0 = Date.now(), log = s => console.log(((Date.now() - t0) / 1000).toFixed
     /* 마지막: 세금 계산 방식 × 연말 절세(이웃 9점으로) → 이웃 25점 · 가운데 값 · 세전 · 원금/수수료 */
     const vs = []; for (const method of ['fifo', 'avg']) for (const harvest of [false, true]) vs.push(Object.assign({}, cur, { method, harvest }));
     const vsm = await smoothMany(vs); let bi = 0; vsm.forEach((s, i) => { if (OBJ[obj](s) > OBJ[obj](vsm[bi]) + 1e-12) bi = i; });
-    const best = vs[bi], n25 = (await smoothMany([best], nb25))[0], c = (await evalMany([best]))[0], gross = (await evalBatch([best], true))[0];
+    const best = vs[bi], n25 = vsm[bi], c = (await evalMany([best]))[0], gross = (await evalBatch([best], true))[0];
     const alt = await evalBatch([Object.assign({}, best, { cap: 100000 }), Object.assign({}, best, { cap: 1000000 }), Object.assign({}, best, { fee: 0.0025 }), Object.assign({}, best, { fee: 0 })]);
     out.runs.push({ obj, start: st, p: best, s9: vsm[bi], s25: n25, center: c, gross, alt: { cap100k: alt[0], cap1m: alt[1], fee025: alt[2], fee0: alt[3] }, taxVariants: vs.map((q, i) => ({ method: q.method, harvest: q.harvest, s9: vsm[i] })), trace, ok: isFinite(OBJ[obj](vsm[bi])) });
     log(obj + ' V' + v + ' 출발 ' + st.p.splits + '분할·' + st.p.target + '% → ' + best.splits + '분할·' + best.target + '% 이웃 중앙 ' + (n25.cagrMed * 100).toFixed(2) + '% / ' + (n25.mddMed * 100).toFixed(1) + '% · 가운데 ' + (c.cagr * 100).toFixed(2) + '%' + (CRED ? ' · dh ' + (vsm[bi].dh * 100).toFixed(2) + '%p' : '') + ' · 계산 ' + nEval);

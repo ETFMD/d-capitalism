@@ -182,6 +182,246 @@
      "cagrMed": 0.3026910722255707,
      "mddMed": -0.5599602460861206
     }
+   },
+   {
+    "ver": "1.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "1.0",
+     "splits": 8,
+     "target": 27.5,
+     "big": 17,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "recover",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "1.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "1.0",
+     "splits": 72,
+     "target": 53.5,
+     "big": 15,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "recover",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.0",
+     "splits": 28,
+     "target": 100,
+     "big": 7,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": -2.5,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.0",
+     "splits": 9,
+     "target": 41,
+     "big": 2.5,
+     "lines": 0,
+     "shares": 1,
+     "part": 6.5,
+     "capP": 10,
+     "avgOff": -15,
+     "money": "compound",
+     "exhaust": "recover",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.1",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.1",
+     "splits": 10,
+     "target": 100,
+     "big": 6,
+     "lines": 34,
+     "shares": 1,
+     "part": 0.5,
+     "capP": 5,
+     "avgOff": -0.5,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.2",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.2",
+     "splits": 18,
+     "target": 21,
+     "big": 14.5,
+     "lines": 7,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "next",
+     "tround": "c1",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.2",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.2",
+     "splits": 17,
+     "target": 22.5,
+     "big": 19,
+     "lines": 26,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "3.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "3.0",
+     "splits": 2,
+     "target": 27.5,
+     "big": 22,
+     "lines": 15,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "half",
+     "exhaust": "official",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "3.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "3.0",
+     "splits": 23,
+     "target": 29,
+     "big": 14.5,
+     "lines": 8,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "half",
+     "exhaust": "hold",
+     "restart": "next",
+     "tround": "c1",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "4.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "4.0",
+     "splits": 6,
+     "target": 34.5,
+     "big": 6.5,
+     "lines": 6,
+     "shares": 4,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "cash",
+     "exhaust": "official",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": true,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
    }
   ]
  },
@@ -368,9 +608,201 @@
      "cagrMed": 0.14720876514911652,
      "mddMed": -0.9495017528533936
     }
+   },
+   {
+    "ver": "1.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "1.0",
+     "splits": 2,
+     "target": 1,
+     "big": 35,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 19,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.0",
+     "splits": 2,
+     "target": 1,
+     "big": 37,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 3,
+     "avgOff": 3,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.1",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.1",
+     "splits": 20,
+     "target": 28.5,
+     "big": 10.5,
+     "lines": 7,
+     "shares": 1,
+     "part": 8.5,
+     "capP": 4.5,
+     "avgOff": 0.5,
+     "money": "compound",
+     "exhaust": "sellall",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.2",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.2",
+     "splits": 7,
+     "target": 41.5,
+     "big": 13.5,
+     "lines": 15,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "sellall",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.2",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.2",
+     "splits": 15,
+     "target": 26,
+     "big": 13,
+     "lines": 12,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "sellall",
+     "restart": "next",
+     "tround": "c1",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "3.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "3.0",
+     "splits": 7,
+     "target": 45,
+     "big": 13.5,
+     "lines": 63,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "half",
+     "exhaust": "sellall",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "3.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "3.0",
+     "splits": 7,
+     "target": 45,
+     "big": 13.5,
+     "lines": 9,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "half",
+     "exhaust": "sellall",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "4.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "4.0",
+     "splits": 3,
+     "target": 46.5,
+     "big": 7.5,
+     "lines": 5,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "cash",
+     "exhaust": "official",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
    }
   ],
-  "floorC": 0.08450153726113685,
+  "floorC": 0.06654219327254945,
   "startsC": [
    {
     "ver": "1.0",
@@ -396,8 +828,8 @@
     },
     "from": "1단계 믿을 만한 후보",
     "s9": {
-     "cagrMed": 0.03731772700832847,
-     "mddMed": -0.8088725752570726
+     "cagrMed": 0.03460265338134216,
+     "mddMed": -0.8174810639682464
     },
     "dh": -0.00536321778089488
    },
@@ -479,8 +911,8 @@
     },
     "from": "1단계 믿을 만한 후보",
     "s9": {
-     "cagrMed": 0.11612490846886847,
-     "mddMed": -0.6884231682800352
+     "cagrMed": 0.11855518307821145,
+     "mddMed": -0.744615786276335
     },
     "dh": 0.005995241767753123
    },
@@ -508,8 +940,8 @@
     },
     "from": "1단계 믿을 만한 균형 후보",
     "s9": {
-     "cagrMed": 0.11612490846886847,
-     "mddMed": -0.6884231682800352
+     "cagrMed": 0.11855518307821145,
+     "mddMed": -0.744615786276335
     },
     "dh": 0.005995241767753123
    },
@@ -518,12 +950,12 @@
     "obj": "cagrC",
     "p": {
      "ver": "2.2",
-     "method": "fifo",
+     "method": "avg",
      "harvest": false,
      "splits": 15,
      "target": 26,
      "big": 13,
-     "lines": 11,
+     "lines": 12,
      "shares": 1,
      "part": 5,
      "capP": 5,
@@ -537,22 +969,22 @@
     },
     "from": "1단계 믿을 만한 후보",
     "s9": {
-     "cagrMed": 0.1344595708848586,
-     "mddMed": -0.9118032374487054
+     "cagrMed": 0.130248639826549,
+     "mddMed": -0.8984274161902668
     },
-    "dh": 0.00479335853651075
+    "dh": 0.004270504358592886
    },
    {
     "ver": "2.2",
     "obj": "calmarC",
     "p": {
      "ver": "2.2",
-     "method": "fifo",
+     "method": "avg",
      "harvest": false,
      "splits": 15,
      "target": 26,
      "big": 13,
-     "lines": 11,
+     "lines": 12,
      "shares": 1,
      "part": 5,
      "capP": 5,
@@ -566,10 +998,10 @@
     },
     "from": "1단계 믿을 만한 균형 후보",
     "s9": {
-     "cagrMed": 0.1344595708848586,
-     "mddMed": -0.9118032374487054
+     "cagrMed": 0.130248639826549,
+     "mddMed": -0.8984274161902668
     },
-    "dh": 0.00479335853651075
+    "dh": 0.004270504358592886
    },
    {
     "ver": "3.0",
@@ -595,8 +1027,8 @@
     },
     "from": "1단계 믿을 만한 후보",
     "s9": {
-     "cagrMed": 0.14547513223757358,
-     "mddMed": -0.896649402689676
+     "cagrMed": 0.09142996716799057,
+     "mddMed": -0.9698894825036216
     },
     "dh": 0.009891910690442929
    },
@@ -624,8 +1056,8 @@
     },
     "from": "1단계 믿을 만한 균형 후보",
     "s9": {
-     "cagrMed": 0.14547513223757358,
-     "mddMed": -0.896649402689676
+     "cagrMed": 0.09142996716799057,
+     "mddMed": -0.9698894825036216
     },
     "dh": 0.009891910690442929
    },
@@ -634,12 +1066,12 @@
     "obj": "cagrC",
     "p": {
      "ver": "4.0",
-     "method": "avg",
-     "harvest": false,
+     "method": "fifo",
+     "harvest": true,
      "splits": 3,
      "target": 46.5,
      "big": 7.5,
-     "lines": 9,
+     "lines": 5,
      "shares": 1,
      "part": 5,
      "capP": 5,
@@ -653,22 +1085,22 @@
     },
     "from": "1단계 믿을 만한 후보",
     "s9": {
-     "cagrMed": 0.1690030745222737,
-     "mddMed": -0.9526681014607742
+     "cagrMed": 0.1330843865450989,
+     "mddMed": -0.9545263005184603
     },
-    "dh": -0.005058227435930318
+    "dh": -0.005091227395983777
    },
    {
     "ver": "4.0",
     "obj": "calmarC",
     "p": {
      "ver": "4.0",
-     "method": "avg",
-     "harvest": false,
+     "method": "fifo",
+     "harvest": true,
      "splits": 3,
      "target": 46.5,
      "big": 7.5,
-     "lines": 9,
+     "lines": 5,
      "shares": 1,
      "part": 5,
      "capP": 5,
@@ -682,10 +1114,10 @@
     },
     "from": "1단계 믿을 만한 균형 후보",
     "s9": {
-     "cagrMed": 0.1690030745222737,
-     "mddMed": -0.9526681014607742
+     "cagrMed": 0.1330843865450989,
+     "mddMed": -0.9545263005184603
     },
-    "dh": -0.005058227435930318
+    "dh": -0.005091227395983777
    }
   ],
   "prep": {
@@ -877,6 +1309,294 @@
      "cagrMed": 0.25299593806266785,
      "mddMed": -0.45535895228385925
     }
+   },
+   {
+    "ver": "1.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "1.0",
+     "splits": 49,
+     "target": 82.5,
+     "big": 35.5,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "1.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "1.0",
+     "splits": 47,
+     "target": 92,
+     "big": 16.5,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "official",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.0",
+     "splits": 15,
+     "target": 81.5,
+     "big": 13.5,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0.5,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.0",
+     "splits": 49,
+     "target": 100,
+     "big": 39,
+     "lines": 0,
+     "shares": 1,
+     "part": 6.5,
+     "capP": 5,
+     "avgOff": -0.5,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.1",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.1",
+     "splits": 11,
+     "target": 89,
+     "big": 5,
+     "lines": 80,
+     "shares": 8,
+     "part": 5.5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.1",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.1",
+     "splits": 5,
+     "target": 33.5,
+     "big": 1.5,
+     "lines": 80,
+     "shares": 1,
+     "part": 5,
+     "capP": 5.5,
+     "avgOff": -0.5,
+     "money": "compound",
+     "exhaust": "recover",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.2",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.2",
+     "splits": 2,
+     "target": 64.5,
+     "big": 0,
+     "lines": 10,
+     "shares": 10,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.2",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.2",
+     "splits": 4,
+     "target": 69,
+     "big": 15.5,
+     "lines": 11,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "recover",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "3.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "3.0",
+     "splits": 7,
+     "target": 17.5,
+     "big": 10.5,
+     "lines": 10,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "half",
+     "exhaust": "hold",
+     "restart": "next",
+     "tround": "c1",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "3.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "3.0",
+     "splits": 37,
+     "target": 11,
+     "big": 12.5,
+     "lines": 5,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "half",
+     "exhaust": "hold",
+     "restart": "next",
+     "tround": "c1",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "4.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "4.0",
+     "splits": 99,
+     "target": 90.5,
+     "big": 13.5,
+     "lines": 8,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "cash",
+     "exhaust": "official",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "4.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "4.0",
+     "splits": 3,
+     "target": 38,
+     "big": 26,
+     "lines": 8,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "cash",
+     "exhaust": "official",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": true,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
    }
   ]
  },
@@ -1063,20 +1783,308 @@
      "cagrMed": 0.12372530996799469,
      "mddMed": -0.9682343602180481
     }
+   },
+   {
+    "ver": "1.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "1.0",
+     "splits": 26,
+     "target": 27.5,
+     "big": 13.5,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "official",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "1.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "1.0",
+     "splits": 26,
+     "target": 27.5,
+     "big": 15,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "official",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.0",
+     "splits": 3,
+     "target": 1,
+     "big": 5.5,
+     "lines": 0,
+     "shares": 1,
+     "part": 4.5,
+     "capP": 4.5,
+     "avgOff": 4.5,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.0",
+     "splits": 2,
+     "target": 0.5,
+     "big": 16,
+     "lines": 0,
+     "shares": 1,
+     "part": 2,
+     "capP": 16,
+     "avgOff": 16,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.1",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.1",
+     "splits": 6,
+     "target": 62.5,
+     "big": 12.5,
+     "lines": 14,
+     "shares": 11,
+     "part": 5,
+     "capP": 7.5,
+     "avgOff": -15,
+     "money": "compound",
+     "exhaust": "recover",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.1",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.1",
+     "splits": 8,
+     "target": 32,
+     "big": 11.5,
+     "lines": 16,
+     "shares": 2,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "sellall",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.2",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.2",
+     "splits": 4,
+     "target": 26.5,
+     "big": 5,
+     "lines": 3,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "sellall",
+     "restart": "rsi",
+     "tround": "c1",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.2",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.2",
+     "splits": 4,
+     "target": 26.5,
+     "big": 5,
+     "lines": 2,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "sellall",
+     "restart": "rsi",
+     "tround": "c1",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "3.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "3.0",
+     "splits": 4,
+     "target": 31.5,
+     "big": 12,
+     "lines": 15,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "half",
+     "exhaust": "sellall",
+     "restart": "next",
+     "tround": "c1",
+     "rebase": true,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "3.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "3.0",
+     "splits": 4,
+     "target": 31.5,
+     "big": 19.5,
+     "lines": 15,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "half",
+     "exhaust": "sellall",
+     "restart": "next",
+     "tround": "c1",
+     "rebase": true,
+     "noBig": false,
+     "method": "avg",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "4.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "4.0",
+     "splits": 98,
+     "target": 89.5,
+     "big": 6.5,
+     "lines": 8,
+     "shares": 18,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "cash",
+     "exhaust": "official",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "4.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "4.0",
+     "splits": 98,
+     "target": 92.5,
+     "big": 13,
+     "lines": 8,
+     "shares": 10,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "cash",
+     "exhaust": "official",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
    }
   ],
-  "floorC": 0.06218110925638487,
+  "floorC": 0.04736017230027989,
   "startsC": [
    {
     "ver": "1.0",
     "obj": "cagrC",
     "p": {
      "ver": "1.0",
-     "method": "fifo",
-     "harvest": false,
+     "method": "avg",
+     "harvest": true,
      "splits": 26,
      "target": 27.5,
-     "big": 14,
+     "big": 13.5,
      "lines": 0,
      "shares": 1,
      "part": 5,
@@ -1091,21 +2099,21 @@
     },
     "from": "1단계 믿을 만한 후보",
     "s9": {
-     "cagrMed": 0.09304559813571345,
-     "mddMed": -0.9140043934905441
+     "cagrMed": 0.09472034460055978,
+     "mddMed": -0.8695295204669813
     },
-    "dh": -0.015844684419999755
+    "dh": -0.011057943991608754
    },
    {
     "ver": "1.0",
     "obj": "calmarC",
     "p": {
      "ver": "1.0",
-     "method": "fifo",
-     "harvest": false,
+     "method": "avg",
+     "harvest": true,
      "splits": 26,
      "target": 27.5,
-     "big": 14.5,
+     "big": 13.5,
      "lines": 0,
      "shares": 1,
      "part": 5,
@@ -1120,10 +2128,10 @@
     },
     "from": "1단계 믿을 만한 균형 후보",
     "s9": {
-     "cagrMed": 0.09304547882512271,
-     "mddMed": -0.896893274168286
+     "cagrMed": 0.09472034460055978,
+     "mddMed": -0.8695295204669813
     },
-    "dh": -0.015844684419999755
+    "dh": -0.011057943991608754
    },
    {
     "ver": "2.0",
@@ -1134,7 +2142,7 @@
      "harvest": true,
      "splits": 3,
      "target": 1,
-     "big": 7.5,
+     "big": 5.5,
      "lines": 0,
      "shares": 1,
      "part": 4.5,
@@ -1149,10 +2157,10 @@
     },
     "from": "1단계 믿을 만한 후보",
     "s9": {
-     "cagrMed": 0.12436221851276974,
-     "mddMed": -0.9319049860813844
+     "cagrMed": 0.03439818641764247,
+     "mddMed": -0.9352325615896082
     },
-    "dh": 0.01528701680375022
+    "dh": 0.012453808039389003
    },
    {
     "ver": "2.0",
@@ -1163,7 +2171,7 @@
      "harvest": true,
      "splits": 3,
      "target": 1,
-     "big": 7.5,
+     "big": 5.5,
      "lines": 0,
      "shares": 1,
      "part": 4.5,
@@ -1174,185 +2182,185 @@
      "restart": "rsi",
      "tround": "r2",
      "rebase": false,
-     "noBig": false
-    },
-    "from": "1단계 믿을 만한 균형 후보",
-    "s9": {
-     "cagrMed": 0.12436221851276974,
-     "mddMed": -0.9319049860813844
-    },
-    "dh": 0.01528701680375022
-   },
-   {
-    "ver": "2.1",
-    "obj": "cagrC",
-    "p": {
-     "ver": "2.1",
-     "method": "fifo",
-     "harvest": false,
-     "splits": 8,
-     "target": 32,
-     "big": 11.5,
-     "lines": 64,
-     "shares": 1,
-     "part": 5,
-     "capP": 5,
-     "avgOff": 0,
-     "money": "compound",
-     "exhaust": "sellall",
-     "restart": "rsi",
-     "tround": "r2",
-     "rebase": false,
-     "noBig": false
-    },
-    "from": "1단계 믿을 만한 후보",
-    "s9": {
-     "cagrMed": 0.09435252812892392,
-     "mddMed": -0.8087900846760341
-    },
-    "dh": 0.009313275602105264
-   },
-   {
-    "ver": "2.1",
-    "obj": "calmarC",
-    "p": {
-     "ver": "2.1",
-     "method": "fifo",
-     "harvest": false,
-     "splits": 8,
-     "target": 32,
-     "big": 11.5,
-     "lines": 64,
-     "shares": 1,
-     "part": 5,
-     "capP": 5,
-     "avgOff": 0,
-     "money": "compound",
-     "exhaust": "sellall",
-     "restart": "rsi",
-     "tround": "r2",
-     "rebase": false,
-     "noBig": false
-    },
-    "from": "1단계 믿을 만한 균형 후보",
-    "s9": {
-     "cagrMed": 0.09435252812892392,
-     "mddMed": -0.8087900846760341
-    },
-    "dh": 0.009313275602105264
-   },
-   {
-    "ver": "2.2",
-    "obj": "cagrC",
-    "p": {
-     "ver": "2.2",
-     "method": "fifo",
-     "harvest": false,
-     "splits": 4,
-     "target": 26.5,
-     "big": 10.5,
-     "lines": 3,
-     "shares": 1,
-     "part": 5,
-     "capP": 5,
-     "avgOff": 0,
-     "money": "compound",
-     "exhaust": "sellall",
-     "restart": "rsi",
-     "tround": "c1",
-     "rebase": false,
-     "noBig": false
-    },
-    "from": "1단계 믿을 만한 후보",
-    "s9": {
-     "cagrMed": 0.09587832731324197,
-     "mddMed": -0.8994164904636625
-    },
-    "dh": -0.004783431550054118
-   },
-   {
-    "ver": "2.2",
-    "obj": "calmarC",
-    "p": {
-     "ver": "2.2",
-     "method": "fifo",
-     "harvest": false,
-     "splits": 4,
-     "target": 26.5,
-     "big": 10.5,
-     "lines": 3,
-     "shares": 1,
-     "part": 5,
-     "capP": 5,
-     "avgOff": 0,
-     "money": "compound",
-     "exhaust": "sellall",
-     "restart": "rsi",
-     "tround": "c1",
-     "rebase": false,
-     "noBig": false
-    },
-    "from": "1단계 믿을 만한 균형 후보",
-    "s9": {
-     "cagrMed": 0.09587832731324197,
-     "mddMed": -0.8994164904636625
-    },
-    "dh": -0.004783431550054118
-   },
-   {
-    "ver": "3.0",
-    "obj": "cagrC",
-    "p": {
-     "ver": "3.0",
-     "method": "avg",
-     "harvest": false,
-     "splits": 4,
-     "target": 31.5,
-     "big": 19.5,
-     "lines": 15,
-     "shares": 1,
-     "part": 5,
-     "capP": 5,
-     "avgOff": 0,
-     "money": "half",
-     "exhaust": "sellall",
-     "restart": "next",
-     "tround": "c1",
-     "rebase": true,
-     "noBig": false
-    },
-    "from": "1단계 믿을 만한 후보",
-    "s9": {
-     "cagrMed": 0.04711766796444894,
-     "mddMed": -0.9287483455771786
-    },
-    "dh": 0.0019088629897543452
-   },
-   {
-    "ver": "3.0",
-    "obj": "calmarC",
-    "p": {
-     "ver": "3.0",
-     "method": "avg",
-     "harvest": false,
-     "splits": 4,
-     "target": 31.5,
-     "big": 19.5,
-     "lines": 15,
-     "shares": 1,
-     "part": 5,
-     "capP": 5,
-     "avgOff": 0,
-     "money": "half",
-     "exhaust": "sellall",
-     "restart": "next",
-     "tround": "c1",
-     "rebase": true,
      "noBig": false
     },
     "from": "대체 출발점",
     "s9": null,
     "dh": null
+   },
+   {
+    "ver": "2.1",
+    "obj": "cagrC",
+    "p": {
+     "ver": "2.1",
+     "method": "fifo",
+     "harvest": false,
+     "splits": 8,
+     "target": 32,
+     "big": 11.5,
+     "lines": 76,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "sellall",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false
+    },
+    "from": "1단계 믿을 만한 후보",
+    "s9": {
+     "cagrMed": 0.07012422403970664,
+     "mddMed": -0.8234460539592073
+    },
+    "dh": 0.009334338029348244
+   },
+   {
+    "ver": "2.1",
+    "obj": "calmarC",
+    "p": {
+     "ver": "2.1",
+     "method": "fifo",
+     "harvest": false,
+     "splits": 8,
+     "target": 32,
+     "big": 11.5,
+     "lines": 76,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "sellall",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false
+    },
+    "from": "1단계 믿을 만한 균형 후보",
+    "s9": {
+     "cagrMed": 0.07012422403970664,
+     "mddMed": -0.8234460539592073
+    },
+    "dh": 0.009334338029348244
+   },
+   {
+    "ver": "2.2",
+    "obj": "cagrC",
+    "p": {
+     "ver": "2.2",
+     "method": "fifo",
+     "harvest": false,
+     "splits": 4,
+     "target": 27.5,
+     "big": 15,
+     "lines": 20,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "sellall",
+     "restart": "next",
+     "tround": "c1",
+     "rebase": false,
+     "noBig": false
+    },
+    "from": "1단계 믿을 만한 후보",
+    "s9": {
+     "cagrMed": 0.07788939056339617,
+     "mddMed": -0.9121773575250042
+    },
+    "dh": -0.01578705411829051
+   },
+   {
+    "ver": "2.2",
+    "obj": "calmarC",
+    "p": {
+     "ver": "2.2",
+     "method": "fifo",
+     "harvest": false,
+     "splits": 4,
+     "target": 27.5,
+     "big": 15,
+     "lines": 20,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "sellall",
+     "restart": "next",
+     "tround": "c1",
+     "rebase": false,
+     "noBig": false
+    },
+    "from": "1단계 믿을 만한 균형 후보",
+    "s9": {
+     "cagrMed": 0.07788939056339617,
+     "mddMed": -0.9121773575250042
+    },
+    "dh": -0.01578705411829051
+   },
+   {
+    "ver": "3.0",
+    "obj": "cagrC",
+    "p": {
+     "ver": "3.0",
+     "method": "fifo",
+     "harvest": false,
+     "splits": 4,
+     "target": 31.5,
+     "big": 12,
+     "lines": 15,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "half",
+     "exhaust": "sellall",
+     "restart": "next",
+     "tround": "c1",
+     "rebase": true,
+     "noBig": false
+    },
+    "from": "1단계 믿을 만한 후보",
+    "s9": {
+     "cagrMed": 0.05720429795409143,
+     "mddMed": -0.9200311788813649
+    },
+    "dh": 0.016572147673845183
+   },
+   {
+    "ver": "3.0",
+    "obj": "calmarC",
+    "p": {
+     "ver": "3.0",
+     "method": "fifo",
+     "harvest": false,
+     "splits": 4,
+     "target": 31.5,
+     "big": 12,
+     "lines": 15,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "half",
+     "exhaust": "sellall",
+     "restart": "next",
+     "tround": "c1",
+     "rebase": true,
+     "noBig": false
+    },
+    "from": "1단계 믿을 만한 균형 후보",
+    "s9": {
+     "cagrMed": 0.05720429795409143,
+     "mddMed": -0.9200311788813649
+    },
+    "dh": 0.016572147673845183
    },
    {
     "ver": "4.0",
@@ -1568,6 +2576,294 @@
      "cagrMed": 0.2972641885280609,
      "mddMed": -0.5705611109733582
     }
+   },
+   {
+    "ver": "1.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "1.0",
+     "splits": 22,
+     "target": 90,
+     "big": 6,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 8.5,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "1.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "1.0",
+     "splits": 83,
+     "target": 93,
+     "big": 12,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "recover",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.0",
+     "splits": 11,
+     "target": 91.5,
+     "big": 7,
+     "lines": 0,
+     "shares": 1,
+     "part": 4,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.0",
+     "splits": 12,
+     "target": 43.5,
+     "big": 18.5,
+     "lines": 0,
+     "shares": 1,
+     "part": 8,
+     "capP": 5,
+     "avgOff": -11.5,
+     "money": "compound",
+     "exhaust": "recover",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.1",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.1",
+     "splits": 7,
+     "target": 84.5,
+     "big": 36.5,
+     "lines": 80,
+     "shares": 20,
+     "part": 15,
+     "capP": 3.5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.1",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.1",
+     "splits": 18,
+     "target": 100,
+     "big": 3,
+     "lines": 79,
+     "shares": 4,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.2",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.2",
+     "splits": 2,
+     "target": 92,
+     "big": 0,
+     "lines": 4,
+     "shares": 20,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.2",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.2",
+     "splits": 5,
+     "target": 20.5,
+     "big": 18.5,
+     "lines": 11,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "recover",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "3.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "3.0",
+     "splits": 2,
+     "target": 92,
+     "big": 0,
+     "lines": 49,
+     "shares": 10,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "half",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "3.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "3.0",
+     "splits": 4,
+     "target": 24.5,
+     "big": 9.5,
+     "lines": 10,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "half",
+     "exhaust": "sellall",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "4.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "4.0",
+     "splits": 100,
+     "target": 100,
+     "big": 11.5,
+     "lines": 8,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "cash",
+     "exhaust": "official",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "4.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "4.0",
+     "splits": 4,
+     "target": 88,
+     "big": 22,
+     "lines": 10,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "cash",
+     "exhaust": "official",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": true,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
    }
   ]
  },
@@ -1754,6 +3050,294 @@
      "cagrMed": 0.15912826359272003,
      "mddMed": -0.3389779031276703
     }
+   },
+   {
+    "ver": "1.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "1.0",
+     "splits": 25,
+     "target": 76,
+     "big": 28.5,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0.5,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "1.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "1.0",
+     "splits": 79,
+     "target": 24.5,
+     "big": 10,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "official",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.0",
+     "splits": 22,
+     "target": 74.5,
+     "big": 12,
+     "lines": 0,
+     "shares": 1,
+     "part": 50,
+     "capP": 5,
+     "avgOff": 2.5,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.0",
+     "splits": 22,
+     "target": 74.5,
+     "big": 12,
+     "lines": 0,
+     "shares": 1,
+     "part": 33,
+     "capP": 5,
+     "avgOff": 2.5,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.1",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.1",
+     "splits": 7,
+     "target": 77.5,
+     "big": 2,
+     "lines": 74,
+     "shares": 3,
+     "part": 5.5,
+     "capP": 4.5,
+     "avgOff": -0.5,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.1",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.1",
+     "splits": 19,
+     "target": 39.5,
+     "big": 7,
+     "lines": 6,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0.5,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.2",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.2",
+     "splits": 2,
+     "target": 73,
+     "big": 0,
+     "lines": 22,
+     "shares": 20,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.2",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.2",
+     "splits": 14,
+     "target": 21,
+     "big": 16,
+     "lines": 17,
+     "shares": 5,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "sellall",
+     "restart": "next",
+     "tround": "c1",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "3.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "3.0",
+     "splits": 2,
+     "target": 91,
+     "big": 3,
+     "lines": 6,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "half",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "3.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "3.0",
+     "splits": 44,
+     "target": 11.5,
+     "big": 12,
+     "lines": 7,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "half",
+     "exhaust": "hold",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "4.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "4.0",
+     "splits": 96,
+     "target": 97,
+     "big": 5,
+     "lines": 8,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "cash",
+     "exhaust": "official",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "4.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "4.0",
+     "splits": 46,
+     "target": 12,
+     "big": 8.5,
+     "lines": 35,
+     "shares": 16,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "cash",
+     "exhaust": "official",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": false
+    },
+    "from": "1단계 안정"
    }
   ]
  },
@@ -1940,9 +3524,297 @@
      "cagrMed": 0.112913578748703,
      "mddMed": -0.9306449890136719
     }
+   },
+   {
+    "ver": "1.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "1.0",
+     "splits": 35,
+     "target": 80.5,
+     "big": 28.5,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": -7.5,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "1.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "1.0",
+     "splits": 82,
+     "target": 58,
+     "big": 15,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "official",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.0",
+     "splits": 27,
+     "target": 71,
+     "big": 15.5,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 4.5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.0",
+     "splits": 21,
+     "target": 85.5,
+     "big": 19,
+     "lines": 0,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "recover",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.1",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.1",
+     "splits": 17,
+     "target": 82,
+     "big": 8.5,
+     "lines": 63,
+     "shares": 2,
+     "part": 22.5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.1",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.1",
+     "splits": 17,
+     "target": 82,
+     "big": 8.5,
+     "lines": 27,
+     "shares": 2,
+     "part": 22.5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.2",
+    "obj": "cagr",
+    "p": {
+     "ver": "2.2",
+     "splits": 2,
+     "target": 58,
+     "big": 3.5,
+     "lines": 23,
+     "shares": 13,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "2.2",
+    "obj": "calmar",
+    "p": {
+     "ver": "2.2",
+     "splits": 5,
+     "target": 79.5,
+     "big": 10.5,
+     "lines": 8,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "compound",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "c1",
+     "rebase": false,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "3.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "3.0",
+     "splits": 5,
+     "target": 94,
+     "big": 27.5,
+     "lines": 8,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "half",
+     "exhaust": "hold",
+     "restart": "rsi",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": false
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "3.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "3.0",
+     "splits": 16,
+     "target": 9.5,
+     "big": 12,
+     "lines": 3,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "half",
+     "exhaust": "sellall",
+     "restart": "next",
+     "tround": "c1",
+     "rebase": true,
+     "noBig": false,
+     "method": "fifo",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "4.0",
+    "obj": "cagr",
+    "p": {
+     "ver": "4.0",
+     "splits": 99,
+     "target": 100,
+     "big": 7,
+     "lines": 8,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "cash",
+     "exhaust": "official",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": false,
+     "method": "avg",
+     "harvest": true
+    },
+    "from": "1단계 안정"
+   },
+   {
+    "ver": "4.0",
+    "obj": "calmar",
+    "p": {
+     "ver": "4.0",
+     "splits": 4,
+     "target": 48,
+     "big": 40,
+     "lines": 18,
+     "shares": 1,
+     "part": 5,
+     "capP": 5,
+     "avgOff": 0,
+     "money": "cash",
+     "exhaust": "official",
+     "restart": "next",
+     "tround": "r2",
+     "rebase": false,
+     "noBig": true,
+     "method": "fifo",
+     "harvest": false
+    },
+    "from": "1단계 안정"
    }
   ],
-  "floorC": 0.05930661651866875,
+  "floorC": 0.05938250009527557,
   "startsC": [
    {
     "ver": "1.0",
@@ -1953,7 +3825,7 @@
      "harvest": false,
      "splits": 83,
      "target": 46.5,
-     "big": 15,
+     "big": 14.5,
      "lines": 0,
      "shares": 1,
      "part": 5,
@@ -1968,8 +3840,8 @@
     },
     "from": "1단계 믿을 만한 후보",
     "s9": {
-     "cagrMed": 0.1186132330373375,
-     "mddMed": -0.9543179360613488
+     "cagrMed": 0.11876500019055114,
+     "mddMed": -0.9551591784646059
     },
     "dh": -0.010044912070876544
    },
@@ -1997,8 +3869,8 @@
     },
     "from": "1단계 믿을 만한 균형 후보",
     "s9": {
-     "cagrMed": 0.10255774589080247,
-     "mddMed": -0.7909387229265228
+     "cagrMed": 0.10980234861142124,
+     "mddMed": -0.7925637913866685
     },
     "dh": 0
    },
@@ -2026,8 +3898,8 @@
     },
     "from": "1단계 믿을 만한 후보",
     "s9": {
-     "cagrMed": 0.09659850963556171,
-     "mddMed": -0.8212211210948234
+     "cagrMed": 0.0960835422209887,
+     "mddMed": -0.8338814535124722
     },
     "dh": 0.00034467284106542984
    },
@@ -2055,8 +3927,8 @@
     },
     "from": "1단계 믿을 만한 균형 후보",
     "s9": {
-     "cagrMed": 0.09509256188211124,
-     "mddMed": -0.7960700641056768
+     "cagrMed": 0.09535305898538127,
+     "mddMed": -0.7956979723811176
     },
     "dh": 0.000010082149025647524
    },
@@ -2085,7 +3957,7 @@
     "from": "1단계 믿을 만한 후보",
     "s9": {
      "cagrMed": 0.05680491608337879,
-     "mddMed": -0.9270457487672725
+     "mddMed": -0.9269233079891372
     },
     "dh": -0.0014197471026911046
    },
@@ -2124,7 +3996,7 @@
      "harvest": true,
      "splits": 2,
      "target": 58,
-     "big": 3.5,
+     "big": 3,
      "lines": 23,
      "shares": 13,
      "part": 5,
@@ -2139,8 +4011,8 @@
     },
     "from": "1단계 믿을 만한 후보",
     "s9": {
-     "cagrMed": 0.11618035129685134,
-     "mddMed": -0.8435346737676119
+     "cagrMed": 0.11487240936611154,
+     "mddMed": -0.8876772017432523
     },
     "dh": 0.008866957426128419
    },
@@ -2168,8 +4040,8 @@
     },
     "from": "1단계 믿을 만한 균형 후보",
     "s9": {
-     "cagrMed": 0.11613250740906311,
-     "mddMed": -0.8420264241390898
+     "cagrMed": 0.11487240936611154,
+     "mddMed": -0.8876772017432523
     },
     "dh": 0.008866957426128419
    },
@@ -2197,8 +4069,8 @@
     },
     "from": "1단계 믿을 만한 후보",
     "s9": {
-     "cagrMed": 0.08629552350078074,
-     "mddMed": -0.8060894308907515
+     "cagrMed": 0.08558647114525408,
+     "mddMed": -0.7975749335173399
     },
     "dh": -0.0000019528948471680962
    },
@@ -2211,7 +4083,7 @@
      "harvest": false,
      "splits": 16,
      "target": 9.5,
-     "big": 19.5,
+     "big": 27,
      "lines": 3,
      "shares": 1,
      "part": 5,
@@ -2226,10 +4098,10 @@
     },
     "from": "1단계 믿을 만한 균형 후보",
     "s9": {
-     "cagrMed": 0.0679273112182186,
-     "mddMed": -0.5676236738498938
+     "cagrMed": 0.06969974499428644,
+     "mddMed": -0.5580359626460574
     },
-    "dh": -0.0033893683453740664
+    "dh": -0.0040894355950853445
    },
    {
     "ver": "4.0",
@@ -2241,7 +4113,7 @@
      "splits": 4,
      "target": 48,
      "big": 20,
-     "lines": 22,
+     "lines": 18,
      "shares": 1,
      "part": 5,
      "capP": 5,
@@ -2255,10 +4127,10 @@
     },
     "from": "1단계 믿을 만한 후보",
     "s9": {
-     "cagrMed": 0.07818064383984602,
-     "mddMed": -0.8160150134016836
+     "cagrMed": 0.07498162203409997,
+     "mddMed": -0.8049551023732602
     },
-    "dh": -0.0025971597925580348
+    "dh": -0.004304280083995415
    },
    {
     "ver": "4.0",
@@ -2284,8 +4156,8 @@
     },
     "from": "1단계 믿을 만한 균형 후보",
     "s9": {
-     "cagrMed": 0.0775896789392354,
-     "mddMed": -0.79993765516075
+     "cagrMed": 0.07498162203409997,
+     "mddMed": -0.8049551023732602
     },
     "dh": -0.004304280083995415
    }
