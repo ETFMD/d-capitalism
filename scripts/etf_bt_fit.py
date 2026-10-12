@@ -68,7 +68,7 @@ US_CAL_FROM = (datetime.date(1980, 1, 1) - EPOCH).days   # 화면이 받는 야�
 CLOSE_UTC = {'KR': 6.5, 'AS': 7.5, 'EU': 16.5, 'US': 21.0, 'FX': 22.0, 'CX': 24.0, 'RK': 6.5, 'RU': 21.0}
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from etf_bt_data import YAHOO_IDX, NAVER_IDX, FX_PAIR, norm_cur, single_stock_keys   # noqa: E402
+from etf_bt_data import YAHOO_IDX, NAVER_IDX, FX_PAIR, norm_cur, single_stock_keys, krx_en_name   # noqa: E402
 YIDX_NAMES = {x[0]: x[3] for x in YAHOO_IDX + NAVER_IDX}
 
 # 금리·변동성 수준·중복 지수는 후보에서 뺌 (^GSPC·^SP500TR → 배당 재투자 S&P 500 'X:SPXTR' · 원/달러 → 'F:USDKRW')
@@ -1460,8 +1460,8 @@ def name_of(D, key):
     if key.startswith('D:'):                          # '코스피 200 커버드콜 ATM 지수|KOSPI 200 Covered Call ATM' — 한글|영문 (화면이 언어에 맞춰 고름)
         i = D.info(key)
         ko = re.sub(r'\s+', ' ', re.sub(r'\bcboe\b', ' ', i.get('name') or key[2:], flags=re.I)).strip()
-        en = re.sub(r'\s+', ' ', re.sub(r'\bcboe\b', ' ', re.sub(r'\s*\bIndex\b', '', i.get('name_en') or ''), flags=re.I)).strip()
-        return ko + ('|' + en if en else '')
+        en = re.sub(r'\s+', ' ', re.sub(r'\bcboe\b', ' ', re.sub(r'\s*\bIndex\b', '', i.get('name_en') or ''), flags=re.I)).strip() or krx_en_name(ko)
+        return ko + '|' + (en or 'KRX option index ' + key[2:])
     if key.startswith('K:'):
         m = D.meta(key)
         if m.get('itemName'):

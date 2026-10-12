@@ -308,6 +308,22 @@ def krx_grid(bld, params):
     return j[list(j)[0]] or []
 
 
+KRX_EN = [('코스피 200', 'KOSPI 200'), ('코스피', 'KOSPI'), ('코스닥 150', 'KOSDAQ 150'), ('인핸스드 콘도르', 'Enhanced Condor'), ('변동성추세 추종', 'Volatility Trend-Following'),
+          ('추세추종 옵션 마운틴', 'Trend-Following Option Mountain'), ('변동성매칭', 'Volatility-Matched'), ('듀얼', 'Dual'), ('양매도', 'Short Strangle'),
+          ('풋매도', 'Put Write'), ('콜매도', 'Call Write'), ('커버드콜', 'Covered Call'), ('커버드풋', 'Covered Put'), ('프로텍티브풋', 'Protective Put'),
+          ('레버리지', 'Leverage'), ('선물지수', 'Futures'), ('고배당', 'High Dividend'), ('위클리', 'Weekly'), ('월별', 'Monthly'), ('타겟', 'Target'),
+          ('고정', 'Fixed'), ('버퍼', 'Buffer'), ('지수', '')]
+
+
+def krx_en_name(ko):
+    """한국거래소가 영문 이름을 주지 않은 옵션 지수 → 낱말을 바꾼 영문 이름 (바꾸지 못한 한글이 남으면 '')"""
+    t = ko or ''
+    for a_, b_ in KRX_EN:
+        t = t.replace(a_, ' ' + b_ + ' ')
+    t = re.sub(r'\s+', ' ', t).strip()
+    return '' if re.search(r'[가-힣]', t) else t
+
+
 def krx_list():
     """한국거래소 옵션 전략 지수 목록 → {지수 ID: {nm 한글 이름, en 영문 이름, cd 지수 코드(구분+번호), tp 구분}}"""
     bz = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=9)
@@ -320,6 +336,9 @@ def krx_list():
             o = out.setdefault(iid, {'cd': tp + ind, 'tp': tp, 'ind': ind})
             o['nm' if lang == 'ko' else 'en'] = re.sub(r'\s+', ' ', (x.get('idx_nm') or '').strip())
     out = {k: v for k, v in out.items() if v.get('nm')}
+    for v in out.values():                                   # 영문 이름이 비어 있는 지수(양매도·콘도르·선물 커버드콜 등 20개)는 낱말을 바꿔서
+        if not v.get('en'):
+            v['en'] = krx_en_name(v['nm'])
     if len(out) < 20:
         raise ValueError('목록 %d개' % len(out))
     return out
