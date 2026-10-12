@@ -336,9 +336,9 @@ def krx_list():
             o = out.setdefault(iid, {'cd': tp + ind, 'tp': tp, 'ind': ind})
             o['nm' if lang == 'ko' else 'en'] = re.sub(r'\s+', ' ', (x.get('idx_nm') or '').strip())
     out = {k: v for k, v in out.items() if v.get('nm')}
-    for v in out.values():                                   # 영문 이름이 비어 있는 지수(양매도·콘도르·선물 커버드콜 등 20개)는 낱말을 바꿔서
-        if not v.get('en'):
-            v['en'] = krx_en_name(v['nm'])
+    for v in out.values():                                   # 영문 이름이 비었거나 약칭(C-KOSPI 200-5O 같은)인 지수는 낱말을 바꿔서
+        if not v.get('en') or re.match(r'^[A-Z]-KOSPI', v['en']):
+            v['en'] = krx_en_name(v['nm']) or v.get('en') or ''
     if len(out) < 20:
         raise ValueError('목록 %d개' % len(out))
     return out

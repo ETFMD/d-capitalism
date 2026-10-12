@@ -1460,7 +1460,9 @@ def name_of(D, key):
     if key.startswith('D:'):                          # '코스피 200 커버드콜 ATM 지수|KOSPI 200 Covered Call ATM' — 한글|영문 (화면이 언어에 맞춰 고름)
         i = D.info(key)
         ko = re.sub(r'\s+', ' ', re.sub(r'\bcboe\b', ' ', i.get('name') or key[2:], flags=re.I)).strip()
-        en = re.sub(r'\s+', ' ', re.sub(r'\bcboe\b', ' ', re.sub(r'\s*\bIndex\b', '', i.get('name_en') or ''), flags=re.I)).strip() or krx_en_name(ko)
+        en = re.sub(r'\s+', ' ', re.sub(r'\bcboe\b', ' ', re.sub(r'\s*\bIndex\b', '', i.get('name_en') or ''), flags=re.I)).strip()
+        if not en or re.match(r'^[A-Z]-KOSPI', en):        # 영문 이름이 없거나 약칭(C-KOSPI 200-5O)이면 낱말을 바꾼 이름
+            en = krx_en_name(ko) or en
         return ko + '|' + (en or 'KRX option index ' + key[2:])
     if key.startswith('K:'):
         m = D.meta(key)
