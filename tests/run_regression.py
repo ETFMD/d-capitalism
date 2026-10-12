@@ -583,6 +583,88 @@ def bt_data_check(fail):
         F('쓰지 않는 옵션 전략 지수 파일 남음: %s' % sorted(have - used)[:5])
 
 
+# 배포 사이트: 모의 커버드콜(Z:)을 쓰는 ETF 백테스트 — 화면이 읽은 식(S.btS)과 받은 재료(S.dep)를 그대로 돌려줌
+BTZ_JS = """async (n) => {
+  const W = ms => new Promise(r => setTimeout(r, ms)), S = window.ECXdebug && ECXdebug.S;
+  if (!S) return { none: true };
+  const busy = () => Object.keys(S.pend).length || Object.keys(S.distP).length || Object.keys(S.exP).length || Object.keys(S.pgP).length || Object.keys(S.btP).length || Object.keys(S.depP).length;
+  for (let i = 0; i < 900; i++) { if (S.ready && S.sel.length === n && !busy() && S.sel.every(s => !S.data[s.k + s.c] || ECXdebug.prepOf(s))) { await W(80); if (!busy()) break; } await W(100); }
+  const sh = k => { let s = 0; for (let i = 0; i < k.length; i++) s += k.charCodeAt(i); return s % 16; };
+  const rcOf = k => (S.btS[sh(k)] || {})[k] || null;
+  ${ROW_OF}
+  return { s: S.sel.map(it => {
+      const s = ECXdebug.prepOf(it), key = it.k + ':' + it.c, rc = rcOf(key);
+      const tr = rowOf(S, it), b = tr && tr.querySelector('.ecx-bt'), need = [];
+      const walk = (r, depth) => r.m.forEach(t => { need.push(t[0]); const c0 = t[0].charAt(0), fr = rcOf(t[0]);
+        if (depth <= 3 && (c0 === 'K' || c0 === 'U' || c0 === 'D') && fr && fr.ec != null && fr.ec <= 0.05) walk(fr, depth + 1); });
+      if (rc) walk(rc, 1);
+      return { key, first: s ? s.d[0] : null, bt: s ? (s.bt || 0) : 0, info: b ? b.textContent : '', cls: b ? b.className : '',
+               rc: rc ? { st: rc.st, x: rc.x, xc: rc.xc, names: rc.m.map(t => [t[5] || '', !!t[6]]) } : null, need }; }),
+    dep: Object.keys(S.dep), depErr: Object.keys(S.depErr), btErr: Object.keys(S.btErr) };
+}""".replace('${ROW_OF}', bt_synth.ROW_OF_JS)
+
+
+def bt_zsim_live(page, base, fail, errs, ignorable):
+    """배포 사이트 점검 — 모의 커버드콜(Z:)을 직접 쓰거나 Z 를 쓰는 한국거래소 지수 식을 이어 붙이는 국내 ETF(저장소 식에서 최대 3개)
+    · 백테스트 시작일(화면이 재료로 계산) = 식의 st(파이썬) · 재료 받기 오류 없음 · 이어 붙인 식이 쓰는 Z·D 파일을 실제로 받음
+    · 방법 문구: 한국어판 = 지수 이름 한글 · 영어판 = 영문 · 예상 오차(앞 구간 포함)·색이 식 값과 같음 — 기대값은 화면이 읽은 식에서(배포 시차에도 맞게)"""
+    F = lambda m: fail('etf-backtest', m)
+    d = os.path.join(ROOT, 'data', 'etfbt')
+    R = {}
+    for i in range(16):
+        R.update(json.load(open(os.path.join(d, '%d.json' % i), encoding='utf-8'))['e'])
+    zd = {k for k, r in R.items() if k.startswith('D:') and any(t[0].startswith('Z:') for t in r['m']) and r.get('ec') is not None and r['ec'] <= 0.05}
+    picks = sorted((k for k, r in R.items() if k.startswith('K:') and any(t[0].startswith('Z:') or t[0] in zd for t in r['m'])), key=lambda k: (R[k]['st'], k))[:3]
+    if not picks:
+        return F('모의 커버드콜(Z:)을 쓰는 국내 ETF 식이 저장소에 없음')
+    hash_ = '#e=%s&p=MAX' % ','.join('K' + k[2:] for k in picks)
+    ep = _dt.date(1970, 1, 1)
+    for lang, pre in (('ko', ''), ('en', 'en/')):
+        errs.clear()
+        page.goto('about:blank'); page.goto(base + pre + 'etf-compare/' + hash_, wait_until='load')
+        try:
+            z = page.evaluate(BTZ_JS, len(picks))
+        except Exception as ex:
+            F('[%s] 모의 커버드콜 점검 실행 실패: %r' % (lang, ex)); continue
+        if z.get('none'):
+            F('[%s] ECXdebug 없음' % lang); continue
+        if z['depErr'] or z['btErr']:
+            F('[%s] 백테스트 재료·식 받기 실패: %s · %s' % (lang, z['depErr'][:5], z['btErr'][:5]))
+        used_z = False
+        for o in z['s']:
+            rc = o['rc']
+            if not rc:
+                F('[%s] %s 화면이 백테스트 식을 못 읽음' % (lang, o['key'])); continue
+            if not o['bt'] or o['first'] != rc['st']:
+                F('[%s] %s 백테스트 시작 %s ≠ 식 %s (백테스트 %d일)' % (lang, o['key'], o['first'] and (ep + _dt.timedelta(o['first'])).isoformat(),
+                                                              (ep + _dt.timedelta(rc['st'])).isoformat(), o['bt']))
+            zk = [k for k in o['need'] if k[:2] in ('Z:', 'D:')]
+            used_z = used_z or any(k.startswith('Z:') for k in zk)
+            miss = [k for k in zk if k not in z['dep']]
+            if miss:
+                F('[%s] %s 이어 붙인 식의 옵션 지수·모의 파일을 받지 않음: %s' % (lang, o['key'], miss[:5]))
+            x, xc = rc['x'], rc.get('xc')
+            if x is None:
+                F('[%s] %s 식에 예상 오차가 없음' % (lang, o['key'])); continue
+            shown = xc if (xc is not None and xc > x * 1.05 + 0.0005) else None
+            names = [nm.split('|')[1 if lang == 'en' else 0] for nm, cc in rc['names'] if '|' in nm and not cc]   # 옵션 지수·모의('한글|영문') 이름
+            want = ('Backtest: ' if lang == 'en' else '백테스트: ', ('expected error ±%.1fpp/yr' if lang == 'en' else '예상 오차 연 ±%.1f%%p') % (100 * x))
+            tail = (' (chained earlier part ±%.1fpp)' if lang == 'en' else ' (이어 붙인 앞 구간 ±%.1f%%p)') % (100 * shown) if shown else ''
+            if not o['info'].startswith(want[0]) or (want[1] + tail) not in o['info'] or not o['info'].endswith(want[1] + tail) \
+                    or any(nm not in o['info'] for nm in names):
+                F('[%s] %s 방법 문구가 식과 다름: %s (기대 이름 %s · %s%s)' % (lang, o['key'], o['info'][:160], names, want[1], tail))
+            w_ = max(x, shown or 0)
+            if not o['cls'].endswith('ecx-bt ' + ('g' if w_ < 0.03 else 'm' if w_ < 0.08 else 'b')):
+                F('[%s] %s 오차 색 %s (예상 오차 %.4f)' % (lang, o['key'], o['cls'], w_))
+            if lang == 'en' and any(re.search(r'[가-힣]', nm) for nm in names):
+                F('[en] %s 지수 이름에 한글: %s' % (o['key'], names))
+        if not used_z:
+            F('[%s] 고른 ETF(%s)의 식이 모의 커버드콜 파일(Z:)을 쓰지 않음 — 화면 식: %s' % (lang, ','.join(picks), [o['need'] for o in z['s']]))
+        for t in [t for t, u in errs if not ignorable(t, u)][:3]:
+            F('[%s] 모의 커버드콜 점검 콘솔 오류: %s' % (lang, t[:200]))
+    print('    모의 커버드콜 실사이트 점검: %s' % ', '.join('%s(%s~)' % (k[2:], (ep + _dt.timedelta(R[k]['st'])).isoformat()) for k in picks), flush=True)
+
+
 def etf_expect(keys, S, mode, E=None, open_=False):
     """기대값 {종목: {ret, tax, fee, n, nk, na, nf, span, mdd, vol, p0, pE, pDay, pKind, endDay}} — 화면 stats·valueSeries 와 같은 규칙을 따로 구현
        S·E: 1970-01-01 기준 일수 (E 없으면 마지막 거래일)
@@ -1298,6 +1380,8 @@ def main():
                     fail('etf-backtest', '%s: %s' % (t['name'], json.dumps(t.get('info'), ensure_ascii=False)))
             bt_check(fail, b, local)
             bt_data_check(fail)
+            if not local:   # 실제 식·자료: 모의 커버드콜(Z:)을 쓰는 ETF 백테스트가 식대로 그려지는지 (한·영)
+                bt_zsim_live(page, base, fail, errs, ignorable)
             if local:   # 식 고르기 스크립트의 모의 커버드콜 계산·받기 실패 안전장치 (합성 자료로)
                 try:
                     for m_ in bt_synth.fit_selfcheck():

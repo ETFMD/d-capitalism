@@ -444,10 +444,16 @@ def joined_prices(exp, rc, p0):
     return P[:iS], sorted(ex)
 
 
+# 표에서 종목 줄 찾기 — 이름 글자 포함으로 찾으면 앞부분이 같은 이름('TIGER 200커버드콜' ⊂ 'TIGER 200커버드콜OTM')에 잘못 걸려,
+# 이름 아래 작은 글씨의 title(화면 subOf — 국내 = 종목코드 · 미국 = 이름)이 같은 줄로 (못 찾으면 이름 포함으로)
+ROW_OF_JS = """const rowOf = (S, it) => { const rows = [...document.querySelectorAll('#ecx-stats tr')], x = S.by[it.k + it.c], sub = it.k === 'K' ? it.c : (x && x.n) || it.c;
+    return rows.find(t => { const sm = t.querySelector('.n small'); return sm && sm.title === sub; })
+      || rows.find(t => t.querySelector('.n b') && t.textContent.indexOf(x ? (x.n || it.c) : it.c) >= 0); };"""
 BT_JS = """async (args) => {
   const R = [], ok = (name, c, info) => R.push({ name, ok: !!c, info }), W = ms => new Promise(r => setTimeout(r, ms));
   const S = window.ECXdebug && ECXdebug.S, X = window.ECX, $ = id => document.getElementById(id);
   if (!S || !X) return { R: [{ name: 'ECX 없음', ok: false }] };
+  ${ROW_OF}
   const busy = () => Object.keys(S.pend).length || Object.keys(S.distP).length || Object.keys(S.exP).length || Object.keys(S.pgP).length || Object.keys(S.btP).length || Object.keys(S.depP).length;
   const done = async () => { for (let i = 0; i < 600; i++) { if (!busy() && S.sel.every(s => !S.data[s.k + s.c] || ECXdebug.prepOf(s))) { await W(50); if (!busy()) return; } await W(100); } };
   const out = { R, s: {}, rows: [], ds: [], note: '', w: null, off: null };
@@ -455,7 +461,7 @@ BT_JS = """async (args) => {
   const r = S.last;
   S.sel.forEach(it => { const s = ECXdebug.prepOf(it); out.s[it.k + it.c] = s ? { d: s.d.slice(0, (s.bt || 0) + 3), p: s.p.slice(0, (s.bt || 0) + 3), bt: s.bt || 0, list: s.list || null, n: s.d.length, dv: (s.dv || []).filter(e => e.k === 's').map(e => [e.x, e.i, e.a, e.t]).slice(0, 40), first: s.d[0] } : null; });
   out.w = r && r.w ? { S: r.w.S, E: r.w.E } : null;
-  out.rows = r && r.list ? r.list.map(o => { const it = S.sel[o.i], tr = [...document.querySelectorAll('#ecx-stats tr')].find(t => t.querySelector('.n b') && t.textContent.indexOf(S.by[it.k + it.c] ? (S.by[it.k + it.c].n || it.c) : it.c) >= 0);
+  out.rows = r && r.list ? r.list.map(o => { const it = S.sel[o.i], tr = rowOf(S, it);
     return { key: it.k + it.c, bt: o.st.bt, list: o.st.list, first: o.st.first, pDay: o.st.pDay, pKind: o.st.pKind, p0: o.st.p0, pE: o.st.pE, ret: o.st.ret, baseDay: o.st.baseDay,
              info: tr && tr.querySelector('.ecx-bt') ? tr.querySelector('.ecx-bt').textContent : '', cls: tr && tr.querySelector('.ecx-bt') ? tr.querySelector('.ecx-bt').className : '', cell: tr && tr.cells[6] ? tr.cells[6].textContent : '' }; }) : [];
   out.ds = S.chart ? S.chart.data.datasets.map(ds => ({ label: ds.label, lx: ds.lx == null ? null : ds.lx, dash: ds.segment ? [ds.segment.borderDash({ p1: { parsed: { x: (ds.lx || 0) - 1 } } }), ds.segment.borderDash({ p1: { parsed: { x: (ds.lx || 0) + 1 } } })] : null })) : [];
@@ -470,3 +476,4 @@ BT_JS = """async (args) => {
   out.parse = { bt: S.bt, box: $('ecx-bt').checked, any: S.sel.some(it => { const s = ECXdebug.prepOf(it); return !!(s && s.bt > 0); }), hash: location.hash };
   return out;
 }"""
+BT_JS = BT_JS.replace('${ROW_OF}', ROW_OF_JS)
