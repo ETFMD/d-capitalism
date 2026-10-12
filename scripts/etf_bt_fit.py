@@ -153,14 +153,65 @@ def clean_cboe(d, a):
     return d, a
 
 
+# ───────────── 모의 커버드콜 지수 Z: (코스피 200 − 콜, 매일 블랙-숄즈로 다시 평가 · 변동성 = VKOSPI × l) ─────────────
+# 한국거래소 커버드콜 지수(월간 ATM 2013~ · 5% OTM 2007~ 등)를 기준일 전으로 재현할 후보 — VKOSPI 가 시작하는 2003년부터
+# 만기일에 행사가 = 그날 코스피 200 × (1 + k) 인 콜을 1개 팔고(프리미엄은 다시 투자 — BXM 방식), 만기까지 매일 (지수 − 콜 가치)로 평가
+# 덧씌우기(cc_col)는 옵션 손익을 만기일에만 반영해 매일 값이 다른 지수를 잘 따라가지 못함(월간 ATM 1개월 추적오차 7.7% → 이 모의 3.3% — 시험)
+ZSIM_UNDER, ZSIM_VOL = 'D:K2G01P', 'D:O2901P'      # 한국거래소 코스피 200(가격) · 코스피 200 변동성지수(VKOSPI)
+KRX_AUX = {ZSIM_UNDER, ZSIM_VOL}                   # 재료로만 — 후보·대상이 아님 (VKOSPI 는 수익이 아닌 변동성 수준)
+ZSIM = {}
+for _P, _ks in (('M', (0.0, 0.02, 0.05)), ('W', (0.0, 0.01))):
+    for _k in _ks:
+        for _l in (0.8, 0.9, 1.0):
+            ZSIM['Z:%s%02dL%02d' % (_P, round(_k * 1000), round(_l * 100))] = (_P, _k, _l)
+ZSIM_BASE = 1000.0
+
+
+def zsim_levels(cal, S, sig, P, k, l):
+    """모의 커버드콜 수준 (달력 cal 위 · 첫 만기 전과 재료가 없는 날은 NaN) — S 코스피 200 · sig VKOSPI(소수) · P 'M'/'W' · k 행사가 OTM · l 변동성 배수
+    만기 a 에 행사가 K = S_a(1+k) 콜을 팔고 a~다음 만기 b 동안 수준 = 수준_a × (S_t − C_t) ÷ (S_a − C_a) — C_t = 블랙-숄즈(남은 날 ÷ 365, sig_t × l, 금리 0),
+    만기일 b 는 내재가치 · 마지막 만기 뒤(아직 오지 않은 만기)는 평일 달력으로 이어 그 다음 만기까지 남은 날을 셈"""
+    cal = np.asarray(cal, dtype=np.int64)
+    n = len(cal)
+    fut = []                                           # 앞으로의 평일 45일 (마지막 만기 뒤 기간의 다음 만기·남은 날)
+    x = int(cal[-1])
+    while len(fut) < 45:
+        x += 1
+        if (x + 3) % 7 < 5:
+            fut.append(x)
+    calx = np.concatenate([cal, np.array(fut, np.int64)])
+    ex = np.where(expiry_flags(calx, P, 'KR'))[0]
+    lv = np.full(n, np.nan)
+    on = False
+    for a, b in zip(ex[:-1], ex[1:]):
+        if a >= n:
+            break
+        if not on:
+            if not (S[a] > 0) or not (sig[a] > 0):
+                continue
+            lv[a] = ZSIM_BASE
+            on = True
+        if not (lv[a] > 0):
+            break
+        K = S[a] * (1.0 + k)
+        base = S[a] - S[a] * float(bs_call(K / S[a], (calx[b] - calx[a]) / 365.0, sig[a] * l))
+        t = np.arange(a + 1, min(b, n - 1) + 1)
+        if not len(t):
+            continue
+        St = S[t]
+        Ct = St * bs_call(K / St, (calx[b] - cal[t]) / 365.0, sig[t] * l)
+        lv[t] = lv[a] * (St - Ct) / base
+    return lv
+
+
 def is_kr(key):
     """국내 달력·원화 키 — 국내 ETF·종목(K:) · 한국거래소 옵션 전략 지수(D:)"""
     return key[:2] in ('K:', 'D:')
 
 
 def opt_idx(key):
-    """옵션 전략 지수 키 — C: Cboe(미국) · D: 한국거래소(국내) — 전략이 이미 든 지수라 콜 매도 덧씌우기·음수·큰 배수를 쓰지 않음"""
-    return key[:2] in ('C:', 'D:')
+    """옵션 전략 지수 키 — C: Cboe(미국) · D: 한국거래소(국내) · Z: 모의 커버드콜 — 전략이 이미 든 지수라 콜 매도 덧씌우기·음수·큰 배수를 쓰지 않음"""
+    return key[:2] in ('C:', 'D:', 'Z:')
 
 
 def shard_of(key):
@@ -257,6 +308,19 @@ class Data:
                     d = np.array(r['d'], np.int32); v = np.round(np.array(r['v'], np.float64), 4)
                     lv = syn_levels(d, v, mat)
                     s = {'d': d, 'c': lv, 'a': lv, 'v_d': z0, 'v_a': np.zeros(0), 'y': v}
+        elif key in ZSIM:
+            cal = self.series(KR_CAL_KEY)['d'].astype(np.int64)
+            su, sv = self.series(ZSIM_UNDER), self.series(ZSIM_VOL)
+            if su is not None and sv is not None and len(su['d']) and len(sv['d']):
+                S = align_level(su, cal, 0)
+                sg = align_level(sv, cal, 0) / 100.0
+                P, k, l = ZSIM[key]
+                lv = zsim_levels(cal, S, sg, P, k, l)
+                ok = np.where(~np.isnan(lv))[0]
+                if len(ok) > 30:
+                    i0, i1 = int(ok[0]), int(ok[-1])
+                    v = np.round(lv[i0:i1 + 1], 6)             # 화면이 받는 파일(r/Z_*.json)과 같은 자릿수
+                    s = {'d': cal[i0:i1 + 1].astype(np.int32), 'c': v, 'a': v, 'v_d': z0, 'v_a': np.zeros(0)}
         elif key == 'F:USDKRW':
             f = self.fx.get('USDKRW')
             if f and f['d']:
@@ -286,6 +350,10 @@ class Data:
         return s
 
     def info(self, key):
+        if key in ZSIM:
+            s = self.series(key)
+            return {'mk': 'KR', 'cur': 'KRW', 'kind': 'idx', 'start': int(s['d'][0]) if s is not None else None,
+                    'end': int(s['d'][-1]) if s is not None else None, 'n': len(s['d']) if s is not None else 0, 'name': name_of(self, key)}
         if key in SYN:
             src, mat, cur = SYN[key]
             s = self.series(key)
@@ -807,19 +875,20 @@ def main():
     log = lambda *x: print(*x, flush=True)
     uni = D.uni
     # 대상: 국내·미국 ETF (상장 순서대로 — 체인으로 늘어난 '더 먼 과거' 시작일을 앞서 고른 식에서 씀)
-    targets = [k for k, v in uni.items() if (v.get('kind') == 'etf' or k.startswith('D:')) and v.get('n', 0) > 1 and not v.get('err')]
+    targets = [k for k, v in uni.items() if (v.get('kind') == 'etf' or k.startswith('D:')) and v.get('n', 0) > 1 and not v.get('err') and k not in KRX_AUX]
     # D: 한국거래소 옵션 전략 지수도 대상 — 지수 기준일 전을 같은 방법(코스피 200 + 콜 매도 등)으로 재현해 두면, 그 지수를 쓰는 ETF 백테스트가 체인으로 더 먼 과거까지
     if a.only:
         targets = a.only.split(',')
     targets.sort(key=lambda k: ((uni.get(k) or {}).get('start') or 0, k))
-    cands = sorted(k for k, v in uni.items() if v.get('n', 0) > 30 and not v.get('err') and k not in EXCLUDE) + sorted(SYN) + ['F:USDKRW', 'X:SPXTR']
+    cands = sorted(k for k, v in uni.items() if v.get('n', 0) > 30 and not v.get('err') and k not in EXCLUDE and k not in KRX_AUX) + sorted(SYN) + ['F:USDKRW', 'X:SPXTR'] \
+        + sorted(z for z in ZSIM if D.series(z) is not None)     # 모의 커버드콜 (코스피 200·VKOSPI 가 있을 때)
     log('대상 %d · 후보 %d' % (len(targets), len(cands)))
     # 안전장치: 지난 식이 쓰던 옵션 전략 지수(C: Cboe · D: 한국거래소 — 화면이 r/<키>.json 으로 받는 것)의 절반 넘게 이번 자료에 없으면
     #   (받기 막힘 + 캐시 없음) 계산하지 않고 멈춤 — 식·r/*.json 이 지난 것 그대로 남아 화면은 계속 맞고, 다음 실행이 다시 받음
     #   (지수 몇 개만 없어진 경우는 그 지수 없이 다시 고름 · 출처마다 따로 셈 · --force 로 무시)
     if not a.only and not a.force:
         old_r = load_recipes(a.out)
-        for pre, nm_ in (('C:', 'Cboe'), ('D:', '한국거래소')):
+        for pre, nm_ in (('C:', 'Cboe'), ('D:', '한국거래소'), ('Z:', '모의 커버드콜(한국거래소 코스피 200·VKOSPI)')):
             used_c, miss = hosted_missing(old_r, D, pre)
             if len(used_c) >= 3 and len(miss) * 2 > len(used_c):
                 raise SystemExit('지난 식이 쓰던 %s 옵션 전략 지수 %d개 중 %d개가 이번 자료에 없어 멈춤 (받기 실패 의심 · --force 로 무시): %s'
@@ -1034,7 +1103,7 @@ def fit_target(D, E, mats, tk, recipes, explain, log):
     cidx, didx = mt.get('cidx'), mt.get('didx')
     if cidx is None:                                    # 옵션 전략 지수 열 번호 (한 번만) — C: Cboe · D: 한국거래소
         cidx = mt['cidx'] = np.array([i for i, k in enumerate(keys_of(mt)) if k.startswith('C:')], np.int64)
-        didx = mt['didx'] = np.array([i for i, k in enumerate(keys_of(mt)) if k.startswith('D:')], np.int64)
+        didx = mt['didx'] = np.array([i for i, k in enumerate(keys_of(mt)) if k[:2] in ('D:', 'Z:')], np.int64)   # 한국거래소 옵션 지수 · 모의 커버드콜
     opt_all = wants_cboe(D, tk)
     cboe_all = (not CBOE_OFF) and opt_all and not tk.startswith('D:')        # 국내 지수(D:)를 재현할 때는 미국 Cboe 지수를 쓰지 않음
     krx_all = (not KRX_OFF) and opt_all and is_kr(tk)                         # 한국거래소 옵션 지수는 국내 상장 옵션 ETF·지수에만
@@ -1317,8 +1386,10 @@ def fit_target(D, E, mats, tk, recipes, explain, log):
     if R is None:
         return None
     # 운용 방식이 바뀌었으면(레버리지·기초지수 교체) 바뀐 뒤 구간으로 다시 — 백테스트는 '지금의 상품' 기준
+    #   콜 매도 ETF 는 오르내림에 따라 노출이 달라 보여 빼고, D: 한국거래소 옵션 지수도 뺌 (규칙이 정해진 지수라 운용 방식이 바뀌지 않음 —
+    #   풋매도·커버드풋 지수는 급락 때 노출이 크게 달라져 2020년 3월 같은 때를 '바뀐 날'로 잘못 잡음)
     rg = None
-    if R['sel'] and R['method'] == 'fit' and not short and not opt:   # 콜 매도 ETF 는 오르내림에 따라 노출이 달라 보여 빼고
+    if R['sel'] and R['method'] == 'fit' and not short and not opt and not tk.startswith('D:'):
         c0 = break_point(R['yt'], R['cashr'], np.column_stack([c for _, c in R['sel']]), R['good'])
         if c0 is not None and n_all - c0 >= MIN_DAYS * 2:
             R2 = best_select(lo + c0)
@@ -1391,6 +1462,8 @@ def inc_sig(D, key):
         return 0.0                                    # C: Cboe 옵션 전략 지수 = 배당·이자를 담은 총수익 지수
     if key.startswith('D:'):                          # 한국거래소 옵션 지수: ID 끝 T = 총수익(TR) · P = 가격 지수(배당 빠짐)
         return 0.0 if key.endswith('T') else PI_SIG
+    if key.startswith('Z:'):                          # 모의 커버드콜: 코스피 200 가격 지수 기반(배당 빠짐) · 모의 프리미엄과 실제의 차이
+        return PI_SIG
     if key.startswith('K:'):
         return 0.0 if D.info(key).get('kind') == 'etf' else PI_SIG
     if key.startswith('Y:'):
@@ -1457,6 +1530,11 @@ def name_of(D, key):
         nm = re.sub(r'\s*\bIndex\b', '', D.info(key).get('name') or key[2:])
         nm = re.sub(r'\s+', ' ', re.sub(r'\bcboe\b', ' ', nm, flags=re.I)).strip() or key[2:]
         return '%s(%s)' % (nm, key[2:])
+    if key in ZSIM:                                   # '코스피 200 커버드콜 모의(월간 ATM · VKOSPI×0.9)|KOSPI 200 covered call model (monthly ATM, VKOSPI×0.9)'
+        P, k, l = ZSIM[key]
+        kk = 'ATM' if k == 0 else '%g%% OTM' % (k * 100)
+        return '코스피 200 커버드콜 모의(%s %s · VKOSPI×%g)|KOSPI 200 covered call model (%s %s, VKOSPI×%g)' % (
+            '월간' if P == 'M' else '위클리', kk, l, 'monthly' if P == 'M' else 'weekly', kk, l)
     if key.startswith('D:'):                          # '코스피 200 커버드콜 ATM 지수|KOSPI 200 Covered Call ATM' — 한글|영문 (화면이 언어에 맞춰 고름)
         i = D.info(key)
         ko = re.sub(r'\s+', ' ', re.sub(r'\bcboe\b', ' ', i.get('name') or key[2:], flags=re.I)).strip()
@@ -1594,10 +1672,18 @@ def _ser(d, vals, nd):
 
 
 def hosted_missing(old, D, pre):
-    """지난 식들이 쓰던 옵션 전략 지수(pre = 'C:' Cboe · 'D:' 한국거래소) → (그 목록, 그중 이번 자료에 없는 것 — 받기 실패·캐시 없음)"""
+    """지난 식들이 쓰던 옵션 전략 지수(pre = 'C:' Cboe · 'D:' 한국거래소 · 'Z:' 모의 커버드콜) → (그 목록, 그중 이번 자료에 없는 것 — 받기 실패·캐시 없음)"""
     used = sorted({f[0] for r in old.values() for f in r['m'] if f[0].startswith(pre)})
-    miss = [k for k in used if (D.uni.get(k) or {}).get('err') or (D.uni.get(k) or {}).get('n', 0) <= 30 or D.series(k) is None]
-    return used, miss
+
+    def gone(k):
+        if k.startswith('Z:'):                    # 모의 커버드콜은 목록(uni)에 없음 — 재료(코스피 200·VKOSPI)로 계산되는지만 (정의를 뺀 키는 받기 실패가 아니라 셈하지 않음)
+            if k not in ZSIM:
+                return False
+            s = D.series(k)
+            return s is None or len(s['d']) <= 30
+        u = D.uni.get(k) or {}
+        return bool(u.get('err')) or u.get('n', 0) <= 30 or D.series(k) is None
+    return used, [k for k in used if gone(k)]
 
 
 def load_recipes(out):
@@ -1639,7 +1725,7 @@ def write_out(out, recipes, D, only, force=False):
     # 이제 어느 식도 쓰지 않는 옵션 전략 지수 파일은 지움 (오래된 값이 남아 있지 않게 · 워크플로가 지운 파일도 커밋)
     keep = {k.replace(':', '_') + '.json' for k in used if opt_idx(k)}
     for f in sorted(os.listdir(os.path.join(out, 'r'))):
-        if re.match(r'^[CD]_[A-Za-z0-9]+\.json$', f) and f not in keep:
+        if re.match(r'^[CDZ]_[A-Za-z0-9]+\.json$', f) and f not in keep:
             os.remove(os.path.join(out, 'r', f))
     for k in sorted(used & set(SYN)):
         s = D.series(k)

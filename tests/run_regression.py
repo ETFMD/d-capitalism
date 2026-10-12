@@ -546,8 +546,8 @@ def bt_check(fail, b, local):
 
 
 def bt_data_check(fail):
-    """저장소의 백테스트 식 묶음(data/etfbt) 점검 — 지수 식 이름에 지수 회사 이름(Cboe) 없음 · 한국거래소 옵션 지수(D:) 이름은 '한글|영문'(영문에 한글 없음)
-    · 식이 쓰는 옵션 전략 지수(C:·D:)는 화면이 받을 파일(data/etfbt/r/<키>.json)이 있음 · 쓰지 않는 지수 파일은 없음"""
+    """저장소의 백테스트 식 묶음(data/etfbt) 점검 — 지수 식 이름에 지수 회사 이름(Cboe) 없음 · 한국거래소 옵션 지수(D:)·모의 커버드콜(Z:) 이름은
+    '한글|영문'(영문에 한글 없음) · 식이 쓰는 옵션 전략 지수(C:·D:·Z:)는 화면이 받을 파일(data/etfbt/r/<키>.json)이 있음 · 쓰지 않는 지수 파일은 없음"""
     F = lambda m: fail('etf-backtest', m)
     d = os.path.join(ROOT, 'data', 'etfbt')
     used, bad = set(), []
@@ -558,18 +558,18 @@ def bt_data_check(fail):
             F('식 묶음 %d 읽기 실패: %r' % (i, ex)); continue
         for k, r in e.items():
             for t in r.get('m') or []:
-                if t[0][:2] in ('C:', 'D:'):
+                if t[0][:2] in ('C:', 'D:', 'Z:'):
                     used.add(t[0])
                 nm = t[5] if len(t) > 5 else ''
                 if t[0][:2] not in ('K:', 'U:') and re.search('cboe', nm, re.I):     # 지수 이름만 (Cboe Global Markets 주식 'CBOE' 같은 보유 종목은 그대로)
                     bad.append('%s 이름에 Cboe: %s' % (k, nm))
-                if t[0].startswith('D:'):
+                if t[0][:2] in ('D:', 'Z:'):
                     en = nm.split('|')[1] if '|' in nm else ''
                     if not en or re.search(r'[가-힣]', en):
                         bad.append('%s 의 %s 영문 이름 없음: %s' % (k, t[0], nm))
     for x in bad[:5]:
         F('식 이름 점검: ' + x)
-    have = {f[:-5].replace('_', ':', 1) for f in os.listdir(os.path.join(d, 'r')) if re.match(r'^[CD]_[A-Za-z0-9]+\.json$', f)}
+    have = {f[:-5].replace('_', ':', 1) for f in os.listdir(os.path.join(d, 'r')) if re.match(r'^[CDZ]_[A-Za-z0-9]+\.json$', f)}
     if used - have:
         F('식이 쓰는 옵션 전략 지수 파일 없음: %s' % sorted(used - have)[:5])
     if have - used:
@@ -1274,6 +1274,12 @@ def main():
                     fail('etf-backtest', '%s: %s' % (t['name'], json.dumps(t.get('info'), ensure_ascii=False)))
             bt_check(fail, b, local)
             bt_data_check(fail)
+            if local:   # 식 고르기 스크립트의 모의 커버드콜 계산·받기 실패 안전장치 (합성 자료로)
+                try:
+                    for m_ in bt_synth.fit_selfcheck():
+                        fail('etf-backtest', m_)
+                except Exception as ex:
+                    fail('etf-backtest', '식 고르기 스크립트 점검 실패: %r' % ex)
             # 후보 일봉 자료 오류 정리(btClean): 화면 JS = 순수 파이썬 기준 구현(= 로컬은 scripts/etf_bt_fit.clean_dep 까지) — 일부러 넣은 오류로
             try:
                 cases = bt_synth.clean_cases()

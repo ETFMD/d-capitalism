@@ -10,6 +10,7 @@
           C:<기호>  Cboe 옵션 전략 지수 (BuyWrite·PutWrite·칼라·버퍼·커버드콜 등 약 200개 · cdn-api.cboe.com 일별 종가 CSV — 매번 전체 기간)
           D:<지수 ID> 한국거래소 옵션 전략 지수 (코스피 200 커버드콜 ATM·위클리 커버드콜·타겟 위클리 커버드콜·고배당·반도체·코스닥 150 커버드콜·
                     양매도·풋매도·버퍼 등 약 56개 · KRX 지수 누리집(index.krx.co.kr) '파생상품지수 > 옵션' 일별 종가 — 매번 전체 기간)
+                    + 재료 D:K2G01P 코스피 200(가격, 1990~) — 모의 커버드콜(Z:)의 기초자산 · VKOSPI 는 옵션 지수 목록의 D:O2901P
   meta/kr/<코드>.json  네이버 ETF 분석 (기초지수·상장일·총보수·상위 10 구성종목·분배)
   meta/us/<티커>.json  야후 quoteSummary (상위 10 보유 종목·분류·보수)
   rates.json           한국은행 ECOS 시장금리(일별) — CD91·콜·국고채 1~30년·회사채·통안증권
@@ -329,6 +330,11 @@ def krx_en_name(ko):
     return '' if re.search(r'[가-힣]', t) else t
 
 
+# 후보가 아니라 재료로만 쓰는 한국거래소 지수 — 코스피 200(가격, 1990~): 모의 커버드콜 지수(etf_bt_fit.py Z:)의 기초자산
+#  (네이버 KPI200 은 2006년부터라, VKOSPI 가 시작하는 2003년부터 모의하려면 한국거래소 값이 필요)
+KRX_AUX = {'K2G01P': {'cd': '1028', 'tp': '1', 'ind': '028', 'nm': '코스피 200', 'en': 'KOSPI 200', 'aux': 1}}
+
+
 def krx_list():
     """한국거래소 옵션 전략 지수 목록 → {지수 ID: {nm 한글 이름, en 영문 이름, cd 지수 코드(구분+번호), tp 구분}}"""
     bz = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=9)
@@ -341,6 +347,9 @@ def krx_list():
             o = out.setdefault(iid, {'cd': tp + ind, 'tp': tp, 'ind': ind})
             o['nm' if lang == 'ko' else 'en'] = re.sub(r'\s+', ' ', (x.get('idx_nm') or '').strip())
     out = {k: v for k, v in out.items() if v.get('nm')}
+    if not out:                                              # 빈 목록(누리집 화면 바뀜·일시 오류)도 실패로 — 지난 목록으로
+        raise RuntimeError('옵션 지수 목록이 비어 있음')
+    out.update({k: dict(v) for k, v in KRX_AUX.items()})
     for v in out.values():                                   # 영문 이름이 비었거나 약칭(C-KOSPI 200-5O 같은)인 지수는 낱말을 바꿔서
         if not v.get('en') or re.match(r'^[A-Z]-KOSPI', v['en']):
             v['en'] = krx_en_name(v['nm']) or v.get('en') or ''
@@ -602,6 +611,8 @@ def main():
         except Exception as e:
             log('한국거래소 옵션 지수 목록 실패 — 지난 목록으로', str(e)[:80])
             krx_info = {k[2:]: v['krx'] for k, v in uni.items() if k.startswith('D:') and (v.get('krx') or {}).get('cd')}
+            for k, v in KRX_AUX.items():                     # 재료 지수(코스피 200)는 고정 코드라 늘 받음
+                krx_info.setdefault(k, dict(v))
     elif a.only:
         krx_info = {k[2:]: (uni.get(k) or {}).get('krx') for k in a.only.split(',') if k.startswith('D:') and (uni.get(k) or {}).get('krx')}
     for s, inf in krx_info.items():

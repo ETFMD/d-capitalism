@@ -6631,10 +6631,10 @@ var TAX = (function () {
       var d = [j.d0]; for (var i = 0; i < j.dd.length; i++) d.push(d[i] + j.dd[i]);
       return { d: d, a: j.a, base: j.base, cur: 'USD' };
     });
-    else if (t === 'C' || t === 'D') p = file().then(function (j) {         /* 옵션 전략 지수 (C: Cboe 미국 · D: 한국거래소 국내) — 파이썬이 정리한 일봉 그대로 */
+    else if (t === 'C' || t === 'D' || t === 'Z') p = file().then(function (j) {   /* 옵션 전략 지수 (C: Cboe 미국 · D: 한국거래소 국내 · Z: 코스피 200 커버드콜 모의) — 파이썬이 정리한 일봉 그대로 */
       if (!j || !j.a || !j.dd || j.a.length !== j.dd.length + 1) throw new Error('optidx');
       var d = [j.d0]; for (var i = 0; i < j.dd.length; i++) d.push(d[i] + j.dd[i]);
-      return { d: d, a: j.a, cur: t === 'D' ? 'KRW' : 'USD' };
+      return { d: d, a: j.a, cur: t === 'C' ? 'USD' : 'KRW' };
     });
     else {
       var same = t === 'K' || t === 'U' ? S.data[t + sym] : null;           /* 고른 종목과 같은 일봉이면 그대로 */
