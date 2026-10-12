@@ -1171,6 +1171,19 @@ def main():
                 hs = got['hash'].lstrip('#').split('&')
                 if bad_k or any(x not in hs for x in h.lstrip('#').split('&')):
                     fail('muhan-backtest', '주소 조건 복원/유지 실패 %s — %s · 주소 %s' % (h[:40], ', '.join('%s=%r' % (k, got['S'].get(k)) for k in bad_k), got['hash'][:160]))
+            # 계산(cfgOf)에 쓰는 버전별 설정은 화면에도 칸이 있어야 함 — 주소로만 바뀌고 안 보이는 값이 없게 (V2.0·V2.1 평단 괴리율이 빠져 있었음)
+            NEED = {'1.0': ['mb-tg', 'mb-big', 'mb-avgoff'], '2.0': ['mb-tg', 'mb-big', 'mb-pt', 'mb-cp', 'mb-avgoff'], '2.1': ['mb-tg', 'mb-big', 'mb-pt', 'mb-cp', 'mb-avgoff', 'mb-ln', 'mb-sh'],
+                    '2.2': ['mb-tg', 'mb-big', 'mb-ln', 'mb-sh'], '3.0': ['mb-tg', 'mb-big', 'mb-ln', 'mb-sh', 'mb-rebase'], '4.0': ['mb-tg', 'mb-big', 'mb-ln', 'mb-sh', 'mb-nobig']}
+            NOT = ['mb-tg', 'mb-big', 'mb-pt', 'mb-cp', 'mb-avgoff', 'mb-ln', 'mb-sh', 'mb-rebase', 'mb-nobig']
+            for ver, ids in NEED.items():
+                h = '#v=%s&t=TQQQ&c=10000&sp=40&tg=10%s' % (ver, '&ao=-2' if 'mb-avgoff' in ids else '')
+                page.goto('about:blank'); page.goto(base + 'muhan-backtest/' + h, wait_until='load')
+                page.wait_for_function('window.MBTdebug && MBTdebug.R() && MBTdebug.R().S', timeout=60000)
+                got = page.evaluate("ids => ids.map(i => { const e = document.getElementById(i); return e ? (e.type === 'checkbox' ? 'chk' : e.value) : null; })", NOT)
+                have = {i: v for i, v in zip(NOT, got) if v is not None}
+                miss = [i for i in ids if i not in have]; extra = [i for i in have if i not in ids]
+                if miss or extra or ('mb-avgoff' in ids and have.get('mb-avgoff') != '-2'):
+                    fail('muhan-backtest', 'V%s 설정 칸이 계산과 다름 — 빠짐 %s · 남음 %s · 평단 괴리율 칸 %r' % (ver, miss, extra, have.get('mb-avgoff')))
             bad = [t for t, u in errs if not ignorable(t, u)]
             for t in bad[:3]:
                 fail('muhan-backtest', '콘솔 오류: ' + t[:200])
