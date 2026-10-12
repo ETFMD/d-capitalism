@@ -231,6 +231,11 @@ def naver_series(sym, start='19900101'):
                 c[-1] = v
             continue
         d.append(x); c.append(v)
+    # 장중(15:40 KST 전)에 받은 오늘 일봉은 아직 끝나지 않은 값 → 뺌 (장이 끝난 날까지만 — 한국거래소 지수·미국 자료와 날을 맞춰,
+    #  받는 시각에 따라 재현 식이 달라지지 않게)
+    now = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=9)
+    if d and d[-1] == day(now.date()) and (now.hour, now.minute) < (15, 40):
+        d.pop(); c.pop()
     s = {'d': np.array(d, np.int32), 'c': np.array(c, np.float64)}
     s['a'] = s['c'].copy()
     s['v_d'], s['v_a'] = np.zeros(0, np.int32), np.zeros(0)
@@ -427,6 +432,10 @@ class Yahoo:
                 continue
             D_.append(d[i]); V_.append(c2); A_.append(aa[i])
         d, c, a = D_, V_, []
+        # 장중에 받은 오늘 일봉(정규장이 아직 끝나지 않은 값)은 뺌 — 그 거래소 정규장 끝 시각(currentTradingPeriod)으로
+        end_ = (((r.get('meta') or {}).get('currentTradingPeriod') or {}).get('regular') or {}).get('end')
+        if end_ and time.time() < end_ and d and d[-1] == int((end_ + off) // 86400):
+            d, c, A_ = d[:-1], c[:-1], A_[:-1]
         ratio = 1.0
         for i in range(len(d)):
             if A_[i] is not None and A_[i] > 0 and c[i] > 0:
