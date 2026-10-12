@@ -31,6 +31,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WIDTHS = [320, 360, 375, 390, 412, 414, 430, 480, 600, 768, 820, 1024, 1280, 1366, 1440, 1920]
 QUICK = [320, 390, 768, 1440]
 
+# 광고·방문 분석 서버 (검사 브라우저에서 요청을 막음 — 애드센스 무효 트래픽·통계 오염 방지)
+TRACK_RE = re.compile(r'^https?://([^/?#]*\.)?(googlesyndication\.com|doubleclick\.net|google-analytics\.com|googletagmanager\.com'
+                      r'|googleadservices\.com|adtrafficquality\.google|fundingchoicesmessages\.google\.com|adservice\.google\.[a-z.]+'
+                      r'|clarity\.ms|wcs\.naver\.(?:net|com))(:\d+)?([/?#]|$)', re.I)
+# 이름에 이런 낱말이 든 서버로 나가는 요청이 TRACK_RE 에 안 걸리면 실패 → 사이트가 새 광고·분석 도구를 붙였을 때 놓치지 않게
+TRACK_HINT = ('syndication', 'doubleclick', 'analytics', 'tagmanager', 'adservice', 'adtraffic', 'clarity', 'wcs.naver', 'fundingchoices')
+
 OVERFLOW_JS = """() => {
   const vw = document.documentElement.clientWidth, out = [];
   const clipped = el => { for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
@@ -830,6 +837,20 @@ def main():
     with sync_playwright() as p:
         br = p.chromium.launch()
         ctx = br.new_context(viewport={'width': 1440, 'height': 900}, locale='ko-KR')
+        # 광고·방문 분석 요청은 브라우저 밖으로 나가지 않게 막음 (로컬·배포 사이트·ETF 점검 모두)
+        #  · 자동 검사가 애드센스 광고를 불러오면 '무효 트래픽'(자동화 도구가 만든 노출)이 되어 계정 제한 위험
+        #  · GA4·Clarity·네이버 애널리틱스에 검사 방문이 사람 방문처럼 쌓이는 것도 막음
+        #  · 스크립트는 빈 내용으로 응답 → 사이트 코드(gtag·clarity 대기열·wcs_do 확인)는 오류 없이 그대로 동작
+        blocked = {'n': 0}
+        def track_block(route):
+            blocked['n'] += 1
+            route.fulfill(status=200, content_type='application/javascript', body='')
+        ctx.route(TRACK_RE, track_block)
+        def track_leak(q):
+            u = q.url
+            if not TRACK_RE.match(u) and any(k in (urllib.parse.urlparse(u).hostname or '') for k in TRACK_HINT):
+                fail('track', '광고·분석 요청이 차단 목록을 벗어남: ' + u[:160])
+        ctx.on('request', track_leak)
         if local:   # ETF 차트 비교 일봉: 로컬 주소는 Worker 가 막으므로(허용 출처 아님) 합성 자료로 대신 · 공개 프록시도 부르지 않게
             ctx.route(re.compile(r'.*workers\.dev/etf\?.*'), etf_route)
             ctx.route(re.compile(r'.*/data/etfdist/\d\.json.*'), etf_dist_route)
@@ -857,6 +878,9 @@ def main():
             print('[ETF 실제 가격 점검] %s' % base, flush=True)
             k = etf_audit(page, base, fail)
             br.close()
+            if not blocked['n']:
+                fail('track', '광고·분석 요청 차단 0건 — 차단 목록이 사이트의 실제 주소와 어긋났을 수 있음')
+            print('광고·분석 요청 차단 %d건' % blocked['n'])
             print('\n대조 %d줄 · %.0f초 · 실패 %d건' % (k, time.time() - t0, len(fails)))
             sys.exit(1 if fails or not k else 0)
 
@@ -1334,6 +1358,9 @@ def main():
         br.close()
     if httpd:
         httpd.shutdown()
+    if not blocked['n']:
+        fail('track', '광고·분석 요청 차단 0건 — 차단 목록이 사이트의 실제 주소와 어긋났을 수 있음')
+    print('광고·분석 요청 차단 %d건' % blocked['n'])
     print('\n검사 %d개 경로 × %d개 폭 · %.0f초 · 실패 %d건' % (len(paths), len(widths), time.time() - t0, len(fails)))
     sys.exit(1 if fails else 0)
 
