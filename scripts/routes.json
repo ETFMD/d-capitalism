@@ -271,14 +271,22 @@
       "path": "muhan",
       "tab": "muhan",
       "group": "invest",
-      "title": "무한매수법 4.0 계산기 — TQQQ·SOXL 분할매수 주문표",
-      "short": "무한매수법 V4.0 리버스모드",
-      "desc": "무한매수법 4.0 방식으로 TQQQ·SOXL 분할 매수·매도 주문표와 평단가, 진행 회차, 수익 현황을 계산하고 기록합니다.",
+      "title": "무한매수법 계산기 — V1.0~V4.0 TQQQ·SOXL 분할매수 주문표·기록",
+      "short": "무한매수법",
+      "desc": "라오어 무한매수법 V1.0~V4.0 규칙으로 TQQQ·SOXL 분할 매수·매도 주문표, 평단가, T값, 수익을 계산하고 기록합니다.",
       "en": {
         "short": "Infinite Buying (TQQQ·SOXL)",
-        "title": "Infinite Buying Tracker & Guide — TQQQ·SOXL Order Sheet and Backtest",
-        "desc": "Laoer’s Infinite Buying V4.0 for TQQQ and SOXL: daily LOC order sheet, cycle tracker, beginner guidebook and a daily-updated real-data backtest."
+        "title": "Infinite Buying Tracker & Guide — V1.0–V4.0 Order Sheet for TQQQ·SOXL",
+        "desc": "Laoer’s Infinite Buying V1.0–V4.0 for TQQQ and SOXL: daily LOC order sheet, cycle tracker, beginner guidebook and a daily-updated real-data backtest."
       }
+    },
+    {
+      "path": "muhan-backtest",
+      "tab": "muhanbt",
+      "group": "invest",
+      "title": "무한매수법 백테스트 — V1.0~V4.0 세금·수수료 포함 TQQQ·SOXL 시뮬레이터",
+      "short": "무한매수법 백테스트",
+      "desc": "라오어 무한매수법 V1.0~V4.0을 TQQQ·SOXL 실제 일봉으로 백테스트합니다. 양도소득세·수수료와 상장 전 재현 구간까지."
     },
     {
       "path": "vr",

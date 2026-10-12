@@ -8,6 +8,8 @@
   3. 메뉴 항목 수(홈 + 도구 수) · 검색 결과 · 허브 카드 수(같은 그룹 도구 수)
   5. 나의 직업 수명 — 776개 직업·21분야 데이터·모델 방향·연구 순서·검색·순위·주소·공유
   4. 무한매수법 — 라오어 카페 원문 예시 숫자로 계산 엔진 검사, 기록 화면 그리기, 가이드북(23장 · 용어 31개 · 자동 숫자 · 장 열기 · 3-6 실제 일봉 백테스트 표)
+     · 버전 V1.0~V3.0 엔진(tests/muhan_ver_test.js — 원문 주문표·LABU 2021·TQQQ 소진 횟수·V4 동등성·양도세) · 백테스트 화면(실행·보기 전환·표·상장 전)
+     · 기록 화면 버전별 시작·기록·직접 입력 분할·화면 안 백테스트
   6. ETF 차트 비교 — 보기 2가지(시장가·기준가) · 기간(1M·3M·6M·YTD·1Y·MAX·기간설정) 기준일 · MAX = 가장 늦게 상장한 ETF 첫 거래일 ·
      기준 가격(1M~1Y·YTD = 기준일 종가 · MAX·기간설정 = 시작일 시가 · 끝 = 끝날 종가) · 국내 ETF 는 실제 거래 가격(수정주가 역산 아님) ·
      수익률·세금·재투자 수수료·CAGR·연환산·최대 낙폭·변동성 계산 · 표의 기준·끝 가격 · 표 정렬 · 수수료 입력 · 검색 · 최대 10개 · 국내·미국 지수 ·
@@ -114,6 +116,60 @@ MUHAN_JS = """async () => {
   const s0 = E.simulate(S({ splits: 20, totalCapital: 20000 }), px.map(x => x * 50 / px[0]), hx.map(x => x * 50 / px[0]));
   const v0 = E.compute(S({ splits: 20, totalCapital: 20000 }), s0.txs);
   eq('백테스트: 회차 여러 번 · 첫 회차 평가금 일치', [bt.cycles.length > 2, Math.abs(bt.eq[c0.days] - v0.remainingCapital) < 0.01, bt.eq.filter(v => v == null).length], [true, true, 0]);
+  return R;
+}"""
+
+MUHANBT_JS = """async () => {
+  const W = ms => new Promise(r => setTimeout(r, ms)), R = [], ok = (name, c, info) => R.push({ name, ok: !!c, info });
+  const res = () => window.MBTdebug && MBTdebug.R();
+  for (let i = 0; i < 240 && !(res() && (!res().pre || res().pre.err)); i++) await W(250);
+  const r = res(); if (!r) return [{ name: '백테스트 결과 없음 (60초)', ok: false, info: document.getElementById('mb-res') && document.getElementById('mb-res').innerText.slice(0, 200) }];
+  ok('주소(#v=2.2&t=TQQQ…)로 조건 복원·자동 실행', r.S.ver === '2.2' && r.tk === 'TQQQ' && r.S.splits === 40 && r.S.target === 10, JSON.stringify([r.S.ver, r.tk, r.S.splits, r.S.target]));
+  ok('핵심 숫자 6칸 · 버전 6개', document.querySelectorAll('#mb-res .mb-k').length === 6 && document.querySelectorAll('#mb-set .mb-ver').length === 6);
+  ok('세금·수수료 포함 보기만 수수료·세금 계산 (미포함 보기는 0)', r.sn.fees > 0 && r.sg.fees === 0 && r.sg.tax === 0 && r.net.taxes.length > 0 && !r.gross.taxes.length, JSON.stringify([r.sn.fees, r.sg.fees, r.sn.tax]));
+  ok('연도별 표', document.querySelectorAll('#mb-tb tbody tr').length >= 5);
+  ok('상장 전: 재현을 붙였으면 오차 카드, 아니면 안내', (r.pre && r.pre.err && document.querySelector('.mb-pre')) || (!r.pre && /상장 전/.test(r.note || '')), r.pre ? JSON.stringify(r.pre.err) : r.note);
+  const k0 = document.querySelector('#mb-res .mb-kpi').innerText;
+  document.querySelector('#mb-res [data-view="gross"]').click(); await W(100);
+  ok('보기 전환(미포함)', document.querySelector('#mb-res .mb-kpi').innerText !== k0);
+  document.querySelector('#mb-res [data-tab="cycle"]').click(); await W(100);
+  const nc = document.querySelectorAll('#mb-tb tbody tr').length;
+  document.querySelector('#mb-res [data-tab="day"]').click(); await W(100);
+  ok('사이클별·일자별 표', nc === r.gross.cycles.length && document.querySelectorAll('#mb-tb tbody tr').length === 50, nc + ' / ' + r.gross.cycles.length);
+  document.querySelector('#mb-set [data-ver="1.0"]').click(); await W(50);
+  document.querySelector('#mb-set [data-tk="SOXL"]').click(); await W(50);
+  document.getElementById('mb-pre').checked = false; document.getElementById('mb-pre').dispatchEvent(new Event('change', { bubbles: true }));
+  document.querySelector('#mb-set [data-act="run"]').click();
+  for (let i = 0; i < 120 && !(res() && res().S.ver === '1.0' && res().tk === 'SOXL'); i++) await W(250);
+  const r2 = res();
+  ok('V1.0 SOXL 다시 실행 · 기본값(40분할·10%·큰수 15%) · 주소 갱신', r2.S.ver === '1.0' && r2.S.splits === 40 && r2.S.target === 10 && r2.S.big === 15 && /v=1\\.0/.test(location.hash) && /t=SOXL/.test(location.hash), location.hash);
+  ok('실행 기록 저장', (JSON.parse(localStorage.getItem('mbt-history') || '[]')).length >= 2);
+  return R;
+}"""
+
+MUHANV_JS = """async () => {
+  const W = ms => new Promise(r => setTimeout(r, ms)), R = [], ok = (name, c, info) => R.push({ name, ok: !!c, info }), $ = q => document.querySelector(q);
+  const click = q => { const e = $(q); if (!e) throw new Error('없음 ' + q); e.click(); }, fill = (q, v) => { const e = $(q); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); };
+  try {
+    ok('설정: 버전 6개 (V1.0~V4.0) · 50~100분할 단추 없음', document.querySelectorAll('[data-act="su-ver"]').length === 6 && !document.querySelector('[data-act="su-splits"][data-v="50"]'));
+    click('[data-act="su-ver"][data-v="2.2"]'); await W(50);
+    ok('V2.2 기본값 (40분할 · R 10 · 큰수 15)', MH.setup.splits === 40 && MH.setup.target === '10' && MH.setup.big === '15', JSON.stringify(MH.setup));
+    fill('[data-in="su:cap"]', '20000'); click('[data-act="su-start"]'); await W(300);
+    let D = MHdebug.curD();
+    ok('V2.2 세션 시작 → 처음 매수 주문', D.old && D.ver === '2.2' && D.st.phase === '처음매수' && (D.close == null || D.orders.some(o => o.tag === 'first')), D.st.phase + ' ' + D.orders.length);
+    if (D.close != null) {
+      click('[data-act="rec-open"]'); await W(200);
+      ok('기록 시트 (주문표 줄마다 체결 체크)', MH.sheet && MH.sheet.kind === 'vrec' && MH.sheet.rows.length > 0);
+      click('#mh-vr-save'); await W(200); D = MHdebug.curD();
+      ok('기록 저장 → 오늘 기록 ✓', D.txs.length === 1 && D.recorded);
+    }
+    for (let i = 0; i < 80 && !/총수익률|받지 못/.test(($('#mh-bt') || {}).innerText || ''); i++) await W(250);
+    ok('화면 안 백테스트 (V2.2 · 기간 단추 · 자세히 링크)', /총수익률/.test($('#mh-bt').innerText) && document.querySelectorAll('#mh-bt [data-act="bt-per"]').length === 5 && /muhan-backtest\\/#v=2\\.2/.test($('#mh-bt a').getAttribute('href')), ($('#mh-bt') || {}).innerText);
+    MH.menu = true; MHdebug.render(); click('.mh-menu [data-act="ses-add"]'); await W(100);
+    fill('[data-in="su:spc"]', '25'); fill('[data-in="su:cap"]', '20000'); click('[data-act="su-start"]'); await W(300);
+    D = MHdebug.curD();
+    ok('V4.0 분할 직접 입력 25 → 비추천 표시 · 주문표', !D.old && D.s.splits === 25 && /비추천/.test($('.mh-top').innerText) && (D.close == null || D.orders.length > 0), D.s.splits);
+  } catch (e) { ok('기록 화면 흐름 오류', false, String(e && e.message)); }
   return R;
 }"""
 
@@ -894,6 +950,12 @@ def main():
         if _def < 0 or _m.start() < _def:
             fail('src', "window.fcRegister('%s') 호출이 정의보다 앞에 있음 (스크립트 전체가 멈춤)" % _m.group(1))
 
+    # 무한매수법 버전 엔진 (원문 숫자·V4 동등성·기록 다시 계산·양도세) — node 가 있으면
+    if not a.etf_audit and shutil.which('node'):
+        _r = subprocess.run(['node', os.path.join(ROOT, 'tests', 'muhan_ver_test.js')], capture_output=True, text=True, timeout=300)
+        print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'muhan_ver_test: 출력 없음', flush=True)
+        if _r.returncode != 0:
+            fail('muhan', '버전 엔진 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:400])
     # Worker ETF 실제 가격 경로(야후 줄 변환·네이버 일별 시세 쪽 찾기) 단독 확인 — node 가 있으면
     if not a.etf_audit and shutil.which('node'):
         _r = subprocess.run(['node', os.path.join(ROOT, 'tests', 'worker_etf_test.mjs')], capture_output=True, text=True, timeout=120)
@@ -1062,6 +1124,30 @@ def main():
         bad = [t for t, u in errs if not ignorable(t, u)]
         for t in bad[:3]:
             fail('muhan', '콘솔 오류: ' + t[:200])
+        # 무한매수법 버전별 기록 (빈 저장소에서 V2.2 시작 · 기록 · 화면 안 백테스트 · 분할 직접 입력)
+        errs.clear()
+        page.set_viewport_size({'width': 430, 'height': 900})
+        page.evaluate("() => { localStorage.removeItem('muhan4-store'); }")
+        page.goto(base + 'muhan/', wait_until='load'); page.wait_for_timeout(2500)
+        for t in page.evaluate(MUHANV_JS):
+            if not t['ok']:
+                fail('muhan', '버전 기록 %s%s' % (t['name'], (' — ' + str(t.get('info'))[:200]) if t.get('info') else ''))
+        page.evaluate("() => { localStorage.removeItem('muhan4-store'); }")
+        bad = [t for t, u in errs if not ignorable(t, u)]
+        for t in bad[:3]:
+            fail('muhan', '버전 기록 콘솔 오류: ' + t[:200])
+        # 무한매수법 백테스트 화면
+        if os.path.isdir(os.path.join(ROOT, 'muhan-backtest')):
+            print('[3b] 무한매수법 백테스트', flush=True)
+            errs.clear()
+            page.set_viewport_size({'width': 1280, 'height': 900})
+            page.goto(base + 'muhan-backtest/#v=2.2&t=TQQQ&c=10000&sp=40&tg=10&p=1', wait_until='load')
+            for t in page.evaluate(MUHANBT_JS):
+                if not t['ok']:
+                    fail('muhan-backtest', '%s%s' % (t['name'], (' — ' + str(t.get('info'))[:200]) if t.get('info') else ''))
+            bad = [t for t, u in errs if not ignorable(t, u)]
+            for t in bad[:3]:
+                fail('muhan-backtest', '콘솔 오류: ' + t[:200])
         # 밸류리밸런싱 VR 5.0 — 엔진(라오어 원문 표·공식 그대로)·백테스트 재현·기록 화면 흐름
         if os.path.isdir(os.path.join(ROOT, 'vr')):
             print('[VR] 밸류리밸런싱', flush=True)
