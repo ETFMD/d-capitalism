@@ -11,6 +11,10 @@
   · 실시간 확인(시세가 그대로면 다시 그리지 않음 · 바뀌면 다시 그림) · 중간 진입(72회 다 씀 → 처음부터 소진 대응 · 매수 주문 없음)
   · 저장 키 분리(r72-store · 무한매수법 muhan4-store 그대로) · 로그인 자동 저장(가짜 로그인 → GET·POST /udata/r72 · /udata/muhan 안 부름)
   · 폭 넘침(시작 화면 세부옵션 펼침 · 현재 화면 · 크게 보기) · 콘솔 오류
+  ㉜: 시작 원금 비우면 $100,000 · 시장 지표 카드(RSI·종가 추이·VIX·공포탐욕) 맨 아래 · 그 4개 + 백테스트 카드 접기(요약 · 접으면 그래프·계산 안 함 · 기억)
+      · 공포탐욕·VIX 그라데이션 띠 · 오늘의 주문 강조 · RSI 기본 와일더 · LOC 매수 상한 실시간 시세(가짜 /q — 장별 이름 · 카드만 고침 · 손으로 고친 값 그대로 ·
+        ↻ 자동 = 바로 조회 · 실패하면 시세 자료 · 카드가 없으면 멈춤 · 배포 사이트는 진짜 /q 도) · 백테스트 기간설정·상장 전 켜기(20·30년)·포함/미포함 한 줄 ·
+        크게 보기 휠·두 손가락 확대(그래프를 새로 만들지 않음)
 """
 import json, os, re
 
@@ -39,6 +43,9 @@ SETUP_JS = """async () => {""" + PRE + """
        ['SOXL', '72번', '+52.5%', '평단 매수선', '상단 매수선', '어제 종가 +13%', '−10%', '1주 단위'].every(w => rtx.includes(w)), rtx);
     const pt = document.getElementById('page-t72').innerText;
     ok('시작 화면·설명글에 무한매수법 용어 없음', !bad(pt), bad(pt));
+    const ci = $('[data-in="su:cap"]'), dy0 = document.getElementById('mh-su-dyn').innerText;
+    ok('시작 원금: 칸 안내 100,000 · 비어 있으면 요약 "원금 (기본값) $100,000" · 1회 $1388.89 · 시작하기 켜짐 · "비워 두면" 안내',
+       ci && ci.placeholder === '100,000' && ci.value === '' && /원금 \\(기본값\\)\\s*\\$100,000/.test(dy0) && /\\$1388\\.89/.test(dy0) && !$('[data-act="su-start"]').disabled && /비워 두면 \\$100,000/.test(ci.parentNode.innerText), (ci && ci.placeholder) + ' | ' + dy0.slice(0, 80));
     ok('세부옵션 처음엔 접힘 · 요약 "지금은 모두 기본값"', !MH.setup.more && /모두 기본값/.test($('.mh-sumore').innerText) && !$('[data-act="su-feemode"]'));
     click('[data-act="su-more"]'); await W(50);
     const n = a => $$('[data-act="' + a + '"]').length;
@@ -138,6 +145,35 @@ NOW_JS = """async () => {""" + PRE + """
       const t1 = rt().innerText, ord = document.querySelector('#t7-root').innerText;
       ok('기록 뒤 현재 화면: 주문 이름 = 목표 +52.5% 지정가 (전량) · 평단/상단 매수선 · 단계 "매수 중" · 용어 없음',
          /목표 \\+52\\.5% 지정가 \\(전량\\)/.test(ord) && /(평단 매수선|상단 매수선)/.test(ord) && /매수 중/.test(t1) && !bad(t1), bad(t1));
+      /* ㉜ 카드 순서: 시장 지표 4개는 거래 히스토리 아래 맨 끝 (RSI → 종가 추이 → VIX → 공포탐욕) */
+      const cards = $$('.mh-card').filter(c => !c.closest('.mh-sheet')), at = f => cards.findIndex(f);
+      const iHist = at(c => /거래 히스토리/.test((c.querySelector('.mh-h3') || {}).textContent || '')), iBt = at(c => c.id === 'mh-bt'), iOrd = at(c => c.id === 'mh-orders');
+      const ind = ['rsi', 'close', 'vix', 'fear'].map(k => at(c => c.getAttribute('data-fold') === k)), have = ind.filter(i => i >= 0);
+      ok('시장 지표 카드(RSI·종가 추이·VIX·공포탐욕) = 거래 히스토리·백테스트 아래 맨 끝 · 그 순서',
+         iHist >= 0 && have.length >= 2 && ind[0] >= 0 && ind[1] >= 0 && have.every(i => i > iHist && i > iBt && i > iOrd) && have.join() === have.slice().sort((a, b) => a - b).join() && have[have.length - 1] === cards.length - 1,
+         JSON.stringify({ iOrd, iBt, iHist, ind, n: cards.length }));
+      const oc = $('#mh-orders');
+      ok('오늘의 주문 강조 (파란 테두리·왼쪽 띠 · 큰 제목 · 건수 칩)', oc && oc.classList.contains('mh-ordhl') && /오늘의 주문/.test(oc.querySelector('.mh-ordhl-t').textContent) && /\\d+건/.test(oc.innerText) &&
+         /linear-gradient/.test(getComputedStyle(oc).backgroundImage) && getComputedStyle(oc, '::before').width === '4px' && !$('.mh-card:not(.mh-ordhl) .mh-ordhl-t'), oc && getComputedStyle(oc).backgroundImage);
+      ok('RSI 표시 기본 = 와일더 (새 사이클 판단과 같은 방식)', MH.rsiMethod === 'wilder' && /와일더\\(원전\\)/.test(($('[data-fold="rsi"]') || {}).innerText || ''), MH.rsiMethod);
+      const vb = $('[data-fold="vix"] .mh-gbar'), fg = $('[data-fold="fear"] .mh-gauge'), stops = el => ((el && el.style.background || '').match(/rgb\\(/g) || []).length;
+      ok('VIX·공포탐욕 띠 = 그라데이션 (구간 사이가 자연스럽게 · 6색 지점)', vb && /linear-gradient/.test(vb.style.background) && stops(vb) === 6 && fg && /linear-gradient/.test(fg.style.background) && stops(fg) === 6,
+         (vb && vb.style.background) + ' | ' + (fg && fg.style.background));
+      /* 접기: 4개 + 백테스트 — 접으면 제목 줄 + 요약만(그래프 없음) · 이 기기에 기억 · 다시 펴기 */
+      const fbad = [], keys = ['rsi', 'close', 'vix', 'fear'].filter(k => $('[data-fold="' + k + '"]')).concat(['bt']);
+      for (const k of keys) {
+        const b = $('[data-fold="' + k + '"] [data-act="fold"]'); if (!b) { fbad.push(k + ': 접기 단추 없음'); continue; }
+        b.click(); await W(80);
+        const sh = $('.mh-fold-shut[data-fold="' + k + '"]'), sum = sh && sh.querySelector('.mh-fold-sum').innerText;
+        if (!sh || !sum || sh.querySelector('canvas') || !JSON.parse(localStorage.getItem('r72-fold') || '{}')[k]) fbad.push(k + ': 접힘 ' + !!sh + ' 요약 ' + sum);
+      }
+      const nCv = $$('canvas[data-chart="close"], canvas[data-chart="fear"]').length, btKeys = Object.keys(T.bt.cache).length;
+      T.render(); await W(150); T.render(); await W(150);
+      const sums = $$('.mh-fold-shut .mh-fold-sum').map(e => e.innerText).join(' | ');
+      ok('카드 접기 (RSI·종가 추이·VIX·공포탐욕·백테스트): 제목 줄 + 요약 · 그래프 없음 · 접은 채 다시 그려도 그대로 · 백테스트 계산 안 함',
+         !fbad.length && nCv === 0 && $$('.mh-fold-shut').length === keys.length && !$('#mh-bt') && Object.keys(T.bt.cache).length === btKeys && /[+−]\\d/.test(sums), fbad.join(' / ') || sums);
+      for (const k of keys) { const h = $('.mh-fold-shut[data-fold="' + k + '"] .mh-fold-h'); if (h) { h.click(); await W(60); } }
+      ok('다시 펴기 → 원래 카드 (그래프·백테스트 카드)', !$$('.mh-fold-shut').length && $('#mh-bt') && $('canvas[data-chart="close"]') && Object.values(JSON.parse(localStorage.getItem('r72-fold') || '{}')).every(v => !v), localStorage.getItem('r72-fold'));
     } else ok('기록 검사에 쓸 시세 없음', false, px.length);
     /* 설명 단추 → 아래 설명글로 */
     window.scrollTo(0, 0); click('.mh-top [data-act="guide"], [data-act="guide"]'); await W(700);
@@ -173,6 +209,54 @@ LIVE_JS = """async () => {""" + PRE + """
   return R;
 }"""
 
+# ㉜ LOC 매수 상한 실시간 시세 — Worker /q 응답을 이 검사 안에서 가짜로 (fetch 가로채기 · 진짜 서버 안 부름)
+LQ_JS = """async () => {""" + PRE + r"""
+  const of = window.fetch; let QV = { p: 131.25, ses: 'post', ps: 'post' }, qn = 0, qfail = false;
+  window.fetch = function (u) { if (typeof u === 'string' && /\/q\?s=SOXL$/.test(u)) { qn++;
+      return Promise.resolve(qfail ? new Response('{"error":"upstream"}', { status: 502 }) : new Response(JSON.stringify(Object.assign({ s: 'SOXL', t: Math.floor(Date.now() / 1000) - 20, rp: 125, pc: 128 }, QV)), { status: 200, headers: { 'Content-Type': 'application/json' } })); }
+    return of.apply(this, arguments); };
+  const L = T.lq, money = v => '$' + (Math.floor(v * 1.2 * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const val = () => ($('#mh-loc [data-in="cap"]') || {}).value, hint = () => ($('#mh-loc-hint') || {}).innerText || '', chip = () => ($('#mh-loc-ses') || {}).textContent;
+  const tick = async () => { L.tried = Date.now() - 25000; T.lqKick(); await W(250); };
+  try {
+    MH.sheet = null; MH.menu = false; MH.view = 'now'; MH.capEdited = false;
+    for (let i = 0; i < 60 && L.busy; i++) await W(200);   /* 진짜 서버로 가던 조회가 끝나기를 */
+    L.v = null; L.err = 0; L.tried = 0; T.render(); await W(300);
+    ok('LOC 상한: 카드가 보이면 바로 실시간 시세 조회 · 기준가 = 애프터장 현재가 · 장 칩 · 상한 = ×1.2',
+       qn === 1 && val() === '131.25' && /애프터장 현재가/.test(hint()) && /실시간/.test(hint()) && chip() === '애프터장' && $('#mh-cap-out').textContent === money(131.25), JSON.stringify([qn, val(), hint(), chip()]));
+    const card = $('#mh-loc'); card.__keep = 1; QV.p = 140; await tick();
+    ok('주기 갱신: 카드의 숫자만 바꿈 (화면을 다시 그리지 않음)', $('#mh-loc') === card && val() === '140' && $('#mh-cap-out').textContent === money(140) && qn === 2, JSON.stringify([val(), qn, $('#mh-loc') === card]));
+    fill('#mh-loc [data-in="cap"]', '100'); QV.p = 150; await tick();
+    ok('손으로 고친 기준가는 갱신해도 그대로 · 자동 값만 바뀜(수동 수정됨)', val() === '100' && /수동 수정됨/.test(hint()) && /자동 \$150\.00/.test(hint()) && $('#mh-cap-out').textContent === money(100), JSON.stringify([val(), hint()]));
+    const n0 = qn; QV.p = 151.5; L.tried = Date.now(); click('[data-act="cap-auto"]'); await W(300);
+    ok('↻ 자동 = 지금 바로 다시 조회해 채움 (20초를 기다리지 않음)', qn === n0 + 1 && val() === '151.5' && !MH.capEdited && $('#mh-cap-out').textContent === money(151.5), JSON.stringify([qn - n0, val()]));
+    const ses = []; for (const v of [{ p: 120.5, ses: 'pre', ps: 'pre' }, { p: 121, ses: 'reg', ps: 'reg' }, { p: 122, ses: 'closed', ps: 'post' }]) { QV = v; await tick(); ses.push(chip() + ' / ' + hint().split('\n')[0]); }
+    ok('장마다 이름: 프리장 현재가 · 정규장 현재가 · 장 마감이면 마지막 체결가(애프터장) · 마감 중엔 5분마다', /^프리장 \/ .*프리장 현재가/.test(ses[0]) && /^정규장 \/ .*정규장 현재가/.test(ses[1]) && /^장 마감 \/ .*마지막 체결가 \(애프터장\)/.test(ses[2]) && val() === '122' && /5분마다/.test($('#mh-loc-note').textContent), ses.join(' | '));
+    qfail = true; L.v = null; await tick();
+    const q0 = MH.market.SOXL && MH.market.SOXL.quote;
+    ok('실시간 시세를 못 받으면 시세 자료 값 · 다음 조회는 늦게(20초 → 40초 …)', L.err >= 1 && /못 받아 시세 자료 값/.test(hint()) && !/실시간 ·/.test(hint()) && (!q0 || Number(val()) > 0), JSON.stringify([L.err, hint(), val()]));
+    qfail = false; QV = { p: 133, ses: 'reg', ps: 'reg' }; await tick();
+    ok('다시 받아지면 실시간으로', L.err === 0 && val() === '133' && /정규장 현재가/.test(hint()), hint());
+    QV = { p: null }; await tick(); const busy = !!L.busy, e1 = L.err; QV = { p: 134, ses: 'reg', ps: 'reg' }; L.v = null; await tick();
+    ok('이상한 응답(가격 없음)도 실패로 처리 · 다음 조회가 막히지 않음', !busy && e1 >= 1 && L.err === 0 && val() === '134', JSON.stringify([busy, e1, L.err, val()]));
+    MH.view = 'an'; T.render(); await W(80); const stop = !L.timer;
+    MH.view = 'now'; T.render(); await W(80);
+    ok('LOC 카드가 없는 화면(분석)에선 조회를 멈추고 · 돌아오면 다시', stop && !!L.timer, JSON.stringify([stop, L.timer]));
+  } catch (e) { ok('실시간 시세 흐름 오류', false, String(e && e.message)); }
+  finally { window.fetch = of; }
+  return R;
+}"""
+
+# 배포 사이트: 진짜 Worker /q 가 이 사이트에서 답하는지 (CORS · 야후 1분봉) — 카드가 실시간 값을 받기까지
+LQ_REAL_JS = """async () => {""" + PRE + r"""
+  try {
+    const L = T.lq; MH.sheet = null; MH.menu = false; MH.view = 'now'; L.v = null; L.err = 0; L.tried = 0; T.render();
+    for (let i = 0; i < 60 && !(L.v && L.v.p > 0) && L.err === 0; i++) await W(250);
+    ok('배포 Worker /q 실시간 시세 (사이트에서 바로 · 프리·정규·애프터 장 표시)', L.v && L.v.p > 0 && /^(pre|reg|post|closed)$/.test(L.v.ses) && /실시간/.test(($('#mh-loc-hint') || {}).innerText || ''), JSON.stringify([L.v, L.err]));
+  } catch (e) { ok('배포 /q 확인 오류', false, String(e && e.message)); }
+  return R;
+}"""
+
 BT_JS = """async (live) => {""" + PRE + """
   try {
     const s = ses().settings;
@@ -180,7 +264,11 @@ BT_JS = """async (live) => {""" + PRE + """
     ok('카드 기본 기간 = 전체 · 계산 끝', r && r.st === 'ok' && $('#mh-bt [data-act="bt-per"][data-v="all"]').classList.contains('mh-btn-sel'), r && (r.st + ' ' + (r.msg || '')));
     if (!r || r.st !== 'ok') return R;
     const bt = document.getElementById('mh-bt').innerText;
-    ok('카드: 수수료 0.1% · 무한매수법 백테스트 링크 없음 · 크게 보기 단추 · 상장 전 포함 단추', /수수료 0\\.1%/.test(bt) && !document.querySelector('#mh-bt a[href*="muhan-backtest"]') && $('[data-act="btz-open"]') && $('#mh-bt [data-act="bt-per"][data-v="pre"]') && !bad(bt), bad(bt) || bt.slice(0, 200));
+    ok('카드: 수수료 0.1% · 무한매수법 백테스트 링크 없음 · 크게 보기 단추 · 상장 전 포함 단추', /수수료 0\\.1%/.test(bt) && !document.querySelector('#mh-bt a[href*="muhan-backtest"]') && $('[data-act="btz-open"]') && $('#mh-bt [data-act="bt-pre"]') && !bad(bt), bad(bt) || bt.slice(0, 200));
+    /* ㉜ 단추: 기간 1·3·5·10년·전체·기간설정 (상장 전 포함을 켜야 20·30년) · 세금·수수료 포함/미포함은 늘 한 줄에 나란히 */
+    const chips = () => $$('#mh-bt [data-act="bt-per"]').map(b => b.getAttribute('data-v')).join(','), vw = () => $$('#mh-bt [data-act="bt-view"]');
+    const row1 = () => { const v = vw(); return v.length === 2 && Math.abs(v[0].getBoundingClientRect().top - v[1].getBoundingClientRect().top) < 2; };
+    ok('기간 단추 1·3·5·10년·전체·기간설정 (20·30년 숨김) · 상장 전 포함 꺼짐 · 포함/미포함 한 줄', chips() === '1y,3y,5y,10y,all,custom' && !T.bt.pre && $('#mh-bt [data-act="bt-pre"]').getAttribute('aria-pressed') === 'false' && row1(), chips());
     /* 카드 숫자 = 엔진 직접 (같은 자료 · 일부분 복리 0.3 · RSI · 절세 · 분배금 빼기) */
     const D = await MBT.load('SOXL'), F = await MBT.fxData().catch(() => null), o = T.btOpts(s), c = T.vcfg(s), cap = s.totalCapital, fx = F && o.tax ? MBT.fxFor(D.d, F) : null;
     const Dn = o.divs ? D : Object.assign({}, D, { dv: null }), base = { from: 1, to: D.d.length - 1, capital: cap, norm: 'auto', rows: false };
@@ -205,11 +293,11 @@ BT_JS = """async (live) => {""" + PRE + """
       if (!tr || tr.cells[1].textContent !== pc(s1[i1] / v0 - 1) || tr.cells[2].textContent !== pc(bh[i1] / b0 - 1) || tr.getAttribute('data-v') !== i0 + ':' + i1) badY.push(d[i1].slice(0, 4)); });
     ok('연도별 수익률 ' + ends.length + '년 = 직접 계산 (첫해는 원금 기준)', ends.length >= 10 && !badY.length, badY.join(','));
     const ym = ends[Math.floor(ends.length / 2)], yy = d[ym].slice(0, 4), tr = yrRow(yy), want = tr.cells[1].textContent;
-    const capFull = chz().data.datasets.length === 3 && rt().querySelector('.mh-btz-cap').style.display !== 'none';
+    const capFull = chz().data.datasets.length === 3 && !chz().data.datasets[2].hidden && rt().querySelector('.mh-btz-cap').style.display !== 'none';
     tr.click(); await W(200);
     { const [i0, i1] = tr.getAttribute('data-v').split(':').map(Number), vis = []; for (let i = Math.max(0, i0); i <= i1; i++) vis.push(s1[i], bh[i]);
       const lo = Math.min(...vis), hi = Math.max(...vis), on = r.cap >= lo / 1.5 && r.cap <= hi * 1.5;
-      ok('원금 선: 전체 구간엔 보이고 · 확대 구간이 원금과 멀면 숨김(눈금이 눌리지 않게)', capFull && chz().data.datasets.length === (on ? 3 : 2) && (rt().querySelector('.mh-btz-cap').style.display === 'none') === !on, JSON.stringify([capFull, on, chz().data.datasets.length, Math.round(lo)])); }
+      ok('원금 선: 전체 구간엔 보이고 · 확대 구간이 원금과 멀면 숨김(눈금이 눌리지 않게)', capFull && !!chz().data.datasets[2].hidden === !on && (rt().querySelector('.mh-btz-cap').style.display === 'none') === !on, JSON.stringify([capFull, on, chz().data.datasets[2].hidden, Math.round(lo)])); }
     ok('연도 줄을 누르면 그해로 확대 (구간 수익률 = 표 값 · 기간 단추 선택 풀림)', cell('수익률', 1) === want && T.btz.per === null && !$$('[data-act="btz-per"].mh-btn-sel').length && new RegExp(yy + '-12-').test(st()), st().slice(0, 80) + ' / ' + want);
     click('[data-act="btz-per"][data-v="1"]'); await W(200);
     const y1 = (st().match(/· ([\\d.]+)년/) || [])[1];
@@ -221,6 +309,30 @@ BT_JS = """async (live) => {""" + PRE + """
     ok('그래프를 끌면 고른 구간만 확대', a0 === -1 && T.btz.a > 0 && T.btz.b < b0 && T.btz.b - T.btz.a > 5 && T.btz.per === null, JSON.stringify([a0, b0, T.btz.a, T.btz.b]));
     const lg = document.getElementById('mh-btz-log'), l0 = chz().options.scales.y.type; lg.click(); await W(200);
     ok('로그 눈금 끄고 켜기', chz().options.scales.y.type !== l0 && document.getElementById('mh-btz-log').checked === (chz().options.scales.y.type === 'logarithmic'), l0 + ' → ' + chz().options.scales.y.type);
+    /* ㉜ 마우스 휠·두 손가락 — 그래프를 새로 만들지 않고 구간만 바꿈 · 전체에서 더 줄이면 화면 스크롤로 넘김 */
+    click('[data-act="btz-per"][data-v="0"]'); await W(150);
+    { const cv = rt().querySelector('canvas[data-chart="btz"]'), ch0 = chz(), rc = cv.getBoundingClientRect(), y = rc.top + rc.height / 2, n = r.ch.d.length;
+      const fxOf = x => { const ca = chz().chartArea; return Math.max(0, Math.min(1, (x - rc.left - ca.left) / (ca.right - ca.left))); };   /* 그래프 안 가로 비율 (화면 코드와 같은 계산) */
+      const wh = (dy, x, extra) => { const e = new WheelEvent('wheel', Object.assign({ deltaY: dy, deltaMode: 0, clientX: x, clientY: y, bubbles: true, cancelable: true }, extra || {})); cv.dispatchEvent(e); return e.defaultPrevented; };
+      const pOut = wh(120, rc.left + rc.width / 2); await W(80);
+      const full = T.btz.a === -1 && T.btz.b === n - 1;
+      const xw = rc.left + rc.width * 0.75, fw = fxOf(xw), pIn = wh(-300, xw); await W(150);
+      const a1 = T.btz.a, b1 = T.btz.b, w1 = b1 - a1;
+      ok('휠 위로 → 확대 (마우스 자리의 날은 그대로 · 그래프 새로 만들지 않음 · 보는 구간 표 바뀜) · 전체에서 휠 아래 → 화면 스크롤로',
+         !pOut && full && pIn && w1 < (n - 1) * 0.8 && w1 > 10 && Math.abs(a1 + w1 * fxOf(xw) - (n - 1) * fw) <= (n - 1) * 0.02 + 2 && chz() === ch0 && T.btz.per === null && new RegExp('^보는 구간').test(st()), JSON.stringify([pOut, full, a1, b1, n, fw]));
+      wh(-200, 0, { shiftKey: true, deltaY: -200 }); await W(150);
+      ok('Shift + 휠 → 옆으로 이동 (너비 그대로)', T.btz.a < a1 && T.btz.b - T.btz.a === w1 && chz() === ch0, JSON.stringify([a1, b1, T.btz.a, T.btz.b]));
+      for (let i = 0; i < 12; i++) wh(400, rc.left + rc.width / 2); await W(200);
+      ok('휠 아래로 계속 → 전체(원금 기준)로 돌아감 · 전체 단추 선택', T.btz.a === -1 && T.btz.b === n - 1 && T.btz.per === '0' && $('[data-act="btz-per"][data-v="0"]').classList.contains('mh-btn-sel'), JSON.stringify([T.btz.a, T.btz.b, T.btz.per]));
+      const pe = (t, id, x) => cv.dispatchEvent(new PointerEvent(t, { bubbles: true, pointerId: id, pointerType: 'touch', clientX: x, clientY: y, isPrimary: id === 1 })), cx = rc.left + rc.width / 2;
+      const fs = fxOf(cx); pe('pointerdown', 1, cx - 20); pe('pointerdown', 2, cx + 20); for (let k = 1; k <= 8; k++) { pe('pointermove', 1, cx - 20 - k * 12); pe('pointermove', 2, cx + 20 + k * 12); }
+      pe('pointerup', 1, cx - 116); pe('pointerup', 2, cx + 116); await W(200);
+      const a2 = T.btz.a, b2 = T.btz.b, sel = rt().querySelector('.mh-btz-sel'), fc = fxOf(cx);
+      ok('두 손가락 벌리기 → 확대 (두 손가락 가운데의 날은 그대로) · 끌어서 고르기 상자는 안 생김 · 그래프 그대로', a2 > 0 && b2 < n - 1 && (b2 - a2) < (n - 1) / 3 && Math.abs(a2 + (b2 - a2) * fc - (n - 1) * fs) <= (n - 1) * 0.02 + 2 && sel.hidden && chz() === ch0, JSON.stringify([a2, b2, n, fc]));
+      pe('pointerdown', 1, cx - 120); pe('pointerdown', 2, cx + 120); for (let k = 1; k <= 8; k++) { pe('pointermove', 1, cx - 120 + k * 12); pe('pointermove', 2, cx + 120 - k * 12); }
+      pe('pointerup', 1, cx - 24); pe('pointerup', 2, cx + 24); await W(200);
+      ok('두 손가락 오므리기 → 축소', T.btz.b - T.btz.a > (b2 - a2) * 2, JSON.stringify([a2, b2, T.btz.a, T.btz.b]));
+      click('[data-act="btz-per"][data-v="0"]'); await W(150); }
     const ka = T.btz.a, kb = T.btz.b, sN = st();
     click('.mh-sheet [data-act="bt-view"][data-v="gross"]'); await W(300);
     ok('창 안에서 미포함으로 바꿔도 구간 그대로 · 숫자는 미포함', T.btz.a === ka && T.btz.b === kb && st() !== sN && rt().querySelector('.mh-sheet [data-act="bt-view"][data-v="gross"]').classList.contains('mh-btn-sel'));
@@ -228,8 +340,24 @@ BT_JS = """async (live) => {""" + PRE + """
     const sht = document.querySelector('#t7-root .mh-sheet').innerText;
     ok('크게 보기 창 무한매수법 용어 없음', !bad(sht), bad(sht));
     MH.sheet = null; T.render(); await W(50);
-    /* 상장 전 포함 */
-    click('#mh-bt [data-act="bt-per"][data-v="pre"]'); await W(100);
+    /* ㉜ 기간설정 — 시작일 ~ 끝일 (지금 보던 결과의 기간으로 채워 줌 · 숫자 = 엔진 직접 · 거꾸로 고르면 안내) */
+    click('#mh-bt [data-act="bt-per"][data-v="custom"]'); await W(100); r = await waitCard();
+    const cf = $('#mh-bt #mh-bt-cf'), ct = $('#mh-bt #mh-bt-ct');
+    ok('기간설정: 날짜 칸 두 개 · 처음엔 보던 결과의 기간', cf && ct && cf.value === D.d[1] && ct.value === D.d[D.d.length - 1] && r && r.st === 'ok' && r.from === D.d[1], JSON.stringify([cf && cf.value, ct && ct.value, r && r.from]));
+    $('#mh-bt #mh-bt-cf').value = '2020-01-01'; $('#mh-bt #mh-bt-ct').value = '2019-01-01'; click('#mh-bt [data-act="bt-apply"]'); await W(80);
+    ok('시작일이 끝일보다 뒤면 안내 · 계산 안 함', /시작일이 끝일보다 앞이어야/.test($('#mh-bt-rhelp').textContent) && T.bt.cf !== '2020-01-01', $('#mh-bt-rhelp').textContent);
+    $('#mh-bt #mh-bt-cf').value = '2015-01-01'; $('#mh-bt #mh-bt-ct').value = '2020-12-31'; click('#mh-bt [data-act="bt-apply"]'); await W(100); r = await waitCard();
+    { let f = 1, t = D.d.length - 1; for (let i = 1; i < D.d.length; i++) if (D.d[i] >= '2015-01-01') { f = i; break; } for (let j = D.d.length - 1; j >= 1; j--) if (D.d[j] <= '2020-12-31') { t = j; break; }
+      const b2 = { from: f, to: t, capital: cap, norm: 'auto', rows: false }, R2 = MHV.run(c, Dn, Object.assign({}, b2, { fee: o.fee / 100, sec: 0.0000206, divTax: 0.15, tax: fx ? { fx: i => fx[i], method: o.method, harvest: o.harvest } : null }));
+      const n3 = MBT.stats(R2, D, cap);
+      ok('기간설정 2015-01-01 ~ 2020-12-31 → 그 사이 거래일만 · 숫자 = 엔진 직접', r && r.st === 'ok' && r.from === D.d[f] && r.to === D.d[t] && eq(r.net, n3) && r.ch.d.length === t - f + 1 && /2015-01-0\\d ~ 2020-12-3\\d/.test(document.getElementById('mh-bt').innerText),
+         JSON.stringify([r && r.from, r && r.to, r && r.net.cagr, n3.cagr])); }
+    $('#mh-bt #mh-bt-cf').value = '2000-01-01'; $('#mh-bt #mh-bt-ct').value = '2009-12-31'; click('#mh-bt [data-act="bt-apply"]'); await W(100); r = await waitCard();
+    ok('상장 전(2010-03 전) 기간을 상장 전 포함 없이 고르면 "자료 없음" 안내 · 켜라는 안내', r && r.st === 'err' && /고른 기간에 자료가 없어요/.test(r.msg) && /상장 전 포함.?을 켜/.test(document.getElementById('mh-bt').innerText), r && r.msg);
+    /* 상장 전 포함 (켜기·끄기 — 기간은 그대로 · 20·30년 단추) */
+    click('#mh-bt [data-act="bt-per"][data-v="all"]'); await W(100); await waitCard();
+    click('#mh-bt [data-act="bt-pre"]'); await W(100);
+    ok('상장 전 포함 켜면 20·30년 단추가 생김 · 전체 그대로 · 포함/미포함 한 줄', T.bt.pre && chips() === '1y,3y,5y,10y,20y,30y,all,custom' && $('#mh-bt [data-act="bt-per"][data-v="all"]').classList.contains('mh-btn-sel') && row1(), chips());
     r = await waitCard(240000);
     const tp = document.getElementById('mh-bt').innerText;
     if (r && r.st === 'ok' && r.pre) {
@@ -238,10 +366,19 @@ BT_JS = """async (live) => {""" + PRE + """
       ok('상장 전 포함: |재현 차이| ≥ 5%p ⇔ ⚠ 안내', big === /⚠ 상장 전 구간 결과는 믿기 어려워요/.test(tp), r.pre.d);
       click('[data-act="btz-open"]'); await W(400);
       const s2 = document.querySelector('#t7-root .mh-sheet').innerText;
-      ok('상장 전 크게 보기: 재현 표시(연도 줄 · 구간 안내)', /재현/.test(s2) && /상장 전 재현 가격/.test(s2) && cell('연평균 (CAGR)', 1) === pc(r.net.cagr, 2), s2.slice(0, 160));
+      ok('상장 전 크게 보기: 재현 표시(연도 줄 · 구간 안내) · 20·30년 단추', /재현/.test(s2) && /상장 전 재현 가격/.test(s2) && cell('연평균 (CAGR)', 1) === pc(r.net.cagr, 2) && $('[data-act="btz-per"][data-v="30"]'), s2.slice(0, 160));
       MH.sheet = null; T.render();
+      click('#mh-bt [data-act="bt-per"][data-v="30y"]'); await W(100); r = await waitCard(240000);
+      const y30 = r && r.from ? (new Date(r.to) - new Date(r.from)) / 3.15576e10 : 0;
+      ok('상장 전 포함 + 30년 → 30년 전부터 (재현 + 실제)', r && r.st === 'ok' && Math.abs(y30 - 30) < 0.05 && r.preL > 0 && r.pre && !r.pre.all, JSON.stringify([r && r.from, r && r.to, y30]));
+      click('#mh-bt [data-act="bt-per"][data-v="custom"]'); await W(60);
+      $('#mh-bt #mh-bt-cf').value = '2000-01-01'; $('#mh-bt #mh-bt-ct').value = '2009-12-31'; click('#mh-bt [data-act="bt-apply"]'); await W(100); r = await waitCard(240000);
+      const tc = document.getElementById('mh-bt').innerText;
+      ok('상장 전 포함 + 기간설정 2000~2009 → 전부 재현 가격 · 상장일 선 없음 · 안내', r && r.st === 'ok' && r.from >= '2000-01-03' && r.to <= '2009-12-31' && r.pre && r.pre.all && !document.querySelector('#mh-bt svg line[stroke="var(--m-warn)"]') && /이 기간 전부/.test(tc), JSON.stringify([r && r.from, r && r.to, r && r.pre]));
+      click('#mh-bt [data-act="bt-per"][data-v="all"]'); await W(100); await waitCard(240000);
     } else ok(live ? '상장 전 포함: 배포 사이트에선 SOXL 재현이 붙어야 함' : '상장 전 포함: 재현 식이 없으면 실제 일봉만 · 안내', !live && r && r.st === 'ok' && /실제 일봉만 썼어요/.test(tp), (r && (r.st + ' ' + (r.msg || r.preNote || ''))) + ' ' + tp.slice(0, 160));
-    click('#mh-bt [data-act="bt-per"][data-v="all"]'); await W(100); await waitCard();
+    click('#mh-bt [data-act="bt-pre"]'); await W(100); await waitCard();
+    ok('상장 전 포함 끄면 20·30년 단추 숨김 · 실제 일봉', !T.bt.pre && chips() === '1y,3y,5y,10y,all,custom' && card() && !card().preL, chips());
   } catch (e) { ok('백테스트 카드 흐름 오류', false, String(e && e.message)); }
   return R;
 }"""
@@ -398,23 +535,45 @@ def check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS):
     report('72 현재', page.evaluate(NOW_JS))
     overflow('현재 화면(기록 3일)')
     report('72 실시간', page.evaluate(LIVE_JS))
+    report('72 실시간 시세', page.evaluate(LQ_JS))
+    if not local:
+        report('72 실시간 시세', page.evaluate(LQ_REAL_JS))
     report('72 백테스트', page.evaluate(BT_JS, not local))
+    # ㉜ 좁은 화면에서도 '세금·수수료 포함'·'미포함' 두 단추는 한 줄에 나란히 (따로 줄바꿈되지 않음)
+    ROW1 = "() => { const v = [...document.querySelectorAll('#t7-root #mh-bt [data-act=\"bt-view\"]')]; return v.length === 2 && Math.abs(v[0].getBoundingClientRect().top - v[1].getBoundingClientRect().top) < 2; }"
+    for w, fs in ((320, 1), (360, 1), (390, 1), (320, 1.3)):   # 글자 크기 130%(⋮ 메뉴 글자 크기)면 줄이 모자라 단추가 다음 줄로 — 그때도 두 단추는 함께
+        page.set_viewport_size({'width': w, 'height': 900}); page.evaluate("(fs) => { T72debug.MH.fontScale = fs; T72debug.render(); }", fs); page.wait_for_timeout(150)
+        n[0] += 1
+        if not page.evaluate(ROW1):
+            n[1] += 1; fail('72 백테스트', '%dpx · 글자 %d%% 에서 세금·수수료 포함/미포함 단추가 한 줄에 나란히 있지 않음' % (w, fs * 100))
+    page.evaluate("() => { T72debug.MH.fontScale = 1; T72debug.render(); }")
+    page.set_viewport_size({'width': 430, 'height': 900}); page.wait_for_timeout(120)
     page.evaluate("() => { const T = T72debug; T.MH.sheet = { kind: 'btz', key: T.btKey(T.store.sessions[0].settings) }; T.render(); }")
     page.wait_for_timeout(400)
     overflow('크게 보기 창')
     page.evaluate("() => { T72debug.MH.sheet = null; T72debug.render(); }")
     report('72 중간 진입', page.evaluate(MID_JS))
     report('72 사이클 끝', page.evaluate(CYCLE_JS))
-    # 새로고침 뒤 그대로 (세션 3개 · 첫 세션 기록 3일)
+    # 새로고침 뒤 그대로 (세션 3개 · 첫 세션 기록 3일 · 접은 카드)
+    page.evaluate("() => localStorage.setItem('r72-fold', JSON.stringify({ vix: true }))")
     page.reload(wait_until='load')
     try:
         page.wait_for_function("window.T72debug && T72debug.store.sessions.length === 3 && document.querySelector('#t7-root .mh-top')", timeout=30000)
         if page.evaluate("() => T72debug.store.sessions[0].transactions.length") != 3:
             fail('72', '새로고침 뒤 첫 세션 기록 3일이 남지 않음')
+        n[0] += 1
+        if page.evaluate("() => T72debug.MH.vix.length > 0 && !document.querySelector('#t7-root .mh-fold-shut[data-fold=\"vix\"]')"):
+            n[1] += 1; fail('72', '새로고침 뒤 접어 둔 VIX 카드가 펼쳐져 있음 (접기 기억 안 됨)')
     except Exception as e:
         fail('72', '새로고침 뒤 기록이 남지 않음: %s' % str(e)[:120])
+    page.evaluate("() => localStorage.removeItem('r72-fold')")
     if page.evaluate("() => localStorage.getItem('muhan4-store')") != mh0:
         fail('72', '72루틴 화면이 무한매수법 기록(muhan4-store)을 바꿈')
+    # ㉜ 시작 원금 칸을 비우고 시작 → $100,000
+    _fresh(page, base)
+    n[0] += 1
+    if not page.evaluate(START_JS, '') or page.evaluate("() => T72debug.store.sessions[0].settings.totalCapital") != 100000:
+        n[1] += 1; fail('72 시작', '시작 원금 칸을 비우고 시작했는데 원금이 $100,000 이 아님')
     # 기본 설정(원금 $10,000 · 수수료 0.25%) 카드 = 같은 조건 무한매수법 백테스트 화면 (같은 엔진·같은 자료 · 고정 규칙이 V1.0 설정 그대로)
     _fresh(page, base)
     try:

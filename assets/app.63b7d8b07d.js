@@ -12135,6 +12135,9 @@ window.MBT = (function () {
    프로필 P: 같은 화면 코드를 무한매수법(/muhan/ · 아래 mhApp 호출)과 72루틴(/72/ · [T72] 이 고정 규칙 프로필로 호출)이 함께 씀
      · 프로필마다 다른 것 — 저장 키(P.key·P.ls 접두사) · 계정 키(P.sync) · 뿌리 요소(P.root·P.page) · 이름(P.name) · 전역 이름(P.init·P.debug)
      · P.lock(고정 규칙 프로필): 버전·종목·분할·목표·큰수·평단 LOC 괴리율·소진 대응·정액이 고정 — 시작 화면·⋮ 메뉴는 고를 수 있는 옵션만, 계산(vcfg)도 lock 값으로
+     · 화면 옵션(72루틴만 켬): btPre·btRange·btZoom(백테스트 카드 상장 전 포함·기간설정·크게 보기) · capDef(시작 원금 기본) · indBottom(시장 지표 카드 맨 아래) · fold(카드 접기)
+       · grad(공포탐욕·VIX 그라데이션) · ordHl(오늘의 주문 강조) · rsiDef(RSI 표시 기본 방식) — 무한매수법은 끔(예전 그대로)
+     · 두 화면 공통: LOC 매수 상한 '↻ 자동' = Worker /q 실시간 시세(프리·정규·애프터 · 카드가 보이는 동안 20초마다) · 요소 찾기 $() 는 자기 화면(P.root) 안에서만
 ════════════════════════════════════════════════════════════ */
 function mhApp(P) {
   var E = MHE, KEY = P.key, OLD_KEY = P.oldKey || null, PX = P.ls, LK = P.lock || null;
@@ -12143,7 +12146,12 @@ function mhApp(P) {
   function baseOf(s) { return s && s.base > 0 ? s.base : s ? s.totalCapital : 0; }   /* 처음 원금 (시작 원금 · '원금 바꿔서 재시작'을 하면 그 원금) */
   function phName(p) { return !LK ? p : p === '처음매수' ? '처음 매수' : p === '전반전' || p === '후반전' ? '매수 중' : p === '소진' || p === '소진모드' ? '원금 소진' : p === '종료' ? '사이클 끝' : p; }
   var TG_MIN = 0.5, TG_MAX = 100;   /* 목표 수익률(기준 R) 범위 — 무한매수법 백테스트(mb-tg 0.5~100)와 같게: 백테스트 결과 설정을 그대로 시작할 수 있게 */
-  var $ = function (id) { return document.getElementById(id); };
+  /* 요소 찾기 — 이 화면(P.root) 안에서만: 무한매수법·72루틴이 같은 id(mh-bt·mh-cap-out·mh-su-dyn …)를 써서, 두 화면이 한 문서에 함께 있을 때
+     (배포 페이지는 화면마다 따로라 함께 있지 않음 · 한 파일인 src/index.html 을 바로 열 때 등) 다른 화면의 칸을 고치지 않게 (㉜) · 뿌리·페이지는 문서에서 */
+  var $ = function (id) {
+    if (id === P.root || id === P.page) return document.getElementById(id);
+    var rt = document.getElementById(P.root); return rt ? rt.querySelector('[id="' + id + '"]') : null;
+  };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var uid = function () { return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); };
   var ymd = function (d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -12316,9 +12324,10 @@ function mhApp(P) {
     view: 'now', menu: false, sheet: null, pop: null, tabDir: null,
     setup: null, fontScale: Number(LS(PX + 'fontScale', '1')) || 1,
     todo: LS(PX + 'order-todo', 'true') !== 'false', rsiOn: LS(PX + 'rsi', 'true') !== 'false',
-    rsiMethod: LS(PX + 'rsi-method', 'sma') === 'wilder' ? 'wilder' : 'sma', vixOn: LS(PX + 'vix', 'true') !== 'false',
+    rsiMethod: LS(PX + 'rsi-method', P.rsiDef || 'sma') === 'wilder' ? 'wilder' : 'sma', vixOn: LS(PX + 'vix', 'true') !== 'false',   /* P.rsiDef: 72루틴 = 와일더(새 사이클 'RSI 60 이하' 판단과 같은 방식) */
     chartPeriod: '1y', anScope: null, anOpen: null, restartOpen: false, restartCap: '', restartSplits: 20, manualDate: today(), manualClose: '',
-    market: {}, marketTicker: null, fx: null, fear: null, vix: [], loading: false, failed: false, now: new Date()
+    market: {}, marketTicker: null, fx: null, fear: null, vix: [], loading: false, failed: false, now: new Date(),
+    fold: (function () { try { var f = JSON.parse(LS(PX + 'fold', '{}')); return f && typeof f === 'object' ? f : {}; } catch (e) { return {}; } })()   /* 접은 카드 (P.fold) */
   };
   if (P.globalMH) window.MH = MH;   /* 무한매수법 화면만 전역 MH (검사·다른 코드가 씀) */
 
@@ -12538,10 +12547,9 @@ function mhApp(P) {
     if (cur === 'USD' && D.fx) h += '<div class="mh-tiny mh-faint mh-mono" style="text-align:right;margin:0 0 10px">USD/KRW <b style="color:var(--m-tx)">₩' + Number(D.fx.rate).toLocaleString(undefined, { maximumFractionDigits: 2 }) + '</b>' + (D.fx.date ? ' (' + D.fx.date + ')' : '') + '</div>';
     if (D.failed) h += '<div class="mh-note warn" style="margin-bottom:10px"><b class="mh-warn">⚠️ 종가를 불러오지 못했어요</b><br>시세 서버가 일시적으로 응답하지 않아 <b>최근 종가 · 주문표 · 기록 자동 채움</b>을 계산할 수 없습니다. 잠시 후 <b>새로고침</b>하면 다시 불러옵니다.</div>';
     if (D.ot.length > 0) h += safe(viewCloses, D);
-    if (MH.rsiOn && D.rsiVal != null && D.rsiPrices.length > 0) h += safe(viewRsi, D);
-    if (D.hn.length > 0) h += safe(viewCloseChart, D);
-    if (MH.vixOn && !D.isCustom && D.vix.length > 0) h += safe(viewVix, D);
-    if (!D.isCustom && MH.fear) h += safe(viewFear, D);
+    var ind = (MH.rsiOn && D.rsiVal != null && D.rsiPrices.length > 0 ? safe(viewRsi, D) : '') + (D.hn.length > 0 ? safe(viewCloseChart, D) : '') +
+      (MH.vixOn && !D.isCustom && D.vix.length > 0 ? safe(viewVix, D) : '') + (!D.isCustom && MH.fear ? safe(viewFear, D) : '');   /* 시장 지표 카드 (RSI · 종가 추이 · VIX · 공포탐욕) — P.indBottom(72루틴)이면 맨 아래 */
+    if (!P.indBottom) h += ind;
     h += modeCard(D);
     var G = D.gate, rsiTx = G && G.rsi != null ? '와일더 RSI(14) <b class="mh-mono">' + G.rsi.toFixed(1) + '</b>' : '';
     if (st.phase === '처음매수' && D.close && G && G.wait)
@@ -12565,15 +12573,19 @@ function mhApp(P) {
     h += safe(viewBt, D);
     if (D.hist.length >= 2) h += safe(viewAvgChart, D);
     if (D.txs.length > 0) h += safe(viewHistoryOld, D);
+    if (P.indBottom) h += ind;
     return h;
   }
   function viewOrdersOld(D) {
-    var cur = D.cur, sells = D.orders.filter(function (o) { return o.type === 'sell'; }), buys = D.orders.filter(function (o) { return o.type === 'buy'; }), P = D.P;
-    var h = '<div class="mh-card"><div class="mh-row" style="margin-bottom:8px"><span class="mh-h3">오늘의 주문</span><span class="mh-small mh-muted">' + D.orders.length + '건 · ' + esc(phName(D.st.phase)) + '</span></div>';
+    var cur = D.cur, sells = D.orders.filter(function (o) { return o.type === 'sell'; }), buys = D.orders.filter(function (o) { return o.type === 'buy'; }), PL = D.P;
+    var h = P.ordHl ?   /* P.ordHl(72루틴): 눈에 띄게 — 파란 테두리·옅은 파란 바탕·왼쪽 띠 · 큰 제목 · 건수/단계 칩 */
+      '<div class="mh-card mh-ordhl" id="mh-orders"><div class="mh-row" style="margin-bottom:10px;align-items:flex-start"><div><div class="mh-ordhl-k">증권사 앱에 이대로 넣을 주문</div><div class="mh-ordhl-t">📋 오늘의 주문</div></div>' +
+        '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end"><span class="mh-chip mh-chip-ac" style="font-size:11px;padding:3px 9px;font-weight:700">' + D.orders.length + '건</span><span class="mh-chip" style="font-size:11px;padding:3px 9px">' + esc(phName(D.st.phase)) + '</span></div></div>' :
+      '<div class="mh-card"><div class="mh-row" style="margin-bottom:8px"><span class="mh-h3">오늘의 주문</span><span class="mh-small mh-muted">' + D.orders.length + '건 · ' + esc(phName(D.st.phase)) + '</span></div>';
     if (D.settling) h += '<div class="mh-note warn" style="margin-bottom:8px"><b class="mh-warn">⏳ 종가 확정 전</b> — 마감 직후 ~15분은 종가가 공식 종가와 몇 센트 다를 수 있어, 아래 주문 가격이 확정 후 살짝 달라질 수 있어요.</div>';
     if (sells.length) h += '<div class="mh-small mh-bad" style="font-weight:600;margin:4px 0 6px">● 매도</div>' + sells.map(function (o) { return orderRow(o, cur, false); }).join('');
     if (buys.length) h += '<div class="mh-small mh-ok" style="font-weight:600;margin:10px 0 6px">● 매수</div>' + buys.map(function (o) { return orderRow(o, cur, false); }).join('');
-    h += '<p class="mh-help">' + (P.sp != null && P.star ? '별% ' + sign(P.sp) + (+P.sp).toFixed(2) + '% · 별지점 ' + fmt(P.star, cur, 2) + ' · ' : '') + '1회 ' + fmt(P.one || 0, cur, 2) + ' · 기준 = 전일 종가 ' + fmt(D.close, cur, 2) +
+    h += '<p class="mh-help">' + (PL.sp != null && PL.star ? '별% ' + sign(PL.sp) + (+PL.sp).toFixed(2) + '% · 별지점 ' + fmt(PL.star, cur, 2) + ' · ' : '') + '1회 ' + fmt(PL.one || 0, cur, 2) + ' · 기준 = 전일 종가 ' + fmt(D.close, cur, 2) +
       (D.cfg.ideal ? ' · 정액 주문(소수 주) — 매수 수량 = 주문 금액 ÷ 가격 (소수점 주문이 되는 증권사에서 그대로 따라 할 수 있어요)' : ' · 수량은 1주 단위 내림') + ' · LOC는 종가로, 지정가는 장중에 그 값에 닿으면 체결</p>';
     if (MH.todo) h += '<button class="mh-done' + (D.orderDone ? ' on' : '') + '" data-act="order-done">' + (D.orderDone ? '<span class="ic">✓</span> 오늘 주문 완료 · 내일 자동 초기화' : '<span class="ic"></span> 오늘 주문 다 넣었어요') + '</button>';
     return h + '</div>';
@@ -12704,8 +12716,16 @@ function mhApp(P) {
   }
 
   /* ── 이 설정으로 백테스트 (기록 화면 안 간단판 — 자세한 건 '무한매수법 백테스트' 화면) ── */
-  var BT = { cache: {}, per: LS(PX + 'bt-per', P.btPer || '5y'), view: LS(PX + 'bt-view', 'net') };   /* 세금·수수료는 세션 설정(btOpts — 기본 수수료 0.25% = 무한매수법 백테스트 기본값) */
-  var BT_PER = [['1y', '1년', 1], ['3y', '3년', 3], ['5y', '5년', 5], ['10y', '10년', 10], ['all', '전체', 0]].concat(P.btPre ? [['pre', '상장 전 포함', -1]] : []);   /* 상장 전 포함 = 상장 전 재현 일봉을 이어 붙여 처음부터 (P.btPre) */
+  var BT = { cache: {}, per: LS(PX + 'bt-per', P.btPer || '5y'), view: LS(PX + 'bt-view', 'net'), span: {},   /* 세금·수수료는 세션 설정(btOpts — 기본 수수료 0.25% = 무한매수법 백테스트 기본값) */
+             pre: !!P.btPre && LS(PX + 'bt-pre', '0') === '1', cf: LS(PX + 'bt-cf', ''), ct: LS(PX + 'bt-ct', '') };    /* pre: 상장 전 포함(P.btPre) · cf~ct: 기간설정(P.btRange) */
+  if (BT.per === 'pre') { BT.per = 'all'; BT.pre = !!P.btPre; }   /* ㉛ 의 '상장 전 포함' 칩(전체 기간만) → 전체 + 상장 전 포함 켬 */
+  /* 기간 — 상장 전 포함을 켜면 20년·30년도 (상장 뒤 자료만으로는 '전체'와 같아서 숨김) · 기간설정 = 시작일 ~ 끝일 (P.btRange) */
+  var BT_PER = [['1y', '1년', 1], ['3y', '3년', 3], ['5y', '5년', 5], ['10y', '10년', 10]].concat(P.btPre ? [['20y', '20년', 20, 1], ['30y', '30년', 30, 1]] : []).concat([['all', '전체', 0]]).concat(P.btRange ? [['custom', '기간설정', -2]] : []);
+  function btPerNow() {   /* 지금 기간 — 상장 전 포함을 끄면 20년·30년은 '전체'로 · 모르는 값이면 기본 기간 */
+    var p = BT_PER.filter(function (x) { return x[0] === BT.per; })[0]; if (p && !(p[3] && !BT.pre)) return p;
+    var d = p ? 'all' : P.btPer || '5y'; return BT_PER.filter(function (x) { return x[0] === d; })[0] || BT_PER[2];
+  }
+  function btPerKey() { var p = btPerNow(); return p[0] + (BT.pre ? '+pre' : '') + (p[0] === 'custom' ? ':' + BT.cf + '~' + BT.ct : ''); }
   function btCfg(s) {
     if (isOld(s)) return vcfg(s);
     var c = VX.defaults('4.0', s.ticker); c.splits = s.splits; c.target = E.targetOf(s.ticker, s.targetProfit); c.big = E.bigNumOf(s.bigNumPercent);
@@ -12713,7 +12733,7 @@ function mhApp(P) {
   }
   /* 카드 결과를 다시 쓸지 정하는 열쇠 — 계산(btRun)에 들어가는 값 그대로 (원금은 반올림하지 않음 · T 반올림 포함) */
   function btKey(s) { var c = btCfg(s), o = btOpts(s); return JSON.stringify([c.ver, String(s.ticker).toUpperCase(), c.splits, c.target, c.big, c.lines, c.shares, c.part, c.cap, c.exhaust, !!c.noBig, c.tround || '',
-    c.avgOff || 0, c.money || '', c.restart || '', !!c.rebase, !!c.ideal, o.fee, o.tax, o.method, o.harvest, o.divs, BT.per, s.totalCapital > 0 ? s.totalCapital : 10000].concat(c.money === 'part' ? [c.mix] : [])); }
+    c.avgOff || 0, c.money || '', c.restart || '', !!c.rebase, !!c.ideal, o.fee, o.tax, o.method, o.harvest, o.divs, btPerKey(), s.totalCapital > 0 ? s.totalCapital : 10000].concat(c.money === 'part' ? [c.mix] : [])); }
   function btLink(s, r) {
     /* 카드 계산과 같은 조건 — 원금은 반올림하지 않음(사이클이 끝나면 센트 단위 원금이 됨) · T 반올림도 */
     var c = btCfg(s), p = ['v=' + c.ver, 't=' + encodeURIComponent(String(s.ticker).toUpperCase()), 'c=' + (s.totalCapital > 0 ? s.totalCapital : 10000), 'sp=' + c.splits, 'tg=' + c.target, 'bg=' + c.big];
@@ -12733,14 +12753,33 @@ function mhApp(P) {
   function viewBt(D) {
     var s = D.s; if (!VX || !window.MBT || D.cur === 'KRW') return '';
     var key = btKey(s), r = BT.cache[key];
+    if (shut('bt')) return foldShut('bt', '📊 이 설정으로 백테스트', btSum(r));   /* 접혀 있으면 계산하지 않음 */
     if (!r) { r = BT.cache[key] = { st: 'load' }; setTimeout(function () { btRun(JSON.parse(JSON.stringify(s)), key); }, 60); }
-    return '<div class="mh-card mh-bt" id="mh-bt">' + btBody(s, r) + '</div>';
+    return '<div class="mh-card mh-bt" id="mh-bt"' + (P.fold ? ' data-fold="bt"' : '') + '>' + btBody(s, r) + '</div>';
+  }
+  /* 기간 칩 · (P.btPre) 상장 전 포함 켜기/끄기 · 세금·수수료 포함/미포함(두 단추는 늘 한 줄에 나란히) · (P.btRange) 기간설정 날짜 */
+  function btCtl() {
+    var pn = btPerNow(), b = function (act, v, on, txt, ex) { return '<button class="mh-btn' + (on ? ' mh-btn-sel' : '') + (ex || '') + '" style="padding:4px 9px;font-size:11px" data-act="' + act + '"' + (v != null ? ' data-v="' + v + '"' : '') + ' aria-pressed="' + on + '">' + txt + '</button>'; };
+    var vw = '<span class="mh-bt-vw">' + b('bt-view', 'net', BT.view === 'net', '세금·수수료 포함') + b('bt-view', 'gross', BT.view === 'gross', '미포함') + '</span>';
+    var chips = BT_PER.filter(function (p) { return !(p[3] && !BT.pre); }).map(function (p) { return b('bt-per', p[0], pn[0] === p[0], (p[0] === 'custom' ? '📅 ' : '') + p[1]); }).join('');
+    if (!P.btPre && !P.btRange) return '<div class="mh-bt-sel">' + chips + vw + '</div>';
+    var h = '<div class="mh-bt-sel">' + chips + '</div><div class="mh-bt-sel mh-bt-sel2">' + (P.btPre ? b('bt-pre', null, BT.pre, (BT.pre ? '✓ ' : '＋ ') + '상장 전 포함', ' mh-bt-pre') : '') + vw + '</div>';
+    if (pn[0] === 'custom') {
+      var sp = BT.span[BT.pre ? 'p' : 'r'] || [], mm = (sp[0] ? ' min="' + sp[0] + '"' : '') + (sp[1] ? ' max="' + sp[1] + '"' : '');
+      h += '<div class="mh-bt-rng"><input class="mh-in" id="mh-bt-cf" type="date" aria-label="백테스트 시작일" value="' + esc(BT.cf) + '"' + mm + ' data-enter="bt-apply"><span class="mh-faint">~</span>' +
+        '<input class="mh-in" id="mh-bt-ct" type="date" aria-label="백테스트 끝일" value="' + esc(BT.ct) + '"' + mm + ' data-enter="bt-apply"><button class="mh-btn mh-btn-p" data-act="bt-apply">적용</button></div>' +
+        '<p class="mh-tiny mh-faint" id="mh-bt-rhelp" style="margin:0 0 6px">시작일·끝일을 고르고 적용' + (sp[0] ? ' · 자료 ' + sp[0] + ' ~ ' + sp[1] : '') + (P.btPre && !BT.pre ? ' · 상장 전까지 보려면 \'상장 전 포함\'을 켜세요' : '') + '</p>';
+    }
+    return h;
+  }
+  function btSum(r) {   /* 접힌 카드 요약 */
+    if (!r || r.st !== 'ok') return r && r.st === 'err' ? '계산 못 함' : '펼치면 계산해요';
+    var X = BT.view === 'net' ? r.net : r.gross, pc = function (v, d) { return v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(d); };
+    return '<span class="mh-mono ' + (X.ret >= 0 ? 'mh-ok' : 'mh-bad') + '">' + pc(X.ret, 1) + '%</span> · 연 <span class="mh-mono">' + pc(X.cagr, 2) + '%</span> · ' + esc(btPerNow()[1]) + (BT.pre ? ' · 상장 전 포함' : '');
   }
   function btBody(s, r) {
     var ol = optList(s);
-    var h = '<div class="mh-row"><div><div class="mh-h3">📊 이 설정으로 백테스트</div><p class="mh-tiny mh-faint" style="margin:2px 0 0">' + esc(String(s.ticker).toUpperCase()) + ' · ' + (LK ? '' : verName(verOf(s)) + ' · ') + btCfg(s).splits + '분할 · 목표 ' + btCfg(s).target + '%' + (ol.length ? ' · ' + esc(ol.join(' · ')) : '') + (BT.per === 'pre' ? ' · 상장 전 재현 + 실제 일봉' : ' · 실제 일봉') + '</p></div></div>' +
-      '<div class="mh-bt-sel">' + BT_PER.map(function (p) { return '<button class="mh-btn' + (BT.per === p[0] ? ' mh-btn-sel' : '') + '" style="padding:4px 9px;font-size:11px" data-act="bt-per" data-v="' + p[0] + '">' + p[1] + '</button>'; }).join('') +
-      '<span style="flex:1"></span>' + [['net', '세금·수수료 포함'], ['gross', '미포함']].map(function (p) { return '<button class="mh-btn' + (BT.view === p[0] ? ' mh-btn-sel' : '') + '" style="padding:4px 9px;font-size:11px" data-act="bt-view" data-v="' + p[0] + '">' + p[1] + '</button>'; }).join('') + '</div>';
+    var h = '<div class="mh-row" style="align-items:flex-start"><div><div class="mh-h3">📊 이 설정으로 백테스트</div><p class="mh-tiny mh-faint" style="margin:2px 0 0">' + esc(String(s.ticker).toUpperCase()) + ' · ' + (LK ? '' : verName(verOf(s)) + ' · ') + btCfg(s).splits + '분할 · 목표 ' + btCfg(s).target + '%' + (ol.length ? ' · ' + esc(ol.join(' · ')) : '') + (BT.pre ? ' · 상장 전 재현 + 실제 일봉' : ' · 실제 일봉') + '</p></div>' + foldB('bt', '이 설정으로 백테스트') + '</div>' + btCtl();
     if (r.st === 'load') return h + '<p class="mh-small mh-muted" style="margin:6px 0">계산 중…</p>';
     if (r.st === 'err') return h + '<p class="mh-small mh-bad" style="margin:6px 0">' + esc(r.msg || '일봉을 받지 못했어요. 잠시 후 다시 열어 주세요.') + '</p>';
     var X = BT.view === 'net' ? r.net : r.gross, n = BT.view === 'net' ? r.nN : r.nG, pc = function (v, d) { return v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(d == null ? 1 : d) + '%'; };
@@ -12752,8 +12791,8 @@ function mhApp(P) {
       (r.lack0 > 0 ? '<p class="mh-small mh-warn" style="margin:6px 0 0">⚠ 손실로 남은 현금이 1회 매수금보다 적어 전반전에 벌써 잔금 소진이 된 날 ' + r.lack0.toLocaleString() + '일 (원문 반복리가 다루지 않는 상황) — 자세히 보기에서 \'1회 매수금 다시 정하기\'와 비교해 보세요</p>' : '') +
       '<p class="mh-help">' + r.from + ' ~ ' + r.to + ' · 원금 $' + Math.round(r.cap).toLocaleString() + ' · LOC는 종가, 지정가는 그날 고가가 닿으면 체결' + (BT.view === 'net' ? ' · 수수료 ' + r.o.fee + '% + SEC' + (r.o.divs ? ' · 분배금 원천징수 15%' : ' · 분배금 끔') +
         (r.tax ? ' · 양도소득세 22%(250만 원 공제 · ' + (r.o.method === 'avg' ? '이동평균' : '선입선출') + (r.o.harvest ? ' · 연말 절세' : '') + ')' : r.taxOff ? ' · 양도세 제외' : ' · 원/달러 자료가 없어 양도세 빼고') : ' · 세금·수수료 빼고' + (r.o.divs ? '' : ' · 분배금 끔')) +
-        (r.pre ? ' · <b>' + r.pre.from + ' ~ ' + r.pre.end + '은 상장 전 재현 가격</b>(지수·비슷한 ETF로 다시 만든 값 · 가격 예상 오차 연 ±' + (Math.max(r.pre.x || 0, r.pre.xc || 0) * 100).toFixed(1) + '%p · 고가는 추정)' : '') + ' · 과거 결과는 미래를 보장하지 않아요</p>' +
-      (r.preNote ? '<p class="mh-small mh-warn" style="margin:6px 0 0">' + esc(r.preNote) + '</p>' : '') +
+        (r.pre ? ' · <b>' + (r.pre.all ? '이 기간 전부(' + r.pre.from + ' ~ ' + r.pre.end + ')가' : r.pre.from + ' ~ ' + r.pre.end + '은') + ' 상장 전 재현 가격</b>(지수·비슷한 ETF로 다시 만든 값 · 가격 예상 오차 연 ±' + (Math.max(r.pre.x || 0, r.pre.xc || 0) * 100).toFixed(1) + '%p · 고가는 추정)' : '') + ' · 과거 결과는 미래를 보장하지 않아요</p>' +
+      (r.preNote ? '<p class="mh-small mh-warn" style="margin:6px 0 0">' + esc(r.preNote) + '</p>' : '') + (r.clip ? '<p class="mh-small mh-warn" style="margin:6px 0 0">' + esc(r.clip) + '</p>' : '') +
       (r.pre && r.pre.d != null && Math.abs(r.pre.d) >= 0.05 ? '<p class="mh-small mh-warn" style="margin:6px 0 0">⚠ 상장 전 구간 결과는 믿기 어려워요 — 상장 뒤 구간을 재현 가격으로 바꿔 돌리면 연평균이 ' + (r.pre.d > 0 ? '+' : '−') + Math.abs(r.pre.d * 100).toFixed(1) + '%p 달라져요 (재현 가격·추정 고가에 민감한 설정)</p>' : '') +
       (P.btZoom && r.ch ? '<button class="mh-btn" style="width:100%;margin-top:8px;font-size:12px" data-act="btz-open">🔍 그래프 크게 보기 · 구간 확대 · 연도별 수익률</button>' : '') +
       (LK ? '' : '<a class="mh-btn" style="display:block;text-align:center;margin-top:8px;font-size:12px;text-decoration:none" href="' + btLink(s, r) + '">기간·세금·상장 전까지 자세히 보기 — 무한매수법 백테스트 ›</a>');
@@ -12774,12 +12813,12 @@ function mhApp(P) {
     var S = btScale(r), n = a.length, step = Math.max(1, Math.ceil(n / 400));
     var line = function (arr) { var p = []; for (var i = 0; i < n; i += step) p.push(S.x(i).toFixed(1) + ',' + S.y(arr[i]).toFixed(1)); if ((n - 1) % step) p.push(S.x(n - 1).toFixed(1) + ',' + S.y(arr[n - 1]).toFixed(1)); return p.join(' '); };
     var cy = S.y(r.cap).toFixed(1), usd0 = function (v) { return '$' + Math.round(v).toLocaleString(); };
-    return '<div class="mh-bt-ch" data-btk="' + esc(btKeyOf(r)) + '"><div class="mh-bt-lg"><span><i style="border-color:#3182f6"></i>총자산 (' + (BT.view === 'net' ? '세금·수수료 포함' : '미포함') + ')</span><span><i style="border-color:#8b95a1;border-top-style:dashed"></i>그냥 보유</span><span><i style="border-color:rgba(139,149,161,.55);border-top-style:dotted"></i>원금</span>' + (r.preL > 0 ? '<span><i style="border-color:var(--m-warn);border-top-style:dashed"></i>상장일</span>' : '') + (S.log ? '<span class="mh-faint">로그 눈금</span>' : '') + '</div>' +
+    return '<div class="mh-bt-ch" data-btk="' + esc(btKeyOf(r)) + '"><div class="mh-bt-lg"><span><i style="border-color:#3182f6"></i>총자산 (' + (BT.view === 'net' ? '세금·수수료 포함' : '미포함') + ')</span><span><i style="border-color:#8b95a1;border-top-style:dashed"></i>그냥 보유</span><span><i style="border-color:rgba(139,149,161,.55);border-top-style:dotted"></i>원금</span>' + (r.preL > 0 && r.preL < n ? '<span><i style="border-color:var(--m-warn);border-top-style:dashed"></i>상장일</span>' : '') + (S.log ? '<span class="mh-faint">로그 눈금</span>' : '') + '</div>' +
       '<svg viewBox="0 0 ' + BT_CW + ' ' + BT_CH + '" preserveAspectRatio="none" role="img" aria-label="' + esc(r.from + ' ~ ' + r.to + ' 총자산 ' + usd0(r.cap) + ' → ' + usd0(a[n - 1]) + ', 그냥 보유 → ' + usd0(r.ch.bh[n - 1])) + '">' +
       '<line x1="0" x2="' + BT_CW + '" y1="' + cy + '" y2="' + cy + '" stroke="rgba(139,149,161,.55)" stroke-width="1" stroke-dasharray="2 3" vector-effect="non-scaling-stroke"/>' +
       '<polyline fill="none" stroke="#8b95a1" stroke-width="1.2" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" points="' + line(r.ch.bh) + '"/>' +
       '<polyline fill="none" stroke="#3182f6" stroke-width="1.8" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="' + line(a) + '"/>' +
-      (r.preL > 0 ? '<line x1="' + S.x(r.preL).toFixed(1) + '" x2="' + S.x(r.preL).toFixed(1) + '" y1="0" y2="' + BT_CH + '" stroke="var(--m-warn)" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>' : '') +
+      (r.preL > 0 && r.preL < n ? '<line x1="' + S.x(r.preL).toFixed(1) + '" x2="' + S.x(r.preL).toFixed(1) + '" y1="0" y2="' + BT_CH + '" stroke="var(--m-warn)" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>' : '') +
       '<line class="mh-bt-cur" x1="0" x2="0" y1="0" y2="' + BT_CH + '" stroke="var(--m-t3)" stroke-width="1" vector-effect="non-scaling-stroke" visibility="hidden"/></svg>' +
       '<div class="mh-bt-ax"><span>' + r.from + '</span><span class="mh-bt-hv" aria-live="polite">' + usd0(a[n - 1]) + ' · 보유 ' + usd0(r.ch.bh[n - 1]) + '</span><span>' + r.to + '</span></div></div>';
   }
@@ -12798,16 +12837,25 @@ function mhApp(P) {
   document.addEventListener('pointerdown', btHover, { passive: true });
   document.addEventListener('pointerleave', function (e) { if (e.target && e.target.classList && e.target.classList.contains('mh-bt-ch')) btHover(e); }, true);
   function btRun(s, key) {
-    var r = BT.cache[key], tk = String(s.ticker || '').toUpperCase(), pre = P.btPre && BT.per === 'pre';
+    var r = BT.cache[key], tk = String(s.ticker || '').toUpperCase(), pre = P.btPre && BT.pre, per = btPerNow(), cf = BT.cf, ct = BT.ct;
     Promise.all([window.MBT.load(tk), window.MBT.fxData().catch(function () { return null; }), pre ? window.MBT.preload(tk).catch(function () { return null; }) : null]).then(function (a) {
       var D0 = a[0], F = a[1], PR = a[2], alpha = null, DD = D0; if (!D0.h) D0.h = D0.c.slice();
       if (pre) {   /* 상장 전 포함 — 무한매수법 백테스트(상장 전 포함)와 같은 재현 일봉 · 같은 고가 추정 */
         alpha = window.MBT.hiAlpha(D0, 1); var J = PR && alpha != null ? window.MBT.join(D0, PR, alpha) : null;
         if (J) DD = J; else r.preNote = (PR ? '상장 전 재현을 이어 붙이지 못해' : '상장 전 재현 자료를 받지 못해') + ' 실제 일봉만 썼어요';
       }
-      var n = DD.d.length, to = n - 1, per = BT_PER.filter(function (p) { return p[0] === BT.per; })[0] || BT_PER[2], from = 1;
-      if (per[2] > 0) { var t0 = new Date(DD.d[to] + 'T12:00:00Z'); t0.setUTCFullYear(t0.getUTCFullYear() - per[2]); var ds = t0.toISOString().slice(0, 10); for (var i = 1; i < n; i++) if (DD.d[i] >= ds) { from = i; break; } }
-      if (to - from < 20) throw { msg: '자료가 너무 짧아요 (' + DD.d[0] + ' ~ ' + DD.d[to] + ')' };
+      var n = DD.d.length, to = n - 1, from = 1;
+      BT.span[pre && DD !== D0 ? 'p' : 'r'] = [DD.d[0], DD.d[n - 1]];   /* 기간설정 날짜 칸의 고를 수 있는 범위 */
+      if (per[0] === 'custom') {   /* 기간설정: 시작일 이후 첫 거래일 ~ 끝일 이전 마지막 거래일 (시작일 전날 = 원금 기준일) */
+        if (!(/^\d{4}-\d{2}-\d{2}$/.test(cf) && /^\d{4}-\d{2}-\d{2}$/.test(ct))) throw { msg: '위에서 시작일과 끝일을 골라 주세요' };
+        if (cf >= ct) throw { msg: '시작일이 끝일보다 앞이어야 해요' };
+        if (cf > DD.d[n - 1] || ct < DD.d[1]) throw { msg: '고른 기간에 자료가 없어요 (자료 ' + DD.d[0] + ' ~ ' + DD.d[n - 1] + ')' };
+        for (var i2 = 1; i2 < n; i2++) if (DD.d[i2] >= cf) { from = i2; break; }
+        for (var j2 = n - 1; j2 >= 1; j2--) if (DD.d[j2] <= ct) { to = j2; break; }
+        if (cf < DD.d[0]) r.clip = '자료가 ' + DD.d[0] + '부터라 그때부터 계산했어요' + (P.btPre && !pre ? ' — 더 옛날은 \'상장 전 포함\'을 켜 보세요' : '');
+      } else if (per[2] > 0) { var t0 = new Date(DD.d[to] + 'T12:00:00Z'); t0.setUTCFullYear(t0.getUTCFullYear() - per[2]); var ds = t0.toISOString().slice(0, 10); for (var i = 1; i < n; i++) if (DD.d[i] >= ds) { from = i; break; }
+        if (P.btRange && DD.d[0] > ds) r.clip = '자료가 ' + DD.d[0] + '부터라 ' + per[1] + '이 안 돼요 — 그때부터 계산했어요'; }
+      if (to - from < 20) throw { msg: per[0] === 'custom' ? '고른 기간이 너무 짧아요 — 거래일 20일 넘게 골라 주세요' : '자료가 너무 짧아요 (' + DD.d[0] + ' ~ ' + DD.d[to] + ')' };
       var cap = s.totalCapital > 0 ? s.totalCapital : 10000, o = btOpts(s), fx = F && o.tax ? window.MBT.fxFor(DD.d, F) : null, cfg = btCfg(s);
       var base = { from: from, to: to, capital: cap, norm: 'auto', rows: false }, Dn = o.divs ? DD : Object.assign({}, DD, { dv: null });   /* 무한매수법 백테스트(run)와 같은 조건 */
       var Rn = VX.run(cfg, Dn, Object.assign({}, base, { fee: o.fee / 100, sec: 0.0000206, divTax: 0.15, tax: fx ? { fx: function (i) { return fx[i]; }, method: o.method, harvest: o.harvest } : null }));
@@ -12815,20 +12863,21 @@ function mhApp(P) {
       r.net = window.MBT.stats(Rn, DD, cap); r.gross = window.MBT.stats(Rg, DD, cap); r.nN = Rn.n; r.nG = Rg.n; r.cyc = Rn.cycles.length; r.nob = Rn.nob; r.lack0 = Rn.lack0;
       r.open = !!(Rn.cycles.length && Rn.cycles[Rn.cycles.length - 1].open); r.from = DD.d[from]; r.to = DD.d[to]; r.tax = !!fx; r.taxOff = !o.tax; r.o = o; r.cap = cap; r.st = 'ok';
       r.ch = { d: DD.d.slice(from, to + 1), d0: DD.d[from - 1], net: Rn.eq.slice(), gross: Rg.eq.slice(), bh: r.net.bhEq.slice() };   /* 그래프: 날마다 총자산(포함·미포함) · 그냥 보유 · d0 = 첫날 전날(원금 기준일 — 카드 연평균과 같은 기준) */
-      if (DD !== D0 && DD.L != null && DD.L > from) {   /* 상장 전 재현 구간: 시작 ~ 상장 전날 · 가격 재현 오차 · 상장 뒤를 재현 가격으로 돌린 연평균 차이(무한매수법 백테스트 오차 카드 ②와 같은 계산) */
-        r.preL = DD.L - from; r.pre = { from: DD.d[from], end: DD.d[DD.L - 1], x: PR.rc.x, xc: PR.rc.xc, d: null };
+      if (DD !== D0 && DD.L != null && DD.L > from) {   /* 상장 전 재현 구간: 시작 ~ 상장 전날(기간이 상장 전에 끝나면 끝일까지 = all) · 가격 재현 오차 · 상장 뒤를 재현 가격으로 돌린 연평균 차이(무한매수법 백테스트 오차 카드 ②와 같은 계산) */
+        var Lc = Math.min(DD.L, to + 1); r.preL = Lc - from; r.pre = { from: DD.d[from], end: DD.d[Lc - 1], all: DD.L > to, x: PR.rc.x, xc: PR.rc.xc, d: null };
         var late = window.MBT.lateSeries(D0, PR, alpha);
         if (late && D0.d.length > 260) { var o2 = { from: 1, capital: cap, norm: 'auto', rows: false }, ra = VX.run(cfg, D0, o2), rb = VX.run(cfg, late, o2), yrs = (window.MBT.dnum(D0.d[D0.d.length - 1]) - window.MBT.dnum(D0.d[0])) / 365.25;
           r.pre.d = Math.pow(rb.final / cap, 1 / yrs) - Math.pow(ra.final / cap, 1 / yrs); }
       }
     }).catch(function (e) { r.st = 'err'; r.msg = e && e.msg; }).then(function () {
-      var el = $('mh-bt'), s2 = active().settings; if (el && s2 && btKey(s2) === key) el.innerHTML = btBody(s2, r);
+      var el = $('mh-bt'), s2 = active().settings, rt = $(P.root), fs = rt && rt.querySelector('[data-fold="bt"] .mh-fold-sum');
+      if (s2 && btKey(s2) === key) { if (el) el.innerHTML = btBody(s2, r); else if (fs) fs.innerHTML = btSum(r); }
     });
   }
 
 
   /* ── 백테스트 그래프 크게 보기 (P.btZoom) — 기간 단추 · 끌어서 구간 확대 · 전체 · 보는 구간 수익률 · 연도별 수익률(줄을 누르면 그해로) ── */
-  var BTZ = { key: null, a: -1, b: -1, per: '0', log: null, ch: null, idx: null, drag: null };
+  var BTZ = { key: null, a: -1, b: -1, per: '0', log: null, ch: null, idx: null, drag: null, W: null, raf: 0, stT: 0 };   /* W: 지금 그린 구간(btzWinData) */
   /* 구간 = 기준 a ~ 끝 b (a = −1 → 첫날 전날의 원금 · 카드 숫자와 같은 기준) · 수익률·연평균 = b ÷ a · 낙폭은 그래프에 보이는 날만(카드와 같게) */
   function btzR() { var S = MH.sheet; return S && S.kind === 'btz' ? BT.cache[S.key] || null : null; }
   function btzSer(r) { return BT.view === 'net' ? r.ch.net : r.ch.gross; }
@@ -12861,14 +12910,15 @@ function mhApp(P) {
     var S = MH.sheet, r = BT.cache[S.key], tk = LK ? LK.ticker : String((active().settings || {}).ticker || '').toUpperCase();
     if (!r || r.st !== 'ok' || !r.ch) return sheet('📊 백테스트 그래프', '', '<p class="mh-small mh-muted">계산 결과가 아직 없어요. 카드에서 계산이 끝난 뒤 다시 열어 주세요.</p>' + okBtn());
     var n = r.ch.d.length; if (BTZ.key !== S.key || BTZ.b < 0 || BTZ.b > n - 1) { BTZ.key = S.key; BTZ.a = -1; BTZ.b = n - 1; BTZ.per = '0'; }
-    var yr = btzYears(r);
-    var chips = [['1', '1년'], ['3', '3년'], ['5', '5년'], ['10', '10년'], ['0', '전체']];
-    var body = '<div class="mh-bt-sel">' + chips.map(function (p) { var on = BTZ.per === p[0]; return '<button class="mh-btn' + (on ? ' mh-btn-sel' : '') + '" style="padding:4px 9px;font-size:11px" data-act="btz-per" data-v="' + p[0] + '" aria-pressed="' + on + '">' + p[1] + '</button>'; }).join('') +
-      '<span style="flex:1"></span>' + [['net', '세금·수수료 포함'], ['gross', '미포함']].map(function (p) { return '<button class="mh-btn' + (BT.view === p[0] ? ' mh-btn-sel' : '') + '" style="padding:4px 9px;font-size:11px" data-act="bt-view" data-v="' + p[0] + '">' + p[1] + '</button>'; }).join('') + '</div>' +
-      '<div class="mh-row mh-tiny" style="margin:8px 0 4px;flex-wrap:wrap;gap:6px 10px"><div class="mh-bt-lg" style="margin:0"><span><i style="border-color:#3182f6"></i>' + esc(P.name) + ' 총자산</span><span><i style="border-color:#8b95a1;border-top-style:dashed"></i>' + esc(tk) + ' 그냥 보유</span><span class="mh-btz-cap"><i style="border-color:rgba(139,149,161,.55);border-top-style:dotted"></i>원금</span>' + (r.preL > 0 ? '<span><i style="border-color:var(--m-warn);border-top-style:dashed"></i>상장일</span>' : '') + '</div>' +
+    var yr = btzYears(r), yAll = (window.MBT.dnum(r.ch.d[n - 1]) - window.MBT.dnum(btzD(r, -1))) / 365.25;
+    var chips = [['1', '1년'], ['3', '3년'], ['5', '5년'], ['10', '10년'], ['20', '20년'], ['30', '30년']].filter(function (c) { return Number(c[0]) < yAll - 0.05; }).concat([['0', '전체']]);   /* 자료보다 짧은 기간만 */
+    var bb = function (act, v, on, txt) { return '<button class="mh-btn' + (on ? ' mh-btn-sel' : '') + '" style="padding:4px 9px;font-size:11px" data-act="' + act + '" data-v="' + v + '" aria-pressed="' + on + '">' + txt + '</button>'; };
+    var body = '<div class="mh-bt-sel">' + chips.map(function (p) { return bb('btz-per', p[0], BTZ.per === p[0], p[1]); }).join('') +
+      '<span class="mh-bt-vw">' + bb('bt-view', 'net', BT.view === 'net', '세금·수수료 포함') + bb('bt-view', 'gross', BT.view === 'gross', '미포함') + '</span></div>' +
+      '<div class="mh-row mh-tiny" style="margin:8px 0 4px;flex-wrap:wrap;gap:6px 10px"><div class="mh-bt-lg" style="margin:0"><span><i style="border-color:#3182f6"></i>' + esc(P.name) + ' 총자산</span><span><i style="border-color:#8b95a1;border-top-style:dashed"></i>' + esc(tk) + ' 그냥 보유</span><span class="mh-btz-cap"><i style="border-color:rgba(139,149,161,.55);border-top-style:dotted"></i>원금</span>' + (r.preL > 0 && r.preL < n ? '<span><i style="border-color:var(--m-warn);border-top-style:dashed"></i>상장일</span>' : '') + '</div>' +
       '<label class="mh-faint" style="display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap"><input type="checkbox" data-act="btz-log" id="mh-btz-log"> 로그 눈금</label></div>' +
       '<div class="mh-btz-cv" data-noswipe><canvas data-chart="btz" aria-label="' + esc(P.name) + ' 백테스트 총자산 그래프"></canvas><div class="mh-btz-sel" hidden></div></div>' +
-      '<p class="mh-help" style="margin-top:6px">그래프 위를 <b>끌어서(드래그)</b> 고른 구간이 확대돼요 · 위 <b>전체</b>로 되돌아가요 · 손가락·마우스를 대면 그날 값</p>' +
+      '<p class="mh-help" style="margin-top:6px"><b>마우스 휠</b>·<b>두 손가락</b>으로 확대·축소(두 손가락을 옆으로 밀면 이동 · 휠은 Shift 를 누르고 굴리면 이동) · <b>끌어서(드래그)</b> 고른 구간 확대 · 위 <b>전체</b>로 되돌아가요 · 손가락·마우스를 대면 그날 값</p>' +
       '<div id="mh-btz-st"></div>' +
       '<div class="mh-small" style="font-weight:700;margin:14px 0 6px">연도별 수익률 <span class="mh-faint" style="font-weight:400">— ' + (BT.view === 'net' ? '세금·수수료 포함' : '미포함') + ' · 줄을 누르면 그해로 확대</span></div>' +
       '<div class="table-scroll"><table class="mh-btz-y"><thead><tr><th>연도</th><th>' + esc(P.name) + '</th><th>' + esc(tk) + ' 그냥 보유</th></tr></thead><tbody>' +
@@ -12876,41 +12926,114 @@ function mhApp(P) {
       '<p class="mh-help">* 그해 일부만 · 연도별 = 그해 마지막 거래일 총자산 ÷ 그 전해 마지막 거래일 총자산 − 1' + (r.preL > 0 ? ' · 재현 = 상장 전 재현 가격 구간' : '') + ' · 과거 결과는 미래를 보장하지 않아요</p>' + okBtn();
     return sheet('📊 백테스트 그래프 크게 보기', esc(tk) + ' · ' + r.from + ' ~ ' + r.to + ' · 원금 $' + Math.round(r.cap).toLocaleString() + (r.preL > 0 ? ' · 상장 전 재현 포함' : ''), body, 960);
   }
-  function btzDraw(cv) {
-    var r = btzR(); if (!r || !r.ch || !window.Chart) return;
-    var d = r.ch.d, s1 = btzSer(r), bh = r.ch.bh, b = Math.min(d.length - 1, BTZ.b < 0 ? d.length - 1 : BTZ.b);
+  /* 지금 구간(BTZ.a ~ b)의 그릴 점(1,200개 넘으면 솎음) · 원금 선 보일지 · 로그 눈금 */
+  function btzWinData(r) {
+    var d = r.ch.d, s1 = btzSer(r), bh = r.ch.bh, n = d.length, b = Math.min(n - 1, BTZ.b < 0 ? n - 1 : BTZ.b);
     BTZ.b = b; BTZ.a = Math.max(-1, Math.min(BTZ.a, b - 1));
     var a = Math.max(0, BTZ.a), step = Math.max(1, Math.ceil((b - a + 1) / 1200)), idx = [];
     for (var i = a; i <= b; i += step) idx.push(i); if (idx[idx.length - 1] !== b) idx.push(b);
-    BTZ.idx = idx;
     var lo = Infinity, hi = -Infinity; idx.forEach(function (j) { lo = Math.min(lo, s1[j], bh[j]); hi = Math.max(hi, s1[j], bh[j]); });
     var capOn = r.cap >= lo / 1.5 && r.cap <= hi * 1.5; if (capOn) { lo = Math.min(lo, r.cap); hi = Math.max(hi, r.cap); }   /* 원금 선은 보이는 값 근처일 때만 (멀리 떨어진 구간을 확대하면 눈금이 눌리지 않게) */
-    var rt0 = $(P.root), lgc = rt0 && rt0.querySelector('.mh-btz-cap'); if (lgc) lgc.style.display = capOn ? '' : 'none';
-    var log = lo > 0 && (BTZ.log != null ? BTZ.log : hi / lo > 6), lg = $('mh-btz-log'); if (lg) lg.checked = log;
-    var usd = function (v) { return '$' + Math.round(v).toLocaleString(); }, o = baseOpts(usd), warn = cssVar('--m-warn'), L = r.preL > 0 ? r.preL : -1;
-    o.scales.y.type = log ? 'logarithmic' : 'linear';
-    if (log) o.scales.y.ticks.callback = function (v) { var e = Math.pow(10, Math.floor(Math.log10(v))), m = v / e; return Math.abs(m - 1) < 1e-6 || Math.abs(m - 2) < 1e-6 || Math.abs(m - 5) < 1e-6 ? usd(v) : ''; };
+    return { a: a, b: b, idx: idx, d: d, s1: s1, bh: bh, capOn: capOn, log: lo > 0 && (BTZ.log != null ? BTZ.log : hi / lo > 6), L: r.preL > 0 && r.preL < n ? r.preL : -1 };
+  }
+  function btzLegend(W) { var rt0 = $(P.root), lgc = rt0 && rt0.querySelector('.mh-btz-cap'); if (lgc) lgc.style.display = W.capOn ? '' : 'none'; var lg = $('mh-btz-log'); if (lg) lg.checked = W.log; }
+  function btzDraw(cv) {
+    var r = btzR(); if (!r || !r.ch || !window.Chart) return;
+    var W = btzWinData(r); BTZ.W = W; BTZ.idx = W.idx; btzLegend(W);
+    var usd = function (v) { return '$' + Math.round(v).toLocaleString(); }, o = baseOpts(usd), warn = cssVar('--m-warn');
+    o.scales.y.type = W.log ? 'logarithmic' : 'linear';
+    if (W.log) o.scales.y.ticks.callback = function (v) { var e = Math.pow(10, Math.floor(Math.log10(v))), m = v / e; return Math.abs(m - 1) < 1e-6 || Math.abs(m - 2) < 1e-6 || Math.abs(m - 5) < 1e-6 ? usd(v) : ''; };
     o.scales.x.ticks.maxTicksLimit = 8; o.scales.x.ticks.maxRotation = 0;
-    o.scales.x.ticks.callback = function (v) { var dd = this.getLabelForValue(v); return dd ? (b - a > 500 ? dd.slice(0, 4) : dd.slice(2, 7).replace('-', '.')) : ''; };
-    o.plugins.tooltip.callbacks.title = function (it) { return it.length ? d[idx[it[0].dataIndex]] : ''; };
-    mkChart(cv, { type: 'line', data: { labels: idx.map(function (j) { return d[j]; }), datasets: [
-        { label: P.name, data: idx.map(function (j) { return s1[j]; }), borderColor: '#3182f6', pointRadius: 0, borderWidth: 1.7 },
-        { label: '그냥 보유', data: idx.map(function (j) { return bh[j]; }), borderColor: '#8b95a1', borderDash: [4, 3], pointRadius: 0, borderWidth: 1.1 },
-      ].concat(capOn ? [{ label: '원금', data: idx.map(function () { return r.cap; }), borderColor: 'rgba(139,149,161,.55)', borderDash: [2, 3], pointRadius: 0, borderWidth: 1 }] : []) },
-      options: o, plugins: [{ id: 'mhBtzMark', afterDatasetsDraw: function (ch) { if (L < a || L > b) return; var p = 0; while (p < idx.length - 1 && idx[p] < L) p++;
+    /* 눈금·풍선·상장일 표시는 그때그때 BTZ.W(지금 구간)를 읽음 — 휠·두 손가락 확대 때 그래프를 새로 만들지 않고 값만 바꿔 다시 그림 */
+    o.scales.x.ticks.callback = function (v) { var dd = this.getLabelForValue(v), w = BTZ.W; return dd ? (w && w.b - w.a > 500 ? dd.slice(0, 4) : dd.slice(2, 7).replace('-', '.')) : ''; };
+    o.plugins.tooltip.callbacks.title = function (it) { var w = BTZ.W; return it.length && w ? w.d[w.idx[it[0].dataIndex]] : ''; };
+    mkChart(cv, { type: 'line', data: { labels: W.idx.map(function (j) { return W.d[j]; }), datasets: [
+        { label: P.name, data: W.idx.map(function (j) { return W.s1[j]; }), borderColor: '#3182f6', pointRadius: 0, borderWidth: 1.7 },
+        { label: '그냥 보유', data: W.idx.map(function (j) { return W.bh[j]; }), borderColor: '#8b95a1', borderDash: [4, 3], pointRadius: 0, borderWidth: 1.1 },
+        { label: '원금', data: W.idx.map(function () { return r.cap; }), borderColor: 'rgba(139,149,161,.55)', borderDash: [2, 3], pointRadius: 0, borderWidth: 1, hidden: !W.capOn } ] },
+      options: o, plugins: [{ id: 'mhBtzMark', afterDatasetsDraw: function (ch) { var w = BTZ.W; if (!w || w.L < w.a || w.L > w.b) return; var p = 0; while (p < w.idx.length - 1 && w.idx[p] < w.L) p++;
         var x = ch.scales.x.getPixelForValue(p), ca = ch.chartArea, g = ch.ctx; g.save(); g.strokeStyle = warn; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(x, ca.top); g.lineTo(x, ca.bottom); g.stroke();
         g.fillStyle = warn; g.font = '10px sans-serif'; g.fillText('상장', x + 4, ca.top + 10); g.restore(); } }] });
     BTZ.ch = _charts[_charts.length - 1] || null;
     btzStat();
-    /* 끌어서 구간 확대 — 손가락·마우스 모두 (그래프 위에서는 화면이 밀리지 않게) */
-    var sel = cv.parentNode.querySelector('.mh-btz-sel'); cv.style.touchAction = 'none';
+    btzInput(cv);
+  }
+  /* 구간만 바뀌었을 때 — 그래프를 새로 만들지 않고 점만 바꿔 다시 그림 (로그·보통 눈금이 바뀌면 새로 그림) · 보는 구간 표는 손을 멈춘 뒤 */
+  function btzApply(now) {   /* now: 단추·줄을 눌렀을 때 — 보는 구간 표도 바로 */
+    var r = btzR(), ch = BTZ.ch; if (!r || !r.ch) return;
+    if (!ch) { btzRedraw(); return; }
+    var W = btzWinData(r); if (W.log !== (ch.options.scales.y.type === 'logarithmic')) { btzRedraw(); return; }
+    BTZ.W = W; BTZ.idx = W.idx; btzLegend(W);
+    ch.data.labels = W.idx.map(function (j) { return W.d[j]; });
+    ch.data.datasets[0].data = W.idx.map(function (j) { return W.s1[j]; });
+    ch.data.datasets[1].data = W.idx.map(function (j) { return W.bh[j]; });
+    ch.data.datasets[2].data = W.idx.map(function () { return r.cap; }); ch.data.datasets[2].hidden = !W.capOn;
+    try { ch.update('none'); } catch (x) { btzRedraw(); return; }
+    clearTimeout(BTZ.stT); if (now) btzStat(); else BTZ.stT = setTimeout(btzStat, 120);
+  }
+  function btzSched() { if (BTZ.raf) return; BTZ.raf = (window.requestAnimationFrame || function (f) { return setTimeout(f, 16); })(function () { BTZ.raf = 0; btzApply(); }); }
+  /* 확대·축소 — f > 1 이면 확대(구간 좁게) · fx = 기준 자리(그래프 안 가로 비율 0~1, 그 자리의 날은 그대로) · 최소 10거래일 · 처음~끝 = 전체(원금 기준) */
+  function btzSet(na, nb, n) { BTZ.a = na <= 0 && nb >= n - 1 ? -1 : Math.max(0, na); BTZ.b = Math.min(n - 1, nb); BTZ.per = BTZ.a === -1 ? '0' : null; btzSched(); }
+  function btzZoom(f, fx, a0, b0) {
+    var r = btzR(); if (!r || !r.ch) return false;
+    var n = r.ch.d.length; a0 = a0 != null ? a0 : Math.max(0, BTZ.a); b0 = b0 != null ? b0 : BTZ.b < 0 ? n - 1 : BTZ.b;
+    var w = b0 - a0, nw = Math.max(Math.min(10, n - 1), Math.min(n - 1, Math.round(w / f)));
+    if (nw === w) return false;
+    var c = a0 + w * fx, na = Math.round(c - nw * fx), nb = na + nw;
+    if (na < 0) { na = 0; nb = nw; } if (nb > n - 1) { nb = n - 1; na = nb - nw; }
+    btzSet(na, nb, n); return true;
+  }
+  function btzPan(frac) {   /* 옆으로 이동 — frac = 구간 너비의 몇 배 (+ 오른쪽 · − 왼쪽) */
+    var r = btzR(); if (!r || !r.ch) return false;
+    var n = r.ch.d.length, a0 = Math.max(0, BTZ.a), b0 = BTZ.b < 0 ? n - 1 : BTZ.b, w = b0 - a0, sh = Math.round(w * frac);
+    if (!sh) sh = frac > 0 ? 1 : -1;
+    var na = Math.max(0, Math.min(n - 1 - w, a0 + sh)); if (na === a0) return false;
+    btzSet(na, na + w, n); return true;
+  }
+  function btzFx(cv, clientX) { var ch = BTZ.ch, rc = cv.getBoundingClientRect(), ca = ch && ch.chartArea; if (!ca) return 0.5; return Math.max(0, Math.min(1, (clientX - rc.left - ca.left) / Math.max(1, ca.right - ca.left))); }
+  /* 그래프 손동작: 마우스 휠 = 확대·축소(Shift·옆 스크롤 = 이동) · 두 손가락 = 벌리고 오므려 확대·축소 + 옆으로 밀어 이동 · 한 손가락·마우스로 끌기 = 고른 구간 확대 */
+  function btzInput(cv) {
+    var sel = cv.parentNode.querySelector('.mh-btz-sel'), pts = {}, pinch = null; cv.style.touchAction = 'none';
     var xOf = function (e) { var rc = cv.getBoundingClientRect(); return Math.max(0, Math.min(rc.width, e.clientX - rc.left)); };
-    cv.onpointerdown = function (e) { BTZ.drag = { x0: xOf(e), x1: xOf(e) }; try { cv.setPointerCapture(e.pointerId); } catch (x) {} };
-    cv.onpointermove = function (e) { var g = BTZ.drag; if (!g || !sel) return; g.x1 = xOf(e); var w = Math.abs(g.x1 - g.x0); if (w > 6) { sel.hidden = false; sel.style.left = Math.min(g.x0, g.x1) + 'px'; sel.style.width = w + 'px'; } };
+    var ids = function () { return Object.keys(pts); };
+    cv.onwheel = function (e) {
+      if (!BTZ.ch) return;
+      var dx = e.deltaX, dy = e.deltaY; if (e.deltaMode === 1) { dx *= 16; dy *= 16; } else if (e.deltaMode === 2) { dx *= 400; dy *= 400; }
+      if (e.shiftKey && !dx) { dx = dy; dy = 0; }
+      if (Math.abs(dx) > Math.abs(dy)) { if (btzPan(dx / 900)) e.preventDefault(); return; }
+      if (!dy) return;
+      if (btzZoom(Math.exp(-dy * 0.0015), btzFx(cv, e.clientX)) || dy < 0) e.preventDefault();   /* 더 줄일 수 없을 때(전체)만 화면이 스크롤 */
+    };
+    cv.onpointerdown = function (e) {
+      pts[e.pointerId] = e.clientX; try { cv.setPointerCapture(e.pointerId); } catch (x) {}
+      var k = ids();
+      if (k.length === 2) {   /* 두 손가락 — 끌어서 고르기는 취소하고 확대·축소로 */
+        BTZ.drag = null; if (sel) sel.hidden = true;
+        var r = btzR(), n = r && r.ch ? r.ch.d.length : 0, x1 = pts[k[0]], x2 = pts[k[1]], a0 = Math.max(0, BTZ.a), b0 = BTZ.b < 0 ? n - 1 : BTZ.b;
+        pinch = { d0: Math.max(12, Math.abs(x1 - x2)), a0: a0, b0: b0, m0: a0 + (b0 - a0) * btzFx(cv, (x1 + x2) / 2) };
+        return;
+      }
+      if (k.length === 1) BTZ.drag = { x0: xOf(e), x1: xOf(e) };
+    };
+    cv.onpointermove = function (e) {
+      if (!(e.pointerId in pts)) return; pts[e.pointerId] = e.clientX;
+      var k = ids();
+      if (pinch && k.length >= 2) {
+        var r = btzR(); if (!r || !r.ch) return;
+        var n = r.ch.d.length, x1 = pts[k[0]], x2 = pts[k[1]], d1 = Math.max(12, Math.abs(x1 - x2)), w0 = pinch.b0 - pinch.a0;
+        var nw = Math.max(Math.min(10, n - 1), Math.min(n - 1, Math.round(w0 * pinch.d0 / d1))), fx = btzFx(cv, (x1 + x2) / 2), na = Math.round(pinch.m0 - nw * fx), nb = na + nw;
+        if (na < 0) { na = 0; nb = nw; } if (nb > n - 1) { nb = n - 1; na = nb - nw; }
+        if (na !== Math.max(0, BTZ.a) || nb !== BTZ.b) btzSet(na, nb, n);
+        return;
+      }
+      var g = BTZ.drag; if (!g || !sel) return; g.x1 = xOf(e); var w = Math.abs(g.x1 - g.x0); if (w > 6) { sel.hidden = false; sel.style.left = Math.min(g.x0, g.x1) + 'px'; sel.style.width = w + 'px'; }
+    };
     cv.onpointerup = cv.onpointercancel = function (e) {
+      delete pts[e.pointerId];
+      if (pinch) { if (ids().length < 2) pinch = null; BTZ.drag = null; if (sel) sel.hidden = true; return; }   /* 두 손가락을 뗄 때 구간 고르기로 넘어가지 않게 */
       var g = BTZ.drag; BTZ.drag = null; if (sel) sel.hidden = true; if (!g || e.type === 'pointercancel' || Math.abs(g.x1 - g.x0) < 8 || !BTZ.ch) return;
       var sx = BTZ.ch.scales.x, n = BTZ.idx.length - 1, p0 = Math.max(0, Math.min(n, Math.round(sx.getValueForPixel(Math.min(g.x0, g.x1))))), p1 = Math.max(0, Math.min(n, Math.round(sx.getValueForPixel(Math.max(g.x0, g.x1)))));
-      var i0 = BTZ.idx[p0], i1 = BTZ.idx[p1]; if (i1 - i0 < 5) return; BTZ.a = i0; BTZ.b = i1; BTZ.per = null; btzRedraw(); };
+      var i0 = BTZ.idx[p0], i1 = BTZ.idx[p1]; if (i1 - i0 < 5) return; BTZ.a = i0; BTZ.b = i1; BTZ.per = null; btzApply(true); };
   }
   function btzRedraw() {
     var rt = $(P.root), cv = rt && rt.querySelector('canvas[data-chart="btz"]'); if (!cv) return;
@@ -13095,6 +13218,7 @@ function mhApp(P) {
     if (MH.sheet && MH.sheet.kind === 'celebrate' && !(D && D.celebrate && D.cycleKey === MH.sheet.key)) MH.sheet = null;
     root.innerHTML = html + '<div id="mh-sheet-host">' + (MH.sheet ? viewSheet() : '') + '</div>' + (MH.pop ? viewPop() : '');
     initCharts();
+    lqKick();   /* LOC 매수 상한 카드가 보이면 실시간 시세 주기 갱신 (안 보이면 멈춤) */
   }
 
   /* ── 세션 탭 ── */
@@ -13152,7 +13276,7 @@ function mhApp(P) {
       v === '2.2' ? '원문 40분할 기준 · 다른 분할은 별% = R − T/2 × (40/분할)로 계산' : '원문 40분할 · 다른 분할은 1회 = 원금 ÷ 분할로 계산';
   }
   function setupCalc(u) {
-    var old = u.ver !== '4.0', v = u.ver, cap = Number(u.cap) || 0, avg = Number(u.avg) || 0, qty = Number(u.qty) || 0, cash = Number(u.cash) || 0, T = Number(u.t) || 0;
+    var old = u.ver !== '4.0', v = u.ver, cap = (LK && P.capDef > 0 && String(u.cap).trim() === '' ? P.capDef : Number(u.cap)) || 0, avg = Number(u.avg) || 0, qty = Number(u.qty) || 0, cash = Number(u.cash) || 0, T = Number(u.t) || 0;
     var total = avg * qty + cash, one = 0, star = 0, midOK = false, useLad = !old || (v !== '1.0' && v !== '2.0');
     var tg = Number(u.target), bg = Number(u.big), sh = Number(u.shares), ln = Number(u.lines), pt = Number(u.part), cp = Number(u.capP);
     var okT = isFinite(tg) && tg >= TG_MIN && tg <= TG_MAX, okB = isFinite(bg) && bg >= 0 && bg <= 40, okS = !useLad || (isFinite(sh) && sh >= 1 && sh <= 20 && Number.isInteger(sh)),
@@ -13277,7 +13401,7 @@ function mhApp(P) {
   function setupDyn() {
     var u = MH.setup, c = setupCalc(u), sym = u.currency === 'KRW' ? '₩' : '$', rows = [], old = (u.ver || '4.0') !== '4.0', st22 = u.ver === '2.2' || u.ver === '3.0' || !old;
     if (u.mid && c.midOK) rows = [['원금 (자동계산)', sym + c.total.toLocaleString()], ['분할', u.splits + '회'], [TV, String(c.T)]].concat(st22 ? [['별지점', sym + c.star.toFixed(2)]] : []).concat([['1회 매수금', sym + c.one.toFixed(2)]]);
-    if (!u.mid && c.cap > 0 && E.validSplits(u.splits)) rows = [['원금', sym + c.cap.toLocaleString()], ['분할', u.splits + '회'], ['1회 매수금', sym + c.one.toFixed(2)]];
+    if (!u.mid && c.cap > 0 && E.validSplits(u.splits)) rows = [[LK && P.capDef > 0 && String(u.cap).trim() === '' ? '원금 (기본값)' : '원금', sym + c.cap.toLocaleString()], ['분할', u.splits + '회'], ['1회 매수금', sym + c.one.toFixed(2)]];
     return (rows.length ? '<div class="mh-note" style="margin-bottom:12px">' + rows.map(function (r, i) {
         return '<div class="mh-row" style="padding:3px 0' + (i === rows.length - 1 ? ';border-top:1px solid var(--m-bd);margin-top:4px;padding-top:7px' : '') + '"><span>' + r[0] + '</span><span class="mh-mono' + (i === rows.length - 1 ? ' mh-ac' : '') + '" style="font-weight:600">' + r[1] + '</span></div>'; }).join('') + '</div>' : '') +
       (!E.validSplits(u.splits) ? '<p class="mh-tiny mh-bad" style="margin:0 0 8px">분할 수는 ' + E.SPLITS_MIN + '~' + E.SPLITS_MAX + ' 사이 정수로 입력하세요</p>' : '') +
@@ -13320,7 +13444,7 @@ function mhApp(P) {
     var amounts = u.mid ?
       '<div class="mh-grid2">' + midF.map(function (f) { return '<div><label class="mh-lbl">' + f[1] + '</label><input class="mh-in" type="number" step="' + f[2] + '" placeholder="' + f[3] + '" value="' + esc(u[f[0]]) + '" data-in="su:' + f[0] + '"></div>'; }).join('') + '</div>' +
       '<p class="mh-help" style="margin-top:-8px">이미 이 규칙으로 사 모으던 중이면 지금 상태를 넣고 이어서 기록해요 · ' + LK.splits + '회를 다 썼으면 처음부터 소진 대응(매수 멈춤)으로 시작해요</p>' :
-      '<div><label class="mh-lbl">시작 원금 ($)</label><input class="mh-in" type="number" min="1" step="1" placeholder="20000" value="' + esc(u.cap) + '" data-in="su:cap"><p class="mh-help">1회 매수금 = 원금 ÷ ' + LK.splits + ' · 하루에 쓰는 돈</p></div>';
+      '<div><label class="mh-lbl">시작 원금 ($)</label><input class="mh-in" type="number" min="1" step="1" placeholder="' + (P.capDef > 0 ? Number(P.capDef).toLocaleString('en-US') : '20000') + '" value="' + esc(u.cap) + '" data-in="su:cap"><p class="mh-help">1회 매수금 = 원금 ÷ ' + LK.splits + ' · 하루에 쓰는 돈' + (P.capDef > 0 ? ' · 비워 두면 $' + Number(P.capDef).toLocaleString('en-US') + '로 시작' : '') + '</p></div>';   /* P.capDef: 비워 두면 이 원금 (72루틴 100,000) */
     var rules = (P.rules || []).map(function (x, i) { return '<div class="mh-row mh-small" style="padding:6px 0;align-items:flex-start;gap:12px' + (i ? ';border-top:1px solid var(--m-bd)' : '') + '"><span class="mh-muted" style="flex:0 0 auto">' + x[0] + '</span><span style="text-align:right;font-weight:600;line-height:1.5">' + x[1] + '</span></div>'; }).join('');
     return '<div style="text-align:center;padding:18px 0 14px"><h1 style="margin:0;font-size:22px;font-weight:800">' + esc(P.name) + '</h1><p class="mh-ac" style="margin:2px 0 6px;font-weight:700">' + esc(P.chip) + '</p>' +
       '<p class="mh-small mh-muted" style="margin:0 auto 10px;max-width:360px;line-height:1.6">' + esc(P.sub) + '</p>' +
@@ -13397,7 +13521,7 @@ function mhApp(P) {
       '<input class="mh-slider" type="range" min="1" max="1.3" step="0.05" value="' + MH.fontScale + '" data-in="font" aria-label="글자 크기" aria-valuetext="' + Math.round(MH.fontScale * 100) + '%"><div class="mh-row mh-tiny mh-faint"><span>보통</span><span>최대</span></div></div>' +
       toggleRow('주문 체크리스트', MH.todo, 'tg-todo', '주문표에서 넣은 주문 체크 · 다음날 자동 초기화') +
       toggleRow('RSI 표시', MH.rsiOn, 'tg-rsi', '14일 RSI 참고 지표 (새 사이클 \'RSI 60 이하\' 판단은 이 표시와 상관없이 와일더 RSI)', MH.rsiOn ? '<div style="display:flex;gap:6px;margin-top:6px">' +
-        [['sma', '증권사식'], ['wilder', '와일더']].map(function (m) { return '<button class="mh-btn' + (MH.rsiMethod === m[0] ? ' mh-btn-sel' : '') + '" style="flex:1;padding:5px;font-size:12px" data-act="rsi-m" data-v="' + m[0] + '">' + m[1] + '</button>'; }).join('') + '</div>' : '') +
+        [['wilder', '와일더 (새 사이클 기준)'], ['sma', '증권사식']].map(function (m) { return '<button class="mh-btn' + (MH.rsiMethod === m[0] ? ' mh-btn-sel' : '') + '" style="flex:1;padding:5px;font-size:12px" data-act="rsi-m" data-v="' + m[0] + '">' + m[1] + '</button>'; }).join('') + '</div>' : '') +
       toggleRow('VIX 표시', MH.vixOn, 'tg-vix', '시장 변동성 지수 · 주문 계산에는 영향 없음') +
       toggleRow('전일자(미국 거래일) 기준', s.recordDateBasis === 'us', 'tg-basis', '기록 기본 날짜를 미국 거래일(전일)로 · 종가 자동입력도 맞춤') +
       '<div class="mh-msec"><div class="mh-row"><span style="font-size:13px;font-weight:700">고정 규칙</span><span class="mh-tiny mh-faint">바꿀 수 없어요</span></div><div class="mh-tiny mh-faint" style="margin-top:4px;line-height:1.6">' +
@@ -13629,9 +13753,31 @@ function mhApp(P) {
       '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;margin-top:6px;color:var(--m-tx)">' + svg + '</svg>' +
       '<div class="mh-row mh-tiny mh-faint" style="margin-top:4px"><span>밴드 = 고·저, 몸통 = 시가~종가 · KST</span><span class="mh-warn">' + (edt ? '☀ 서머타임' : '❄ 표준시') + '</span></div></div>';
   }
+  /* ── 카드 접기 (P.fold — 72루틴: 시장 지표 4개 · 이 설정으로 백테스트) ── 접으면 제목 줄 + 한 줄 요약만(그래프·백테스트 계산 안 함) · 이 기기에 기억(PX + 'fold') */
+  function shut(k) { return !!(P.fold && MH.fold[k]); }
+  function foldB(k, name) { if (!P.fold) return ''; var sh = shut(k);
+    return '<button class="mh-fold-b" data-act="fold" data-v="' + k + '" aria-expanded="' + !sh + '" aria-label="' + esc(name) + (sh ? ' 펼치기' : ' 접기') + '" title="' + (sh ? '펼치기' : '접기') + '"><span aria-hidden="true">' + (sh ? '▸' : '▾') + '</span></button>'; }
+  function foldR(x, k, name) { return P.fold ? '<div class="mh-fold-r">' + x + foldB(k, name) + '</div>' : x; }   /* 제목 줄 오른쪽 + 접기 단추 */
+  function foldShut(k, name, sum) {   /* 접힌 카드 — 줄 전체가 펼치기 단추 */
+    return '<div class="mh-card mh-fold-shut" data-fold="' + k + '"><button class="mh-fold-h" data-act="fold" data-v="' + k + '" aria-expanded="false" aria-label="' + esc(name) + ' 펼치기">' +
+      '<span class="mh-h3">' + esc(name) + '</span><span class="mh-fold-sum">' + sum + '</span><span class="mh-fold-ic" aria-hidden="true">▸</span></button></div>';
+  }
+  /* ── 색 띠 (P.grad — 72루틴): 구간이 바뀌는 곳을 그라데이션으로 자연스럽게 · 숫자 색도 같은 띠에서 ── */
+  var FG_STOPS = [[0, '#f04452'], [10, '#f04452'], [42, '#fe9800'], [55, '#fe9800'], [85, '#3182f6'], [100, '#3182f6']];    /* 공포·탐욕 0~100: 빨 → 주 → 파 */
+  var VIX_STOPS = [[0, '#3182f6'], [28, '#3182f6'], [50, '#fe9800'], [62, '#fe9800'], [84, '#f04452'], [100, '#f04452']];   /* VIX 0~50 (띠의 %): 파 → 주 → 빨 */
+  function gradCss(st, a) { return 'linear-gradient(90deg,' + st.map(function (x) { return (a != null ? rgba(x[1], a) : x[1]) + ' ' + x[0] + '%'; }).join(',') + ')'; }
+  function gradAt(st, p) {
+    p = Math.max(0, Math.min(100, Number(p) || 0));
+    for (var i = 1; i < st.length; i++) if (p <= st[i][0]) {
+      var a = st[i - 1], b = st[i], t = b[0] > a[0] ? (p - a[0]) / (b[0] - a[0]) : 0, ch = function (h, k) { return parseInt(h.slice(1 + 2 * k, 3 + 2 * k), 16); };
+      return 'rgb(' + [0, 1, 2].map(function (k) { return Math.round(ch(a[1], k) + (ch(b[1], k) - ch(a[1], k)) * t); }).join(',') + ')';
+    }
+    return st[st.length - 1][1];
+  }
   function viewRsi(D) {
-    var v = D.rsiVal, z = v >= 70 ? ['과매수', 'mh-bad'] : v <= 30 ? ['과매도', 'mh-info'] : ['중립', 'mh-muted'], last = D.rsiPrices[D.rsiPrices.length - 1].date, d = new Date(last + 'T12:00:00');
-    return '<div class="mh-card"><div class="mh-row"><div style="display:flex;align-items:center;gap:2px"><span class="mh-h3" style="font-weight:500">' + esc(D.s.ticker) + ' RSI (14일)</span>' + info('i-rsi', 'RSI 설명 보기') + '</div><span class="mh-tiny mh-faint mh-mono">' + (d.getMonth() + 1) + '/' + d.getDate() + ' 종가 기준</span></div>' +
+    var v = D.rsiVal, z = v >= 70 ? ['과매수', 'mh-bad'] : v <= 30 ? ['과매도', 'mh-info'] : ['중립', 'mh-muted'], last = D.rsiPrices[D.rsiPrices.length - 1].date, d = new Date(last + 'T12:00:00'), nm = D.s.ticker + ' RSI (14일)';
+    if (shut('rsi')) return foldShut('rsi', nm, '<b class="mh-mono ' + z[1] + '">' + v.toFixed(2) + '</b> ' + z[0] + ' · ' + (MH.rsiMethod === 'wilder' ? '와일더' : '증권사식'));
+    return '<div class="mh-card" data-fold="rsi"><div class="mh-row"><div style="display:flex;align-items:center;gap:2px"><span class="mh-h3" style="font-weight:500">' + esc(nm) + '</span>' + info('i-rsi', 'RSI 설명 보기') + '</div>' + foldR('<span class="mh-tiny mh-faint mh-mono">' + (d.getMonth() + 1) + '/' + d.getDate() + ' 종가 기준</span>', 'rsi', nm) + '</div>' +
       '<div style="margin:6px 0 8px"><span class="mh-mono ' + z[1] + '" style="font-size:24px;font-weight:800">' + v.toFixed(2) + '</span> <span class="mh-chip ' + (z[1] === 'mh-bad' ? 'mh-chip-bad' : '') + '">' + z[0] + '</span></div>' +
       '<div style="position:relative;height:6px;border-radius:3px;background:linear-gradient(90deg,rgba(49,130,246,.45) 0 30%,rgba(139,149,161,.25) 30% 70%,rgba(240,68,82,.45) 70%)"><span style="position:absolute;top:-3px;left:' + Math.min(100, Math.max(0, v)) + '%;width:10px;height:10px;border-radius:50%;background:var(--m-tx);transform:translateX(-50%)"></span></div>' +
       '<div class="mh-row mh-tiny mh-faint mh-mono" style="margin-top:4px"><span>0</span><span>30 과매도</span><span>70 과매수</span><span>100</span></div>' +
@@ -13641,31 +13787,37 @@ function mhApp(P) {
   function periodData(D) { var p = PERIODS.filter(function (x) { return x[0] === MH.chartPeriod; })[0] || PERIODS[11], from = daysAgo(p[2]); return { p: p, list: (D.mk ? D.mk.long : []).filter(function (x) { return x.date >= from; }) }; }
   function viewCloseChart(D) {
     var pd = periodData(D), o = pd.list; if (o.length < 2) return '';
-    var c = o.map(function (x) { return x.close; }), mn = Math.min.apply(null, c), mx = Math.max.apply(null, c), last = c[c.length - 1], ch = c[0] > 0 ? (last - c[0]) / c[0] * 100 : 0;
-    return '<div class="mh-card"><div class="mh-row"><span class="mh-h3">' + esc(D.s.ticker) + ' 종가 추이</span><div style="display:flex;align-items:center;gap:6px">' +
+    var c = o.map(function (x) { return x.close; }), mn = Math.min.apply(null, c), mx = Math.max.apply(null, c), last = c[c.length - 1], ch = c[0] > 0 ? (last - c[0]) / c[0] * 100 : 0, nm = D.s.ticker + ' 종가 추이';
+    if (shut('close')) return foldShut('close', nm, '<span class="mh-mono">$' + last.toFixed(2) + '</span> · ' + pd.p[1] + ' <span class="mh-mono ' + (ch >= 0 ? 'mh-ok' : 'mh-bad') + '">' + sign(ch) + ch.toFixed(1) + '%</span>');
+    return '<div class="mh-card" data-fold="close"><div class="mh-row"><span class="mh-h3">' + esc(nm) + '</span><div style="display:flex;align-items:center;gap:6px">' +
       '<select class="mh-sel" data-ch="period">' + PERIODS.map(function (p) { return '<option value="' + p[0] + '"' + (p[0] === pd.p[0] ? ' selected' : '') + '>' + p[1] + '</option>'; }).join('') + '</select>' +
-      '<span class="mh-small mh-mono ' + (ch >= 0 ? 'mh-ok' : 'mh-bad') + '">' + sign(ch) + ch.toFixed(1) + '%</span></div></div>' +
+      '<span class="mh-small mh-mono ' + (ch >= 0 ? 'mh-ok' : 'mh-bad') + '">' + sign(ch) + ch.toFixed(1) + '%</span>' + foldB('close', nm) + '</div></div>' +
       '<div class="mh-grid3" style="margin:10px 0">' + stat(pd.p[1] + ' 최저', '$' + mn.toFixed(2)) + stat('현재', '$' + last.toFixed(2), 'mh-ac') + stat(pd.p[1] + ' 최고', '$' + mx.toFixed(2)) + '</div>' +
       '<div class="mh-chart"><canvas data-chart="close"></canvas></div></div>';
   }
   function viewVix(D) {
     var v = D.vix[D.vix.length - 1].close, p = D.vix.length >= 2 ? D.vix[D.vix.length - 2].close : null, d = new Date(D.vix[D.vix.length - 1].date + 'T12:00:00');
-    var z = v < 20 ? ['안정', 'mh-info'] : v < 30 ? ['주의', 'mh-warn'] : v < 40 ? ['불안', 'mh-warn'] : ['공포', 'mh-bad'], ch = p ? v - p : null;
-    return '<div class="mh-card"><div class="mh-row"><div style="display:flex;align-items:center;gap:2px"><span class="mh-h3" style="font-weight:500">VIX 변동성 지수</span>' + info('i-vix', 'VIX 설명 보기') + '</div><span class="mh-tiny mh-faint mh-mono">' + (d.getMonth() + 1) + '/' + d.getDate() + ' 종가 기준</span></div>' +
-      '<div style="margin:6px 0 8px;display:flex;align-items:center;gap:8px"><span class="mh-mono ' + z[1] + '" style="font-size:24px;font-weight:800">' + v.toFixed(2) + '</span><span class="mh-chip">' + z[0] + '</span>' +
+    var z = v < 20 ? ['안정', 'mh-info'] : v < 30 ? ['주의', 'mh-warn'] : v < 40 ? ['불안', 'mh-warn'] : ['공포', 'mh-bad'], ch = p ? v - p : null, pos = Math.min(100, v / 50 * 100);
+    var vc = P.grad ? ' style="color:' + gradAt(VIX_STOPS, pos) + '"' : '', vcl = P.grad ? '' : ' ' + z[1];   /* P.grad: 숫자 색 = 띠에서 그 자리 색 */
+    if (shut('vix')) return foldShut('vix', 'VIX 변동성 지수', '<b class="mh-mono' + vcl + '"' + vc + '>' + v.toFixed(2) + '</b> ' + z[0] + (ch != null ? ' · <span class="mh-mono ' + (ch >= 0 ? 'mh-bad' : 'mh-info') + '">' + (ch >= 0 ? '▲' : '▼') + Math.abs(ch).toFixed(2) + '</span>' : ''));
+    return '<div class="mh-card" data-fold="vix"><div class="mh-row"><div style="display:flex;align-items:center;gap:2px"><span class="mh-h3" style="font-weight:500">VIX 변동성 지수</span>' + info('i-vix', 'VIX 설명 보기') + '</div>' + foldR('<span class="mh-tiny mh-faint mh-mono">' + (d.getMonth() + 1) + '/' + d.getDate() + ' 종가 기준</span>', 'vix', 'VIX 변동성 지수') + '</div>' +
+      '<div style="margin:6px 0 8px;display:flex;align-items:center;gap:8px"><span class="mh-mono' + vcl + '"' + vc + ' style="font-size:24px;font-weight:800">' + v.toFixed(2) + '</span><span class="mh-chip">' + z[0] + '</span>' +
       (ch != null ? '<span class="mh-tiny mh-mono ' + (ch >= 0 ? 'mh-bad' : 'mh-info') + '">' + (ch >= 0 ? '▲ ' : '▼ ') + Math.abs(ch).toFixed(2) + ' (' + sign(ch) + (ch / p * 100).toFixed(2) + '%)</span>' : '') + '</div>' +
-      '<div style="position:relative;height:6px;border-radius:3px;background:linear-gradient(90deg,rgba(49,130,246,.45) 0 40%,rgba(254,152,0,.4) 40% 60%,rgba(254,152,0,.4) 60% 80%,rgba(240,68,82,.5) 80%)"><span style="position:absolute;top:-3px;left:' + Math.min(100, v / 50 * 100) + '%;width:10px;height:10px;border-radius:50%;background:var(--m-tx);transform:translateX(-50%)"></span></div>' +
-      '<div class="mh-row mh-tiny mh-faint mh-mono" style="margin-top:4px"><span>0</span><span>20 주의</span><span>30 불안</span><span>40 공포</span></div>' +
+      (P.grad ? '<div class="mh-gbar" style="background:' + gradCss(VIX_STOPS) + '"><span class="k" style="left:' + pos + '%"></span></div>' +
+        '<div class="mh-gax mh-tiny mh-faint mh-mono"><span style="left:0">0</span><span style="left:40%">20 주의</span><span style="left:60%">30 불안</span><span style="left:80%">40 공포</span></div>' :
+      '<div style="position:relative;height:6px;border-radius:3px;background:linear-gradient(90deg,rgba(49,130,246,.45) 0 40%,rgba(254,152,0,.4) 40% 60%,rgba(254,152,0,.4) 60% 80%,rgba(240,68,82,.5) 80%)"><span style="position:absolute;top:-3px;left:' + pos + '%;width:10px;height:10px;border-radius:50%;background:var(--m-tx);transform:translateX(-50%)"></span></div>' +
+      '<div class="mh-row mh-tiny mh-faint mh-mono" style="margin-top:4px"><span>0</span><span>20 주의</span><span>30 불안</span><span>40 공포</span></div>') +
       '<p class="mh-help">참고 지표입니다 — ' + (LK ? P.name + ' 주문 계산에는 쓰이지 않아요' : '무한매수법 T값·별지점·주문가 계산에는 쓰이지 않습니다') + '.</p></div>';
   }
   var FEAR_KO = { 'extreme fear': '극단적 공포', fear: '공포', neutral: '중립', greed: '탐욕', 'extreme greed': '극단적 탐욕' };
   var FEAR_COL = { 'extreme fear': '#f04452', fear: '#fe9800', neutral: '#fe9800', greed: '#3182f6', 'extreme greed': '#3182f6' };
   function viewFear() {
-    var f = MH.fear, u = f.current, col = FEAR_COL[u.rating] || '#fe9800', lbl = FEAR_KO[u.rating] || u.rating;
-    return '<div class="mh-card"><div class="mh-row"><div style="display:flex;align-items:center;gap:2px"><span class="mh-h3" style="font-weight:500">공포 &amp; 탐욕 지수</span>' + info('i-fear', '공포 탐욕 지수 설명 보기') + '</div>' +
-      '<a href="https://edition.cnn.com/markets/fear-and-greed" target="_blank" rel="noopener noreferrer" class="mh-tiny mh-faint">CNN</a></div>' +
+    var f = MH.fear, u = f.current, col = P.grad ? gradAt(FG_STOPS, u.score) : FEAR_COL[u.rating] || '#fe9800', lbl = FEAR_KO[u.rating] || u.rating;   /* P.grad: 숫자 색 = 띠에서 그 자리 색 */
+    if (shut('fear')) return foldShut('fear', '공포 & 탐욕 지수', '<b class="mh-mono" style="color:' + col + '">' + Math.round(u.score) + '</b> <span style="color:' + col + '">' + esc(lbl) + '</span>');
+    return '<div class="mh-card" data-fold="fear"><div class="mh-row"><div style="display:flex;align-items:center;gap:2px"><span class="mh-h3" style="font-weight:500">공포 &amp; 탐욕 지수</span>' + info('i-fear', '공포 탐욕 지수 설명 보기') + '</div>' +
+      foldR('<a href="https://edition.cnn.com/markets/fear-and-greed" target="_blank" rel="noopener noreferrer" class="mh-tiny mh-faint">CNN</a>', 'fear', '공포 & 탐욕 지수') + '</div>' +
       '<div style="margin:6px 0 12px"><span class="mh-mono" style="font-size:26px;font-weight:800;color:' + col + '">' + Math.round(u.score) + '</span> <span class="mh-small" style="color:' + col + '">' + lbl + '</span></div>' +
-      '<div role="button" data-act="i-fear-range" style="cursor:pointer"><div class="mh-gauge"><span class="k" style="left:' + Math.min(100, Math.max(0, u.score)) + '%"></span></div>' +
+      '<div role="button" data-act="i-fear-range" style="cursor:pointer"><div class="mh-gauge"' + (P.grad ? ' style="background:' + gradCss(FG_STOPS) + '"' : '') + '><span class="k" style="left:' + Math.min(100, Math.max(0, u.score)) + '%"></span></div>' +
       '<div class="mh-row mh-tiny mh-faint" style="margin-top:5px"><span>극단적 공포</span><span>공포</span><span>중립</span><span>탐욕</span><span>극단적 탐욕</span></div></div>' +
       (f.historical && f.historical.length >= 2 ? '<div class="mh-chart" style="height:150px;margin-top:10px"><canvas data-chart="fear"></canvas></div>' : '') + '</div>';
   }
@@ -13676,17 +13828,76 @@ function mhApp(P) {
       (list.length ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">' + list.map(function (m) { return '<span class="mh-chip" style="font-size:11px">' + m.date.slice(5).replace('-', '/') + ' <b class="mh-mono">' + fmt(m.close, cur, 2) + '</b><button class="mh-ico" style="font-size:11px;padding:0 2px" data-act="mc-del" data-v="' + m.date + '">✕</button></span>'; }).join('') + '</div>' : '') +
       '<p class="mh-help">' + (list.length ? '날짜별로 쌓으면 <b>최근 종가·5일 평균(리버스 별지점)·기록 추천</b>이 자동 종목과 똑같이 계산돼요. 같은 날짜를 다시 넣으면 수정됩니다.' : '매일 종가를 날짜별로 추가해 주세요. 별지점·큰수·LOC 주문가 계산에 사용되고, <b>5일치가 쌓이면</b> 5일 평균(리버스 별지점)도 자동 계산됩니다.') + '</p></div>';
   }
+  /* ── 실시간 시세 (Worker GET /q — 야후 1분봉 마지막 체결가 · 프리장·정규장·애프터장) ──
+     'LOC 매수 상한' 카드가 화면에 보이는 동안만: 처음 보일 때·↻ 자동을 누를 때 바로, 그 뒤 20초마다(장 마감 중에는 5분 · 실패하면 점점 늦게)
+     · 탭을 숨기거나 다른 화면이면 멈춤 · 카드의 숫자만 바꿈(화면 전체를 다시 그리지 않음 · 손으로 고친 기준가·입력 중인 칸은 그대로)
+     · 못 받으면 시세 자료(data/muhan.json — 15분 간격)의 가격 */
+  var LQ = { ep: null, v: null, busy: null, err: 0, tried: 0, timer: 0, due: 0 };
+  var LQ_SES = { pre: '프리장', reg: '정규장', post: '애프터장', closed: '장 마감' };
+  function lqEp() { if (LQ.ep !== null) return Promise.resolve(LQ.ep);
+    return (window.mdLoad ? window.mdLoad('counter.json') : Promise.resolve(null)).then(function (c) { LQ.ep = c && c.endpoint ? String(c.endpoint).replace(/\/$/, '') : ''; return LQ.ep; }, function () { return ''; }); }
+  function lqGet(tk) {
+    if (LQ.busy) return LQ.busy;
+    LQ.tried = Date.now();
+    LQ.busy = lqEp().then(function (ep) {
+      if (!ep) throw new Error('no endpoint');
+      return Promise.race([fetch(ep + '/q?s=' + encodeURIComponent(tk), { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); }),
+        new Promise(function (_, j) { setTimeout(function () { j(new Error('timeout')); }, 8000); })]);
+    }).then(function (j) { if (!(j && Number(j.p) > 0)) throw new Error('empty');
+      LQ.v = { tk: tk, p: Number(j.p), t: Number(j.t) || 0, ps: j.ps || 'reg', ses: LQ_SES[j.ses] ? j.ses : 'closed', at: Date.now(), stale: !!j.stale }; LQ.err = 0; return LQ.v; })
+      .catch(function () { LQ.err++; return null; }).then(function (v) { LQ.busy = null; return v; });   /* 어떤 실패든(응답 모양이 이상해도) 다음 조회가 막히지 않게 */
+    return LQ.busy;
+  }
+  function lqOf(tk) { var v = LQ.v; return v && v.tk === tk && Date.now() - v.at < 15 * 60e3 ? v : null; }   /* 15분 넘게 못 받았으면 시세 자료 쪽 가격 */
+  function lqGap() { return LQ.err ? Math.min(300e3, 20e3 * Math.pow(2, LQ.err - 1)) : LQ.v && LQ.v.ses === 'closed' ? 300e3 : 20e3; }
+  function lqCard() { var rt = $(P.root), c = rt && rt.querySelector('#mh-loc[data-lq]'); return c && c.offsetParent !== null && !document.hidden ? c : null; }
+  function lqKick(now) {   /* 다음 조회 예약 (now: ↻ 자동 — 바로) — 카드가 안 보이면 멈춤 */
+    var c = lqCard(); if (!c) { clearTimeout(LQ.timer); LQ.timer = 0; return; }
+    if (LQ.v && LQ.v.tk !== c.getAttribute('data-lq') && !LQ.err) now = true;   /* 다른 종목 세션으로 바꾸면 바로 (실패 중이면 늦춤 그대로) */
+    var wait = now ? 0 : Math.max(0, LQ.tried + lqGap() - Date.now());
+    if (now) c.classList.add('lq-busy');
+    if (LQ.timer && LQ.due <= Date.now() + wait) return;
+    clearTimeout(LQ.timer); LQ.due = Date.now() + wait;
+    LQ.timer = setTimeout(function () { LQ.timer = 0; var c2 = lqCard(); if (!c2) return;
+      lqGet(c2.getAttribute('data-lq')).then(function () { try { lqPaint(); } catch (e) {} lqKick(); }); }, wait);
+  }
+  /* 기준가 = 실시간 시세(어느 장이든 마지막 체결가) → 없으면 시세 자료의 가격(장 마감 중이면 직전 종가) */
+  function locBase(D) {
+    var lv = D.isCustom || D.cur === 'KRW' ? null : lqOf(String(D.s.ticker).toUpperCase());
+    if (lv) return { base: lv.p, live: lv, ses: lv.ses, lbl: lv.ses === 'closed' ? '마지막 체결가 (' + LQ_SES[lv.ps] + ')' : LQ_SES[lv.ses] + ' 현재가' };
+    var q = D.mk && D.mk.quote, ms = marketState(), px = ms !== 'CLOSED' && q && q.price > 0, MS = { PRE: 'pre', REGULAR: 'reg', POST: 'post', CLOSED: 'closed' };
+    return { base: px ? q.price : D.close, live: null, ses: MS[ms], lbl: px ? '현재가' : '직전 종가' };
+  }
+  function kst(t) { var d = new Date(t * 1000 + 9 * 3600e3), hm = String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');   /* 체결 시각 (한국 시간 · 오늘이 아니면 날짜도) */
+    return d.toISOString().slice(0, 10) === new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10) ? hm : (d.getUTCMonth() + 1) + '/' + d.getUTCDate() + ' ' + hm; }
+  function locHint(L, D) {
+    var cur = D.cur, src = L.live ? '<span class="mh-ok">● 실시간</span> · ' + kst(L.live.t) + ' 체결 (한국 시간)' + (L.live.stale ? ' · 잠깐 못 받아 직전 값' : '') : (D.isCustom || cur === 'KRW' ? '' : LQ.err ? '실시간 시세를 못 받아 시세 자료 값' : '');
+    return '<span class="mh-warn">기준가</span> = ' + L.lbl + ' (자동 <span class="mh-mono">' + fmt(L.base, cur, 2) + '</span>)' + (MH.capEdited ? ' · 수동 수정됨' : '') + (src ? '<br>' + src : '');
+  }
+  function capOut(cur) { var n = Number(MH.capVal), ok = isFinite(n) && n > 0, t = ok ? fmt(Math.floor(n * 1.2 * 100) / 100, cur, 2) : '-';
+    if ($('mh-cap-out')) $('mh-cap-out').textContent = t; if ($('mh-cap-out2')) $('mh-cap-out2').textContent = ok ? t : '—'; }
+  /* 실시간 시세가 오면 카드의 숫자만 바꿈 */
+  function lqPaint() {
+    var c = $(P.root) && $(P.root).querySelector('#mh-loc'), D = MH.locD; if (c) c.classList.remove('lq-busy'); if (!c || !D) return;
+    var L = locBase(D), inp = c.querySelector('[data-in="cap"]');
+    if (MH.capBase !== L.base && !(inp && document.activeElement === inp)) { MH.capBase = L.base; if (!MH.capEdited) { MH.capVal = String(L.base); if (inp) inp.value = MH.capVal; capOut(D.cur); } }   /* 입력 칸을 누르고 있으면 다음 번에 */
+    var h = $('mh-loc-hint'); if (h) h.innerHTML = locHint(L, D);
+    var ch = $('mh-loc-ses'); if (ch) ch.textContent = LQ_SES[L.ses];
+    var nt = $('mh-loc-note'); if (nt) nt.textContent = locNote(L);
+  }
+  function locNote(L) { return L.live ? '실시간 시세(야후 1분봉 마지막 체결가)를 20초마다 다시 받아요' + (L.ses === 'closed' ? ' (장 마감 중에는 5분마다)' : '') + ' · 몇십 초 늦을 수 있고, 종가는 마감 때 정해져요. 참고용으로만 사용하세요.'
+    : '시세는 최대 15분 지연될 수 있고, 종가는 마감 시 변동됩니다. 참고용으로만 사용하세요.'; }
   function viewLocCap(D) {
-    var q = D.mk && D.mk.quote, ms = marketState(), livePx = (ms === 'PRE' || ms === 'REGULAR') && q && q.price, base = livePx ? q.price : D.close, lbl = livePx ? '현재가' : '직전 종가';
+    var L = locBase(D), base = L.base, live = !D.isCustom && D.cur !== 'KRW';
+    MH.locD = { s: { ticker: D.s.ticker }, isCustom: D.isCustom, cur: D.cur, mk: D.mk, close: D.close };   /* 실시간 시세가 오면 카드만 고칠 때 씀 */
     if (MH.capManual == null || MH.capBase !== base) { if (!MH.capEdited) MH.capVal = String(base); MH.capBase = base; }
     var v = Number(MH.capVal), ok = isFinite(v) && v > 0, cap = ok ? Math.floor(v * 1.2 * 100) / 100 : 0, cur = D.cur;
-    var MS = { PRE: '프리장', REGULAR: '정규장', POST: '애프터장', CLOSED: '장 마감' };
-    return '<div class="mh-card"><div class="mh-row"><div><div class="mh-h3">LOC 매수 상한 (×1.2)</div><p class="mh-tiny mh-faint" style="margin:2px 0 0">' + esc(D.s.ticker) + ' · 증권사 거부 한도 참고</p></div>' + (D.isCustom ? '' : '<span class="mh-chip">' + MS[ms] + '</span>') + '</div>' +
-      '<div class="mh-mrow" style="margin-top:10px"><span class="mh-faint">' + (cur === 'KRW' ? '₩' : '$') + '</span><input class="mh-in" type="number" step="0.01" inputmode="decimal" placeholder="기준가 입력" value="' + esc(MH.capVal) + '" data-in="cap"><button class="mh-btn" style="padding:8px 10px;font-size:12px" data-act="cap-auto" title="' + lbl + '로 자동 채우기">↻ 자동</button></div>' +
-      '<p class="mh-tiny mh-faint" style="margin:5px 0 8px"><span class="mh-warn">기준가</span> = ' + lbl + ' (자동 <span class="mh-mono">' + fmt(base, cur, 2) + '</span>)' + (MH.capEdited ? ' · 수동 수정됨' : '') + '</p>' +
+    return '<div class="mh-card" id="mh-loc"' + (live ? ' data-lq="' + esc(String(D.s.ticker).toUpperCase()) + '"' : '') + '><div class="mh-row"><div><div class="mh-h3">LOC 매수 상한 (×1.2)</div><p class="mh-tiny mh-faint" style="margin:2px 0 0">' + esc(D.s.ticker) + ' · 증권사 거부 한도 참고</p></div>' + (D.isCustom ? '' : '<span class="mh-chip" id="mh-loc-ses">' + LQ_SES[L.ses] + '</span>') + '</div>' +
+      '<div class="mh-mrow" style="margin-top:10px"><span class="mh-faint">' + (cur === 'KRW' ? '₩' : '$') + '</span><input class="mh-in" type="number" step="0.01" inputmode="decimal" placeholder="기준가 입력" value="' + esc(MH.capVal) + '" data-in="cap"><button class="mh-btn mh-lq-b" style="padding:8px 10px;font-size:12px" data-act="cap-auto" title="' + (live ? '지금 가격(프리·정규·애프터)을 바로 받아 채우기' : L.lbl + '로 자동 채우기') + '">↻ 자동</button></div>' +
+      '<p class="mh-tiny mh-faint" style="margin:5px 0 8px" id="mh-loc-hint">' + locHint(L, D) + '</p>' +
       '<div class="mh-note mh-row" style="padding:12px"><span>LOC 매수 상한 (기준가 ×1.2)</span><span id="mh-cap-out" class="mh-mono mh-warn" style="font-size:17px;font-weight:800">' + (ok ? fmt(cap, cur, 2) : '-') + '</span></div>' +
       '<p class="mh-small" style="margin:8px 0 2px">⚠️ LOC 매수 지정가가 <b id="mh-cap-out2" class="mh-warn mh-mono">' + (ok ? fmt(cap, cur, 2) : '—') + '</b>를 초과하면 증권사에서 매수 주문이 거부될 수 있습니다.</p>' +
-      '<p class="mh-tiny mh-faint" style="margin:0">시세는 최대 15분 지연될 수 있고, 종가는 마감 시 변동됩니다. 참고용으로만 사용하세요.</p></div>';
+      '<p class="mh-tiny mh-faint" style="margin:0" id="mh-loc-note">' + locNote(L) + '</p></div>';
   }
   function orderRow(o, cur, withInfo) {
     var star = o.label.charAt(0) === '★';
@@ -14219,7 +14430,9 @@ function mhApp(P) {
         var lb = h.map(function (p) { var d = new Date(p.date + 'T12:00:00'); return d.getFullYear() !== yr ? d.getFullYear() + '.' + (d.getMonth() + 1) + '/' + d.getDate() : (d.getMonth() + 1) + '/' + d.getDate(); });
         var col = function (v) { return v >= 75 ? '#3182f6' : v >= 55 ? '#3182f6' : v >= 45 ? '#fe9800' : v >= 25 ? '#fe9800' : '#f04452'; };
         var o2 = baseOpts(function (v) { return Number(v).toFixed(0); }); o2.scales.y.min = 0; o2.scales.y.max = 100;
-        mkChart(cv, { type: 'line', data: { labels: lb, datasets: [{ data: h.map(function (p) { return p.score; }), pointRadius: 0, borderWidth: 1.6, tension: .25, segment: { borderColor: function (c) { return col(c.p1.parsed.y); } }, borderColor: '#fe9800' }] }, options: o2 }); }
+        var fgLine = function (c) { var ch = c.chart, y = ch.scales && ch.scales.y; if (!ch.chartArea || !y) return '#fe9800'; var g = ch.ctx.createLinearGradient(0, y.getPixelForValue(0), 0, y.getPixelForValue(100)); FG_STOPS.forEach(function (x) { g.addColorStop(x[0] / 100, x[1]); }); return g; };   /* P.grad: 값 높이에 따라 띠와 같은 그라데이션 */
+        mkChart(cv, { type: 'line', data: { labels: lb, datasets: [P.grad ? { data: h.map(function (p) { return p.score; }), pointRadius: 0, borderWidth: 1.8, tension: .25, borderColor: fgLine } :
+          { data: h.map(function (p) { return p.score; }), pointRadius: 0, borderWidth: 1.6, tension: .25, segment: { borderColor: function (c) { return col(c.p1.parsed.y); } }, borderColor: '#fe9800' }] }, options: o2 }); }
       if (k === 'btz') { btzDraw(cv); return; }
       if (k === 'avg') { D = curD(); var hs = D.hist, tab = MH.avgTab || (LK ? 'ret' : 'avg'), lbl = hs.map(function (p) { var d = new Date(p.date); return (d.getMonth() + 1) + '/' + d.getDate(); });
         if (tab === 'ret') { retChart(cv, D, lbl); return; }
@@ -14293,6 +14506,7 @@ function mhApp(P) {
       case 'menu-close': MH.menu = false; render(); break;
       case 'view': MH.view = v; MH.menu = false; render(); break;
       case 'tg-todo': MH.todo = !MH.todo; localStorage.setItem(PX + 'order-todo', String(MH.todo)); render(); break;
+      case 'fold': MH.fold[v] = !MH.fold[v]; try { localStorage.setItem(PX + 'fold', JSON.stringify(MH.fold)); } catch (x) {} render(); break;   /* 카드 접기·펴기 (P.fold) */
       case 'tg-rsi': MH.rsiOn = !MH.rsiOn; localStorage.setItem(PX + 'rsi', String(MH.rsiOn)); render(); break;
       case 'rsi-m': MH.rsiMethod = v; localStorage.setItem(PX + 'rsi-method', v); render(); break;
       case 'tg-vix': MH.vixOn = !MH.vixOn; localStorage.setItem(PX + 'vix', String(MH.vixOn)); render(); break;
@@ -14332,7 +14546,7 @@ function mhApp(P) {
       case 'order-done': mut(function () { var d0 = today(), on = !!(ses.orderDone && ses.orderDone.date === d0 && ses.orderDone.done); ses.orderDone = { date: d0, done: !on }; }); break;
       case 'yesterday': MH.sheet = { kind: 'yesterday', mode: 'after' }; render(); break;
       case 'y-mode': MH.sheet.mode = v; render(); break;
-      case 'cap-auto': MH.capEdited = false; MH.capBase = null; render(); break;
+      case 'cap-auto': MH.capEdited = false; MH.capBase = null; render(); lqKick(true); break;   /* 지금 가격을 바로 받아 채움 (프리·정규·애프터 어느 때나) */
       case 'mc-add': var mv = Number(MH.manualClose); if (!MH.manualDate || !isFinite(mv) || mv <= 0) return;
         mut(function () { var L = (s.manualCloses || []).filter(function (m) { return m.date !== MH.manualDate; }).concat([{ date: MH.manualDate, close: r2(mv) }]).sort(function (p, q) { return p.date < q.date ? -1 : 1; }).slice(-30);
           var ns2 = Object.assign({}, s, { manualCloses: L }); if (L[L.length - 1].date === MH.manualDate) ns2.manualClose = r2(mv); ses.settings = ns2; MH.manualClose = ''; }); break;
@@ -14373,7 +14587,17 @@ function mhApp(P) {
       case 'notice-x': MH.notice = null; render(); break;
       case 'preset-x': if (MH.setup) MH.setup.preset = null; render(); break;
       case 'vr-del': if (MH.sheet.id && confirm('이 날 기록을 삭제할까요?')) { var vid = MH.sheet.id; MH.sheet = null; mut(function () { ses.transactions = ses.transactions.filter(function (t) { return t.id !== vid; }); vSplit(ses); }); } break;
-      case 'bt-per': BT.per = v; try { localStorage.setItem(PX + 'bt-per', v); } catch (e2) {} render(); break;
+      case 'bt-per':
+        if (v === 'custom' && !(BT.cf && BT.ct)) {   /* 처음 고르면 지금 보던 결과의 기간으로 채움 (없으면 최근 5년) */
+          var r0 = s && BT.cache[btKey(s)], t5 = new Date(); t5.setFullYear(t5.getFullYear() - 5);
+          BT.cf = r0 && r0.from || ymd(t5); BT.ct = r0 && r0.to || today(); try { localStorage.setItem(PX + 'bt-cf', BT.cf); localStorage.setItem(PX + 'bt-ct', BT.ct); } catch (e2) {}
+        }
+        BT.per = v; try { localStorage.setItem(PX + 'bt-per', v); } catch (e2) {} render(); break;
+      case 'bt-pre': BT.pre = !BT.pre; if (!BT.pre && /^(20y|30y)$/.test(BT.per)) BT.per = 'all';   /* 상장 전 포함 켜기·끄기 — 기간은 그대로(20·30년은 끄면 전체) */
+        try { localStorage.setItem(PX + 'bt-pre', BT.pre ? '1' : '0'); localStorage.setItem(PX + 'bt-per', BT.per); } catch (e2) {} render(); break;
+      case 'bt-apply': var f1 = ($('mh-bt-cf') || {}).value || '', f2 = ($('mh-bt-ct') || {}).value || '', okd = function (x) { return /^\d{4}-\d{2}-\d{2}$/.test(x) && x >= '1900' && x <= '2100'; };
+        if (!okd(f1) || !okd(f2) || f1 >= f2) { var rh = $('mh-bt-rhelp'); if (rh) { rh.className = 'mh-tiny mh-bad'; rh.textContent = !okd(f1) || !okd(f2) ? '시작일과 끝일을 모두 골라 주세요' : '시작일이 끝일보다 앞이어야 해요'; } break; }
+        BT.cf = f1; BT.ct = f2; BT.per = 'custom'; try { localStorage.setItem(PX + 'bt-cf', f1); localStorage.setItem(PX + 'bt-ct', f2); localStorage.setItem(PX + 'bt-per', 'custom'); } catch (e2) {} render(); break;
       case 'bt-view': BT.view = v; try { localStorage.setItem(PX + 'bt-view', v); } catch (e2) {} if (MH.sheet && MH.sheet.kind === 'btz') { render(); break; } var be = $('mh-bt'), bk = btKey(s); if (be && BT.cache[bk]) be.innerHTML = btBody(s, BT.cache[bk]); else render(); break;
       case 'rec-type': var R = recState(), f = E.prefill(v, R.ctx, R.rec); Object.assign(MH.sheet, { step: 'detail', type: v, tManual: false, tVal: '', bp: f.buyPrice, bq: f.buyQty, sp: f.sellPrice, sq: f.sellQty }); render(); recLive(); break;
       case 'rec-back': MH.sheet.step = 'type'; MH.sheet.type = null; render(); break;
@@ -14397,9 +14621,9 @@ function mhApp(P) {
       /* 백테스트 그래프 크게 보기 */
       case 'legacy-x': if (P.legacy) (P.legacy.keys || []).forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} }); render(); break;
       case 'btz-open': MH.menu = false; MH.sheet = { kind: 'btz', key: btKey(s) }; BTZ.key = null; BTZ.log = null; render(); break;
-      case 'btz-per': var rz = btzR(); if (rz) { var wz = btzWin(rz, Number(v)); BTZ.a = wz[0]; BTZ.b = wz[1]; BTZ.per = String(v); btzRedraw(); } break;
+      case 'btz-per': var rz = btzR(); if (rz) { var wz = btzWin(rz, Number(v)); BTZ.a = wz[0]; BTZ.b = wz[1]; BTZ.per = String(v); btzApply(true); } break;
       case 'btz-log': BTZ.log = !!el.checked; btzRedraw(); break;
-      case 'btz-year': var yz = String(v).split(':'); BTZ.a = Number(yz[0]); BTZ.b = Number(yz[1]); BTZ.per = null; btzRedraw(); var cz = rt.querySelector('.mh-btz-cv'); if (cz && cz.scrollIntoView) cz.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); break;
+      case 'btz-year': var yz = String(v).split(':'); BTZ.a = Number(yz[0]); BTZ.b = Number(yz[1]); BTZ.per = null; btzApply(true); var cz = rt.querySelector('.mh-btz-cv'); if (cz && cz.scrollIntoView) cz.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); break;
       /* 계정 동기화 */
       case 'sync-login': if (window.dcAuth) window.dcAuth.ready().then(function (ok) { if (ok) window.dcAuth.open(); else if (window.dcAuth.toast) window.dcAuth.toast('로그인을 준비하고 있습니다. 잠시 뒤 다시 눌러 주세요'); }); break;
       case 'sync-info': MH.menu = false; MH.sheet = { kind: 'sync-info' }; render(); break;
@@ -14489,8 +14713,7 @@ function mhApp(P) {
     if (p[0] === 'del') { MH.sheet.typed = val; var b = $('mh-del-go'); if (b) b.disabled = val.trim() !== '삭제'; return; }
     if (k === 'font') { var fs = Math.min(1.3, Math.max(1, Number(val) || 1)); MH.fontScale = fs; try { localStorage.setItem(PX + 'fontScale', String(fs)); } catch (e2) {} rt.style.zoom = fs;
       var fv = $('mh-font-v'), pc = Math.round(fs * 100) + '%'; if (fv) fv.textContent = pc; el.setAttribute('aria-valuetext', pc); return; }
-    if (k === 'cap') { MH.capVal = val; MH.capEdited = true; var n = Number(val), ok = isFinite(n) && n > 0, cur = active().settings.currency || 'USD', t = ok ? fmt(Math.floor(n * 1.2 * 100) / 100, cur, 2) : '-';
-      if ($('mh-cap-out')) $('mh-cap-out').textContent = t; if ($('mh-cap-out2')) $('mh-cap-out2').textContent = ok ? t : '—'; return; }
+    if (k === 'cap') { MH.capVal = val; MH.capEdited = true; capOut(active().settings.currency || 'USD'); var hh = $('mh-loc-hint'); if (hh && MH.locD) hh.innerHTML = locHint(locBase(MH.locD), MH.locD); return; }
     if (k === 'big-live') { var mx = Number(el.getAttribute('data-max')), y = Number(val); var w = y > Math.floor(mx) ? mx : Math.round(y); if ($('mh-big-lbl')) $('mh-big-lbl').textContent = w + '%'; return; }
     if (k === 'mc-date') { MH.manualDate = val; return; } if (k === 'mc-close') { MH.manualClose = val; return; }
     if (k === 'rs-cap') { MH.restartCap = val; return; }
@@ -14522,6 +14745,7 @@ function mhApp(P) {
         if (dx < 0 && i >= 0 && i < L.length - 1) { store.activeSessionId = L[i + 1].id; save(); render(); } else if (dx > 0 && i > 0) { store.activeSessionId = L[i - 1].id; save(); render(); } } }, { passive: true });
     setInterval(function () { MH.now = new Date(); }, 60000);
     if (P.live) { setInterval(liveTick, 60000); document.addEventListener('visibilitychange', function () { if (!document.hidden) liveTick(); }); }
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) lqKick(); });   /* 탭으로 돌아오면 실시간 시세 다시 (20초 지났으면 바로) */
   }
   /* 실시간 (P.live): 1분마다 시세 자료를 다시 확인(서버 자료는 15분마다 · 받아 둔 자료는 5분 보관) — 지금 가격·새 확정 종가가 바뀌었을 때만, 시트·메뉴·입력 중이 아닐 때 다시 그림 */
   function liveTick() {
@@ -14534,7 +14758,7 @@ function mhApp(P) {
   /* 탭 진입 시 호출 ([NAV] switchSubTab 의 훅) */
   window[P.init] = function () { bind(); MH.now = new Date(); takePreset(); if (!SY.inited) { SY.inited = true; SY.uid = authUid(); if (SY.uid) SY.st = 'pull'; if (window.dcAuth && window.dcAuth.ready) window.dcAuth.ready().then(function (ok) { if (SY.can !== ok) { SY.can = ok; render(); } }).catch(function () {}); } render(); if (SY.uid && SY.st === 'pull') pull(); };
   window[P.debug] = { get store() { return store; }, derive: derive, deriveOld: deriveOld, curD: curD, vCompute: vCompute, render: render, bt: BT, restart: startNewCycle, vcfg: vcfg, btOpts: btOpts,
-                      MH: MH, P: P, btKey: btKey, btz: BTZ, mixOf: mixOf, liveTick: liveTick };
+                      MH: MH, P: P, btKey: btKey, btz: BTZ, mixOf: mixOf, liveTick: liveTick, lq: LQ, lqKick: lqKick };
 }
 mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan', key: 'muhan4-store', oldKey: 'muhan4_data', ls: 'muhan4-', sync: '/udata/muhan',
         init: 'muhanInit', debug: 'MHdebug', globalMH: true, preset: true });   /* 무한매수법 기록 (/muhan/) — 72루틴 프로필은 [T72] 에서 */
@@ -16650,7 +16874,10 @@ var VBD = (function () {
    · 고를 수 있는 것 = 시작 원금 · 1회 매수금(복리/일부분 복리 + 비율) · 새 사이클(다음 날/RSI 60 이하) · 수수료(기본 0.25% · 직접 입력은 0.1%부터)
                       · 양도세(포함 시 취득가액·연말 절세) · 분배금 · 새로 시작/중간 진입
    · 저장: localStorage 'r72-store' (+ 'r72-' 화면 설정) · 로그인 시 계정 /udata/r72 (worker/src/auth.js UDATA_KEYS)
-   · 백테스트 카드: 상장 전 포함 기간(btPre) · 그래프 크게 보기(btZoom) · 실시간: 1분마다 시세 확인(live)
+   · 백테스트 카드: 상장 전 포함 켜기·끄기(btPre — 기간 칩·기간설정과 함께 · 켜면 20·30년도) · 기간설정 시작일~끝일(btRange) · 그래프 크게 보기(btZoom — 휠·두 손가락 확대)
+   · 실시간: 1분마다 시세 자료 확인(live) · LOC 매수 상한은 Worker /q 실시간 시세(두 화면 공통)
+   · ㉜: 시작 원금 비우면 100,000(capDef) · RSI·종가 추이·VIX·공포탐욕 카드는 맨 아래(indBottom) · 그 4개와 백테스트 카드 접기(fold)
+         · 공포탐욕·VIX 띠 그라데이션(grad) · 오늘의 주문 강조(ordHl) · RSI 표시 기본 와일더(rsiDef — 새 사이클 'RSI 60 이하' 판단과 같은 방식)
    · 화면·설명글에는 무한매수법·라오어 이름을 쓰지 않음 (사용자 지시 2026-10-13) — 큰수 → 상단 매수선 · 평단 LOC 괴리율 → 평단 매수선 · T값 → 회차
 ════════════════════════════════════════════════════════════ */
 (function () {
@@ -16662,6 +16889,7 @@ var VBD = (function () {
     rules: [['종목', 'SOXL'], ['분할 수', '72번'], ['목표 수익률', '평단 +52.5%에 전량 매도'], ['평단 매수선', '내 평단 그대로 (+0%)'], ['상단 매수선', '어제 종가 +13%'],
             ['원금 소진 대응', '원금을 다 쓰면 매수를 멈추고, 종가가 평단 −10% 안으로 오면 전량 매도'], ['주문 수량', '실제 주문 (1주 단위)']],
     feeDef: 0.25, feeCustom: 0.1, mixDef: 0.5, btPre: true, btZoom: true, btPer: 'all', live: true,
+    capDef: 100000, indBottom: true, fold: true, grad: true, ordHl: true, rsiDef: 'wilder', btRange: true,   /* ㉜ 시작 원금 기본 · 시장 지표 카드 맨 아래 · 접기 · 그라데이션 · 오늘의 주문 강조 · RSI 와일더 · 백테스트 기간설정 */
     legacy: { log: 't72-log', keys: ['t72-set', 't72-log', 't72-tab', 't72-open'] } });   /* 예전 '72매매법' 화면(2026-10-13 저녁 잠깐) 기록 — 옮기지 못함 안내 */
   function go() { if (document.getElementById('t7-root') && window.t72Init) window.t72Init(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();

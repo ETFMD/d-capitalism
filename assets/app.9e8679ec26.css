@@ -1045,6 +1045,7 @@ html[data-theme="light"] #page-muhan,html[data-theme="light"] #page-vr,html[data
 .mh-sheet .grab{width:40px;height:4px;border-radius:2px;background:var(--m-bd);margin:2px auto 10px}
 .mh-sheet h2,.mh-sheet h3{margin:0;font-size:16px}
 .mh-obox{border-radius:10px;padding:9px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.mh-lq-b{flex:0 0 auto;white-space:nowrap}.lq-busy .mh-lq-b{opacity:.55;pointer-events:none}
 .mh-obox.sell{background:rgba(240,68,82,.09);border:1px solid rgba(240,68,82,.18)}.mh-obox.buy{background:rgba(49,130,246,.07);border:1px solid rgba(49,130,246,.15)}
 .mh-obox .p{font-family:var(--mono);font-weight:700}.mh-obox.sell .p{color:var(--m-bad)}.mh-obox.buy .p{color:var(--m-ok)}
 .mh-tag{font-size:9.5px;padding:1px 6px;border-radius:5px;background:rgba(49,130,246,.15);color:var(--m-info);font-weight:600}
@@ -1112,7 +1113,30 @@ html[data-theme="light"] #page-vrbt{--m-ac-s:rgba(49,130,246,.10)}
 .mh-btz-sel{position:absolute;top:0;bottom:0;background:rgba(49,130,246,.14);border:1px solid rgba(49,130,246,.45);border-radius:4px;pointer-events:none}
 .mh-btz-y{width:100%;border-collapse:collapse;font-size:12px;font-family:var(--mono)}
 .mh-btz-y th,.mh-btz-y td{padding:6px 8px;border-bottom:1px solid var(--m-bd);text-align:right;white-space:nowrap}.mh-btz-y th:first-child,.mh-btz-y td:first-child{text-align:left}
-.mh-btz-y th{font-family:var(--font);font-weight:600;color:var(--m-t2);font-size:11px}.mh-btz-y tbody tr[data-act]{cursor:pointer}.mh-btz-y tbody tr[data-act]:hover td{background:var(--m-s2)}
+.mh-btz-y th{font-family:var(--font);font-weight:600;color:var(--m-t2);font-size:11px;white-space:normal}.mh-btz-y tbody tr[data-act]{cursor:pointer}.mh-btz-y tbody tr[data-act]:hover td{background:var(--m-s2)}
+/* ── [MUHAN] ㉜ 72루틴 프로필 옵션 — 백테스트 기간·보기 단추(두 단추는 늘 한 줄에 나란히) · 카드 접기(P.fold) · 그라데이션 띠(P.grad) · 오늘의 주문 강조(P.ordHl) ── */
+.mh-bt-sel{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0}
+.mh-bt-vw{display:inline-flex;gap:4px;margin-left:auto;flex:0 0 auto;white-space:nowrap}
+.mh-bt-sel2{margin-top:-2px;align-items:center}
+.mh-bt-rng{display:flex;align-items:center;gap:6px;margin:2px 0 4px}.mh-bt-rng .mh-in{flex:1 1 0;min-width:0;padding:7px 8px;font-size:13px}.mh-bt-rng .mh-btn{flex:0 0 auto;padding:7px 12px;font-size:12px}
+.mh-fold-r{display:flex;align-items:center;gap:6px}
+.mh-fold-b{flex:0 0 auto;width:28px;height:28px;margin:-6px -6px -6px 0;border:0;border-radius:8px;background:transparent;color:var(--m-t3);font:inherit;font-size:13px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.mh-fold-b:hover{background:var(--m-s2);color:var(--m-tx)}
+.mh-card.mh-fold-shut{padding:0}
+.mh-fold-h{width:100%;display:flex;align-items:center;gap:10px;padding:13px 14px;border:0;border-radius:16px;background:transparent;color:var(--m-tx);font:inherit;text-align:left;cursor:pointer}
+.mh-fold-h:hover{background:var(--m-s2)}
+.mh-fold-h .mh-h3{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mh-fold-sum{flex:1 1 auto;min-width:0;text-align:right;font-size:12px;color:var(--m-t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mh-fold-ic{flex:0 0 auto;color:var(--m-t3);font-size:13px}
+.mh-fold-b:focus-visible,.mh-fold-h:focus-visible{outline:2px solid var(--m-ac);outline-offset:2px}
+.mh-gbar{position:relative;height:8px;border-radius:4px}
+.mh-gbar .k{position:absolute;top:-3px;width:4px;height:14px;border-radius:2px;background:var(--m-tx);transform:translateX(-50%);box-shadow:0 0 0 2px var(--m-s1)}
+.mh-gax{position:relative;height:13px;margin-top:5px}.mh-gax span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}.mh-gax span:first-child{transform:none}
+.mh-card.mh-ordhl{position:relative;overflow:hidden;border:1.5px solid var(--m-ac-b);background:linear-gradient(180deg,var(--m-ac-s),var(--m-s1) 70%);box-shadow:0 8px 24px -14px rgba(49,130,246,.55);padding:16px 16px 14px 19px}
+.mh-card.mh-ordhl::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--m-ac)}
+.mh-ordhl-k{font-size:10.5px;font-weight:600;letter-spacing:.02em;color:var(--m-ac)}
+.mh-ordhl-t{font-size:17px;font-weight:800;color:var(--m-tx);margin-top:2px}
+.mh-ordhl .mh-obox{padding:11px 12px}.mh-ordhl .mh-obox .p{font-size:15px}
 body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-overlay) .dsh-fab,body:has(.mh-overlay) .kk-fabs,body:has(.mh-cel) .dsh-fab,body:has(.mh-cel) .kk-fabs{opacity:0;pointer-events:none}
 /* ═══ [MUHAN-BT] 무한매수법 백테스트 시뮬레이터 — 스타일 (.mh-* 부품 재사용 · 상승 빨강/하락 파랑) ═══ */
 #page-muhanbt .layout.mb-lay{grid-template-columns:372px minmax(0,1fr);gap:16px}
@@ -1194,7 +1218,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
 .mh-bt-ch svg{display:block;width:100%;height:150px;overflow:visible}
 .mh-bt-lg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--m-t2);margin:0 2px 4px}
 .mh-bt-lg i{display:inline-block;width:14px;height:0;border-top:2px solid;vertical-align:middle;margin-right:4px}
-.mh-bt-ax{display:flex;justify-content:space-between;font-size:10.5px;color:var(--m-t3);font-family:var(--mono);margin:2px 2px 0}
+.mh-bt-ax{display:flex;flex-wrap:wrap;justify-content:space-between;font-size:10.5px;color:var(--m-t3);font-family:var(--mono);margin:2px 2px 0}.mh-bt-ax .mh-bt-hv{order:3;flex:1 0 100%;text-align:center;color:var(--m-t2)}
   /* ═══ [THEME] 라이트 테마 — html[data-theme="light"] 일 때 색 변수만 교체 ═══ */
   html[data-theme="light"] {
     /* 토스증권 라이트 팔레트 */
