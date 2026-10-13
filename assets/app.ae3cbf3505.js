@@ -11931,13 +11931,23 @@ window.MBT = (function () {
     if (ev) Object.keys(ev).forEach(function (k) { var x = ev[k]; if (!x || !(x.amount > 0)) return; var dd = ymd(Math.floor((x.date + off) / 86400)); if (idx[dd] != null) dv[idx[dd]] += +x.amount; });
     return d.length > 1 ? { d: d, c: c, h: h, dv: dv } : null;
   }
-  function fromCagr(s) {
+  /* 미국 정규장이 아직 끝나지 않은 오늘(뉴욕 날짜) — 평일 16:00 ET 전이면 그 날짜, 아니면 '' (그 날짜 일봉은 장중 값) */
+  function openDayNY(now) {
+    var p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(now == null ? Date.now() : now));
+    var g = function (t) { return (p.filter(function (x) { return x.type === t; })[0] || {}).value || ''; };
+    var wd = g('weekday'), min = Number(g('hour')) % 24 * 60 + Number(g('minute'));
+    return wd === 'Sat' || wd === 'Sun' || min >= 960 ? '' : g('year') + '-' + g('month') + '-' + g('day');
+  }
+  /* etfcagr.json 일봉 → { d, c, h, dv } — 장중에 저장된 오늘 일봉은 뺌 (Worker 경로 parseY 와 같은 규칙 · 시세 봇도 장중 일봉을 저장하지 않음) */
+  function fromCagr(s, now) {
     if (!s || !s.c || !s.dd) return null;
-    var n = s.c.length, d = new Array(n), x = s.d0, idx = {};
-    for (var i = 0; i < n; i++) { if (i > 0) x += s.dd[i - 1]; d[i] = ymd(x); idx[x] = i; }
-    var dv = new Array(n); for (i = 0; i < n; i++) dv[i] = 0;
+    var n = s.c.length, dn = new Array(n), x = s.d0;
+    for (var i = 0; i < n; i++) { if (i > 0) x += s.dd[i - 1]; dn[i] = x; }
+    if (n > 1 && ymd(dn[n - 1]) === openDayNY(now)) n--;
+    var d = new Array(n), idx = {}, dv = new Array(n);
+    for (i = 0; i < n; i++) { d[i] = ymd(dn[i]); idx[dn[i]] = i; dv[i] = 0; }
     (s.div || []).forEach(function (e) { if (idx[e[0]] != null) dv[idx[e[0]]] += e[1]; });
-    return { d: d, c: s.c.slice(), h: s.h ? s.h.map(function (v, k) { return Math.max(v, s.c[k]); }) : null, dv: dv };
+    return { d: d, c: s.c.slice(0, n), h: s.h ? s.h.slice(0, n).map(function (v, k) { return Math.max(v, s.c[k]); }) : null, dv: dv };
   }
   var CACHE = {}, PEND = {};
   var CAGR_TK = { TQQQ: 1, SOXL: 1 };
@@ -12103,7 +12113,7 @@ window.MBT = (function () {
              fees: fees, divs: R.divs, tax: R.taxPaid || 0, taxDue: R.taxDue || 0, maxCost: R.maxCost, days: days, years: days / 365.25,
              bh: { final: bh[bh.length - 1], ret: bh[bh.length - 1] / cap - 1, cagr: cagr(cap, bh[bh.length - 1], days), mdd: bm.v }, bhEq: bh };
   }
-  return { load: load, parseY: parseY, fromCagr: fromCagr, fxData: fxData, fxFor: fxFor, preload: preload, join: join, lateSeries: lateSeries,
+  return { load: load, parseY: parseY, fromCagr: fromCagr, openDayNY: openDayNY, fxData: fxData, fxFor: fxFor, preload: preload, join: join, lateSeries: lateSeries,
            hiAlpha: hiAlpha, hiModel: hiModel, stats: stats, mdd: mdd, cagr: cagr, ymd: ymd, dnum: dnum, HQ: HQ };
 })();
 
@@ -12627,12 +12637,15 @@ window.MBT = (function () {
     var c = VX.defaults('4.0', s.ticker); c.splits = s.splits; c.target = E.targetOf(s.ticker, s.targetProfit); c.big = E.bigNumOf(s.bigNumPercent);
     c.lines = E.locLines(s.lowerLocLines); c.shares = E.locShares(s.lowerLocShares); c.noBig = s.disableBigNum === true; return c;
   }
-  function btKey(s) { var c = btCfg(s); return JSON.stringify([c.ver, String(s.ticker).toUpperCase(), c.splits, c.target, c.big, c.lines, c.shares, c.part, c.cap, c.exhaust, !!c.noBig, BT.per, Math.round(s.totalCapital || 0)]); }
+  /* 카드 결과를 다시 쓸지 정하는 열쇠 — 계산(btRun)에 들어가는 값 그대로 (원금은 반올림하지 않음 · T 반올림 포함) */
+  function btKey(s) { var c = btCfg(s); return JSON.stringify([c.ver, String(s.ticker).toUpperCase(), c.splits, c.target, c.big, c.lines, c.shares, c.part, c.cap, c.exhaust, !!c.noBig, c.tround || '', BT.per, s.totalCapital > 0 ? s.totalCapital : 10000]); }
   function btLink(s, r) {
-    var c = btCfg(s), p = ['v=' + c.ver, 't=' + encodeURIComponent(String(s.ticker).toUpperCase()), 'c=' + Math.round(s.totalCapital || 10000), 'sp=' + c.splits, 'tg=' + c.target, 'bg=' + c.big];
+    /* 카드 계산과 같은 조건 — 원금은 반올림하지 않음(사이클이 끝나면 센트 단위 원금이 됨) · T 반올림도 */
+    var c = btCfg(s), p = ['v=' + c.ver, 't=' + encodeURIComponent(String(s.ticker).toUpperCase()), 'c=' + (s.totalCapital > 0 ? s.totalCapital : 10000), 'sp=' + c.splits, 'tg=' + c.target, 'bg=' + c.big];
     if (c.ver === '2.0' || c.ver === '2.1') p.push('pt=' + c.part, 'cp=' + c.cap);
     if (c.ver !== '1.0' && c.ver !== '2.0') p.push('ln=' + c.lines, 'sh=' + c.shares);
     if (c.noBig) p.push('nb=1'); if (c.exhaust && c.exhaust !== 'official') p.push('x=' + c.exhaust);
+    if ((c.ver === '2.2' || c.ver === '3.0') && c.tround === 'c1') p.push('tr=c1');
     if (r && r.from) p.push('f=' + r.from);
     return 'muhan-backtest/#' + p.join('&');
   }
@@ -14181,6 +14194,9 @@ window.MBT = (function () {
     if (X.tsell > 0) W.push('5월 말 양도소득세를 낼 현금이 모자라 그날 종가에 보유를 팔아 낸 해가 ' + X.tsell + '번 있어요 (이 계좌에서 세금을 낸다고 가정 · 판 손익은 그해 양도 손익에 들어감).');
     if (X.taxExt > 0) W.push('<b>보유를 다 팔아도 세금이 모자라 ' + usd(X.taxExt) + ' 은 밖에서 낸 것으로 계산</b>했어요 — 최종 자산·수익률·그래프에서 뺐어요 (큰 이익을 낸 해 다음에 크게 잃은 경우).');
     if (X.rs > 0) W.push('사이클 안에서 가격이 크게 떨어져 가격 단위를 ' + X.rs + '번 바꿔 계산했어요 (실제 ETF 의 액면 병합처럼 보유 수량은 10분의 1로, 평단은 10배로 — 손익은 같음).');
+    /* 상장 전 결과가 재현 가격·추정 고가 탓으로 크게 달라지는 설정 (아래 오차 카드의 ② 가 ±5%p 넘음) — 숫자를 보기 전에 알림 */
+    var pe = R.pre && R.pre.err;
+    if (preN > 0 && pe && isFinite(pe.d) && Math.abs(pe.d) >= 0.05) W.push('<b>상장 전 구간 결과는 믿기 어려워요</b> — 같은 설정을 상장 뒤 기간에 실제 가격 대신 재현 가격·추정 고가로 돌리면 연평균이 <b>' + (pe.d > 0 ? '+' : '−') + Math.abs(pe.d * 100).toFixed(1) + '%p</b> 달라져요(아래 \'상장 전 백테스트 오차\'). 목표 수익률이 아주 작으면(1% 안팎) 추정 고가 때문에 거의 매일 체결된 것처럼 계산돼 크게 부풀어요.');
     if (W.length) h += '<div class="card mb-msg warn mb-warns">' + W.map(function (t) { return '<p>⚠ ' + t + '</p>'; }).join('') + '</div>';
     /* 핵심 숫자 */
     var k = function (lab, val, sub, c) { return '<div class="mb-k"><span>' + lab + '</span><b class="' + (c || '') + '">' + val + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</div>'; };

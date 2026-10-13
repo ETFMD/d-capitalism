@@ -647,6 +647,75 @@ def bt_data_check(fail):
         F('쓰지 않는 옵션 전략 지수 파일 남음: %s' % sorted(have - used)[:5])
 
 
+
+def bot_etfcagr_check(fail):
+    """시세 수집기(scripts/update_market_data.py) data/etfcagr.json — 무한매수법 백테스트의 TQQQ·SOXL 일봉
+    · 종가가 확정되지 않은 오늘 일봉(정규장 끝 + 15분 전 = 장중 값)은 넣지 않음 · 16:15 ET 뒤엔 바로 확정 일봉을 받음
+    · 확인할 때 TQQQ 하나만 먼저 받아 보고 같으면 나머지 11종목은 받지 않음 · 한 종목이라도 뒤처졌거나 값이 바뀌면 모두 다시 받음
+    (가짜 야후 응답과 바꿔 끼운 시각으로 — 네트워크 안 씀)"""
+    import importlib.util, tempfile, contextlib, io, datetime as dt
+    F = lambda m: fail('muhan-backtest', '시세 수집기 etfcagr: ' + m)
+    spec = importlib.util.spec_from_file_location('umd_check', os.path.join(ROOT, 'scripts', 'update_market_data.py'))
+    M = importlib.util.module_from_spec(spec); spec.loader.exec_module(M)
+    at = lambda y, mo, d, h, mi: dt.datetime(y, mo, d, h, mi, tzinfo=M.NY).timestamp()      # 뉴욕 시각 → 유닉스 초
+    days, x = [], dt.date(2025, 9, 1)
+    while x <= dt.date(2026, 10, 12):                                                          # 평일 일봉 (마지막 = 10-12 월)
+        if x.weekday() < 5:
+            days.append(x)
+        x += dt.timedelta(days=1)
+    reg = {'start': at(2026, 10, 12, 9, 30), 'end': at(2026, 10, 12, 16, 0)}
+    st, calls = {'close': 150.0, 'down': ()}, []
+    def chart(sym, q):
+        calls.append(sym)
+        if sym in st['down']:
+            raise RuntimeError('야후 오류(시험)')
+        ts = [int(dt.datetime(d.year, d.month, d.day, 9, 30, tzinfo=M.NY).timestamp()) for d in days]
+        c = [100 + i * 0.1 for i in range(len(days))]; c[-1] = st['close']
+        return {'meta': {'currentTradingPeriod': {'regular': reg}}, 'timestamp': ts,
+                'indicators': {'quote': [{'close': c, 'high': [v * 1.01 for v in c], 'low': [v * 0.99 for v in c]}]},
+                'events': {'dividends': {'a': {'date': ts[-30], 'amount': 0.05}}}}
+    M.yahoo_chart = chart
+    M.ETFCAGR = os.path.join(tempfile.mkdtemp(), 'etfcagr.json')
+    def run(when, close=None, down=()):
+        calls.clear(); st['down'] = down
+        if close is not None:
+            st['close'] = close
+        t = at(*when); M.utc_now = lambda: dt.datetime.fromtimestamp(t, dt.timezone.utc).replace(tzinfo=None)
+        with contextlib.redirect_stdout(io.StringIO()):
+            M.build_etfcagr()
+        return json.load(open(M.ETFCAGR, encoding='utf-8'))
+    last = lambda s: dt.date.fromordinal(719163 + s['d0'] + sum(s['dd'])).isoformat()
+    n = len(M.ETF_CAGR)
+    def same(name, ok, info):
+        if not ok:
+            F('%s — %s' % (name, info))
+    j = run((2026, 10, 12, 9, 45))                                   # 처음(파일 없음) · 장중 → 모두 받고 오늘 일봉은 뺌
+    same('처음 장중 수집', len(calls) == n and all(last(j['series'][k]) == '2026-10-09' for k in M.ETF_CAGR) and j['series']['TQQQ'].get('h'),
+         '받은 %d회 · TQQQ 마지막 %s' % (len(calls), last(j['series']['TQQQ'])))
+    run((2026, 10, 12, 13, 0)); same('장중·6시간 안 → 확인 안 함', calls == [], calls)
+    j2 = run((2026, 10, 12, 16, 5))                                  # 6시간 지남 · 마감 15분 전(종가 미확정) → TQQQ 만 확인, 그대로
+    same('마감 직후(16:05) → TQQQ 하나만 확인·그대로', calls == ['TQQQ'] and j2 == j, calls)
+    j = run((2026, 10, 12, 16, 20))                                  # 16:15 뒤 → 확정 일봉 생김 → 모두 받음 (TQQQ 는 한 번만)
+    same('16:20 → 확정 일봉 받기', calls == ['TQQQ'] + [k for k in M.ETF_CAGR if k != 'TQQQ'] and all(last(j['series'][k]) == '2026-10-12' for k in M.ETF_CAGR)
+         and j['series']['SOXL']['c'][-1] == 150.0, '받은 %s · TQQQ 마지막 %s' % (calls, last(j['series']['TQQQ'])))
+    run((2026, 10, 12, 16, 35), close=151.0); same('확정 뒤 15분 → 확인 안 함', calls == [], calls)
+    j = run((2026, 10, 12, 22, 30))                                  # 6시간 뒤 → 정정된 종가(151) → 모두 다시 받음
+    same('6시간 뒤 정정 반영', len(calls) == n and j['series']['UPRO']['c'][-1] == 151.0, calls)
+    j2 = run((2026, 10, 13, 10, 0)); same('다음 날 장중 · 새 일봉 없음 → TQQQ 하나만', calls == ['TQQQ'] and j2 == j, calls)
+    run((2026, 10, 17, 17, 0)); same('토요일 · 6시간 안 아님 → TQQQ 하나만', calls == ['TQQQ'], calls)
+    j['updated'] = '2026-10-12T19:46:00Z'                                             # 예전 수집기가 장중(15:46)에 넣은 일봉 (모든 종목)
+    for k in M.ETF_CAGR:
+        j['series'][k]['c'][-1] = 149.0
+    json.dump(j, open(M.ETFCAGR, 'w', encoding='utf-8'))
+    j = run((2026, 10, 12, 16, 20)); same('장중에 저장된 값 → 16:15 뒤 확정값으로', len(calls) == n and all(j['series'][k]['c'][-1] == 151.0 for k in M.ETF_CAGR), calls)
+    j['series']['SOXL'] = dict(j['series']['SOXL'], dd=j['series']['SOXL']['dd'][:-1], c=j['series']['SOXL']['c'][:-1], h=j['series']['SOXL']['h'][:-1], l=j['series']['SOXL']['l'][:-1])
+    j['updated'] = '2026-10-12T21:00:00Z'; json.dump(j, open(M.ETFCAGR, 'w', encoding='utf-8'))
+    j = run((2026, 10, 13, 4, 0), down=('SPY',))                     # SOXL 하루 뒤처짐 → TQQQ 가 같아도 모두 다시 · SPY 실패는 직전값 유지
+    same('뒤처진 종목 → 모두 다시 받기', len(calls) == n and last(j['series']['SOXL']) == '2026-10-12' and last(j['series']['SPY']) == '2026-10-12', calls)
+    ops = M.open_session_start({'meta': {'currentTradingPeriod': {'regular': reg}}}, at(2026, 10, 12, 16, 14)), M.open_session_start({'meta': {'currentTradingPeriod': {'regular': reg}}}, at(2026, 10, 12, 16, 16)), M.open_session_start({}, at(2026, 10, 12, 11, 0))
+    same('정규장 끝 + 15분 경계', ops == (reg['start'], None, None), ops)
+
+
 # 배포 사이트: 모의 커버드콜(Z:)을 쓰는 ETF 백테스트 — 화면이 읽은 식(S.btS)과 받은 재료(S.dep)를 그대로 돌려줌
 BTZ_JS = """async (n) => {
   const W = ms => new Promise(r => setTimeout(r, ms)), S = window.ECXdebug && ECXdebug.S;
@@ -1147,6 +1216,40 @@ def main():
         for t in page.evaluate(MUHANV_JS):
             if not t['ok']:
                 fail('muhan', '버전 기록 %s%s' % (t['name'], (' — ' + str(t.get('info'))[:200]) if t.get('info') else ''))
+        # 화면 안 백테스트 카드 숫자 = '자세히 보기'로 연 시뮬레이터 숫자 (사이클이 끝나 센트 단위가 된 원금 · V2.2 T 올림까지 같은 조건으로 넘어가는지)
+        if os.path.isdir(os.path.join(ROOT, 'muhan-backtest')):
+            card = page.evaluate("""async () => {
+              const W = ms => new Promise(r => setTimeout(r, ms)), st = MHdebug.store;
+              const ses = st.sessions.filter(s => !s.archived && s.settings && s.settings.version === '2.2')[0];
+              if (!ses) return { err: 'V2.2 세션 없음' };
+              st.activeSessionId = ses.id; ses.settings = Object.assign({}, ses.settings, { totalCapital: 12345.67, tround: 'c1' });
+              MHdebug.render();
+              let r = null;
+              for (let i = 0; i < 160; i++) { await W(250); r = Object.values(MHdebug.bt.cache).filter(x => x && x.cap === 12345.67 && (x.st === 'ok' || x.st === 'err'))[0]; if (r) break; }
+              const a = document.querySelector('#mh-bt a');
+              const out = r && r.st === 'ok' ? { href: a && a.getAttribute('href'), cagr: r.net.cagr, mdd: r.net.mdd, gcagr: r.gross.cagr, from: r.from, to: r.to } : { err: r ? r.msg || 'err' : '계산 안 끝남' };
+              // 원금이 몇 센트만 바뀌어도(반올림하면 같은 12,346) · T 반올림만 바꿔도 카드를 다시 계산하는지 (예전 열쇠는 원금 반올림·T 반올림 없음 → 옛 결과를 그대로 보여 줌)
+              const C = MHdebug.bt.cache, keys = () => Object.keys(C), done = k => C[k] && (C[k].st === 'ok' || C[k].st === 'err');
+              const step = async (patch) => { const n0 = keys().length; ses.settings = Object.assign({}, ses.settings, patch); MHdebug.render();
+                const k = keys()[keys().length - 1]; for (let i = 0; i < 160 && keys().length > n0 && !done(k); i++) await W(250);
+                const b = document.querySelector('#mh-bt a'); return { added: keys().length - n0, cap: keys().length > n0 ? C[k].cap : null, href: b ? b.getAttribute('href') : '' }; };
+              out.cents = await step({ totalCapital: 12345.89 }); out.tr = await step({ tround: 'r2' });
+              return out;
+            }""")
+            if card.get('err') or not card.get('href'):
+                fail('muhan', '화면 안 백테스트 카드 계산 실패: %s' % card.get('err'))
+            else:
+                if 'c=12345.67' not in card['href'] or 'tr=c1' not in card['href']:
+                    fail('muhan', '자세히 보기 주소에 카드 조건이 빠짐 (원금 센트·T 올림): ' + card['href'][:200])
+                ce, tr_ = card.get('cents') or {}, card.get('tr') or {}
+                if ce.get('added') != 1 or ce.get('cap') != 12345.89 or 'c=12345.89' not in ce.get('href', '') or tr_.get('added') != 1 or 'tr=c1' in tr_.get('href', 'tr=c1'):
+                    fail('muhan', '설정이 조금 바뀌어도 카드를 다시 계산해야 함 (원금 센트 %r · T 반올림 %r)' % (ce, tr_))
+                page.goto('about:blank'); page.goto(base + card['href'], wait_until='load')
+                page.wait_for_function('window.MBTdebug && MBTdebug.R() && MBTdebug.R().sn', timeout=90000)
+                sim = page.evaluate("(() => { const R = MBTdebug.R(); return { cagr: R.sn.cagr, mdd: R.sn.mdd, gcagr: R.sg.cagr, from: R.D.d[R.net.from], to: R.D.d[R.net.to], cap: R.S.cap, tround: R.cfg.tround }; })()")
+                if abs(sim['cagr'] - card['cagr']) > 1e-9 or abs(sim['mdd'] - card['mdd']) > 1e-9 or abs(sim['gcagr'] - card['gcagr']) > 1e-9 or sim['from'] != card['from'] or sim['to'] != card['to']:
+                    fail('muhan', '화면 안 백테스트 카드와 시뮬레이터 숫자가 다름 — 카드 %r · 시뮬레이터 %r' % (card, sim))
+            page.goto(base + 'muhan/', wait_until='load'); page.wait_for_timeout(1500)
         page.evaluate("() => { localStorage.removeItem('muhan4-store'); }")
         bad = [t for t, u in errs if not ignorable(t, u)]
         for t in bad[:3]:
@@ -1184,6 +1287,32 @@ def main():
                 miss = [i for i in ids if i not in have]; extra = [i for i in have if i not in ids]
                 if miss or extra or ('mb-avgoff' in ids and have.get('mb-avgoff') != '-2'):
                     fail('muhan-backtest', 'V%s 설정 칸이 계산과 다름 — 빠짐 %s · 남음 %s · 평단 괴리율 칸 %r' % (ver, miss, extra, have.get('mb-avgoff')))
+            # 장중에 저장된 오늘 일봉은 백테스트에서 뺌 (TQQQ·SOXL = etfcagr.json 경로 · 뉴욕 평일 16:00 ET 전)
+            oc = page.evaluate("""() => { const B = window.MBT, U = (y, mo, d, h, mi) => Date.UTC(y, mo - 1, d, h, mi), dn = s => B.dnum(s), R = [];
+              const s = { d0: dn('2026-10-12'), dd: [1], c: [10, 11], h: [10.5, 11.5], div: [[dn('2026-10-12'), 0.05], [dn('2026-10-13'), 0.1]] };
+              const a = B.fromCagr(s, U(2026, 10, 13, 18, 0)), b = B.fromCagr(s, U(2026, 10, 13, 20, 30)), c = B.fromCagr(s, U(2026, 10, 14, 13, 0));
+              R.push(['openDayNY 화 14:00 EDT', B.openDayNY(U(2026, 10, 13, 18, 0)) === '2026-10-13'], ['openDayNY 16:30 EDT', B.openDayNY(U(2026, 10, 13, 20, 30)) === ''],
+                     ['openDayNY 토요일', B.openDayNY(U(2026, 10, 17, 15, 0)) === ''], ['openDayNY 15:30 EST', B.openDayNY(U(2026, 12, 15, 20, 30)) === '2026-12-15'],
+                     ['장중 → 오늘 일봉 뺌', a.d.length === 1 && a.c.length === 1 && a.h.length === 1 && a.dv.length === 1 && a.dv[0] === 0.05],
+                     ['마감 뒤 → 오늘 일봉 씀', b.d.length === 2 && b.d[1] === '2026-10-13' && b.c[1] === 11 && b.h[1] === 11.5 && b.dv[1] === 0.1],
+                     ['다음 날 → 그대로', c.d.length === 2]);
+              return R.filter(x => !x[1]).map(x => x[0]); }""")
+            for t in oc:
+                fail('muhan-backtest', '장중 일봉 빼기 검사 실패: ' + t)
+            if local:   # 시세 수집기가 etfcagr.json 에 장중 값을 넣지 않고, 마감 15분 뒤 확정 일봉을 받는지 (네트워크 없이)
+                bot_etfcagr_check(fail)
+            # 상장 전 결과가 재현 가격·추정 고가 탓으로 크게 달라지면(오차 카드 ② |d| ≥ 5%p) 결과 위 ⚠ 알림 — 알림 ⇔ |d| ≥ 5%p
+            # (로컬 합성 자료는 상장 뒤 재현이 없어 d 가 비므로, 계산된 결과의 d 를 바꿔 다시 그려 확인)
+            page.goto('about:blank'); page.goto(base + 'muhan-backtest/#v=2.2&t=TQQQ&c=10000&sp=40&tg=10&p=1', wait_until='load')
+            page.wait_for_function('window.MBTdebug && MBTdebug.R() && MBTdebug.R().pre && MBTdebug.R().pre.err', timeout=90000)
+            w = page.evaluate("""async () => { const W = ms => new Promise(r => setTimeout(r, ms)), R = MBTdebug.R(), out = { d0: R.pre.err.d == null ? null : R.pre.err.d };
+              const has = () => { const w = document.querySelector('.mb-warns'); return !!w && /상장 전 구간 결과는 믿기 어려워요/.test(w.innerText); };
+              const redraw = async () => { document.querySelector('[data-view="gross"]').click(); await W(80); document.querySelector('[data-view="net"]').click(); await W(80); };
+              out.w0 = has(); R.pre.err.d = 0.2; await redraw(); out.w20 = has() && document.querySelector('.mb-warns').innerText.includes('+20.0%p');
+              R.pre.err.d = -0.051; await redraw(); out.wm = has(); R.pre.err.d = 0.01; await redraw(); out.w1 = has(); return out; }""")
+            print('    상장 전 재현 차이 알림: 로컬 d %s · 20%%p → %s · −5.1%%p → %s · 1%%p → %s' % (w['d0'], w['w20'], w['wm'], w['w1']), flush=True)
+            if w['w0'] != (w['d0'] is not None and abs(w['d0']) >= 0.05) or not w['w20'] or not w['wm'] or w['w1']:
+                fail('muhan-backtest', '상장 전 재현 차이 알림이 d 와 맞지 않음 %r' % w)
             bad = [t for t, u in errs if not ignorable(t, u)]
             for t in bad[:3]:
                 fail('muhan-backtest', '콘솔 오류: ' + t[:200])

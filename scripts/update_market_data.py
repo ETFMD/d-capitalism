@@ -71,7 +71,7 @@ COMPARE_PAIRS = {                                     # 분배 시뮬레이터 E
 }
 KST = 9 * 3600
 
-# 기타 금융 자료 'ETF CAGR 비교' (data/etfcagr.json): 상장 이후 일봉 종가 + 분배금 (야후, 6시간마다)
+# 기타 금융 자료 'ETF CAGR 비교' (data/etfcagr.json): 상장 이후 일봉 종가 + 분배금 (야후, 6시간마다 + 미국장 마감 15분 뒤 확정 종가)
 # 가치 속도 '부동산' (data/realty.json): 국토교통부 실거래가 공개시스템 아파트 매매 원자료(2006~)로 연도별 평균·중앙 실거래가
 REALTY = os.path.join(ROOT, 'realty.json')
 REALTY_FIRST_YEAR = 2006            # 실거래가 공개 시작
@@ -635,9 +635,71 @@ def build_dxy():
     save_if_changed(DXY, {'unit': 'day', 'sym': DXY_SYM, 'd0': days[0], 'dd': gaps, 'c': [pts[d] for d in days]}, old)
 
 
+SETTLE_MIN = 15   # 미국 정규장 마감(16:00 ET) 뒤 종가가 확정되기를 기다리는 분 (마감 경매 체결·야후 반영)
+
+
+def now_ts():
+    """지금(유닉스 초) — utc_now() 를 거침 (시험에서 시각을 바꿔 끼울 수 있게)"""
+    return utc_now().replace(tzinfo=datetime.timezone.utc).timestamp()
+
+
+def open_session_start(res, now=None):
+    """야후 일봉 결과에서 '아직 끝나지 않은(종가 미확정) 정규장'의 시작 시각(유닉스 초) — 그 뒤 일봉은 장중 값이라 빼야 함 · 확정됐으면 None
+    (지금 < 정규장 끝 + 15분 이면 정규장 시작 이후 일봉 제외 · 화면 MBT.parseY · etf_bt_data.py 는 정규장 끝까지만 기다림)"""
+    reg = (((res or {}).get('meta') or {}).get('currentTradingPeriod') or {}).get('regular') or {}
+    now = now_ts() if now is None else now
+    if reg.get('start') and reg.get('end') and now < reg['end'] + SETTLE_MIN * 60:
+        return reg['start']
+    return None
+
+
+def etfcagr_due(age_h, now=None):
+    """etfcagr.json 을 확인할 때인지 — 마지막 변경 뒤 6시간이 지났거나, 미국 평일 16:15 ET 가 지났는데 그 뒤로 바뀐 적이 없으면
+    (장중엔 오늘 일봉을 넣지 않으므로 마감 직후 확정 종가를 바로 채우려고 · 실제로 받을지는 build_etfcagr 가 TQQQ 하나로 먼저 확인)"""
+    if age_h >= ETFCAGR_MAX_AGE_H:
+        return True
+    now = now_ts() if now is None else now
+    ny = datetime.datetime.fromtimestamp(now, NY)
+    settle = ny.replace(hour=16, minute=SETTLE_MIN, second=0, microsecond=0)
+    return ny.weekday() < 5 and ny >= settle and now - age_h * 3600 < settle.timestamp()
+
+
+def etfcagr_series(sym):
+    """야후 상장 이후 일봉 한 종목 → {d0, dd, c, div(, h, l)} · 종가가 확정되지 않은 오늘 일봉(장중 값)은 넣지 않음"""
+    res = yahoo_chart(sym, DAILY_ALL.format(now=int(time.time())))
+    ny = lambda t: datetime.datetime.fromtimestamp(t, NY).date().toordinal() - 719163   # 미국 거래일 날짜
+    pts, his, los = {}, {}, {}
+    q = ((res.get('indicators') or {}).get('quote') or [{}])[0]
+    nts = len(res.get('timestamp') or [])
+    open0 = open_session_start(res)
+    for t, cl, hi, lo in zip(res.get('timestamp') or [], q.get('close') or [], q.get('high') or [None] * nts, q.get('low') or [None] * nts):
+        if open0 is not None and t >= open0:
+            continue                                   # 아직 끝나지 않은 오늘 일봉 (장중 값)
+        if cl is not None and cl > 0:
+            pts[ny(t)] = round(float(cl), 4)
+            his[ny(t)] = round(max(float(hi), float(cl)), 4) if hi is not None and hi > 0 else round(float(cl), 4)
+            los[ny(t)] = round(min(float(lo), float(cl)), 4) if lo is not None and lo > 0 else round(float(cl), 4)
+    days = sorted(pts)
+    if len(days) < 250:
+        raise ValueError(f'일봉 부족 ({len(days)}개)')
+    gaps = sorted(b - a for a, b in zip(days, days[1:]))
+    if gaps[len(gaps) // 2] > 4:                     # 거래일 간격 중앙값이 4일 초과면 일봉이 아님(주봉·월봉)
+        raise ValueError(f'일봉이 아님 (간격 중앙값 {gaps[len(gaps) // 2]}일)')
+    divs = sorted([ny(int(d['date'])), round(float(d['amount']), 4)]
+                  for d in ((res.get('events') or {}).get('dividends') or {}).values() if d.get('amount'))
+    out = {'d0': days[0], 'dd': [b - a for a, b in zip(days, days[1:])], 'c': [pts[d] for d in days], 'div': divs}
+    if sym in ETFCAGR_HIGH:
+        out['h'] = [his[d] for d in days]   # 같은 날짜 순서의 일별 고가 (고가 없는 날은 종가)
+        out['l'] = [los[d] for d in days]   # 일별 저가 (저가 없는 날은 종가)
+    return out
+
+
 def build_etfcagr():
     """ETF CAGR 비교용 상장 이후 일봉 (분할 반영 종가) + 분배금 → data/etfcagr.json
-    형식: series[T] = {d0: 첫 거래일(일수), dd: 거래일 간격 배열, c: 종가 배열, div: [[일수, 분배금]]}"""
+    형식: series[T] = {d0: 첫 거래일(일수), dd: 거래일 간격 배열, c: 종가 배열, div: [[일수, 분배금]]}
+    · 종가가 확정되지 않은 오늘 일봉(장중 값)은 넣지 않음 — 백테스트가 장중 가격을 그날 종가로 쓰지 않게
+    · 확인할 때(etfcagr_due)엔 TQQQ 하나만 먼저 받아 보고, 저장된 것과 같고 모든 종목이 같은 날까지 있으면 나머지 11종목은 받지 않음
+      (새 확정 일봉·정정·분배·분할이 생기면 TQQQ 도 바뀌므로 그때 모두 새로 받음 — 장중에 15분마다 12종목을 다시 받지 않게)"""
     old = load(ETFCAGR)
     age_h = 1e9
     if old.get('updated'):
@@ -645,35 +707,27 @@ def build_etfcagr():
     series = dict(old.get('series') or {})
     if old.get('v') != ETFCAGR_VERSION:
         series = {}                               # 이전 형식(월봉 섞임)은 버리고 새로 수집
-    if age_h < ETFCAGR_MAX_AGE_H and old.get('v') == ETFCAGR_VERSION and set(ETF_CAGR) <= set(series) and '--etfcagr' not in sys.argv \
-            and all(series.get(t, {}).get('h') and series.get(t, {}).get('l') for t in ETFCAGR_HIGH):
+    whole = set(ETF_CAGR) <= set(series) and all(series[t].get('h') and series[t].get('l') for t in ETFCAGR_HIGH)
+    force = '--etfcagr' in sys.argv or not whole
+    if not force and not etfcagr_due(age_h):
         print(f'  etfcagr.json: 최근 갱신({age_h:.1f}시간 전) — 건너뜀')
         return
+    fresh, probe = {}, ETFCAGR_HIGH[0]
+    if not force:
+        try:
+            fresh[probe] = etfcagr_series(probe)
+        except Exception as e:
+            print(f'  CAGR {probe} 확인 실패: {e}')
+        last = lambda x: x['d0'] + sum(x['dd'])
+        p = fresh.get(probe)
+        if p and p == series.get(probe) and all(last(series[t]) >= last(p) for t in ETF_CAGR):
+            print(f'  etfcagr.json: 새 확정 일봉 없음 (마지막 {datetime.date.fromordinal(719163 + last(p))} · {age_h:.1f}시간 전 갱신) — 건너뜀')
+            return
     for sym in ETF_CAGR:
         try:
-            res = yahoo_chart(sym, DAILY_ALL.format(now=int(time.time())))
-            ny = lambda t: datetime.datetime.fromtimestamp(t, NY).date().toordinal() - 719163   # 미국 거래일 날짜
-            pts, his, los = {}, {}, {}
-            q = ((res.get('indicators') or {}).get('quote') or [{}])[0]
-            nts = len(res.get('timestamp') or [])
-            for t, cl, hi, lo in zip(res.get('timestamp') or [], q.get('close') or [], q.get('high') or [None] * nts, q.get('low') or [None] * nts):
-                if cl is not None and cl > 0:
-                    pts[ny(t)] = round(float(cl), 4)
-                    his[ny(t)] = round(max(float(hi), float(cl)), 4) if hi is not None and hi > 0 else round(float(cl), 4)
-                    los[ny(t)] = round(min(float(lo), float(cl)), 4) if lo is not None and lo > 0 else round(float(cl), 4)
-            days = sorted(pts)
-            if len(days) < 250:
-                raise ValueError(f'일봉 부족 ({len(days)}개)')
-            gaps = sorted(b - a for a, b in zip(days, days[1:]))
-            if gaps[len(gaps) // 2] > 4:                     # 거래일 간격 중앙값이 4일 초과면 일봉이 아님(주봉·월봉)
-                raise ValueError(f'일봉이 아님 (간격 중앙값 {gaps[len(gaps) // 2]}일)')
-            divs = sorted([ny(int(d['date'])), round(float(d['amount']), 4)]
-                          for d in ((res.get('events') or {}).get('dividends') or {}).values() if d.get('amount'))
-            series[sym] = {'d0': days[0], 'dd': [b - a for a, b in zip(days, days[1:])], 'c': [pts[d] for d in days], 'div': divs}
-            if sym in ETFCAGR_HIGH:
-                series[sym]['h'] = [his[d] for d in days]   # 같은 날짜 순서의 일별 고가 (고가 없는 날은 종가)
-                series[sym]['l'] = [los[d] for d in days]   # 일별 저가 (저가 없는 날은 종가)
-            print(f'  CAGR {sym} {len(days)}일 (상장 {datetime.date.fromordinal(719163 + days[0])}) · 분배 {len(divs)}회')
+            series[sym] = fresh[sym] if sym in fresh else etfcagr_series(sym)
+            d = series[sym]
+            print(f'  CAGR {sym} {len(d["c"])}일 (상장 {datetime.date.fromordinal(719163 + d["d0"])}) · 분배 {len(d["div"])}회')
         except Exception as e:
             print(f'  CAGR {sym} 실패(직전값 유지): {e}')
     save_if_changed(ETFCAGR, {'unit': 'day', 'v': ETFCAGR_VERSION, 'series': series}, old)
