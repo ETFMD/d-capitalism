@@ -219,6 +219,99 @@ MUHANV_JS = """async () => {
   return R;
 }"""
 
+# 무한매수법 기록 화면 — 무한매수법 백테스트와 같은 세부 규칙·세금·수수료 (시작 화면·⋮ 메뉴·주문표·RSI 대기·재시작·카드 계산 조건)
+MUHANOPT_JS = """async () => {
+  const W = ms => new Promise(r => setTimeout(r, ms)), R = [], ok = (name, c, info) => R.push({ name, ok: !!c, info }), $ = q => document.querySelector(q), $$ = q => [...document.querySelectorAll(q)];
+  const click = q => { const e = $(q); if (!e) throw new Error('없음 ' + q); e.click(); }, fill = (q, v) => { const e = $(q); if (!e) throw new Error('없음 ' + q); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); };
+  const st = () => MHdebug.store, ses = () => st().sessions.filter(x => x.id === st().activeSessionId)[0];
+  const cf0 = window.confirm; window.confirm = () => true;
+  try {
+    // ① 시작 화면 세부 규칙 — 버전마다 백테스트와 같은 칸
+    const has = a => !!$('[data-act="' + a + '"]');
+    const kinds = {};
+    for (const v of ['1.0', '2.1', '2.2', '3.0', '4.0']) {
+      click('[data-act="su-ver"][data-v="' + v + '"]'); await W(40); if (!MH.setup.more) { click('[data-act="su-more"]'); await W(40); }
+      kinds[v] = { ao: !!$('[data-in="su:avgOff"]'), money: has('su-money'), restart: has('su-restart'), rebase: has('su-rebase'), ideal: has('su-ideal'), tround: has('su-tround'), nobig: has('su-nobig'), fee: has('su-fee'), tax: has('su-tax'), divs: has('su-divs') };
+    }
+    const want = { '1.0': [1,1,1,0,1,0,0], '2.1': [1,1,1,0,1,0,0], '2.2': [0,1,1,0,1,1,0], '3.0': [0,0,1,1,1,1,0], '4.0': [0,0,0,0,0,0,1] };
+    const badK = Object.keys(want).filter(v => { const k = kinds[v], w = want[v]; return [k.ao, k.money, k.restart, k.rebase, k.ideal, k.tround, k.nobig].map(Number).join() !== w.join() || !k.fee || !k.tax || !k.divs; });
+    ok('시작 화면 세부 규칙 칸 = 백테스트와 같음 (평단 괴리율 V1.0~V2.1 · 단리 V1.0~V2.2 · RSI V1.0~V3.0 · 다시 정하기 V3.0 · 정액 V1~V3 · T 반올림 V2.2/V3.0 · 큰수 미사용 V4.0 · 세금·수수료 모두)', badK.length === 0, JSON.stringify(kinds));
+    // ② V2.1 + 모든 선택으로 시작 → 세션 설정 · 계산 설정(vcfg) · 카드 조건(btOpts)
+    click('[data-act="su-ver"][data-v="2.1"]'); await W(40); if (!MH.setup.more) { click('[data-act="su-more"]'); await W(40); }
+    fill('[data-in="su:avgOff"]', '-1.5'); click('[data-act="su-money"][data-v="simple"]'); await W(20); click('[data-act="su-restart"][data-v="rsi"]'); await W(20); click('[data-act="su-ideal"][data-v="1"]'); await W(20);
+    click('[data-act="su-fee"][data-v="0.1"]'); await W(20); click('[data-act="su-method"][data-v="avg"]'); await W(20); click('[data-act="su-harv"][data-v="1"]'); await W(20); click('[data-act="su-divs"][data-v="0"]'); await W(20);
+    fill('[data-in="su:avgOff"]', '25'); const disA = $('[data-act="su-start"]').disabled; fill('[data-in="su:avgOff"]', '-1.5');
+    fill('[data-in="su:cap"]', '20000');
+    const sum = ($('.mh-sumore') || {}).innerText || '';
+    ok('세부 규칙 요약 (기본값과 다른 것) · 범위 밖 평단 괴리율이면 시작하기 꺼짐', disA && /평단 괴리 −1\\.5%/.test(sum) && /단리/.test(sum) && /RSI 60 이하/.test(sum) && /정액/.test(sum) && /수수료 0\\.1%/.test(sum) && /이동평균/.test(sum) && /연말 절세/.test(sum) && /분배금 끔/.test(sum), sum.slice(0, 200));
+    click('[data-act="su-start"]'); await W(300);
+    /* 시작한 세션(SOXL)의 시세 받기가 다 끝난 뒤 — 시작 화면에선 시세를 받지 않음 · 주문표(정액) 확인 · 뒤늦은 응답이 ④ 합성 시세를 덮지 않게 */
+    for (let i = 0; i < 120 && !(MH.market.SOXL && MH.market.SOXL.prices.length && !MH.loading); i++) await W(250); await W(2500);
+    for (let i = 0; i < 40 && MH.loading; i++) await W(250);
+    MHdebug.render(); await W(50);
+    let s = ses().settings, c = MHdebug.vcfg(s), o = MHdebug.btOpts(s);
+    ok('시작 → 세션 설정에 세부 규칙·세금·수수료 저장', s.version === '2.1' && s.avgOff === -1.5 && s.money === 'simple' && s.restart === 'rsi' && s.ideal === true && s.btFee === 0.1 && s.btMethod === 'avg' && s.btHarvest === true && s.btDivs === false && s.btTax !== false && s.cycleNo === 1 && s.base === 20000, JSON.stringify(s));
+    ok('계산 설정(vcfg)·카드 조건(btOpts) = 백테스트 cfgOf 와 같은 값', c.avgOff === -1.5 && c.money === 'simple' && c.restart === 'rsi' && c.ideal === true && !c.rebase && o.fee === 0.1 && o.tax && o.method === 'avg' && o.harvest && !o.divs, JSON.stringify([c, o]));
+    let D = MHdebug.curD();
+    ok('시작한 세션 시세 받음 (주문표 기준 전날 종가)', D.close != null, [!!MH.market.SOXL, MH.loading]);
+    if (D.close != null) {
+      const fr = D.orders.filter(x => x.tag === 'first')[0];
+      ok('정액(소수 주) 주문표 — 처음 매수 = (처음 원금 ÷ 분할) ÷ 주문가 · 하방 LOC 없음 · 설명', fr && Math.abs(fr.quantity - (20000 / 40) / fr.price) < 1e-9 && fr.quantity % 1 !== 0 && D.orders.length === 1 && /정액 주문\\(소수 주\\)/.test(($$('.mh-card').filter(x => /오늘의 주문/.test(x.innerText))[0] || {}).innerText || ''), fr && [fr.quantity, fr.price]);
+      click('[data-act="rec-open"]'); await W(200);
+      const step = $('[data-in^="vr:"][data-in$=":fq"]'); ok('기록 시트: 정액이면 수량 소수 입력 (step any)', MH.sheet && MH.sheet.ideal && (!step || step.getAttribute('step') === 'any'), step && step.getAttribute('step'));
+      MH.sheet = null; MHdebug.render();
+    }
+    // ③ ⋮ 메뉴 — 같은 선택을 시작한 뒤에도 바꿈
+    MH.menu = true; MHdebug.render(); await W(50);
+    const mt = ($('.mh-menu') || {}).innerText || '';
+    ok('⋮ 메뉴에 세부 규칙·세금·수수료', ['평단 LOC 괴리율', '1회 매수금', '새 사이클 시작', '주문 수량', '백테스트 카드', '양도소득세', '연말 절세', '분배금 받기'].every(k => mt.includes(k)) && !mt.includes('T값 반올림') && !mt.includes('다시 정하기'), mt.slice(0, 120));
+    click('.mh-menu [data-act="m-money"][data-v="compound"]'); await W(60); MH.menu = true; MHdebug.render();
+    click('.mh-menu [data-act="m-ideal"][data-v="0"]'); await W(60); MH.menu = true; MHdebug.render();
+    fill('#mh-m-avgoff', '2'); click('.mh-menu [data-act="ap-avgoff"]'); await W(60); MH.menu = true; MHdebug.render();
+    click('.mh-menu [data-act="tg-bttax"]'); await W(60); MH.menu = true; MHdebug.render();
+    fill('#mh-m-btfee', '0.33'); click('.mh-menu [data-act="ap-btfee"]'); await W(60); MH.menu = true; MHdebug.render();
+    s = ses().settings; o = MHdebug.btOpts(s);
+    ok('⋮ 메뉴로 바꾸기 (복리 · 1주 · 평단 괴리 +2% · 양도세 빼기 · 수수료 0.33%)', s.money == null && s.ideal == null && s.avgOff === 2 && o.tax === false && o.fee === 0.33 && !o.harvest && o.method === 'fifo', JSON.stringify(s));
+    const a0 = $('.mh-menu a[href*="muhan-backtest/#"]'), href = a0 ? a0.getAttribute('href') : '';
+    ok('⋮ 메뉴 \\'이 설정으로 백테스트\\' 주소에 세부 규칙·세금·수수료', /ao=2(&|$)/.test(href) && /r=rsi/.test(href) && !/m=simple/.test(href) && !/id=1/.test(href) && /fe=0\\.33/.test(href) && /tx=0/.test(href) && /dv=0/.test(href), href);
+    click('.mh-menu [data-act="m-money"][data-v="simple"]'); await W(60);
+    MH.menu = true; MHdebug.render(); fill('#mh-m-cap', '25000'); click('.mh-menu [data-act="ap-cap"]'); await W(60);
+    s = ses().settings; let C = MHdebug.vCompute(s, [], null);
+    ok('원금 바꾸기(추가 입금) → 단리 기준 처음 원금도 같은 만큼 · 1회 = 처음 원금 ÷ 분할', s.totalCapital === 25000 && s.base === 25000 && Math.abs(C.buyAmount - 25000 / 40) < 0.01, JSON.stringify([s.totalCapital, s.base, C.buyAmount]));
+    MH.menu = false; MHdebug.render();
+    // ④ 새 사이클 RSI 60 이하 — 첫 사이클은 바로 · 다음 사이클부터 와일더 RSI(14) > 60 이면 대기 (합성 시세로 두 경우 모두)
+    const mk0 = MH.market.SOXL;
+    const synth = up => { const L = []; let d = new Date(Date.UTC(2026, 0, 2)), x = 50;
+      for (let i = 0; i < 120; i++) { while (d.getUTCDay() % 6 === 0) d.setUTCDate(d.getUTCDate() + 1); x = x * (up ? 1.01 : 0.99); L.push({ date: d.toISOString().slice(0, 10), close: Math.round(x * 100) / 100 }); d.setUTCDate(d.getUTCDate() + 1); }
+      return { ticker: 'SOXL', long: L, prices: L.slice(-25).map(z => ({ date: z.date, close: z.close, dayHigh: z.close })), quote: null }; };
+    const gate = async (up, no) => { MH.market.SOXL = synth(up); ses().settings = Object.assign({}, ses().settings, { cycleNo: no }); ses().transactions = []; MHdebug.render(); await W(60);
+      const D2 = MHdebug.curD(); return { wait: !!(D2.gate && D2.gate.wait), first: !!(D2.gate && D2.gate.first), rsi: D2.gate && D2.gate.rsi, rows: D2.orders.length, card: !!$('#mh-rsi-wait'), okc: !!$('#mh-rsi-ok') }; };
+    const g1 = await gate(true, 2), g2 = await gate(false, 2), g3 = await gate(true, 1);
+    ok('RSI 대기: 2번째 사이클 · RSI 100 → 주문 없음 · 대기 카드', g1.wait && g1.rsi === 100 && g1.rows === 0 && g1.card && !g1.okc, JSON.stringify(g1));
+    ok('RSI 대기: 2번째 사이클 · RSI 0 → 첫 매수 · 충족 안내', !g2.wait && g2.rsi === 0 && g2.rows > 0 && !g2.card && g2.okc, JSON.stringify(g2));
+    ok('RSI 대기: 첫 사이클은 RSI 100 이어도 바로 시작 (백테스트와 같음)', g3.first && !g3.wait && g3.rows > 0 && !g3.card, JSON.stringify(g3));
+    await gate(true, 2); click('[data-act="rec-open"]'); await W(200);
+    ok('RSI 대기 중 기록 시트: 주문표 줄 없음 · 안내 · 직접 추가 가능', MH.sheet && MH.sheet.wait && MH.sheet.rows.length === 0 && /RSI 대기/.test(($('.mh-sheet') || document.body).innerText) && !!$('[data-act="vr-xadd"]'), MH.sheet && JSON.stringify([MH.sheet.wait, MH.sheet.rows.length]));
+    MH.sheet = null; MH.market.SOXL = mk0; ses().settings = Object.assign({}, ses().settings, { cycleNo: 1 }); MHdebug.render();
+    // ⑤ 재시작: 사이클 번호 · V3.0 반복리 완충 바닥 → '다시 정하기' 켬(새 원금) / 끔(경고) · 단리 1회 매수금 그대로
+    const endTx = [{ id: 't1', date: '2026-01-05T12:00:00', close: 50, fills: [{ side: 'B', p: 50, q: 100, tag: 'first', m: 'LOC' }] }, { id: 't2', date: '2026-01-06T12:00:00', close: 40, fills: [{ side: 'S', p: 40, q: 100, tag: 'tp', m: 'LMT' }] }];
+    const v3 = rb => { ses().settings = { ticker: 'TQQQ', splits: 20, totalCapital: 20000, base: 20000, cum0: 0, max0: 4000, targetProfit: 15, bigNumPercent: 15, lowerLocShares: 1, lowerLocLines: 8, version: '3.0', exhaust: 'official', rebase: rb || undefined, cycleNo: 1 };
+      ses().transactions = JSON.parse(JSON.stringify(endTx)); ses().archivedCycles = []; MH.notice = null; MHdebug.render(); };
+    v3(true); const ph = MHdebug.curD().st.phase; MHdebug.restart(19000); let s3 = ses().settings, n3 = MH.notice;
+    ok('V3.0 다시 정하기 켬: 현금 19,000 < 원금 + 최대 누적 ÷ 2(22,000) → 새 원금 19,000 · 누적 0 · 사이클 2', ph === '종료' && s3.base === 19000 && s3.cum0 === 0 && s3.max0 === 0 && s3.totalCapital === 19000 && s3.cycleNo === 2 && n3 && /다시 정함/.test(n3.title) && ses().archivedCycles.length === 1, JSON.stringify([ph, s3, n3]));
+    v3(false); MHdebug.restart(19000); s3 = ses().settings; n3 = MH.notice;
+    ok('V3.0 다시 정하기 끔: 원금·최대 누적 그대로(누적 −1,000) · 완충 바닥 경고', s3.base === 20000 && s3.cum0 === -1000 && s3.max0 === 4000 && n3 && n3.warn && /완충/.test(n3.title), JSON.stringify([s3, n3]));
+    ses().settings = { ticker: 'TQQQ', splits: 40, totalCapital: 20000, base: 20000, targetProfit: 10, bigNumPercent: 15, partPct: 5, capPct: 5, lowerLocShares: 1, lowerLocLines: 8, version: '2.1', exhaust: 'official', money: 'simple', cycleNo: 1 };
+    ses().transactions = JSON.parse(JSON.stringify(endTx)).map(t => Object.assign(t, { fills: t.fills.map(f => Object.assign(f, f.side === 'S' ? { p: 60 } : {})) })); ses().archivedCycles = []; MHdebug.render();
+    MHdebug.restart(21000); let s2 = ses().settings; C = MHdebug.vCompute(s2, [], null);
+    ok('단리 재시작(복리 원금 21,000): 1회 = 처음 원금 20,000 ÷ 40 그대로 · 사이클 2', s2.totalCapital === 21000 && s2.base === 20000 && Math.abs(C.buyAmount - 500) < 1e-9 && s2.cycleNo === 2, JSON.stringify([s2, C.buyAmount]));
+    s2.money = undefined; C = MHdebug.vCompute(s2, [], null);
+    ok('복리면 1회 = 지금 원금 21,000 ÷ 40', Math.abs(C.buyAmount - 525) < 1e-9, C.buyAmount);
+  } catch (e) { ok('세부 규칙 흐름 오류', false, String(e && e.message)); }
+  window.confirm = cf0;
+  return R;
+}"""
+
 ETF_JS = """async (local) => {
   const R = [], ok = (name, c, info) => R.push({ name, ok: !!c, info }), W = ms => new Promise(r => setTimeout(r, ms));
   const S = window.ECXdebug && ECXdebug.S, X = window.ECX, $ = id => document.getElementById(id);
@@ -1288,6 +1381,13 @@ def main():
                 if abs(sim['cagr'] - card['cagr']) > 1e-9 or abs(sim['mdd'] - card['mdd']) > 1e-9 or abs(sim['gcagr'] - card['gcagr']) > 1e-9 or sim['from'] != card['from'] or sim['to'] != card['to']:
                     fail('muhan', '화면 안 백테스트 카드와 시뮬레이터 숫자가 다름 — 카드 %r · 시뮬레이터 %r' % (card, sim))
             page.goto(base + 'muhan/', wait_until='load'); page.wait_for_timeout(1500)
+        # 무한매수법 백테스트와 같은 세부 규칙·세금·수수료 (빈 저장소의 새 세션에서 — 위 V2.2 세션 검사가 끝난 뒤)
+        page.evaluate("() => { localStorage.removeItem('muhan4-store'); }")
+        page.goto('about:blank'); page.goto(base + 'muhan/', wait_until='load'); page.wait_for_timeout(1500)
+        for t in page.evaluate(MUHANOPT_JS):
+            if not t['ok']:
+                fail('muhan', '세부 규칙 %s%s' % (t['name'], (' — ' + str(t.get('info'))[:300]) if t.get('info') else ''))
+        page.goto('about:blank'); page.goto(base + 'muhan/', wait_until='load'); page.wait_for_timeout(500)
         page.evaluate("() => { localStorage.removeItem('muhan4-store'); }")
         bad = [t for t, u in errs if not ignorable(t, u)]
         for t in bad[:3]:
@@ -1343,7 +1443,8 @@ def main():
                 page.evaluate("""() => { localStorage.removeItem('mbt-history');
                   localStorage.setItem('muhan4-store', JSON.stringify({ activeSessionId: 'a1', sessions: [{ id: 'a1', name: 'TQQQ 40분할', settings: { ticker: 'TQQQ', splits: 40, totalCapital: 20000, targetProfit: 15, bigNumPercent: 12, lowerLocLines: 8, lowerLocShares: 1 },
                     transactions: [], isReverseMode: false, reverseStarPrice: null, archivedCycles: [], midEntry: null }] })); }""")
-                page.goto('about:blank'); page.goto(base + 'muhan-backtest/#v=2.1&t=SOXL&c=20000&sp=10&tg=100&pt=4&cp=6&bg=10&ln=5&sh=2&x=hold&r=rsi', wait_until='load')
+                PH = '#v=2.1&t=SOXL&c=20000&sp=10&tg=100&pt=4&cp=6&bg=10&ln=5&sh=2&x=hold&r=rsi&ao=-1.5&m=simple&id=1&fe=0.1&tm=avg&hv=1&dv=0'   # 세부 규칙·세금·수수료까지 모두 바꾼 조건
+                page.goto('about:blank'); page.goto(base + 'muhan-backtest/' + PH, wait_until='load')
                 pr = None
                 try:
                     page.wait_for_function('window.MBTdebug && MBTdebug.R() && document.getElementById("mb-save")', timeout=90000)
@@ -1354,19 +1455,45 @@ def main():
                 except Exception as e:
                     fail('muhan-backtest', '실행 기록 → 무한매수법 시작: 저장·이동·조건 채우기 실패 (%s)' % str(e).split('\n')[0][:160])
                 pr = (page.evaluate("""async () => { const u = MH.setup, W = ms => new Promise(r => setTimeout(r, ms)), st = MHdebug.store;
-                  const o = { u: { ver: u.ver, ticker: u.ticker, custom: u.custom, splits: u.splits, spc: u.spc, target: u.target, big: u.big, part: u.part, capP: u.capP, lines: u.lines, shares: u.shares, exhaust: u.exhaust, cap: u.cap },
-                    note: (document.getElementById('mh-preset') || {}).innerText || '', dis: document.querySelector('[data-act="su-start"]').disabled, live: st.sessions.filter(s => !s.archived).length, left: localStorage.getItem('muhan4-preset') };
+                  const o = { u: { ver: u.ver, ticker: u.ticker, custom: u.custom, splits: u.splits, spc: u.spc, target: u.target, big: u.big, part: u.part, capP: u.capP, lines: u.lines, shares: u.shares, exhaust: u.exhaust, cap: u.cap,
+                      avgOff: u.avgOff, money: u.money, restart: u.restart, rebase: u.rebase, ideal: u.ideal, fee: u.fee, tax: u.tax, method: u.method, harvest: u.harvest, divs: u.divs, more: u.more },
+                    note: (document.getElementById('mh-preset') || {}).innerText || '', dis: document.querySelector('[data-act="su-start"]').disabled, live: st.sessions.filter(s => !s.archived).length, left: localStorage.getItem('muhan4-preset'),
+                    sum: (document.querySelector('.mh-sumore') || {}).innerText || '', pre: Object.keys(MHdebug.bt.cache) };   /* 넘어온 조건 전에 예전 세션(a1)을 먼저 그려 그 카드를 계산하면 안 됨 */
                   document.querySelector('[data-act="su-start"]').click(); await W(300);
                   const a = st.sessions.filter(s => s.id === st.activeSessionId)[0], old = st.sessions.filter(s => s.id === 'a1')[0];
-                  o.s = a.settings; o.oldOk = !!(old && old.settings && old.settings.ticker === 'TQQQ' && old.settings.splits === 40); o.n = st.sessions.length; return o; }""") if page.evaluate("() => !!(window.MH && MH.setup && MH.setup.preset)") else None)
-                wu = {'ver': '2.1', 'ticker': 'SOXL', 'custom': False, 'splits': 10, 'spc': '10', 'target': '100', 'big': '10', 'part': '4', 'capP': '6', 'lines': '5', 'shares': '2', 'exhaust': 'hold', 'cap': '20000'}
-                if pr is None: pr = {'u': {}, 'dis': True, 'live': 0, 'left': None, 'note': '', 'oldOk': False, 's': {}}
+                  o.s = a.settings; o.oldOk = !!(old && old.settings && old.settings.ticker === 'TQQQ' && old.settings.splits === 40); o.n = st.sessions.length;
+                  /* 시작한 세션의 '이 설정으로 백테스트' 카드 — 같은 조건 그대로 계산 (아래에서 시뮬레이터 숫자와 비교) */
+                  /* 지금 화면 카드의 열쇠(data-btk)로 찾음 — 원금이 같은 다른 세션(a1 TQQQ $20,000) 카드와 섞이지 않게 */
+                  let r = null; for (let i = 0; i < 240; i++) { const ch = document.querySelector('#mh-bt .mh-bt-ch'), x = ch && MHdebug.bt.cache[ch.getAttribute('data-btk')]; if (x && (x.st === 'ok' || x.st === 'err')) { r = x; break; }
+                    const er = document.querySelector('#mh-bt .mh-bad'); if (er) { r = { st: 'err', msg: er.textContent }; break; } await W(250); }
+                  const ah = document.querySelector('#mh-bt a');
+                  o.card = r && r.st === 'ok' ? { href: ah && ah.getAttribute('href'), cagr: r.net.cagr, mdd: r.net.mdd, gcagr: r.gross.cagr, from: r.from, to: r.to, sub: ((document.querySelector('#mh-bt') || {}).innerText || '').slice(0, 300) } : { err: r ? r.msg || 'err' : '계산 안 끝남' };
+                  return o; }""") if page.evaluate("() => !!(window.MH && MH.setup && MH.setup.preset)") else None)
+                wu = {'ver': '2.1', 'ticker': 'SOXL', 'custom': False, 'splits': 10, 'spc': '10', 'target': '100', 'big': '10', 'part': '4', 'capP': '6', 'lines': '5', 'shares': '2', 'exhaust': 'hold', 'cap': '20000',
+                      'avgOff': '-1.5', 'money': 'simple', 'restart': 'rsi', 'rebase': False, 'ideal': True, 'fee': '0.1', 'tax': True, 'method': 'avg', 'harvest': True, 'divs': False, 'more': True}
+                if pr is None: pr = {'u': {}, 'dis': True, 'live': 0, 'left': None, 'note': '', 'oldOk': False, 's': {}, 'sum': '', 'pre': [], 'card': {'err': '시작 화면 없음'}}
                 bu = [k for k, v in wu.items() if pr['u'].get(k) != v]
                 s_ = pr.get('s') or {}
-                if bu or pr['dis'] or pr['live'] != 2 or pr['left'] is not None or 'RSI' not in pr['note'] or not pr['oldOk'] \
-                        or s_.get('version') != '2.1' or s_.get('targetProfit') != 100 or s_.get('splits') != 10 or s_.get('partPct') != 4 or s_.get('capPct') != 6 \
-                        or s_.get('lowerLocLines') != 5 or s_.get('lowerLocShares') != 2 or s_.get('exhaust') != 'hold' or s_.get('totalCapital') != 20000 or s_.get('ticker') != 'SOXL':
-                    fail('muhan-backtest', '실행 기록 → 무한매수법 시작 이상 — 다른 칸 %s · %r' % (bu, {k: pr[k] for k in ('u', 'dis', 'live', 'left', 'oldOk', 's')}))
+                ws = {'version': '2.1', 'targetProfit': 100, 'splits': 10, 'partPct': 4, 'capPct': 6, 'lowerLocLines': 5, 'lowerLocShares': 2, 'exhaust': 'hold', 'totalCapital': 20000, 'ticker': 'SOXL',
+                      'avgOff': -1.5, 'money': 'simple', 'restart': 'rsi', 'ideal': True, 'btFee': 0.1, 'btMethod': 'avg', 'btHarvest': True, 'btDivs': False, 'cycleNo': 1}
+                bs = [k for k, v in ws.items() if s_.get(k) != v] + [k for k in ('btTax', 'rebase', 'tround') if k in s_]
+                note = pr['note']
+                nbad = [w for w in ('RSI 60 이하', '평단 괴리 −1.5%', '단리', '정액(소수 주)', '수수료 0.1%', '이동평균', '연말 절세', '분배금 끔', '그대로') if w not in note] + [w for w in ('빼고',) if w in note]
+                if bu or bs or nbad or pr['dis'] or pr['live'] != 2 or pr['left'] is not None or not pr['oldOk']:
+                    fail('muhan-backtest', '실행 기록 → 무한매수법 시작 이상 — 다른 칸 %s · 저장 설정 %s · 안내 %s · %r' % (bu, bs, nbad, {k: pr[k] for k in ('u', 'dis', 'live', 'left', 'oldOk', 's', 'note')}))
+                if pr.get('pre'):
+                    fail('muhan-backtest', '실행 기록 → 무한매수법: 넘어온 조건보다 예전 세션이 먼저 그려져 그 백테스트 카드까지 계산함 %r' % pr['pre'][:2])
+                cd = pr.get('card') or {}
+                if cd.get('err') or not cd.get('href'):
+                    fail('muhan-backtest', '실행 기록으로 시작한 세션의 백테스트 카드 계산 실패: %s' % cd.get('err'))
+                else:
+                    miss = [x for x in ('ao=-1.5', 'm=simple', 'r=rsi', 'id=1', 'fe=0.1', 'tm=avg', 'hv=1', 'dv=0', 'x=hold', 'pt=4', 'cp=6', 'ln=5', 'sh=2') if x not in cd['href'].split('#', 1)[-1].split('&')]
+                    page.goto('about:blank'); page.goto(base + cd['href'], wait_until='load')
+                    page.wait_for_function('window.MBTdebug && MBTdebug.R() && MBTdebug.R().sn', timeout=90000)
+                    sim = page.evaluate("(() => { const R = MBTdebug.R(); return { cagr: R.sn.cagr, mdd: R.sn.mdd, gcagr: R.sg.cagr, from: R.D.d[R.net.from], to: R.D.d[R.net.to], S: { avgOff: R.S.avgOff, money: R.S.money, restart: R.S.restart, ideal: R.S.ideal, fee: R.S.fee, method: R.S.method, harvest: R.S.harvest, divs: R.S.divs } }; })()")
+                    if miss or abs(sim['cagr'] - cd['cagr']) > 1e-9 or abs(sim['mdd'] - cd['mdd']) > 1e-9 or abs(sim['gcagr'] - cd['gcagr']) > 1e-9 or sim['from'] != cd['from'] or sim['to'] != cd['to']:
+                        fail('muhan-backtest', '실행 기록으로 시작한 세션의 카드 ≠ 시뮬레이터 — 주소에 빠짐 %s · 카드 %r · 시뮬레이터 %r' % (miss, cd, sim))
+                    print('    실행 기록 → 기록 화면 카드 = 시뮬레이터: CAGR %.4f%% · MDD %.4f%% (%s~%s)' % (cd['cagr'] * 100, cd['mdd'] * 100, cd['from'], cd['to']), flush=True)
                 page.evaluate("() => { localStorage.removeItem('muhan4-store'); localStorage.removeItem('mbt-history'); }")
             # 주소만으로 같은 조건 — 평단 괴리율·취득가액·연말 절세·분배금(V2.1) · T 반올림(V2.2) 이 주소에 남고 다시 열면 그대로
             for h, want in [('#v=2.1&t=SOXL&c=20000&sp=33&tg=12.5&pt=4&cp=6&bg=10&fe=0.1&ln=5&sh=2&x=hold&r=rsi&ao=-1.5&tm=avg&hv=1&dv=0',
@@ -1407,7 +1534,11 @@ def main():
             page.goto('about:blank'); page.goto(base + 'muhan-backtest/', wait_until='load')
             page.wait_for_function("document.querySelectorAll('#mb-set .mb-acc').length === 7", timeout=30000)
             a2 = page.evaluate(ST)
-            page.focus('#mb-set .mb-acc[data-sec="ver"] > summary'); page.keyboard.press('Enter'); page.wait_for_timeout(450)
+            page.focus('#mb-set .mb-acc[data-sec="ver"] > summary'); page.keyboard.press('Enter')
+            try:   # 닫는 모션(220ms)이 끝날 때까지 — 고정 450ms 는 페이지가 바쁠 때(큰 스크립트·자료 처리) 모자라 가끔 '안 닫힘'으로 잘못 실패했음
+                page.wait_for_function("() => { const d = document.querySelector('#mb-set .mb-acc[data-sec=\"ver\"]'); return d && !d.open && d._accTarget == null; }", timeout=5000)
+            except Exception:
+                pass   # 정말 안 닫히면 아래 a3 검사가 실패로 알림
             page.evaluate("""() => { const e = document.getElementById('mb-cap'); e.value = '25000'; e.dispatchEvent(new Event('input', { bubbles: true }));
                                      const t = document.getElementById('mb-tg'); t.value = '12.5'; t.dispatchEvent(new Event('input', { bubbles: true })); }""")
             a3 = {x['k']: x for x in page.evaluate(ST)}

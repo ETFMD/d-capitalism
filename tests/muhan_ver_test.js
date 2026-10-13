@@ -101,6 +101,36 @@ const LABU = { d0: '2021-01-04', dd: [1,1,1,1,3,1,1,1,1,4,1,1,1,3,1,1,1,1,3,1,1,
   }
   check('기록 화면 다시 계산 = 백테스트 상태 (' + n + '가지)', b0 === 0, b0 + '건 다름'); }
 
+/* ⑤b 기록 화면에 더한 백테스트 세부 규칙 — 단리(처음 원금 ≠ 지금 현금) · 정액(소수 주) · 평단 괴리율 · T 둘째 자리 올림 · V3 반복리 누적(cum0·max0) 도
+       기록 화면 다시 계산(replay) = 백테스트 하루 루프 상태 (기록 화면이 백테스트와 같은 규칙으로 주문표·T값·1회 매수금을 냄) */
+{ let n = 0, b0 = 0;
+  for (const [tk, D] of [['TQQQ', TQ], ['SOXL', SX]]) for (const ver of ['1.0', '2.0', '2.1', '2.2', '3.0']) for (const ideal of [false, true]) for (let s0 = 60; s0 < D.c.length - 200; s0 += 523) {
+    const cfg = Object.assign(MHV.defaults(ver, tk), { splits: ver === '3.0' ? 20 : 30, ideal });
+    if (ver !== '3.0') cfg.money = 'simple';
+    if (ver === '1.0' || ver === '2.0' || ver === '2.1') cfg.avgOff = s0 % 2 ? -1.5 : 2;
+    if (ver === '2.2' || ver === '3.0') cfg.tround = 'c1';
+    const x = { capital: 12000, base: 10000, cum0: ver === '3.0' ? 1500 : 0, max0: ver === '3.0' ? 2500 : 0 };
+    const k = 50 / D.c[s0 - 1], st0 = MHV.init(cfg, x.capital); st0.base = x.base; st0.cum = x.cum0; st0.maxCum = x.max0; MHV.begin(cfg, st0);
+    const one0 = MHV.oneOf(cfg, st0), recs = [];
+    for (let i = s0; i < Math.min(D.c.length, s0 + 300); i++) {
+      const bar = { c: D.c[i] * k, h: D.h[i] * k }, P = MHV.plan(cfg, st0, { prev: D.c[i - 1] * k }), f = MHV.settle(P.rows, bar, ideal), ev = MHV.apply(cfg, st0, P, f, bar, {});
+      recs.push({ date: D.d[i], close: bar.c, fills: f.map(z => ({ side: z.side, p: z.p, q: z.q, tag: z.tag, m: z.m })) });
+      if (ev.end) break;
+    }
+    const R = MHV.replay(cfg, x, recs), a = R.st; n++;
+    const sameOne = ver === '3.0' ? Math.abs(one0 - (10000 / 20 + 2500 / 40)) < 1e-9 : Math.abs(one0 - 10000 / 30) < 1e-9;   /* 단리 = 처음 원금 ÷ 분할 · V3 = 원금 ÷ 20 + 최대 누적 ÷ 40 */
+    if (!(sameOne && Math.abs(a.qty - st0.qty) < 1e-9 && Math.abs(a.avg - st0.avg) < 1e-9 && Math.abs(a.cash - st0.cash) < 1e-6 && a.mode === st0.mode && a.T === st0.T && Math.abs(MHV.tOf(cfg, a) - MHV.tOf(cfg, st0)) < 1e-12)) {
+      b0++; if (b0 < 4) console.log('  세부 규칙 replay 차이', tk, ver, ideal, D.d[s0], one0); }
+  }
+  check('기록 화면 세부 규칙(단리·정액·평단 괴리율·T 올림·V3 누적) 다시 계산 = 백테스트 상태 (' + n + '가지)', b0 === 0, b0 + '건 다름'); }
+/* ⑤c 새 사이클 RSI 60 이하 — 백테스트(run): 첫 사이클은 바로 · 두 번째 사이클부터 와일더 RSI(14) 가 60 이하인 날에야 첫 매수 (기록 화면 rsiGate 와 같은 규칙) */
+{ const cfg = Object.assign(MHV.defaults('2.2', 'TQQQ'), { restart: 'rsi' }), O = MHV.run(cfg, TQ, { from: 1, capital: 10000, rows: true }), c2 = O.cycles.slice(1).filter(c => !c.rebuy);
+  const ok1 = O.cycles.length > 2 && O.cycles[0].from === 1, bad = c2.filter(c => { const r = MHV.rsiW(TQ.c, c.from - 1); return !(r == null || r <= 60); });
+  const waited = c2.filter(c => { const prev = O.cycles[O.cycles.indexOf(c) - 1]; return prev && prev.end != null && c.from > prev.end + 1; });
+  check('새 사이클 RSI: 첫 사이클 바로 · 다음 사이클 첫날 RSI ≤ 60 · 기다린 사이클 있음', ok1 && bad.length === 0 && waited.length > 0, JSON.stringify([O.cycles.length, bad.length, waited.length]));
+  const waitOk = waited.every(c => { const prev = O.cycles[O.cycles.indexOf(c) - 1]; for (let j = prev.end + 1; j < c.from; j++) { const r = MHV.rsiW(TQ.c, j - 1); if (r == null || r <= 60) return false; } return true; });
+  check('새 사이클 RSI: 기다린 날은 모두 RSI > 60', waitOk); }
+
 /* ⑥ 보유를 다 판 날 같은 날 매수 → 새 사이클 (V1.0 지정가 익절 + 큰수 LOC): T 는 1 이하에서 다시 시작 */
 { const O = MHV.run(MHV.defaults('1.0', 'TQQQ'), TQ, { from: 1, capital: 10000, rows: true }), rb = O.rows.filter(r => r.rb);
   check('V1.0 같은 날 재매수 = 새 사이클 (T ≤ 1)', rb.length > 0 && rb.every(r => r.T <= 1 + 1e-9), rb.length + '건 · 최대 T ' + Math.max.apply(null, rb.map(r => r.T)));
