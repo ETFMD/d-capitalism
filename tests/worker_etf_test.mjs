@@ -2,6 +2,7 @@
 //  · yahooRows: 야후 일봉 → "YYYYMMDD,시가,종가" 줄 (거래소 현지 날짜 · 시가 없는 날은 빈칸 · 종가 없는 날은 뺌)
 //  · etfPage(m=kp): 네이버 일별 시세 쪽 찾기 — 추정 쪽이 어긋나도 앞뒤로 옮겨 찾음 · 보관본
 //    · 자료 시작 전 날짜 = 200 "first=자료 첫날"(보관) · 미래 날짜 404 · 잘못된 코드 400 · 원본 오류 502
+//  · liveQuote(/q): 실시간 시세 — 야후 1분봉 마지막 체결가 · 장(프리·정규·애프터·마감) 판정 · 다른 사이트 403 · 15초 메모리 보관 · 원본 오류 시 직전 값
 // fetch·D1 은 모의 (m.stock 처럼 1쪽 = 가장 최근 60거래일, 최신이 앞)
 import fs from 'fs';
 import path from 'path';
@@ -56,5 +57,41 @@ ok(!okU.length, 'm=u 백테스트 재료 기호 허용', okU);
 const badU = ['', 'a b', '../x', 'spy', 'ABCDEFGHIJKLMNOPQ', '^^GSPC', 'SPY&x=1'].filter(x => W.etfSource('u', x));
 ok(!badU.length, 'm=u 이상한 기호 거절', badU);
 ok(['KOSPI', 'KPI200', '069500', '0167A0'].every(x => W.etfSource('k', x)) && !W.etfSource('k', 'KOSPI;') && !W.etfSource('k', 'abc'), 'm=k 국내 지수·종목 코드', '');
+// ── 실시간 시세 /q (야후 1분봉 마지막 체결가 · 프리·정규·애프터 · 15초 메모리 보관) ──
+const qa = src.indexOf('const Q_TTL'), qb = src.indexOf('export default');
+if (qa < 0 || qb < 0 || qb < qa) { console.log('FAIL Worker 에서 /q(liveQuote) 구간을 찾지 못함'); process.exit(1); }
+const Q = new Function('CNN_UA', src.slice(qa, qb) + '\nreturn { yQuote, liveQuote, QC };')('test');
+const S = 1791878400, TP = { pre: { start: S, end: S + 19800 }, regular: { start: S + 19800, end: S + 43200 }, post: { start: S + 43200, end: S + 57600 } };   // 2026-10-13 04:00 EDT 부터
+const yj = (bars, meta = {}) => JSON.stringify({ chart: { result: [{ meta: Object.assign({ symbol: 'SOXL', gmtoffset: -14400, regularMarketPrice: 128.4, regularMarketTime: S - 14400, chartPreviousClose: 127.1, currentTradingPeriod: TP }, meta),
+  timestamp: bars.map((x) => x[0]), indicators: { quote: [{ close: bars.map((x) => x[1]) }] } }] } });
+let q = Q.yQuote(yj([[S + 60, 121.29], [S + 600, 121.333333]]), S + 700);
+ok(q && q.p === 121.3333 && q.t === S + 600 && q.ps === 'pre' && q.ses === 'pre' && q.rp === 128.4 && q.pc === 127.1, '/q 프리장: 마지막 1분봉 = 지금 가격 (정규장 가격은 전일 종가 그대로)', q);
+q = Q.yQuote(yj([[S + 20000, 125], [S + 30000, 125.502], [S + 30060, null]], { regularMarketPrice: 125.502 }), S + 30070);
+ok(q && q.p === 125.502 && q.t === S + 30000 && q.ps === 'reg' && q.ses === 'reg', '/q 정규장: 아직 체결 없는 마지막 분(null)은 건너뜀', q);
+q = Q.yQuote(yj([[S + 30000, 125.5], [S + 50000, 126.75], [S + 50060, null]]), S + 50100);
+ok(q && q.p === 126.75 && q.ps === 'post' && q.ses === 'post', '/q 애프터장 가격', q);
+q = Q.yQuote(yj([[S + 50000, 126.75]]), S + 60000);
+ok(q && q.p === 126.75 && q.ps === 'post' && q.ses === 'closed', '/q 애프터장 끝난 뒤 = 장 마감 · 마지막 체결가(애프터)', q);
+const MON = { pre: { start: S + 6 * 86400, end: S + 6 * 86400 + 19800 }, regular: { start: S + 6 * 86400 + 19800, end: S + 6 * 86400 + 43200 }, post: { start: S + 6 * 86400 + 43200, end: S + 6 * 86400 + 57600 } };
+q = Q.yQuote(yj([[S + 3 * 86400 + 57540, 119.9]], { currentTradingPeriod: MON }), S + 4 * 86400);
+ok(q && q.p === 119.9 && q.ps === 'post' && q.ses === 'closed', '/q 주말(시간표가 다음 거래일): 금요일 19:59 체결 = 애프터 · 장 마감', q);
+q = Q.yQuote(yj([], { regularMarketPrice: 130.12, regularMarketTime: S + 43200 }), S + 43300);
+ok(q && q.p === 130.12 && q.t === S + 43200 && q.ses === 'post', '/q 1분봉이 없으면 정규장 가격', q);
+ok(Q.yQuote('{x', S) === null && Q.yQuote('{"chart":{"result":[]}}', S) === null && Q.yQuote(yj([[S, null]], { regularMarketPrice: null }), S) === null, '/q 깨진 응답·빈 응답·가격 없음 → null', '');
+let qcalls = [], qmode = 'ok';
+globalThis.fetch = async (u) => { qcalls.push(u); if (qmode === '404') return { ok: false, status: 404, text: async () => '{}' };
+  if (qmode === 'down') return { ok: false, status: 503, text: async () => '' }; return { ok: true, status: 200, text: async () => yj([[S + 30000, 125.5]]) }; };
+const qreq = async (s, c = cors) => { const r = await Q.liveQuote(new URL('https://x/q?s=' + s), c, json); return { status: r.status, j: JSON.parse(await r.text()) }; };
+let qr = await qreq('soxl', { ok: false, headers: {} }); ok(qr.status === 403 && !qcalls.length, '/q 다른 사이트에서 부르면 403 (원본 안 부름)', qr);
+qr = await qreq('a%20b'); ok(qr.status === 400 && !qcalls.length, '/q 이상한 기호 → 400', qr);
+qr = await qreq('..%2Fx'); ok(qr.status === 400 && !qcalls.length, '/q 경로 기호 → 400', qr);
+qr = await qreq('soxl'); ok(qr.status === 200 && qr.j.s === 'SOXL' && qr.j.p === 125.5 && qcalls.length === 1 && /\/chart\/SOXL\?interval=1m&range=1d&includePrePost=true$/.test(qcalls[0]), '/q 정상 · 대문자 · 1분봉 프리·애프터 포함 주소', [qr, qcalls]);
+qr = await qreq('SOXL'); ok(qr.status === 200 && qcalls.length === 1, '/q 15초 안 같은 기호 → 메모리 보관본 (원본 안 부름)', qcalls.length);
+qr = await qreq('%5EGSPC'); ok(qr.status === 200 && qcalls.length === 2 && qcalls[1].indexOf('/chart/%5EGSPC?') > 0, '/q 지수 기호(^) 인코딩', qcalls[1]);
+const realNow = Date.now; Date.now = () => realNow() + 16000; qmode = 'down';
+qr = await qreq('SOXL'); ok(qr.status === 200 && qr.j.stale === 1 && qr.j.p === 125.5 && qcalls.length === 3, '/q 15초 지나 원본 오류 → 직전 값(stale)', qr);
+qr = await qreq('TQQQ'); ok(qr.status === 502, '/q 원본 오류 · 보관본 없음 → 502', qr);
+qmode = '404'; qr = await qreq('ZZZZ'); ok(qr.status === 404, '/q 없는 기호 → 404', qr);
+Date.now = realNow;
 console.log('Worker ETF 실제 가격 경로: ok ' + oks + ' · fail ' + fails);
 process.exit(fails ? 1 : 0);

@@ -25,6 +25,7 @@
  *   · m=k 국내: 네이버 증권 siseJson (상장일부터 · 분배금 반영 수정주가) · m=u 미국: Yahoo Finance v8 chart (adjclose)
  *   · 이 사이트(ALLOWED_ORIGINS)에서 온 요청만 · 코드 형식 검사(다른 주소로는 못 보냄) · 원문을 그대로 D1 cache 에 보관(가공 없이 → CPU 적게)
  *   · 받아 오지 못하면 직전 보관본 · 매일 03시에 7일 넘게 안 쓴 보관본 정리
+ * GET /q?s=SOXL → 실시간 시세 (야후 1분봉 마지막 체결가 · 프리장·정규장·애프터장) — 무한매수법·72루틴 'LOC 매수 상한' ↻ 자동 · 15초 메모리 보관
  * GET /apt?sgg=11650&seq=시군구|법정동|지번|단지명 → 아파트 한 단지의 최근 1년 매매 실거래 [[계약일, 금액(만원), 전용㎡, 층], ...]
  *   · 자료는 GitHub Actions 가 2시간마다 POST /apt/put 으로 올린 시군구·월별 실거래 (D1)
  *
@@ -349,6 +350,55 @@ async function etfChart(env, url, cors, json) {
     return json({ error: 'upstream', detail: String(e && e.message || e).slice(0, 120) }, 502);
   }
 }
+/* ── 실시간 시세 GET /q?s=SOXL ── 무한매수법·72루틴 'LOC 매수 상한'의 ↻ 자동 · 화면 주기 갱신
+ *   · 야후 1분봉(프리장·애프터장 포함)의 마지막 체결가 → 프리장·정규장·애프터장 어느 때나 지금 가격
+ *   · 응답 {s, p: 가격, t: 체결 시각(유닉스 초), ps: 그 가격의 장 pre|reg|post, ses: 지금 장 pre|reg|post|closed, rp: 정규장 가격, pc: 전일 종가}
+ *   · 이 사이트(ALLOWED_ORIGINS)에서 온 요청만 · 기호 형식 검사(다른 주소로는 못 보냄)
+ *   · 같은 기호는 15초 동안 이 Worker 메모리에 보관 → 보는 사람이 많아도 원본 호출은 15초에 한 번 (workers.dev 는 Cache API 가 없음 · D1 쓰기도 안 함)
+ *   · 원본이 잠깐 안 되면 보관본(stale: 1) · 없으면 502 */
+const Q_TTL = 15000, QC = new Map();
+function qSes(tp, off, x) {                                                 // 시각 x(초)가 어느 장인지 — 거래소 시간표(오늘) 안이면 그대로, 아니면 미국 동부 시계(4:00·9:30·16:00·20:00)
+  if (!x) return null;
+  const inP = (k) => tp[k] && x >= tp[k].start && x < tp[k].end;
+  if (tp.pre && tp.post && x >= tp.pre.start && x < tp.post.end) return inP('pre') ? 'pre' : inP('regular') ? 'reg' : 'post';
+  const mi = Math.floor((((x + off) % 86400) + 86400) % 86400 / 60);
+  return mi >= 240 && mi < 570 ? 'pre' : mi >= 570 && mi < 960 ? 'reg' : mi >= 960 && mi < 1200 ? 'post' : null;
+}
+function yQuote(v, now) {
+  let j; try { j = JSON.parse(v); } catch (e) { return null; }
+  const r = j && j.chart && j.chart.result && j.chart.result[0], m = r && r.meta;
+  if (!m) return null;
+  const ts = r.timestamp || [], q = (r.indicators && r.indicators.quote && r.indicators.quote[0]) || {}, c = q.close || [];
+  let p = null, t = null;
+  for (let i = ts.length - 1; i >= 0; i--) if (c[i] > 0) { p = c[i]; t = ts[i]; break; }   // 마지막 1분봉 (아직 체결 없는 분은 null → 건너뜀)
+  if (!(p > 0) && m.regularMarketPrice > 0) { p = m.regularMarketPrice; t = m.regularMarketTime || null; }
+  if (!(p > 0)) return null;
+  const tp = m.currentTradingPeriod || {}, off = +m.gmtoffset || 0, r4 = (x) => (x > 0 ? Math.round(x * 1e4) / 1e4 : null);
+  const inDay = tp.pre && tp.post && now >= tp.pre.start && now < tp.post.end;
+  return { s: m.symbol || '', p: r4(p), t: t || null, ps: qSes(tp, off, t) || 'post', ses: inDay ? qSes(tp, off, now) : 'closed',
+    rp: r4(m.regularMarketPrice), pc: r4(m.chartPreviousClose != null ? m.chartPreviousClose : m.previousClose) };
+}
+async function liveQuote(url, cors, json) {
+  if (!cors.ok) return json({ error: 'origin' }, 403);
+  const s = (url.searchParams.get('s') || '').toUpperCase();
+  if (!/^\^?[A-Z0-9][A-Z0-9.=-]{0,15}$/.test(s)) return json({ error: 'bad symbol' }, 400);
+  const now = Date.now(), c = QC.get(s);
+  if (c && now - c.at < Q_TTL) return json(c.v);
+  try {
+    const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?interval=1m&range=1d&includePrePost=true`,
+      { headers: { 'User-Agent': CNN_UA, Accept: 'application/json, text/plain, */*', 'Accept-Language': 'en-US,en;q=0.9', Referer: 'https://finance.yahoo.com/' } });
+    if (r.status === 404 && !c) return json({ error: 'not found' }, 404);
+    if (!r.ok) throw new Error('upstream ' + r.status);
+    const v = yQuote(await r.text(), Math.floor(now / 1000));
+    if (!v) throw new Error('empty');
+    if (QC.size >= 64) QC.clear();
+    QC.set(s, { at: now, v });
+    return json(v);
+  } catch (e) {
+    if (c) return json({ ...c.v, stale: 1 });                              // 원본 일시 오류 → 직전 값
+    return json({ error: 'upstream', detail: String(e && e.message || e).slice(0, 120) }, 502);
+  }
+}
 
 export default {
   async fetch(req, env) {
@@ -383,6 +433,7 @@ export default {
         return json({ token: !!env.GH_TOKEN, lastDispatch: one(row), aptDispatch: one(ap) });
       }
       if (url.pathname === '/etf' && req.method === 'GET') return await etfChart(env, url, cors, json);
+      if (url.pathname === '/q' && req.method === 'GET') return await liveQuote(url, cors, json);   /* 실시간 시세 (프리·정규·애프터) */
       /* GET /relay?u=… → 해외 서버(GitHub Actions)를 막는 운용사 사이트의 공개 분배금 자료만 대신 받아 옴 (허용 주소만 · GET 만) */
       if (url.pathname === '/relay' && req.method === 'GET') {
         let target;
