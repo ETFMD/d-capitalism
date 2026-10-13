@@ -1657,6 +1657,10 @@ def main():
         if os.path.isdir(os.path.join(ROOT, 'vr-backtest')):
             import vr_bt_ui
             vr_bt_ui.check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS)
+        # 72매매법 — 백테스트 = 엔진·무한매수법 백테스트 화면 · 기록(시세대로 = 같은 날 시작 백테스트 · 고치기·중간 진입·백업) · 휴장일 (tests/t72_ui.py)
+        if os.path.isdir(os.path.join(ROOT, '72')):
+            import t72_ui
+            t72_ui.check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS)
         # 홈 첫 화면 — AI 시대, 노동자에서 자본가로: 두 힘·하나의 답 숫자 · 데이터 탭 · 직업 검색
         print('[홈] 첫 화면', flush=True)
         errs.clear()
