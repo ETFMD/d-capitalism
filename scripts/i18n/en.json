@@ -339,6 +339,7 @@
   "'분배금 포함'은 분배락일 종가로 분배금을 재투자했다고 가정한 총수익 기준이며, 종가는 주식분할이 반영된 값입니다. 운용보수는 가격에 이미 반영되어 있습니다.": "“With distributions” assumes distributions are reinvested at the ex-date close (total return); prices are split-adjusted. Expense ratios are already reflected in prices.",
   "데이터: Yahoo Finance 일봉 (GitHub Actions로 6시간마다 수집) · 종목 정보: 각 운용사 공식 페이지(Invesco, State Street, iShares, ProShares, Direxion) 기준, 보수는 변경될 수 있음": "Data: Yahoo Finance daily prices (collected every 6 hours via GitHub Actions) · ETF details from each issuer (Invesco, State Street, iShares, ProShares, Direxion); fees may change.",
   "ETF 12종 CAGR 추이 비교 차트": "CAGR trend chart for 12 ETFs",
+  "밸류리밸런싱 VR 5.0 백테스트": "Value rebalancing backtest (Korean)",
   "차트 비교": "Chart Comparison",
   "국내 상장": "Korea-listed",
   "여 개 · 미국 상장": " · U.S.-listed",

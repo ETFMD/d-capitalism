@@ -1088,6 +1088,24 @@ html[data-theme="light"] #page-muhan,html[data-theme="light"] #page-vr,html[data
 .vr-close{border-color:var(--m-ac-b)}
 .vr-chart{position:relative;height:230px;margin-top:12px}
 .vr-chart > canvas{max-width:100%}
+/* ═══ [VR-BT] 밸류리밸런싱 VR 5.0 백테스트 — 무한매수법 백테스트와 같은 부품(.mb-* · .mh-*) · 이 페이지 범위 변수·배치만 여기 (무한매수법 구간은 안 건드림) ═══ */
+#page-vrbt{--m-bg:var(--bg);--m-s1:var(--bg2);--m-s2:var(--bg3);--m-bd:var(--card-border);--m-tx:var(--text);--m-t2:var(--text2);--m-t3:var(--text3);
+ --m-ac:var(--accent);--m-ac-s:rgba(49,130,246,.12);--m-ac-b:rgba(49,130,246,.35);--m-ok:#3182f6;--m-bad:#f04452;--m-warn:#fe9800;--m-info:#3182f6;--m-rev:#3182f6;--m-on-ac:#ffffff}
+html[data-theme="light"] #page-vrbt{--m-ac-s:rgba(49,130,246,.10)}
+#page-vrbt .layout.mb-lay{grid-template-columns:372px minmax(0,1fr);gap:16px}
+@media(max-width:980px){#page-vrbt .layout.mb-lay{grid-template-columns:330px minmax(0,1fr)}}
+@media(max-width:780px){#page-vrbt .layout.mb-lay{grid-template-columns:minmax(0,1fr)}}
+#page-vrbt .card{padding:16px 18px}
+#vb-set .mb-acc>summary{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"t a" "v a";column-gap:10px;row-gap:3px;padding:11px 12px 11px 14px}
+#vb-set .mb-acc .inc-sec-t{grid-area:t;white-space:normal;font-size:13.5px}
+#vb-set .mb-acc .inc-sec-v{grid-area:v;min-width:0;max-width:none;text-align:left;padding-left:12px;font-size:11.5px}
+#vb-set .mb-acc .acc-arrow{grid-area:a;align-self:center}
+#vb-set .mb-acc .inc-sec-in{padding:12px 14px 14px}
+#vb-set .mb-acc .inc-sec-in>:first-child{margin-top:0}
+#page-vrbt .mb-t td.a{text-align:left;white-space:normal;min-width:90px;max-width:240px}
+#page-vrbt .mb-pg{align-items:center}
+#page-vr .vr-bt .mb-kg{grid-template-columns:repeat(2,minmax(0,1fr))}#page-vr .vr-bt .mb-k b{font-size:16px}
+#page-vr .vr-bt-sel{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0}
 .vrbt-h{margin:18px 0 6px;font-size:14px;color:var(--text)}
 /* ═══ [MUHAN-BT] 무한매수법 백테스트 시뮬레이터 — 스타일 (.mh-* 부품 재사용 · 상승 빨강/하락 파랑) ═══ */
 #page-muhanbt .layout.mb-lay{grid-template-columns:372px minmax(0,1fr);gap:16px}
