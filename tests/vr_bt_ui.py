@@ -59,7 +59,10 @@ MAIN_JS = """async (local) => {
   const g2 = E.summary(E.run(r.cfg, Dn, Object.assign({}, base, { fee: 0, sec: 0, divTax: 0, tax: null })), D, S.cap);
   const same = (a, b) => ['final', 'cagr', 'irr', 'mdd', 'cash', 'fees', 'tax'].every(k => Math.abs((a[k] || 0) - (b[k] || 0)) <= 1e-9 * Math.max(1, Math.abs(a[k] || 0)));
   ok('화면 숫자 = 엔진 직접 계산 (포함·미포함)', same(r.sn, n2) && same(r.sg, g2) && fx, JSON.stringify([r.sn.cagr, n2.cagr, r.sg.cagr, g2.cagr]));
-  ok('연평균 칸 = 계산값 (소수 둘째 자리)', ($$('#vb-res .mb-k b')[1].textContent || '').replace('−', '-').replace('+', '') === (r.sn.cagr * 100).toFixed(2) + '%', $$('#vb-res .mb-k b')[1].textContent);
+  { const kb = [...$$('#vb-res .mb-k b')].map(b => b.textContent || ''), wt = ($('#vb-res .mb-warns') || {}).innerText || '';
+    ok('연평균 칸 = 계산값 (소수 둘째 자리 · 최종 자산 0 이하면 —)', r.sn.cagr == null ? kb[1] === '—' : kb[1].replace('−', '-').replace('+', '') === (r.sn.cagr * 100).toFixed(2) + '%', kb[1]);
+    /* 최종 자산 0 이하(양도세 함정 — 실제 TQQQ 상장 전 1985~ 거치식 G 10 이 그럼) · 보유 0개로 멈춤은 알림 · 총수익률·MDD 는 '−100% 이하' */
+    ok('최종 자산 0 이하·보유 0개 멈춤 표시', (r.sn.final > 0 || (kb[0] === '−100% 이하' && (!(r.net.taxExt > 0) || /원금을 다 잃고 세금 빚/.test(wt)))) && (r.net.idle == null || /보유가 0개라 VR 이 멈췄어요/.test(wt)) && (r.sn.mdd >= -1 || kb[2] === '−100% 이하'), JSON.stringify([r.sn.final, r.net.idle, kb.slice(0, 3)])); }
   const k0 = $('#vb-res .mb-kpi').innerText;
   $('#vb-res [data-view="gross"]').click(); await W(100);
   ok('보기 전환(미포함)', $('#vb-res .mb-kpi').innerText !== k0);

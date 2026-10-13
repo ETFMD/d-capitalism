@@ -237,6 +237,21 @@ check('매수표·매도표 비교 수 (충분히 많이)', nTable > 5000 && nCy
   const A = VRE.run(cfg, TQ, { from: e, capital: 10000, norm: 'auto' }), B = VRE.run(cfg, TQ, { from: e - 1, capital: 10000, norm: 'auto' });
   check('시작일이 분배락일이면 그날 분배금 없음 · 전날 시작이면 있음', e > 0 && A.rows[0].dv === 0 && A.divs === A.rows.reduce((s, r) => s + r.dv, 0) && B.rows[1].dv > 0, [TQ.d[e], A.rows[0].dv, B.rows[1].dv].join(' ')); }
 
+/* 양도세 함정: 큰 이익을 낸 다음 해 5월 전에 폭락 → 보유를 다 팔아도 모자란 세금은 밖에서(평가금에서 뺌) · 보유 0개면 VR 멈춤(idle — 그 뒤 매매 없음) · 최종 0 이하면 연평균 없음 */
+{ const d = [], c = [], ct = x => Math.round(x * 100) / 100; let t = Date.parse('2001-01-02T00:00:00Z'), p = 50;
+  while (t < Date.parse('2003-12-31T00:00:00Z')) { const day = new Date(t).toISOString().slice(0, 10), i = d.length;
+    const g = day < '2001-12-31' ? 0.0095 : day < '2002-05-20' ? -0.05 : 0.0005; p = p * Math.exp(g + 0.02 * Math.sin(i * 1.7)); d.push(day); c.push(ct(Math.max(0.05, p)));
+    t += (new Date(t).getUTCDay() === 5 ? 3 : 1) * 864e5; }
+  const D = { d, c, h: null, l: null, o: null, dv: null }, cfg = { type: 'hold', G: 10, band: 0.15, limit: 0.5, mode: 'ladder', cycle: 'cal' };
+  const R = VRE.run(cfg, D, { from: 0, capital: 10000, norm: 'auto', fee: 0, sec: 0, divTax: 0, tax: { fx: i => d[i] < '2002-01-01' ? 1000 : 100, method: 'fifo', harvest: false } }), S = VRE.summary(R, D, 10000);
+  const after = R.rows.filter(r => R.idle != null && r.i >= R.idle), t1 = R.taxes[0];
+  check('양도세 함정: 모자란 세금 밖에서 · 보유 0개 → VR 멈춤(그 뒤 매매 없음) · 최종 0 이하면 연평균 없음', R.taxExt > 0 && t1.ext > 0 && R.idle != null && d[R.idle] > t1.paid && R.n === 0 && after.length > 100 && after.every(r => !r.bq && !r.sq) && S.final < 0 && S.cagr === null && R.tsell > 0,
+    [R.taxExt, t1.paid, R.idle != null && d[R.idle], R.n, after.length, S.final, S.cagr].join(' '));
+  const R0 = VRE.run(cfg, D, { from: 0, capital: 10000, norm: 'auto' });
+  check('세금 없으면 같은 자료에서 VR 이 멈추지 않음', R0.idle == null && R0.n > 0, [R0.idle, R0.n].join(' ')); }
+{ const R = VRE.run({ type: 'acc', G: 10, band: 0.15, limit: 0.75, amt: 250, mode: 'ladder', cycle: 'cal' }, TQ, { from: 0, capital: 10000, norm: 'auto', fee: 0.0025, sec: 0.0000206, divTax: 0.15, tax: { fx: () => 1300, method: 'fifo', harvest: false } });
+  check('실제 일봉 적립식 기본값: 보유 0개로 멈추는 일 없음', R.idle == null && R.taxExt === 0, [R.idle, R.taxExt].join(' ')); }
+
 /* 같은 입력이면 같은 결과 · 평균 현금 비중 0~1 */
 { const cfg = { type: 'acc', G: 10, band: 0.15, limit: 0.75, amt: 250, mode: 'ladder', cycle: 'cal' }, o = { from: 0, capital: 10000, norm: 'auto' };
   const A = VRE.summary(VRE.run(cfg, TQ, o), TQ, 10000), B = VRE.summary(VRE.run(cfg, TQ, o), TQ, 10000);

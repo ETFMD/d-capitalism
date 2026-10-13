@@ -14905,7 +14905,7 @@ var VRE = (function () {
     var k = o.norm === 'none' || !(p0 > 0) ? 1 : (s < syn || p0 < 10 || p0 > U_HI ? 50 / p0 : 1);
     var out = { eq: [], pool: [], E: [], V: [], mn: [], mx: [], nav: [], bh: [], cycles: [], rows: keep ? [] : null, flows: [], from: s, to: to,
                 fees: 0, divs: 0, taxPaid: 0, taxes: [], taxDue: 0, taxExt: 0, tsell: 0, rs: 0, sp: 0, coarse: 0, coarseFrom: null, short: 0, shortAmt: 0,
-                limHit: 0, dry: 0, buys: 0, sells: 0, buyAmt: 0, sellAmt: 0, realized: 0, net: 0, contrib: 0, withdraw: 0, switchAt: null, dead: null };
+                limHit: 0, dry: 0, buys: 0, sells: 0, buyAmt: 0, sellAmt: 0, realized: 0, net: 0, contrib: 0, withdraw: 0, switchAt: null, dead: null, idle: null };
     /* coarse: 사이클 첫날 보유가 30주 미만 (1주씩 사다리가 거칠어짐 — 원금이 작거나 1주가 비쌈) · short/shortAmt: 인출식 Pool 이 모자라 덜 뺀 사이클·금액
        limHit: Pool 한도까지 사서 더 못 산 사이클 · dry: 매수점에 닿았는데 Pool 에 1주 값도 없던 사이클 · net: 매수에 쓴 돈 − 매도로 받은 돈 (실효평단)
        dead: 인출로 V 가 0 이하가 되어 VR 이 멈춘 날(인덱스) — 그 뒤로는 보유·Pool 그대로 평가만 */
@@ -14943,6 +14943,7 @@ var VRE = (function () {
       cno++; cyc = { no: cno, from: i, G: G, V: V, min: bd.min, max: bd.max, type: type, lim: lim, L: Lm, n0: n, pool0: pool, flow: flow, short: short || 0, k: k,
                      bq: 0, ba: 0, sq: 0, sa: 0, limHit: false, dry: false, dead: out.dead != null };
       if (n > 0 && n < 30) { out.coarse++; if (!out.coarseFrom) out.coarseFrom = D.d[i]; }
+      if (n < 1 && out.dead == null && out.idle == null) out.idle = i;   /* 보유 0개 — 매수표·매도표(개수 기준)를 만들 수 없어 VR 이 더 굴러가지 않음 (양도세로 다 판 뒤 등) */
       if (o.trace) { cyc.bpx = []; cyc.spx = []; cyc.fpx = []; cyc.fsx = []; }
       out.cycles.push(cyc);
     }
@@ -15321,9 +15322,9 @@ if (typeof module !== 'undefined') module.exports = VRE;
     if (r.st === 'err') return h + '<p class="mh-small mh-bad" style="margin:6px 0">' + esc(r.msg || '일봉을 받지 못했어요. 잠시 후 다시 열어 주세요.') + '</p>';
     var X = BT.view === 'net' ? r.net : r.gross, pc = function (v, d) { return v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(d == null ? 1 : d) + '%'; };
     var cl = function (v) { return v > 0 ? 'mh-bad' : v < 0 ? 'mh-ok' : ''; }, k = function (q, b, c, d) { return '<div class="mb-k"><span>' + q + '</span><b class="' + (d || '') + '">' + b + '</b>' + (c ? '<small>' + c + '</small>' : '') + '</div>'; };
-    return h + '<div class="mb-kg">' + k(X.flows ? '넣은 돈 대비 수익률' : '총수익률', pc(X.ret), '최종 $' + Math.round(X.final).toLocaleString(), cl(X.ret)) +
+    return h + '<div class="mb-kg">' + k(X.flows ? '넣은 돈 대비 수익률' : '총수익률', X.final <= 0 ? '−100% 이하' : pc(X.ret), '최종 $' + Math.round(X.final).toLocaleString(), cl(X.ret)) +
       (X.flows ? k('내 돈 기준 연수익', pc(X.irr, 2), '그냥 ' + pc(X.bh.irr, 2), cl(X.irr)) : k('연평균 (CAGR)', pc(X.cagr, 2), '그냥 보유 ' + pc(X.bh.cagr, 2), cl(X.cagr))) +
-      k('최대 낙폭 (MDD)', pc(X.mdd), '그냥 보유 ' + pc(X.bh.mdd), 'mh-ok') + k('평균 현금 비중', (X.cash * 100).toFixed(1) + '%', r.cyc + '사이클 · 매수 ' + r.nb + '번 · 매도 ' + r.ns + '번') + '</div>' +
+      k('최대 낙폭 (MDD)', X.mdd < -1 ? '−100% 이하' : pc(X.mdd), '그냥 보유 ' + pc(X.bh.mdd), 'mh-ok') + k('평균 현금 비중', (X.cash * 100).toFixed(1) + '%', r.cyc + '사이클 · 매수 ' + r.nb + '번 · 매도 ' + r.ns + '번') + '</div>' +
       (r.dead ? '<p class="mh-small mh-warn" style="margin:6px 0 0">⚠ ' + r.dead + ' 인출로 V 가 0 이하가 되어 VR 이 멈췄어요 — 인출금을 줄이거나 G 를 키워 보세요</p>' : '') +
       (r.coarse > 0 ? '<p class="mh-small mh-warn" style="margin:6px 0 0">⚠ 사이클 첫날 보유가 30개 미만인 사이클이 ' + r.coarse + '번 — 원금이 작아 1개씩 사고파는 표가 거칠어요</p>' : '') +
       '<p class="mh-help">' + r.from + ' ~ ' + r.to + ' · 원금 $' + Math.round(r.cap).toLocaleString() + (x.p0 ? '(현금 ' + x.p0 + '%)' : '') + ' · 2주마다 · 1개씩 지정가(' + (r.ohl ? '시가·저가·고가로 체결' : '종가로 체결 판단') + ')' + (BT.view === 'net' ? ' · 수수료 0.25% + SEC · 분배금 원천징수 15%' + (r.tax ? ' · 양도소득세 22%(250만 원 공제)' : '') : ' · 세금·수수료 빼고') + ' · 과거 결과는 미래를 보장하지 않아요</p>' +
@@ -15906,7 +15907,8 @@ var VBD = (function () {
     if (X.short > 0) W.push('인출식: Pool 이 모자라 인출금을 다 못 뺀 사이클이 ' + X.short.toLocaleString() + '번(모자란 돈 ' + usd(X.shortAmt) + ') 있어요 — 원문처럼 Pool 에 있는 만큼만 뺐어요.');
     if (X.coarse > 0) W.push('사이클 첫날 보유가 <b>30개 미만인 사이클이 ' + X.coarse.toLocaleString() + '번</b>(처음 ' + X.coarseFrom + ') 있어요 — 1개씩 사고파는 매수표·매도표가 거칠어져(1개가 V 의 3% 넘음) 결과가 원문 의도와 달라질 수 있어요. 원금을 늘려 보세요.');
     if (X.tsell > 0) W.push('5월 말 양도소득세를 낼 Pool 이 모자라 그날 종가에 보유를 팔아 낸 해가 ' + X.tsell + '번 있어요 (판 손익은 그해 양도 손익에 들어감).');
-    if (X.taxExt > 0) W.push('<b>보유를 다 팔아도 세금이 모자라 ' + usd(X.taxExt) + ' 은 밖에서 낸 것으로 계산</b>했어요 — 최종 자산·수익률·그래프에서 뺐어요.');
+    if (X.taxExt > 0) W.push('<b>보유를 다 팔아도 세금이 모자라 ' + usd(X.taxExt) + ' 은 밖에서 낸 것으로 계산</b>했어요 — 최종 자산·수익률·그래프에서 뺐어요' + (st.final <= 0 ? ' (그래서 최종 자산이 0 이하 — 원금을 다 잃고 세금 빚이 남은 셈이라 연평균은 계산할 수 없어요)' : '') + '. 큰 이익을 낸 다음 해 5월 전에 폭락하면 생기는 해외주식 양도세의 함정이에요.');
+    if (X.idle != null) W.push('<b>' + D.d[X.idle] + ' 부터 보유가 0개라 VR 이 멈췄어요</b> — 매수표·매도표는 보유 개수로 만들어서 0개면 더 사고팔 수 없어요' + (X.taxExt > 0 || X.tsell > 0 ? '(양도소득세를 내느라 보유를 다 판 뒤)' : '') + '. 그 뒤로는 남은 현금' + (SS.type === 'acc' ? '·적립금' : '') + '만 그대로 있어요.');
     if (X.rs > 0) W.push('가격이 크게 떨어져 1주 가격을 ' + X.rs + '번 병합처럼 바꿔 계산했어요 (보유 10분의 1 · 끝수는 전날 종가로 현금화 — 손익은 거의 같음).');
     var pe = R.pre && R.pre.err;
     if (preN > 0 && pe && isFinite(pe.d) && Math.abs(pe.d) >= 0.05) W.push('<b>상장 전 구간 결과는 믿기 어려워요</b> — 같은 설정을 상장 뒤 기간에 실제 일봉 대신 재현 가격(종가로 체결 판단)으로 돌리면 연수익이 <b>' + (pe.d > 0 ? '+' : '−') + Math.abs(pe.d * 100).toFixed(1) + '%p</b> 달라져요(아래 \'상장 전 백테스트 오차\').');
@@ -15915,9 +15917,9 @@ var VBD = (function () {
     var k = function (lab, val, sub, c) { return '<div class="mb-k"><span>' + lab + '</span><b class="' + (c || '') + '">' + val + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</div>'; };
     var lastPool = X.pool[X.pool.length - 1];
     h += '<div class="card mb-kpi"><div class="mb-kg">' +
-      k(fl ? '넣은 돈 대비 총수익률' : '원금 대비 총수익률', pct(st.ret), '최종 ' + usd(st.final) + (st.back > 0 ? ' · 뺀 돈 ' + usd(st.back) : '') + (fl && SS.type === 'acc' ? ' · 넣은 돈 ' + usd(st.put) : ''), cls(st.ret)) +
+      k(fl ? '넣은 돈 대비 총수익률' : '원금 대비 총수익률', st.final <= 0 ? '−100% 이하' : pct(st.ret), '최종 ' + usd(st.final) + (st.back > 0 ? ' · 뺀 돈 ' + usd(st.back) : '') + (fl && SS.type === 'acc' ? ' · 넣은 돈 ' + usd(st.put) : ''), cls(st.ret)) +
       (fl ? k('내 돈 기준 연수익 (IRR)', pct(st.irr, 2), '그냥 ' + pct(st.bh.irr, 2) + ' · 시간가중 ' + pct(st.cagr, 2), cls(st.irr)) : k('연평균 (CAGR)', pct(st.cagr, 2), '그냥 보유 ' + pct(st.bh.cagr, 2), cls(st.cagr))) +
-      k('최대 낙폭 (MDD)', pct(st.mdd), st.mddFrom + ' → ' + st.mddTo, 'mb-dn') +
+      k('최대 낙폭 (MDD)', st.mdd < -1 ? '−100% 이하' : pct(st.mdd), st.mddFrom + ' → ' + st.mddTo, 'mb-dn') +
       k('평균 현금 비중', pc0(st.cash), '마지막 Pool ' + usd(lastPool)) +
       k('실효평단 (1개)', X.eff != null ? px(X.eff) : '—', '지금 1개 ' + px(D.c[X.to] * X.k) + ' · ' + fmtQ(X.n) + '개 보유') +
       k(VIEW === 'net' ? '세금 · 수수료' : '분배금', VIEW === 'net' ? usd(-(st.tax + st.fees)) : usd(st.divs), VIEW === 'net' ? '수수료 ' + usd(st.fees) + ' · 양도세 ' + usd(st.tax) + (st.taxDue > 0 ? ' · 미납 ' + usd(st.taxDue) : '') : '세전 · Pool 로 받음') + '</div>';
@@ -16042,7 +16044,7 @@ var VBD = (function () {
   function saveHist() {
     var Hs = lsGet(LS_HIST, []) || [], st = R.sn, sg = R.sg;
     Hs.unshift({ id: Date.now(), at: new Date().toISOString(), S: R.S, tk: R.tk, from: R.D.d[R.net.from], to: R.D.d[R.net.to],
-                 n: { ret: st.ret, cagr: st.flows ? st.irr : st.cagr, mdd: st.mdd, final: st.final, g: sg.ret, cash: st.cash, fl: st.flows }, pre: !!(R.pre && R.pre.L > R.net.from) });
+                 n: { ret: st.ret, cagr: st.flows ? st.irr : st.cagr, mdd: st.mdd, final: st.final, g: sg.ret, gf: sg.final, cash: st.cash, fl: st.flows }, pre: !!(R.pre && R.pre.L > R.net.from) });
     lsSet(LS_HIST, Hs.slice(0, 30)); renderHist();
   }
   function renderHist() {
@@ -16051,7 +16053,7 @@ var VBD = (function () {
     el.innerHTML = '<div class="mb-h"><b>실행 기록 <small>' + Hs.length + '건 · 이 기기</small></b><button type="button" class="mh-btn mb-mini" data-act="hclear">모두 지우기</button></div><div class="mb-hl">' + Hs.map(function (x, i) {
       var ty = (TYS.filter(function (t) { return t[0] === x.S.type; })[0] || ['', '?'])[1];
       return '<div class="mb-hi"><div class="mb-hh"><b>' + ty + ' · ' + esc(x.tk) + '</b><small>G ' + nm(x.S.G) + ' · ±' + nm(x.S.band) + '% · ' + x.from + ' ~ ' + x.to + (x.pre ? ' · 상장 전 포함' : '') + (x.S.mode === 'simple' ? ' · 단순 모델' : '') + '</small></div>' +
-        '<div class="mb-hn"><span>총 <b class="' + cls(x.n.ret) + '">' + pct(x.n.ret) + '</b></span><span>' + (x.n.fl ? 'IRR' : 'CAGR') + ' <b>' + pct(x.n.cagr, 2) + '</b></span><span>MDD <b class="mb-dn">' + pct(x.n.mdd) + '</b></span><span class="mh-faint">세전 ' + pct(x.n.g) + '</span></div>' +
+        '<div class="mb-hn"><span>총 <b class="' + cls(x.n.ret) + '">' + (x.n.final <= 0 ? '−100% 이하' : pct(x.n.ret)) + '</b></span><span>' + (x.n.fl ? 'IRR' : 'CAGR') + ' <b>' + pct(x.n.cagr, 2) + '</b></span><span>MDD <b class="mb-dn">' + (x.n.mdd < -1 ? '−100% 이하' : pct(x.n.mdd)) + '</b></span><span class="mh-faint">세전 ' + (x.n.gf <= 0 ? '−100% 이하' : pct(x.n.g)) + '</span></div>' +
         '<div class="mb-hb"><button type="button" class="mh-btn mb-mini" data-hload="' + i + '">조건 불러오기</button><button type="button" class="mh-btn mb-mini" data-hrun="' + i + '">바로 재실행</button><button type="button" class="mh-ico" data-hdel="' + i + '" aria-label="이 기록 지우기">✕</button></div></div>';
     }).join('') + '</div>';
   }
