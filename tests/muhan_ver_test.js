@@ -243,7 +243,7 @@ function bdays(from, n, skip) { const out = []; let t = Date.parse(from + 'T12:0
   }
   check('무작위 불변식 · 세금 포함 (' + n + '번)', b0 === 0, b0 + '건 실패'); }
 
-/* ⑯ 1회 매수금 '일부분 복리'(money 'part' · mix) — mix 1 = 복리 · 0 = 단리와 날마다 같고, 그 사이는 (원금 + (현금 − 원금) × mix) ÷ 분할 (72매매법 선택) */
+/* ⑯ 1회 매수금 '일부분 복리'(money 'part' · mix) — mix 1 = 복리 · 0 = 단리와 날마다 같고, 그 사이는 (원금 + (현금 − 원금) × mix) ÷ 분할 (72루틴 선택) */
 { const c72 = m => Object.assign(MHV.defaults('1.0', 'SOXL'), { splits: 72, target: 52.5, big: 13, avgOff: 0, exhaust: 'recover', restart: 'rsi' }, m);
   const o = { from: 1, capital: 10000, rows: true, fee: 0.0075, sec: 0.0000206, divTax: 0.15, tax: { fx: () => 1300, method: 'fifo', harvest: false } };
   const run = m => MHV.run(c72(m), SX, o), same = (a, b) => a.eq.length === b.eq.length && a.eq.every((x, i) => Math.abs(x - b.eq[i]) < 1e-9);
@@ -255,6 +255,25 @@ function bdays(from, n, skip) { const out = []; let t = Date.parse(from + 'T12:0
   check('일부분 복리 30%: 손실 4,000 → 1회 = (10,000 − 1,200) ÷ 72', Math.abs(s.one - 8800 / 72) < 1e-9, s.one);
   const H = run({ money: 'part', mix: 0.5 });
   check('일부분 복리 50%: 현금 ≥ 0 · 결과가 복리·단리와 다름', H.rows.every(r => r.cash > -1e-9) && !same(H, C) && !same(H, S0), [H.final, C.final, S0.final].map(Math.round).join(' / ')); }
+
+/* ⑰ 중간 진입이 이미 소진이면(V1.0: 회차를 다 썼거나 현금 < 1회 × 0.5) 처음부터 소진 대응 — 다시 계산(replay) 직후 그날 주문표에 매수 없음 (72루틴·새로 만든 중간 진입 = 표식 xc)
+   · 표식 없는 예전 중간 진입 세션은 예전처럼 (첫 기록 날 판정 — 그 기록을 다시 계산해도 상태가 바뀌지 않게) */
+{ const cfg = Object.assign(MHV.defaults('1.0', 'SOXL'), { splits: 72, target: 52.5, big: 13, avgOff: 0, exhaust: 'recover' });
+  const mid = m => MHV.replay(cfg, { capital: 20000, mid: Object.assign({ qty: 100, avg: 50, one: 277.78, xc: true }, m) }, []).st, buys = st => MHV.plan(cfg, st, { prev: 48 }).rows;
+  const A = mid({ cash: 15000, T: 72 }), pa = buys(A);
+  check('중간 진입 72회 다 씀 → 소진 대응(평단 −10% LOC 전량) · 매수 주문 없음', A.mode === 'xrec' && !pa.some(r => r.side === 'B') && pa.some(r => r.tag === 'xrec') && pa.some(r => r.tag === 'tp'), A.mode + ' ' + pa.map(r => r.tag).join(','));
+  const B = mid({ cash: 100, T: 30 });
+  check('중간 진입 현금 < 1회 × 0.5 → 소진 대응', B.mode === 'xrec' && !buys(B).some(r => r.side === 'B'), B.mode);
+  const C = mid({ cash: 15000, T: 30 }), pc = buys(C);
+  check('중간 진입 여유 있음 → 평소 주문표 (평단·큰수 LOC 매수 + 목표 지정가)', C.mode === 'normal' && pc.some(r => r.tag === 'avg') && pc.some(r => r.tag === 'big') && pc.some(r => r.tag === 'tp'), C.mode + ' ' + pc.map(r => r.tag).join(','));
+  const cf2 = Object.assign({}, cfg, { exhaust: 'hold' }), H = MHV.replay(cf2, { capital: 20000, mid: { qty: 100, avg: 50, cash: 15000, T: 72, one: 277.78, xc: true } }, []).st;
+  check('중간 진입 소진 · 다른 소진 대응(보유)도 그대로', H.mode === 'xhold', H.mode);
+  const O = mid({ cash: 15000, T: 72, xc: false });
+  check('표식 없는 예전 중간 진입은 예전처럼 (시작은 평소 상태 · 첫 기록 날 판정)', O.mode === 'normal', O.mode);
+  /* 예전 세션 다시 계산 그대로: V2.2 T 39.5/40 중간 진입 + 첫날 ★쿼터매도 기록 → 표식 없으면 평소 상태 유지 (표식이 있으면 처음부터 쿼터손절 — 새 세션에서만) */
+  const c22 = MHV.defaults('2.2', 'TQQQ'), recs = [{ date: '2024-01-02', close: 52, fills: [{ side: 'S', q: 197, p: 52, tag: 'qs', m: 'LOC' }] }];
+  const m22 = { qty: 790, avg: 50, cash: 500, one: 1000, T: 39.5 }, o22 = MHV.replay(c22, { capital: 40000, mid: m22 }, recs).st, n22 = MHV.replay(c22, { capital: 40000, mid: Object.assign({ xc: true }, m22) }, []).st;
+  check('V2.2 예전 중간 진입(T 39.5) + 첫날 기록 → 평소 상태 그대로 · 새 중간 진입은 처음부터 소진(쿼터손절)', o22.mode === 'normal' && n22.mode !== 'normal', o22.mode + ' / ' + n22.mode); }
 
 console.log((bad ? 'FAIL ' : 'OK ') + '무한매수법 버전 엔진 검사 ' + ok + ' / ' + (ok + bad));
 process.exit(bad ? 1 : 0);

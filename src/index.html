@@ -23949,7 +23949,7 @@ var MHV = (function () {
              cum: 0, maxCum: 0, k: 1, cycCap: capital };
   }
   /* 새 사이클 시작 (보유 0주일 때): 1회 매수금 = 복리 → 지금 현금 ÷ 분할 · 단리 → 처음 원금 ÷ 분할
-     · 일부분 복리(part · mix 0~1) → (처음 원금 + (지금 현금 − 처음 원금) × mix) ÷ 분할 — mix 1 = 복리 · 0 = 단리 (72매매법 선택) */
+     · 일부분 복리(part · mix 0~1) → (처음 원금 + (지금 현금 − 처음 원금) × mix) ÷ 분할 — mix 1 = 복리 · 0 = 단리 (72루틴 선택) */
   function begin(cfg, st) {
     st.T = 0; st.t4 = 0; st.qk = 0; st.rev = false; st.revFirst = false; st.cycCap = st.cash; st.mode = 'idle';
     if (cfg.ver === '1.0' || cfg.ver === '2.0' || cfg.ver === '2.1' || cfg.ver === '2.2')
@@ -24225,6 +24225,11 @@ var MHV = (function () {
         else if (tg.qbuy) st.qk++;
       }
     }
+    xcheck(cfg, st, ev, o);
+  }
+  /* 소진 판정 — 그날 체결을 반영한 뒤(step) · 중간 진입으로 시작할 때(replay) 같은 규칙 */
+  function xcheck(cfg, st, ev, o) {
+    var v = cfg.ver, a = cfg.splits;
     if (st.mode !== 'normal') return;
     /* 소진: 1회치를 더 살 수 없음 — V1 = 회차 a 다 씀 · 그 외 = T > a−1 또는 현금 < 1회 (원문 39 < T ≤ 40 · '잔금 소진') */
     var T = tOf(cfg, st), one = oneOf(cfg, st);
@@ -24422,6 +24427,7 @@ var MHV = (function () {
       st.qty = m.qty; st.avg = m.avg; st.cash = m.cash; st.mode = 'normal';
       if (m.one > 0) { st.one = m.one; if (cfg.ver === '3.0') { st.base = m.one * cfg.splits; st.cum = 0; st.maxCum = 0; } }
       if (cfg.ver === '1.0') st.T = m.T || 0;
+      if (m.xc) xcheck(cfg, st, { tags: {} }, {});   /* 중간 진입 때 이미 회차를 다 썼거나 현금이 모자라면 처음부터 소진 대응 (그날 주문표에 매수 없음) · xc = 이 판정이 생긴 뒤 만든 중간 진입만 — 예전 세션은 그 기록대로 다시 계산돼야 해서 그대로 */
     }
     var out = { st: st, hist: [], invested: m && m.qty > 0 ? m.avg * m.qty : 0, returned: 0, realized: 0, realizedCost: 0, fees: 0, exhaust: null };
     (recs || []).forEach(function (r) {
