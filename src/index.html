@@ -1349,8 +1349,14 @@ html[data-theme="light"] #page-muhan,html[data-theme="light"] #page-vr,html[data
 .mb-set{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow-y:auto;scrollbar-width:thin}
 @media(max-width:780px){.mb-set{position:static;max-height:none}}
 .mb-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}.mb-h b{font-size:15px}.mb-h small{font-weight:400;color:var(--text3);font-size:11px;margin-left:4px}
-.mb-sec{padding:12px 0 10px;border-top:1px solid var(--card-border)}
-.mb-st{font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:8px}
+/* 설정 1~7 접이식 — 종합소득세 계산기와 같은 공통 아코디언(.inc-sec) · 좁은 설정 칸이라 요약은 제목 아래 줄 · 기본값과 다르면 파란색(.on) */
+.mb-note{margin:0 0 10px}
+#mb-set .mb-acc>summary{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"t a" "v a";column-gap:10px;row-gap:3px;padding:11px 12px 11px 14px}
+#mb-set .mb-acc .inc-sec-t{grid-area:t;white-space:normal;font-size:13.5px}
+#mb-set .mb-acc .inc-sec-v{grid-area:v;min-width:0;max-width:none;text-align:left;padding-left:12px;font-size:11.5px}
+#mb-set .mb-acc .acc-arrow{grid-area:a;align-self:center}
+#mb-set .mb-acc .inc-sec-in{padding:12px 14px 14px}
+#mb-set .mb-acc .inc-sec-in>:first-child{margin-top:0}
 .mb-mini{padding:5px 9px;font-size:11.5px;border-radius:8px}
 .mb-vers,.mb-tks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 .mb-ver,.mb-tk{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 9px;border-radius:10px;border:1px solid var(--m-bd);background:var(--m-s2);color:var(--m-tx);font:inherit;cursor:pointer;text-align:left;min-width:0}
@@ -1369,13 +1375,12 @@ html[data-theme="light"] #page-muhan,html[data-theme="light"] #page-vr,html[data
 .mb-sub{margin:8px 0 0 22px}
 .mb-radios{display:flex;flex-direction:column;gap:6px}
 .mb-radio{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.5;color:var(--m-t2);cursor:pointer}.mb-radio input{margin-top:3px;accent-color:var(--accent)}.mb-radio b{color:var(--m-ac)}
-.mb-adv{border-top:1px solid var(--card-border);padding-top:10px;font-size:12px}.mb-adv summary{cursor:pointer;color:var(--m-t2);font-weight:600;margin-bottom:8px}
 .mb-run{width:100%;padding:13px;font-size:15px;margin-top:14px;border-radius:12px}
 .mb-res{min-width:0}.mb-res>.card{margin-bottom:12px}
 .mb-msg{font-size:13px;line-height:1.6;color:var(--m-t2)}.mb-msg.bad{color:var(--m-bad)}.mb-msg.warn{color:var(--m-warn);font-size:12.5px}.mb-warns p{margin:0 0 6px}.mb-warns p:last-child{margin:0}
 .mb-spin{display:inline-block;width:14px;height:14px;border:2px solid var(--m-ac-b);border-top-color:var(--m-ac);border-radius:50%;animation:mbspin .8s linear infinite;vertical-align:-2px;margin-right:8px}
 @keyframes mbspin{to{transform:rotate(360deg)}}
-.mb-empty b{font-size:14px}.mb-empty ol{margin:10px 0 0;padding-left:18px;font-size:12.5px;line-height:1.8;color:var(--m-t2)}
+.mb-empty b{font-size:14px}.mb-empty ul{margin:10px 0 0;padding-left:18px;font-size:12.5px;line-height:1.8;color:var(--m-t2)}.mb-empty .mh-help{margin:8px 0 0}
 .mb-top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}.mb-tags{display:flex;flex-wrap:wrap;gap:5px}.mb-tags .mh-chip{font-size:11px;padding:3px 9px}
 .mb-view .mb-seg button{font-size:12px;padding:6px 12px}
 .mb-kg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
@@ -26389,68 +26394,104 @@ window.MBT = (function () {
   function fld(lbl, id, val, step, min, max, help, unit) {
     return '<div class="mb-f"><label class="mh-lbl" for="' + id + '">' + lbl + '</label><div class="mb-in"><input class="mh-in" type="number" id="' + id + '" value="' + esc(val) + '" step="' + step + '" min="' + min + '"' + (max != null ? ' max="' + max + '"' : '') + ' inputmode="decimal">' + (unit ? '<span>' + unit + '</span>' : '') + '</div>' + (help ? '<p class="mh-help">' + help + '</p>' : '') + '</div>';
   }
+  /* 설정 1~7 접이식 (종합소득세 계산기와 같은 공통 아코디언 <details class="inc-sec"> · 모션은 공통 처리기) — 펼친 항목은 이 기기에 기억(다시 그려도 그대로) */
+  var LS_OPEN = 'mbt-open', OPEN = lsGet(LS_OPEN, null);
+  if (!OPEN || typeof OPEN !== 'object') OPEN = { ver: true };
+  function sec(key, title, inner) {
+    return '<details class="inc-sec mb-acc" data-sec="' + key + '"' + (OPEN[key] ? ' open' : '') + '><summary><span class="inc-sec-t">' + title + '</span><span class="inc-sec-v" id="mb-sum-' + key + '"></span>' +
+      '<span class="acc-arrow" aria-hidden="true">▼</span></summary><div class="inc-sec-in">' + inner + '</div></details>';
+  }
+  /* 접은 항목에 보이는 요약 — 계산(cfgOf)에 실제로 쓰이는 값만 · 기본값(그 버전·종목의 원문 값, 원금 $10,000·수수료 0.07%·양도세·분배금)과 다르면 파란 글씨 */
+  var EXH_S = { '1.0': '전체 손절', '2.0': '쿼터손절', '2.1': '쿼터손절', '2.2': '쿼터손절 모드', '3.0': '쿼터매도', '4.0': '리버스모드' };
+  function nm(x) { return String(+(+x).toFixed(4)); }
+  function sg(x) { return (x > 0 ? '+' : x < 0 ? '−' : '') + nm(Math.abs(x)); }
+  function sumSet() {
+    var v = S.ver, tk = tkOf(), D = defaults(v, tk), vi = VERS.filter(function (x) { return x[0] === v; })[0] || VERS[5], ti = TKS.filter(function (x) { return x[0] === tk; })[0];
+    var put = function (key, txt, on) { var e = $('mb-sum-' + key); if (!e) return; e.textContent = txt; e.title = txt; e.classList.toggle('on', !!on); };
+    put('ver', vi[1] + ' · ' + vi[2]);
+    put('tk', tk + (S.custom ? ' · 직접 입력' : ti ? ' · ' + ti[1] : ''));
+    put('per', (S.from || S.to ? (S.from || '처음') + ' ~ ' + (S.to || '오늘') : '처음부터 오늘까지') + ' · ' + usd(S.cap) + (S.pre ? ' · 상장 전 포함' : ''), S.from || S.to || S.pre || S.cap !== 10000);
+    var r = [S.splits + '분할', (v === '2.2' ? 'R ' : v === '2.0' || v === '2.1' ? '최종 ' : '목표 ') + nm(S.target) + '%'], on = S.splits !== D.splits || S.target !== D.target || S.big !== D.big;
+    if (v === '2.0' || v === '2.1') { r.push('1차 ' + nm(S.part) + '%'); on = on || S.part !== D.part || S.capP !== D.capP; }
+    r.push('큰수 ' + nm(S.big) + '%');
+    if (v === '2.0' || v === '2.1') r.push('큰수 상한 +' + nm(S.capP) + '%');
+    if (/^(1\.0|2\.0|2\.1)$/.test(v)) { if (S.avgOff) r.push('평단 괴리 ' + sg(S.avgOff) + '%'); on = on || S.avgOff !== D.avgOff; }
+    if (v !== '1.0' && v !== '2.0') { r.push('하방 LOC ' + Math.round(S.lines) + '줄' + (Math.round(S.shares) > 1 ? '×' + Math.round(S.shares) + '주' : '')); on = on || Math.round(S.lines) !== D.lines || Math.round(S.shares) !== 1; }
+    if (v === '4.0' && S.noBig) { r.push('큰수 미사용'); on = true; }
+    if (/^(1\.0|2\.0|2\.1|2\.2)$/.test(v) && S.money === 'simple') { r.push('단리'); on = true; }
+    if (v === '3.0' && S.rebase) { r.push('1회 매수금 다시 정하기'); on = true; }
+    put('rule', r.join(' · '), on);
+    var ex = S.exhaust === 'official' ? EXH_S[v] + '(원문)' : { sellall: '소진 다음 날 전량 매도', recover: '평단 −10% 안 전량 매도', hold: '목표가까지 보유' }[S.exhaust] || S.exhaust;
+    put('exh', ex + (v !== '4.0' ? ' · 새 사이클 ' + (S.restart === 'rsi' ? 'RSI 60 이하' : '다음 날') : ''), S.exhaust !== 'official' || (v !== '4.0' && S.restart !== 'next'));
+    var t = ['수수료 ' + nm(S.fee) + '%', S.tax ? '양도세 22%' + (S.method === 'avg' ? '(이동평균)' : '') + (S.harvest ? ' · 연말 절세' : '') : '양도세 제외', S.divs ? '분배금 받음' : '분배금 끔'];
+    put('tax', t.join(' · '), +S.fee !== 0.07 || !S.tax || (S.tax && (S.method !== 'fifo' || S.harvest)) || !S.divs);
+    var tr = v === '2.2' || v === '3.0';
+    put('adv', (S.ideal && v !== '4.0' ? '정액 체결(소수 주)' : '실제 주문(1주 단위)') + (tr ? ' · T ' + (S.tround === 'c1' ? '둘째 자리 올림' : '셋째 자리 반올림') : ''), (S.ideal && v !== '4.0') || (tr && S.tround !== 'r2'));
+  }
   function renderSet() {
     var v = S.ver, tk = tkOf(), vi = VERS.filter(function (x) { return x[0] === v; })[0];
-    var h = '<div class="mb-h"><b>백테스트 조건</b><button type="button" class="mh-btn mb-mini" data-act="reset">기본값</button></div>';
+    var h = '<div class="mb-h"><b>백테스트 조건</b><button type="button" class="mh-btn mb-mini" data-act="reset">기본값</button></div>' +
+      '<p class="mh-help mb-note">항목을 눌러 펼치고 조건을 바꾸세요. 접어 두면 지금 조건만 요약해 보여 주고, 기본값과 다른 항목은 파란 글씨예요.</p>';
     /* 1. 버전 */
-    h += '<div class="mb-sec"><div class="mb-st">1. 전략 버전</div><div class="mb-vers">' + VERS.map(function (x) {
+    h += sec('ver', '1. 전략 버전', '<div class="mb-vers">' + VERS.map(function (x) {
       return '<button type="button" class="mb-ver' + (x[0] === v ? ' on' : '') + '" data-ver="' + x[0] + '" aria-pressed="' + (x[0] === v) + '"><b>' + x[1] + '</b><small>' + x[2] + '</small></button>'; }).join('') + '</div>' +
-      '<p class="mh-help mb-vdesc">' + esc(vi[3]) + '</p></div>';
+      '<p class="mh-help mb-vdesc">' + esc(vi[3]) + '</p>');
     /* 2. 종목 */
-    h += '<div class="mb-sec"><div class="mb-st">2. 종목</div><div class="mb-tks">' + TKS.map(function (x) {
+    h += sec('tk', '2. 종목', '<div class="mb-tks">' + TKS.map(function (x) {
       var on = !S.custom && S.tk === x[0]; return '<button type="button" class="mb-tk' + (on ? ' on' : '') + '" data-tk="' + x[0] + '" aria-pressed="' + on + '"><b>' + x[0] + '</b><small>' + x[1] + '</small></button>'; }).join('') + '</div>' +
-      '<div class="mb-f" style="margin-top:8px"><label class="mh-lbl" for="mb-custom">직접 입력 (미국 상장 티커)</label><input class="mh-in" id="mb-custom" type="text" maxlength="12" autocomplete="off" spellcheck="false" placeholder="예: NVDA, TSLA, LABU" value="' + esc(S.custom) + '"></div></div>';
+      '<div class="mb-f" style="margin-top:8px"><label class="mh-lbl" for="mb-custom">직접 입력 (미국 상장 티커)</label><input class="mh-in" id="mb-custom" type="text" maxlength="12" autocomplete="off" spellcheck="false" placeholder="예: NVDA, TSLA, LABU" value="' + esc(S.custom) + '"></div>');
     /* 3. 기간·원금 */
-    h += '<div class="mb-sec"><div class="mb-st">3. 기간 · 원금</div><div class="mh-grid2">' +
+    h += sec('per', '3. 기간 · 원금', '<div class="mh-grid2">' +
       '<div class="mb-f"><label class="mh-lbl" for="mb-from">시작일</label><input class="mh-in" id="mb-from" type="date" value="' + esc(S.from) + '"></div>' +
       '<div class="mb-f"><label class="mh-lbl" for="mb-to">종료일 (선택)</label><input class="mh-in" id="mb-to" type="date" value="' + esc(S.to) + '"></div></div>' +
       '<div class="mb-quick">' + [['', '처음부터'], ['2015-01-01', '2015~'], ['2020-01-01', '2020~'], ['y3', '최근 3년'], ['y1', '최근 1년']].map(function (q) { return '<button type="button" class="mh-btn mb-mini" data-qf="' + q[0] + '">' + q[1] + '</button>'; }).join('') + '</div>' +
       '<p class="mh-help">시작일을 비우면 자료 첫날(상장일 · 상장 전 포함이면 재현 첫날)부터, 종료일을 비우면 오늘까지</p>' +
       '<label class="mb-chk"><input type="checkbox" id="mb-pre"' + (S.pre ? ' checked' : '') + '> <span><b>상장 전 백테스트 포함</b> — ETF 차트 비교의 재현 식으로 상장 전 가격을 만들어 이어 붙임 (예상 오차 함께 표시)</span></label>' +
-      fld('투자 원금 (USD)', 'mb-cap', S.cap, '100', '100', null, '', '$') + '</div>';
+      fld('투자 원금 (USD)', 'mb-cap', S.cap, '100', '100', null, '', '$'));
     /* 4. 분할 · 매매 조건 */
     var sp = S.splits, std = [20, 30, 40];
-    h += '<div class="mb-sec"><div class="mb-st">4. 분할 · 매매 조건</div><label class="mh-lbl">분할 수</label>' +
+    var h4 = '<label class="mh-lbl">분할 수</label>' +
       '<div class="mb-seg mb-sp">' + std.map(function (n) { return '<button type="button" class="' + (sp === n ? 'on' : '') + '" data-sp="' + n + '" aria-pressed="' + (sp === n) + '">' + n + '분할</button>'; }).join('') +
       '<span class="mb-spc"><input class="mh-in" id="mb-spc" type="number" min="2" max="200" step="1" placeholder="직접" value="' + (std.indexOf(sp) < 0 ? sp : '') + '" aria-label="분할 수 직접 입력"></span></div>' +
       '<p class="mh-help">원문 권장 ' + (v === '3.0' ? '20분할(30·40 가능)' : v === '4.0' ? '20·30·40분할' : '40분할') + (std.indexOf(sp) < 0 ? ' · <span class="mh-warn">직접 입력한 분할은 원문 밖 설정이에요</span>' : '') + '</p>';
-    if (v === '1.0') h += '<div class="mh-grid2">' + fld('목표 수익률', 'mb-tg', S.target, '0.5', '0.5', '100', '평단 대비 지정가 전량 매도', '%') + fld('큰수 (현재가 +)', 'mb-big', S.big, '0.5', '0', '40', '원문: 시중가 +10~15% LOC', '%') + '</div>' +
+    if (v === '1.0') h4 += '<div class="mh-grid2">' + fld('목표 수익률', 'mb-tg', S.target, '0.5', '0.5', '100', '평단 대비 지정가 전량 매도', '%') + fld('큰수 (현재가 +)', 'mb-big', S.big, '0.5', '0', '40', '원문: 시중가 +10~15% LOC', '%') + '</div>' +
       fld('평단 LOC 괴리율', 'mb-avgoff', S.avgOff, '0.5', '-20', '20', '0% = 평단 그대로 (원문)', '%');
-    else if (v === '2.0' || v === '2.1') h += '<div class="mh-grid2">' + fld('최종 목표', 'mb-tg', S.target, '0.5', '0.5', '100', '원문 +10%', '%') + fld('1차 분할매도', 'mb-pt', S.part, '0.5', '0.5', '50', v === '2.0' ? '후반전 절반 (원문 +5%)' : '¼ LOC·지정가 (원문 +5%)', '%') + '</div>' +
+    else if (v === '2.0' || v === '2.1') h4 += '<div class="mh-grid2">' + fld('최종 목표', 'mb-tg', S.target, '0.5', '0.5', '100', '원문 +10%', '%') + fld('1차 분할매도', 'mb-pt', S.part, '0.5', '0.5', '50', v === '2.0' ? '후반전 절반 (원문 +5%)' : '¼ LOC·지정가 (원문 +5%)', '%') + '</div>' +
       '<div class="mh-grid2">' + fld('큰수 상한 (평단 +)', 'mb-cp', S.capP, '0.5', '0', '50', '원문 +5%', '%') + fld('큰수 (현재가 +)', 'mb-big', S.big, '0.5', '0', '40', '원문 +15% (둘 중 낮은 값)', '%') + '</div>' +
       fld('평단 LOC 괴리율', 'mb-avgoff', S.avgOff, '0.5', '-20', '20', '0% = 평단 그대로 (원문)', '%');   /* 계산(cfgOf)·주소(ao=)는 V1.0~V2.1 모두 쓰므로 칸도 V2.0·V2.1 에 보임 */
-    else if (v === '2.2') h += '<div class="mh-grid2">' + fld('기준 R (별%·지정가)', 'mb-tg', S.target, '0.5', '0.5', '100', 'TQQQ 10% · SOXL 12% (2023-07)', '%') + fld('큰수 (전날 종가 +)', 'mb-big', S.big, '0.5', '0', '40', '큰 하락 때 (원문 10~15%)', '%') + '</div>';
-    else if (v === '3.0') h += '<div class="mh-grid2">' + fld('목표 수익률', 'mb-tg', S.target, '0.5', '0.5', '100', 'TQQQ 15% · SOXL 20%', '%') + fld('큰수 (전날 종가 +)', 'mb-big', S.big, '0.5', '0', '40', '큰 하락 때 (원문 10~15%)', '%') + '</div>';
-    else h += '<div class="mh-grid2">' + fld('목표 수익률', 'mb-tg', S.target, '0.5', '0.5', '100', 'TQQQ 15% · SOXL 20%', '%') + fld('큰수 (전날 종가 ×)', 'mb-big', S.big, '0.5', '0', '40', '기록 화면 기본 12%', '%') + '</div>';
-    if (v !== '1.0' && v !== '2.0') h += '<div class="mh-grid2">' + fld('하방 LOC 줄 수', 'mb-ln', S.lines, '1', '0', '80', '1회치를 맞춰 사는 사다리 (0 = 안 씀)', '줄') + fld('줄당 주식 수', 'mb-sh', S.shares, '1', '1', '20', '하방 LOC 1줄에 거는 수', '주') + '</div>';
-    if (v === '4.0') h += '<label class="mb-chk"><input type="checkbox" id="mb-nobig"' + (S.noBig ? ' checked' : '') + '> <span><b>큰수 미사용 (별지점만)</b> — 큰수로 낮추지 않고 항상 별지점에 LOC 매수 (기록 화면 같은 설정)</span></label>';
-    if (/^(1\.0|2\.0|2\.1|2\.2)$/.test(v)) h += '<label class="mh-lbl" style="margin-top:6px">1회 매수금</label>' + seg('1회 매수금', [['compound', '복리'], ['simple', '단리']], S.money, 'money') +
+    else if (v === '2.2') h4 += '<div class="mh-grid2">' + fld('기준 R (별%·지정가)', 'mb-tg', S.target, '0.5', '0.5', '100', 'TQQQ 10% · SOXL 12% (2023-07)', '%') + fld('큰수 (전날 종가 +)', 'mb-big', S.big, '0.5', '0', '40', '큰 하락 때 (원문 10~15%)', '%') + '</div>';
+    else if (v === '3.0') h4 += '<div class="mh-grid2">' + fld('목표 수익률', 'mb-tg', S.target, '0.5', '0.5', '100', 'TQQQ 15% · SOXL 20%', '%') + fld('큰수 (전날 종가 +)', 'mb-big', S.big, '0.5', '0', '40', '큰 하락 때 (원문 10~15%)', '%') + '</div>';
+    else h4 += '<div class="mh-grid2">' + fld('목표 수익률', 'mb-tg', S.target, '0.5', '0.5', '100', 'TQQQ 15% · SOXL 20%', '%') + fld('큰수 (전날 종가 ×)', 'mb-big', S.big, '0.5', '0', '40', '기록 화면 기본 12%', '%') + '</div>';
+    if (v !== '1.0' && v !== '2.0') h4 += '<div class="mh-grid2">' + fld('하방 LOC 줄 수', 'mb-ln', S.lines, '1', '0', '80', '1회치를 맞춰 사는 사다리 (0 = 안 씀)', '줄') + fld('줄당 주식 수', 'mb-sh', S.shares, '1', '1', '20', '하방 LOC 1줄에 거는 수', '주') + '</div>';
+    if (v === '4.0') h4 += '<label class="mb-chk"><input type="checkbox" id="mb-nobig"' + (S.noBig ? ' checked' : '') + '> <span><b>큰수 미사용 (별지점만)</b> — 큰수로 낮추지 않고 항상 별지점에 LOC 매수 (기록 화면 같은 설정)</span></label>';
+    if (/^(1\.0|2\.0|2\.1|2\.2)$/.test(v)) h4 += '<label class="mh-lbl" style="margin-top:6px">1회 매수금</label>' + seg('1회 매수금', [['compound', '복리'], ['simple', '단리']], S.money, 'money') +
       '<p class="mh-help">' + (S.money === 'simple' ? '단리: 처음 원금 ÷ 분할 고정, 번 돈은 따로 쌓아 두고 모자랄 때만 씀 (라오어 쿼터손절 백테스트 조건)' : '복리: 사이클이 끝날 때마다 그때 전체 자금 ÷ 분할') + '</p>';
-    else h += '<p class="mh-help">1회 매수금: ' + (v === '3.0' ? '원금 ÷ 분할 + 지금까지 가장 컸던 누적 수익 ÷ (분할 × 2) — 반복리 · 손해가 나도 줄이지 않음 (원문)' : '잔금 ÷ (분할 − T) (원문)') + '</p>';
-    if (v === '3.0') h += '<label class="mb-chk"><input type="checkbox" id="mb-rebase"' + (S.rebase ? ' checked' : '') + '> <span><b>손실이 커지면 1회 매수금 다시 정하기</b> (원문에 없음) — 새 사이클을 시작할 때 현금이 1회 매수금 × 분할보다 적으면 그 현금을 새 원금으로 (반복리를 처음부터)</span></label>';
-    h += '</div>';
+    else h4 += '<p class="mh-help">1회 매수금: ' + (v === '3.0' ? '원금 ÷ 분할 + 지금까지 가장 컸던 누적 수익 ÷ (분할 × 2) — 반복리 · 손해가 나도 줄이지 않음 (원문)' : '잔금 ÷ (분할 − T) (원문)') + '</p>';
+    if (v === '3.0') h4 += '<label class="mb-chk"><input type="checkbox" id="mb-rebase"' + (S.rebase ? ' checked' : '') + '> <span><b>손실이 커지면 1회 매수금 다시 정하기</b> (원문에 없음) — 새 사이클을 시작할 때 현금이 1회 매수금 × 분할보다 적으면 그 현금을 새 원금으로 (반복리를 처음부터)</span></label>';
+    h += sec('rule', '4. 분할 · 매매 조건', h4);
     /* 5. 소진 · 새 사이클 */
-    h += '<div class="mb-sec"><div class="mb-st">5. 원금 소진 대응 · 새 사이클</div><div class="mb-radios">' + (V.EXHAUST[v] || ['official']).map(function (x) {
+    h += sec('exh', '5. 원금 소진 대응 · 새 사이클', '<div class="mb-radios">' + (V.EXHAUST[v] || ['official']).map(function (x) {
       var l = x === 'official' ? EXH_LBL.official[v] : EXH_LBL[x];
       return '<label class="mb-radio"><input type="radio" name="mb-exh" value="' + x + '"' + (S.exhaust === x ? ' checked' : '') + '> <span>' + (x === 'official' ? '<b>원문</b> ' : '') + esc(l) + '</span></label>'; }).join('') + '</div>' +
       (v !== '4.0' ? '<label class="mh-lbl" style="margin-top:8px">새 사이클 시작</label>' + seg('새 사이클 시작', [['next', '다음 날 바로'], ['rsi', 'RSI 60 이하']], S.restart, 'restart') +
-        '<p class="mh-help">' + (S.restart === 'rsi' ? 'RSI(14, 와일더) 60 이하일 때 첫 매수 (V2.0 5줄 요약)' : '익절 다음 날 바로 첫 매수 (라오어 백테스트 조건 · TQQQ V2.2 이후)') + '</p>' : '') + '</div>';
+        '<p class="mh-help">' + (S.restart === 'rsi' ? 'RSI(14, 와일더) 60 이하일 때 첫 매수 (V2.0 5줄 요약)' : '익절 다음 날 바로 첫 매수 (라오어 백테스트 조건 · TQQQ V2.2 이후)') + '</p>' : ''));
     /* 6. 세금 · 수수료 */
-    h += '<div class="mb-sec"><div class="mb-st">6. 세금 · 수수료</div><label class="mh-lbl">매매 수수료 (사고팔 때마다)</label>' +
+    h += sec('tax', '6. 세금 · 수수료', '<label class="mh-lbl">매매 수수료 (사고팔 때마다)</label>' +
       '<div class="mb-seg mb-fee">' + FEES.map(function (f) { var on = String(S.fee) === f[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" data-fee="' + f[0] + '" aria-pressed="' + on + '">' + f[1] + '</button>'; }).join('') +
       '<span class="mb-spc"><input class="mh-in" id="mb-feec" type="number" min="0" max="2" step="0.01" placeholder="직접" value="' + (FEES.some(function (f) { return String(S.fee) === f[0]; }) ? '' : S.fee) + '" aria-label="수수료 직접 입력 (%)"></span></div>' +
       '<p class="mh-help">국내 증권사 미국 주식 온라인 기본 0.25% · 이벤트 0.07% 안팎 · 매도 때 SEC 수수료 0.00206%(2026-04 기준)도 뺌</p>' +
       '<label class="mb-chk"><input type="checkbox" id="mb-tax"' + (S.tax ? ' checked' : '') + '> <span><b>해외주식 양도소득세</b> — 해마다 실현 손익(원화) − 250만 원 공제 × 22%, 다음 해 5월 말 납부 · 원화 환산은 결제일 매매기준율</span></label>' +
       (S.tax ? '<div class="mb-sub"><label class="mh-lbl">취득가액 계산</label>' + seg('취득가액', [['fifo', '선입선출 (법 원칙)'], ['avg', '이동평균']], S.method, 'method') +
         '<label class="mb-chk"><input type="checkbox" id="mb-harv"' + (S.harvest ? ' checked' : '') + '> <span>연말 절세 매도·재매수 — 그해 이익이 250만 원을 넘고 평가손이 있으면 같은 종가에 필요한 만큼 팔고 다시 사서 손실 확정 (라오어 2024-12-20 글)</span></label></div>' : '') +
-      '<label class="mb-chk"><input type="checkbox" id="mb-divs"' + (S.divs ? ' checked' : '') + '> <span>분배금 받기 — 현금으로 (세금 포함 보기는 미국 원천징수 15% 뗌)</span></label></div>';
-    /* 7. 고급 */
-    h += '<details class="mb-adv"' + (S.ideal || S.tround !== 'r2' ? ' open' : '') + '><summary>고급 설정</summary>' +
+      '<label class="mb-chk"><input type="checkbox" id="mb-divs"' + (S.divs ? ' checked' : '') + '> <span>분배금 받기 — 현금으로 (세금 포함 보기는 미국 원천징수 15% 뗌)</span></label>');
+    /* 7. 고급 — V4.0 은 기록 화면과 같은 주문표(1주 단위)로만 계산(cfgOf: 정액은 V1.0~V3.0) */
+    h += sec('adv', '7. 고급 설정', (v === '4.0' ? '<p class="mh-help">체결 수량: V4.0 은 기록 화면과 같은 주문표라 실제 주문(1주 단위)으로만 계산해요</p>' :
       '<label class="mh-lbl">체결 수량</label>' + seg('체결 수량', [['0', '실제 주문 (1주 단위)'], ['1', '정액 (소수 주)']], S.ideal ? '1' : '0', 'ideal') +
-      '<p class="mh-help">정액 = 주문 금액 ÷ 종가만큼 소수 주로 체결. 라오어 원문 백테스트 숫자는 이 방식과 가장 잘 맞음 (예: TQQQ V2.1 2010~2021 해마다 소진 횟수 일치)</p>' +
-      (S.ver === '2.2' || S.ver === '3.0' ? '<label class="mh-lbl" style="margin-top:8px">T값 반올림</label>' + seg('T값', [['r2', '셋째 자리 반올림 (2024-09 수정)'], ['c1', '둘째 자리 올림 (처음 원문)']], S.tround, 'tround') : '') + '</details>';
+      '<p class="mh-help">정액 = 주문 금액 ÷ 종가만큼 소수 주로 체결. 라오어 원문 백테스트 숫자는 이 방식과 가장 잘 맞음 (예: TQQQ V2.1 2010~2021 해마다 소진 횟수 일치)</p>') +
+      (v === '2.2' || v === '3.0' ? '<label class="mh-lbl" style="margin-top:8px">T값 반올림</label>' + seg('T값', [['r2', '셋째 자리 반올림 (2024-09 수정)'], ['c1', '둘째 자리 올림 (처음 원문)']], S.tround, 'tround') : ''));
     h += '<button type="button" class="mh-btn mh-btn-p mb-run" data-act="run"' + (BUSY ? ' disabled' : '') + '>' + (BUSY ? '계산 중…' : '백테스트 실행') + '</button>';
     $('mb-set').innerHTML = h;
+    sumSet();
   }
 
   /* ── 실행 ── */
@@ -26598,7 +26639,7 @@ window.MBT = (function () {
       '<button type="button" class="mh-btn mb-mini" data-act="csv">CSV 내보내기</button></div><div id="mb-tb">' + table(X, st) + '</div></div>';
     h += '<div class="card mb-assume"><b>계산 가정</b><ul>' +
       '<li>LOC 주문은 그날 종가로, 지정가 매도는 그날 고가가 지정가에 닿으면 지정가로 체결 · MOC 는 종가 (프리·애프터장, 일부 체결 없음)</li>' +
-      '<li>주문 수량은 원문대로 1주 단위' + (R.S.ideal ? ' — 지금은 고급 설정 <b>정액(소수 주)</b>' : '') + ' · 수정주가가 $10 아래·$2,000 위이거나 상장 전 재현 가격이면 사이클마다 시작가를 $50 단위로, 사이클 안에서 $1 아래로 떨어지면 액면 병합처럼 10배 단위로 바꿔 계산(1센트·1주 반올림 왜곡 방지, 손익은 같음)</li>' +
+      '<li>주문 수량은 원문대로 1주 단위' + (R.cfg && R.cfg.ideal ? ' — 지금은 고급 설정 <b>정액(소수 주)</b>' : '') + ' · 수정주가가 $10 아래·$2,000 위이거나 상장 전 재현 가격이면 사이클마다 시작가를 $50 단위로, 사이클 안에서 $1 아래로 떨어지면 액면 병합처럼 10배 단위로 바꿔 계산(1센트·1주 반올림 왜곡 방지, 손익은 같음)</li>' +
       '<li>세금·수수료 포함 보기: 매매 수수료 ' + R.S.fee + '% + 매도 SEC 0.00206% · 분배금 미국 원천징수 15%' + (R.taxOn ? ' · 양도소득세 22%(250만 원 공제, ' + (R.S.method === 'avg' ? '이동평균' : '선입선출') + ', 결제일 매매기준율, 다음 해 5월 말 이 계좌 현금에서 납부 — 모자라면 그날 종가에 보유를 팔아 냄)' + (R.S.harvest ? ' · 연말 절세 매도·재매수' : '') : '') + '</li>' +
       '<li>환전 수수료·현금 이자·다른 해외주식 손익과의 합산·금융소득종합과세는 빼고 계산 · 과거 기간에도 지금 세법(2026년)을 적용</li></ul></div>';
     $('mb-res').innerHTML = h;
@@ -26697,6 +26738,8 @@ window.MBT = (function () {
 
   /* ── 이벤트 ── */
   root.addEventListener('click', function (e) {
+    var sm = e.target.closest('#mb-set .mb-acc > summary');   /* 열고 닫기는 공통 처리기(문서)가 함 — 여기선 다음 상태만 기억 */
+    if (sm) { var dd = sm.parentNode; OPEN[dd.getAttribute('data-sec')] = !(dd._accTarget != null ? dd._accTarget : dd.open); lsSet(LS_OPEN, OPEN); return; }
     var t = e.target.closest('button,[data-hload]'); if (!t) return;
     var d = t.dataset;
     if (d.ver) { readInputs(); setVer(d.ver); saveS(); renderSet(); return; }
@@ -26733,12 +26776,13 @@ window.MBT = (function () {
     if (t.id === 'mb-logy') { LOGY = t.checked; if (R) drawChart(VIEW === 'net' ? R.net : R.gross, VIEW === 'net' ? R.sn : R.sg); return; }
     if (t.id === 'mb-tax' || t.id === 'mb-spc' || t.id === 'mb-feec') { readInputs(); saveS(); renderSet(); return; }
     if (t.id === 'mb-custom') { readInputs(); if (S.custom) { var d0 = V.defaults(S.ver, S.custom); S.target = d0.target; } saveS(); renderSet(); return; }
-    if (t.name === 'mb-exh' || t.type === 'checkbox' || t.type === 'date' || t.type === 'number') { readInputs(); saveS(); }
+    if (t.name === 'mb-exh' || t.type === 'checkbox' || t.type === 'date' || t.type === 'number') { readInputs(); saveS(); sumSet(); }
   });
+  root.addEventListener('input', function (e) { if (e.target.closest('#mb-set')) { readInputs(); sumSet(); } });   /* 입력하는 동안 접은 요약도 바로 */
   root.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type !== 'checkbox') { e.preventDefault(); run(); } });
 
   renderSet(); renderHist();
-  $('mb-res').innerHTML = '<div class="card mb-empty"><b>조건을 고르고 [백테스트 실행]을 누르세요</b><ol><li>버전 — V1.0(책) ~ V4.0(리버스모드), 버전마다 원문 기본값이 자동으로 들어가요</li><li>종목 — TQQQ·SOXL 등 레버리지 ETF (직접 입력도 가능)</li><li>세금·수수료 — 포함·미포함 결과를 단추 하나로 바꿔 봐요</li></ol></div>';
+  $('mb-res').innerHTML = '<div class="card mb-empty"><b>조건을 고르고 [백테스트 실행]을 누르세요</b><ul><li>1. 전략 버전 — V1.0(책) ~ V4.0(리버스모드), 버전마다 원문 기본값이 자동으로 들어가요</li><li>2. 종목 — TQQQ·SOXL 등 레버리지 ETF (직접 입력도 가능)</li><li>6. 세금·수수료 — 포함·미포함 결과를 단추 하나로 바꿔 봐요</li></ul><p class="mh-help">조건 항목을 누르면 펼쳐지고, 접어 둔 항목엔 지금 조건이 요약돼요</p></div>';
   if (/(^|#|&)v=/.test(location.hash || '')) run();
   window.MBTdebug = { S: function () { return S; }, R: function () { return R; }, run: run };
 })();

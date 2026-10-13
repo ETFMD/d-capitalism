@@ -1287,6 +1287,55 @@ def main():
                 miss = [i for i in ids if i not in have]; extra = [i for i in have if i not in ids]
                 if miss or extra or ('mb-avgoff' in ids and have.get('mb-avgoff') != '-2'):
                     fail('muhan-backtest', 'V%s 설정 칸이 계산과 다름 — 빠짐 %s · 남음 %s · 평단 괴리율 칸 %r' % (ver, miss, extra, have.get('mb-avgoff')))
+            # 설정 1~7 접이식(종합소득세 계산기와 같은 .inc-sec) — 처음엔 1번만 펼침 · 접은 요약 = 지금 조건(기본값과 다르면 파란색) · 펼친 상태는 다시 그려도·새로 열어도 그대로 ·
+            # 입력하는 동안 요약 갱신 · 모두 펼친 채 버전마다 좁은 화면 넘침 없음 · V4.0 고급엔 정액 단추 없음
+            ST = "() => [...document.querySelectorAll('#mb-set .mb-acc')].map(d => ({ k: d.dataset.sec, open: d.open, v: d.querySelector('.inc-sec-v').textContent, on: d.querySelector('.inc-sec-v').classList.contains('on') }))"
+            page.evaluate("() => { localStorage.removeItem('mbt-open'); localStorage.removeItem('mbt-settings'); }")
+            page.goto('about:blank'); page.goto(base + 'muhan-backtest/', wait_until='load')
+            page.wait_for_function("document.querySelectorAll('#mb-set .mb-acc').length === 7", timeout=30000)
+            a0 = page.evaluate(ST)
+            if [x['k'] for x in a0] != ['ver', 'tk', 'per', 'rule', 'exh', 'tax', 'adv'] or [x['open'] for x in a0] != [True] + [False] * 6 or not all(x['v'] for x in a0) or any(x['on'] for x in a0):
+                fail('muhan-backtest', '설정 접이식 처음 상태가 다름 (1번만 펼침 · 요약 · 기본값은 회색) %r' % a0)
+            page.click('#mb-set .mb-acc[data-sec="rule"] > summary'); page.wait_for_timeout(450)
+            page.evaluate("""() => document.querySelector('#mb-set [data-ver="2.1"]').click()"""); page.wait_for_timeout(150)
+            a1 = page.evaluate(ST)
+            page.goto('about:blank'); page.goto(base + 'muhan-backtest/', wait_until='load')
+            page.wait_for_function("document.querySelectorAll('#mb-set .mb-acc').length === 7", timeout=30000)
+            a2 = page.evaluate(ST)
+            page.focus('#mb-set .mb-acc[data-sec="ver"] > summary'); page.keyboard.press('Enter'); page.wait_for_timeout(450)
+            page.evaluate("""() => { const e = document.getElementById('mb-cap'); e.value = '25000'; e.dispatchEvent(new Event('input', { bubbles: true }));
+                                     const t = document.getElementById('mb-tg'); t.value = '12.5'; t.dispatchEvent(new Event('input', { bubbles: true })); }""")
+            a3 = {x['k']: x for x in page.evaluate(ST)}
+            op = [True, False, False, True, False, False, False]
+            if [x['open'] for x in a1] != op or [x['open'] for x in a2] != op or not a2[0]['v'].startswith('V2.1') or a3['ver']['open'] \
+                    or '$25,000' not in a3['per']['v'] or not a3['per']['on'] or '최종 12.5%' not in a3['rule']['v'] or not a3['rule']['on']:
+                fail('muhan-backtest', '설정 접이식 펼침 기억·입력 즉시 요약 실패 — 다시 그림 %r · 새로 엶 %r · 입력 뒤 %r' % ([x['open'] for x in a1], [x['open'] for x in a2], a3))
+            page.goto('about:blank'); page.goto(base + 'muhan-backtest/#v=2.1&t=SOXL&c=20000&sp=33&tg=12.5&pt=4&cp=6&bg=10&fe=0.1&ln=5&sh=2&x=hold&r=rsi&ao=-1.5&tm=avg&hv=1&dv=0', wait_until='load')
+            page.wait_for_function('window.MBTdebug && MBTdebug.R() && MBTdebug.R().S', timeout=60000)
+            a4 = {x['k']: x for x in page.evaluate(ST)}
+            want = {'tk': ('SOXL · 반도체 3배', False), 'per': ('처음부터 오늘까지 · $20,000', True),
+                    'rule': ('33분할 · 최종 12.5% · 1차 4% · 큰수 10% · 큰수 상한 +6% · 평단 괴리 −1.5% · 하방 LOC 5줄×2주', True),
+                    'exh': ('목표가까지 보유 · 새 사이클 RSI 60 이하', True), 'tax': ('수수료 0.1% · 양도세 22%(이동평균) · 연말 절세 · 분배금 끔', True), 'adv': ('실제 주문(1주 단위)', False)}
+            badw = ['%s %r' % (k, a4[k]) for k, (t, on) in want.items() if a4[k]['v'] != t or a4[k]['on'] != on]
+            if badw:
+                fail('muhan-backtest', '주소로 연 조건의 접은 요약이 다름: ' + ' / '.join(badw))
+            page.evaluate("() => localStorage.setItem('mbt-open', JSON.stringify({ ver: true, tk: true, per: true, rule: true, exh: true, tax: true, adv: true }))")
+            page.goto('about:blank'); page.goto(base + 'muhan-backtest/', wait_until='load')
+            page.wait_for_function("document.querySelectorAll('#mb-set .mb-acc[open]').length === 7", timeout=30000)
+            for ver in ['1.0', '2.0', '2.1', '2.2', '3.0', '4.0']:
+                page.set_viewport_size({'width': 1280, 'height': 900})
+                page.evaluate("v => document.querySelector('#mb-set [data-ver=\"' + v + '\"]').click()", ver); page.wait_for_timeout(120)
+                for w in widths:
+                    page.set_viewport_size({'width': w, 'height': 900}); page.wait_for_timeout(80)
+                    r = page.evaluate(OVERFLOW_JS)
+                    sw = page.evaluate("() => { const e = document.getElementById('mb-set'); return [e.scrollWidth, e.clientWidth]; }")   # 설정 칸은 스크롤 상자라 OVERFLOW_JS 가 안을 보지 않음
+                    if r['sw'] > r['vw'] + 1 or r['out'] or sw[0] > sw[1] + 1:
+                        fail('muhan-backtest', 'V%s 설정 모두 펼침 %dpx 넘침 (문서 %dpx · 설정 칸 %d > %dpx)%s' % (ver, w, r['sw'], sw[0], sw[1], (' · ' + ', '.join(r['out'])) if r['out'] else ''))
+            adv = page.evaluate("() => { const d = document.querySelector('#mb-set .mb-acc[data-sec=\"adv\"]'); return [!!d.querySelector('[data-ideal]'), d.querySelector('.inc-sec-in').innerText]; }")
+            if adv[0] or '1주 단위' not in adv[1]:
+                fail('muhan-backtest', 'V4.0 고급 설정에 계산에 안 쓰는 정액 단추가 있음 %r' % adv)
+            page.set_viewport_size({'width': 1280, 'height': 900})
+            page.evaluate("() => { localStorage.removeItem('mbt-open'); localStorage.removeItem('mbt-settings'); }")
             # 장중에 저장된 오늘 일봉은 백테스트에서 뺌 (TQQQ·SOXL = etfcagr.json 경로 · 뉴욕 평일 16:00 ET 전)
             oc = page.evaluate("""() => { const B = window.MBT, U = (y, mo, d, h, mi) => Date.UTC(y, mo - 1, d, h, mi), dn = s => B.dnum(s), R = [];
               const s = { d0: dn('2026-10-12'), dd: [1], c: [10, 11], h: [10.5, 11.5], div: [[dn('2026-10-12'), 0.05], [dn('2026-10-13'), 0.1]] };

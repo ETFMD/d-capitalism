@@ -1097,8 +1097,14 @@ html[data-theme="light"] #page-muhan,html[data-theme="light"] #page-vr,html[data
 .mb-set{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow-y:auto;scrollbar-width:thin}
 @media(max-width:780px){.mb-set{position:static;max-height:none}}
 .mb-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}.mb-h b{font-size:15px}.mb-h small{font-weight:400;color:var(--text3);font-size:11px;margin-left:4px}
-.mb-sec{padding:12px 0 10px;border-top:1px solid var(--card-border)}
-.mb-st{font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:8px}
+/* 설정 1~7 접이식 — 종합소득세 계산기와 같은 공통 아코디언(.inc-sec) · 좁은 설정 칸이라 요약은 제목 아래 줄 · 기본값과 다르면 파란색(.on) */
+.mb-note{margin:0 0 10px}
+#mb-set .mb-acc>summary{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"t a" "v a";column-gap:10px;row-gap:3px;padding:11px 12px 11px 14px}
+#mb-set .mb-acc .inc-sec-t{grid-area:t;white-space:normal;font-size:13.5px}
+#mb-set .mb-acc .inc-sec-v{grid-area:v;min-width:0;max-width:none;text-align:left;padding-left:12px;font-size:11.5px}
+#mb-set .mb-acc .acc-arrow{grid-area:a;align-self:center}
+#mb-set .mb-acc .inc-sec-in{padding:12px 14px 14px}
+#mb-set .mb-acc .inc-sec-in>:first-child{margin-top:0}
 .mb-mini{padding:5px 9px;font-size:11.5px;border-radius:8px}
 .mb-vers,.mb-tks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 .mb-ver,.mb-tk{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 9px;border-radius:10px;border:1px solid var(--m-bd);background:var(--m-s2);color:var(--m-tx);font:inherit;cursor:pointer;text-align:left;min-width:0}
@@ -1117,13 +1123,12 @@ html[data-theme="light"] #page-muhan,html[data-theme="light"] #page-vr,html[data
 .mb-sub{margin:8px 0 0 22px}
 .mb-radios{display:flex;flex-direction:column;gap:6px}
 .mb-radio{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.5;color:var(--m-t2);cursor:pointer}.mb-radio input{margin-top:3px;accent-color:var(--accent)}.mb-radio b{color:var(--m-ac)}
-.mb-adv{border-top:1px solid var(--card-border);padding-top:10px;font-size:12px}.mb-adv summary{cursor:pointer;color:var(--m-t2);font-weight:600;margin-bottom:8px}
 .mb-run{width:100%;padding:13px;font-size:15px;margin-top:14px;border-radius:12px}
 .mb-res{min-width:0}.mb-res>.card{margin-bottom:12px}
 .mb-msg{font-size:13px;line-height:1.6;color:var(--m-t2)}.mb-msg.bad{color:var(--m-bad)}.mb-msg.warn{color:var(--m-warn);font-size:12.5px}.mb-warns p{margin:0 0 6px}.mb-warns p:last-child{margin:0}
 .mb-spin{display:inline-block;width:14px;height:14px;border:2px solid var(--m-ac-b);border-top-color:var(--m-ac);border-radius:50%;animation:mbspin .8s linear infinite;vertical-align:-2px;margin-right:8px}
 @keyframes mbspin{to{transform:rotate(360deg)}}
-.mb-empty b{font-size:14px}.mb-empty ol{margin:10px 0 0;padding-left:18px;font-size:12.5px;line-height:1.8;color:var(--m-t2)}
+.mb-empty b{font-size:14px}.mb-empty ul{margin:10px 0 0;padding-left:18px;font-size:12.5px;line-height:1.8;color:var(--m-t2)}.mb-empty .mh-help{margin:8px 0 0}
 .mb-top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}.mb-tags{display:flex;flex-wrap:wrap;gap:5px}.mb-tags .mh-chip{font-size:11px;padding:3px 9px}
 .mb-view .mb-seg button{font-size:12px;padding:6px 12px}
 .mb-kg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
