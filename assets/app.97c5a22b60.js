@@ -16665,8 +16665,10 @@ var VBD = (function () {
     legacy: { log: 't72-log', keys: ['t72-set', 't72-log', 't72-tab', 't72-open'] } });   /* 예전 '72매매법' 화면(2026-10-13 저녁 잠깐) 기록 — 옮기지 못함 안내 */
   function go() { if (document.getElementById('t7-root') && window.t72Init) window.t72Init(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
-  /* 사이트 테마(밝게·어둡게)를 바꾸면 그래프 색도 새로 — 이미 그려진 뒤에만 */
-  if (window.MutationObserver) new MutationObserver(function () { var rt = document.getElementById('t7-root'); if (rt && rt._mhBound && rt.childNodes.length && window.T72debug) window.T72debug.render(); })
+  /* 사이트 테마(밝게·어둡게)를 바꾸면 그래프 색도 새로 — 이미 그려진 뒤에만 · 같은 테마를 다시 적용한 것은 건너뜀(입력 중인 칸이 다시 그려지지 않게) */
+  var thm = document.documentElement.getAttribute('data-theme');
+  if (window.MutationObserver) new MutationObserver(function () { var t = document.documentElement.getAttribute('data-theme'); if (t === thm) return; thm = t;
+    var rt = document.getElementById('t7-root'); if (rt && rt._mhBound && rt.childNodes.length && window.T72debug) window.T72debug.render(); })
     .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 })();
 /* [/T72] */

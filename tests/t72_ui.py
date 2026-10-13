@@ -161,6 +161,14 @@ LIVE_JS = """async () => {""" + PRE + """
     const md = window.mdLoad, n0 = MH.market.SOXL.prices.length; window.mdLoad = () => Promise.reject(new Error('network'));
     let f = null; try { f = await T.liveTick(); } finally { window.mdLoad = md; }
     ok('실시간 확인이 잠깐 실패하면 있던 시세 그대로 (주문표가 사라지지 않음)', f === false && MH.market.SOXL.prices.length === n0 && n0 > 0 && !/불러오지 못/.test(rt().innerText), JSON.stringify([f, n0, MH.market.SOXL.prices.length]));
+    /* 테마: 같은 테마를 다시 적용하면 그대로(입력 중인 칸이 다시 그려지지 않게) · 바꾸면 다시 그림(그래프 색) */
+    const hd = document.documentElement, t0 = hd.getAttribute('data-theme'), m1 = rt().firstElementChild;
+    if (t0) { hd.setAttribute('data-theme', t0); await W(60); }
+    const keep = rt().firstElementChild === m1;
+    hd.setAttribute('data-theme', t0 === 'light' ? 'dark' : 'light'); await W(80);
+    const redo = rt().firstElementChild !== m1;
+    if (t0) hd.setAttribute('data-theme', t0); else hd.removeAttribute('data-theme'); await W(80);
+    ok('테마: 같은 테마 다시 적용 → 그대로 · 바꾸면 → 다시 그림', keep && redo, JSON.stringify([t0, keep, redo]));
   } catch (e) { ok('실시간 확인 오류', false, String(e && e.message)); }
   return R;
 }"""
@@ -279,6 +287,13 @@ CYCLE_JS = """async () => {""" + PRE + """
 }"""
 
 
+# 원금 넣고 시작 — 한 번의 실행 안에서(입력 → 시작) 끝내야 함: 따로 하면 그 사이 비동기 다시 그리기(로그인 준비·테마)가
+# 입력칸을 새로 만들어 입력이 사라짐 (CI 에서 시작하기가 꺼진 채 30초 기다림)
+START_JS = """(cap) => { const r = document.getElementById('t7-root'), e = r.querySelector('[data-in="su:cap"]'); if (!e) return false;
+  e.value = cap; e.dispatchEvent(new Event('input', { bubbles: true })); const b = r.querySelector('[data-act="su-start"]'); if (!b || b.disabled) return false;
+  b.click(); return !!(T72debug.store.sessions[0] && T72debug.store.sessions[0].settings); }"""
+
+
 def _fresh(page, base):
     page.goto('about:blank'); page.goto(base + '72/', wait_until='load')
     page.evaluate(CLEAR)
@@ -317,7 +332,8 @@ def _sync(page, base, fail):
         page.wait_for_function("window.T72debug && document.querySelector('#t7-root [data-act=\"su-start\"]')", timeout=60000)
         page.wait_for_timeout(1200)
         t0 = page.evaluate("() => document.getElementById('t7-root').innerText")
-        page.fill('#t7-root [data-in="su:cap"]', '15000'); page.click('#t7-root [data-act="su-start"]')
+        if not page.evaluate(START_JS, '15000'):
+            raise RuntimeError('원금 $15,000 으로 시작하지 못함')
         page.wait_for_timeout(2500)
         posts = [c for c in calls if c[0] == 'POST' and c[1] == '/udata/r72']
         v = json.loads(posts[-1][2]).get('v') if posts else None
@@ -369,10 +385,9 @@ def check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS):
     n[0] += 1
     if '2025-03-03' not in lg or '중간 진입' not in lg:
         n[1] += 1; fail('72 시작', '예전 화면 기록 안내가 없음 %r' % lg[:120])
-    if page.query_selector('#mh-legacy [data-act="legacy-x"]'):
-        page.click('#mh-legacy [data-act="legacy-x"]'); page.wait_for_timeout(150)
-    else:
+    if not page.evaluate("() => { const b = document.querySelector('#mh-legacy [data-act=\"legacy-x\"]'); if (b) b.click(); return !!b; }"):
         page.evaluate(CLEAR)   # 안내가 없으면(위에서 이미 실패) 예전 키만 지우고 계속
+    page.wait_for_timeout(150)
     n[0] += 1
     if page.evaluate("() => !!document.getElementById('mh-legacy') || !!localStorage.getItem('t72-log') || !!localStorage.getItem('t72-set')"):
         n[1] += 1; fail('72 시작', '[알림 지우기] 뒤에도 예전 기록 안내·키가 남음')
@@ -402,8 +417,9 @@ def check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS):
         fail('72', '72루틴 화면이 무한매수법 기록(muhan4-store)을 바꿈')
     # 기본 설정(원금 $10,000 · 수수료 0.25%) 카드 = 같은 조건 무한매수법 백테스트 화면 (같은 엔진·같은 자료 · 고정 규칙이 V1.0 설정 그대로)
     _fresh(page, base)
-    page.fill('#t7-root [data-in="su:cap"]', '10000'); page.click('#t7-root [data-act="su-start"]')
     try:
+        if not page.evaluate(START_JS, '10000'):
+            raise RuntimeError('원금 $10,000 으로 시작하지 못함')
         page.wait_for_function("() => { const T = T72debug, s = T.store.sessions[0].settings, c = s && T.bt.cache[T.btKey(s)]; return c && (c.st === 'ok' || c.st === 'err'); }", timeout=180000)
         c = page.evaluate("() => { const T = T72debug, r = T.bt.cache[T.btKey(T.store.sessions[0].settings)]; return r.st === 'ok' ? { cagr: r.net.cagr, mdd: r.net.mdd, final: r.net.final, gc: r.gross.cagr, from: r.from, to: r.to, fee: r.o.fee } : { err: r.msg || 'err' }; }")
         if c.get('err') or c.get('fee') != 0.25:
