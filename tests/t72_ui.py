@@ -15,6 +15,8 @@
       · 공포탐욕·VIX 그라데이션 띠 · 오늘의 주문 강조 · RSI 기본 와일더 · LOC 매수 상한 실시간 시세(가짜 /q — 장별 이름 · 카드만 고침 · 손으로 고친 값 그대로 ·
         ↻ 자동 = 바로 조회 · 실패하면 시세 자료 · 카드가 없으면 멈춤 · 배포 사이트는 진짜 /q 도) · 백테스트 기간설정·상장 전 켜기(20·30년)·포함/미포함 한 줄 ·
         크게 보기 휠·두 손가락 확대(그래프를 새로 만들지 않음)
+  ㉝: 오늘의 주문 — 매수 지정가 > 지금 한도(LOC 카드 기준가 × 1.2)면 그 줄 아래 경고·입력 가격·요약(실시간 시세·손으로 고친 기준가와 함께 · 카드는 다시 그리지 않음)
+      · 백테스트 '증권사 주문 거부' 3가지 = 엔진 직접(로컬은 시가를 만들어 넣음 · 배포는 실제 시가) · 고르면 카드 숫자·그래프 · 기억 · 무한매수법 화면엔 끔
 """
 import json, os, re
 
@@ -215,7 +217,7 @@ LQ_JS = """async () => {""" + PRE + r"""
   window.fetch = function (u) { if (typeof u === 'string' && /\/q\?s=SOXL$/.test(u)) { qn++;
       return Promise.resolve(qfail ? new Response('{"error":"upstream"}', { status: 502 }) : new Response(JSON.stringify(Object.assign({ s: 'SOXL', t: Math.floor(Date.now() / 1000) - 20, rp: 125, pc: 128 }, QV)), { status: 200, headers: { 'Content-Type': 'application/json' } })); }
     return of.apply(this, arguments); };
-  const L = T.lq, money = v => '$' + (Math.floor(v * 1.2 * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const L = T.lq, money = v => '$' + (Math.floor(Math.round(v * 100) * 12 / 10) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });   /* 센트 정수로 셈 (부동소수 오차 없이) */
   const val = () => ($('#mh-loc [data-in="cap"]') || {}).value, hint = () => ($('#mh-loc-hint') || {}).innerText || '', chip = () => ($('#mh-loc-ses') || {}).textContent;
   const tick = async () => { L.tried = Date.now() - 25000; T.lqKick(); await W(250); };
   try {
@@ -239,6 +241,24 @@ LQ_JS = """async () => {""" + PRE + r"""
     ok('다시 받아지면 실시간으로', L.err === 0 && val() === '133' && /정규장 현재가/.test(hint()), hint());
     QV = { p: null }; await tick(); const busy = !!L.busy, e1 = L.err; QV = { p: 134, ses: 'reg', ps: 'reg' }; L.v = null; await tick();
     ok('이상한 응답(가격 없음)도 실패로 처리 · 다음 조회가 막히지 않음', !busy && e1 >= 1 && L.err === 0 && val() === '134', JSON.stringify([busy, e1, L.err, val()]));
+    /* ㉝ 오늘의 주문 — 매수 지정가가 지금 한도(LOC 카드 기준가 × 1.2 · 1센트 버림)를 넘으면 그 줄 아래 경고 + 입력 가격 · 요약 · 실시간 시세·손으로 고친 기준가와 함께 (카드는 다시 그리지 않음) */
+    { const ws = () => $$('#mh-orders .mh-rjw[data-rjp]'), sum = () => $('#mh-rjsum'), bp = ws().map(w => Number(w.getAttribute('data-rjp')));
+      ok('오늘의 주문: 매수 줄마다 한도 경고 칸 (매도 줄엔 없음)', bp.length > 0 && bp.every(x => x > 0) && $$('#mh-orders .mh-obox.buy').length === bp.length, JSON.stringify(bp));
+      if (bp.length) {
+        const mx = Math.max(...bp), lowP = Math.floor(mx / 1.2 * 0.97 * 100) / 100, oc = $('#mh-orders'), usd = v => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        QV = { p: lowP, ses: 'reg', ps: 'reg' }; MH.capEdited = false; await tick();
+        const capL = T.capOf(lowP), vis = ws().filter(w => !w.hidden), exp = bp.filter(x => x > capL + 1e-9).length;
+        ok('지금 가격이 낮아 한도를 넘는 줄만 경고 · 입력 가격 = 기준가 × 1.2 1센트 버림(= LOC 카드 상한) · 요약에 한도 계산 · 주문 카드는 그대로',
+           capL === Math.floor(Math.round(lowP * 100) * 12 / 10) / 100 && vis.length === exp && exp > 0 && vis.every(w => w.innerText.includes(usd(capL))) && $('#mh-cap-out').textContent === usd(capL) &&
+           sum() && !sum().hidden && sum().classList.contains('warn') && sum().innerText.includes(usd(capL)) && sum().innerText.includes(usd(lowP)) && $('#mh-orders') === oc,
+           JSON.stringify([lowP, capL, vis.length, exp, sum() && sum().innerText]));
+        QV = { p: Math.ceil(mx / 1.2 * 1.05 * 100) / 100, ses: 'reg', ps: 'reg' }; await tick();
+        ok('가격이 오르면 경고가 사라지고 ✓ 요약', ws().every(w => w.hidden) && !sum().hidden && !sum().classList.contains('warn') && /✓/.test(sum().innerText) && $('#mh-orders') === oc, sum().innerText);
+        fill('#mh-loc [data-in="cap"]', String(Math.floor(mx / 1.2 * 0.9 * 100) / 100));
+        ok('기준가를 손으로 고치면 경고도 바로', ws().some(w => !w.hidden) && sum().classList.contains('warn') && sum().innerText.includes(usd(T.capOf(Math.floor(mx / 1.2 * 0.9 * 100) / 100))), sum().innerText);
+        click('[data-act="cap-auto"]'); await W(300);
+      }
+      ok('무한매수법 화면 프로필엔 끔 (오늘의 주문 경고·백테스트 거부 비교)', !window.MHdebug || (!MHdebug.P.rejWarn && !MHdebug.P.btRej)); }
     MH.view = 'an'; T.render(); await W(80); const stop = !L.timer;
     MH.view = 'now'; T.render(); await W(80);
     ok('LOC 카드가 없는 화면(분석)에선 조회를 멈추고 · 돌아오면 다시', stop && !!L.timer, JSON.stringify([stop, L.timer]));
@@ -380,6 +400,48 @@ BT_JS = """async (live) => {""" + PRE + """
     click('#mh-bt [data-act="bt-pre"]'); await W(100); await waitCard();
     ok('상장 전 포함 끄면 20·30년 단추 숨김 · 실제 일봉', !T.bt.pre && chips() === '1y,3y,5y,10y,all,custom' && card() && !card().preL, chips());
   } catch (e) { ok('백테스트 카드 흐름 오류', false, String(e && e.message)); }
+  return R;
+}"""
+
+# ㉝ 백테스트 '증권사 주문 거부' — 반영 안 함 · 한도로 낮춰 넣기 · 그날 건너뛰기 = 엔진 직접 (같은 자료 · 로컬은 시가를 만들어 넣어 거부가 생기게, 배포는 실제 시가)
+RJ_JS = """async (live) => {""" + PRE + r"""
+  try {
+    const s = ses().settings;
+    const D = await MBT.load('SOXL');
+    if (!live) D.o = D.c.map((c, i) => i ? (i % 3 === 0 ? D.c[i - 1] * 0.93 : D.c[i - 1]) : c);   /* 3일마다 시가 = 전날 × 0.93 → 한도 1.116 < 상단 매수선 1.13 */
+    else await MBT.withOpen(D);
+    if (MH.fold) MH.fold.bt = false; MH.sheet = null; MH.menu = false; MH.view = 'now';
+    T.bt.per = 'all'; T.bt.pre = false; T.bt.rj = 'none'; for (const k in T.bt.cache) delete T.bt.cache[k]; T.render();
+    const r = await waitCard();
+    ok('카드: 세 가지 처리 모두 계산 · 거부 비교 표 3줄', r && r.st === 'ok' && r.m && r.m.none && r.m.clamp && r.m.skip && $$('#mh-rjc tbody tr').length === 3, r && (r.st + ' ' + (r.msg || '')));
+    if (!r || r.st !== 'ok' || !r.m || !r.m.skip) return R;
+    const F = await MBT.fxData().catch(() => null), o = T.btOpts(s), c = T.vcfg(s), cap = s.totalCapital, fx = F && o.tax ? MBT.fxFor(D.d, F) : null;
+    const Dn = o.divs ? D : Object.assign({}, D, { dv: null }), base = { from: 1, to: D.d.length - 1, capital: cap, norm: 'auto', rows: false };
+    const run = (rej, net) => MHV.run(c, Dn, Object.assign({}, base, net ? { fee: o.fee / 100, sec: 0.0000206, divTax: 0.15, tax: fx ? { fx: i => fx[i], method: o.method, harvest: o.harvest } : null } : { fee: 0, sec: 0, divTax: 0, tax: null }, { rej }));
+    const eq = (a, b) => ['final', 'cagr', 'mdd'].every(k => Math.abs((a[k] || 0) - (b[k] || 0)) <= 1e-9 * Math.max(1, Math.abs(a[k] || 0)));
+    const badM = [];
+    for (const m of ['none', 'clamp', 'skip']) { const rj = m === 'none' ? null : { mode: m, cap: 1.2 }, A = run(rj, true), G = run(rj, false);
+      if (!eq(r.m[m].net, MBT.stats(A, D, cap)) || !eq(r.m[m].gross, MBT.stats(G, D, cap)) || JSON.stringify(r.m[m].rjN) !== JSON.stringify(A.rj) || JSON.stringify(r.m[m].rjG) !== JSON.stringify(G.rj)) badM.push(m); }
+    ok('세 가지 = 엔진 직접 (포함·미포함 · 거부 통계)', !badM.length, badM.join(','));
+    const Sc = r.m.clamp.rjN, Ss = r.m.skip.rjN;
+    ok('거부가 실제로 생김 (' + (live ? '실제 시가' : '만든 시가') + ') · 달라진 날 ≤ 거부된 날 · 반영 안 함과 숫자가 다름', Sc.days > 0 && Sc.miss <= Sc.days && Ss.days > 0 && Ss.miss <= Ss.days && r.m.skip.net.final !== r.m.none.net.final, JSON.stringify([Sc, Ss]));
+    const rows = $$('#mh-rjc tbody tr');
+    ok('표 = 계산 값 (연평균·MDD · 거부 일수)', ['none', 'clamp', 'skip'].every((m, i) => rows[i].cells[1].textContent === pc(r.m[m].net.cagr, 2) && rows[i].cells[2].textContent === pc(r.m[m].net.mdd, 1)) &&
+       rows[1].cells[4].textContent.startsWith(Sc.days.toLocaleString() + '일') && rows[2].cells[4].textContent.startsWith(Ss.days.toLocaleString() + '일'), rows.map(tr => tr.innerText.replace(/\s+/g, ' ')).join(' | '));
+    ok('기본 = 반영 안 함 (카드 숫자 = 반영 안 함 · 단추 눌림)', T.bt.rj === 'none' && r.net === r.m.none.net && r.ch.net === r.m.none.eqN && $('#mh-rjc [data-act="bt-rj"][data-v="none"]').getAttribute('aria-pressed') === 'true');
+    click('#mh-rjc [data-act="bt-rj"][data-v="skip"]'); await W(150);
+    const kg = $('#mh-bt .mb-kg').innerText, help = $('#mh-bt .mh-help').innerText;
+    ok('그날 건너뛰기를 고르면 위 숫자·그래프 = 그 처리 · 이 기기에 기억 · 설명 줄에 처리 이름', T.bt.rj === 'skip' && r.net === r.m.skip.net && r.ch.net === r.m.skip.eqN && kg.includes(pc(r.m.skip.net.cagr, 2)) &&
+       localStorage.getItem('r72-bt-rj') === 'skip' && $('#mh-rjc tr.on').getAttribute('data-rj') === 'skip' && /증권사 주문 거부 그날 건너뛰기/.test(help), kg.slice(0, 120) + ' | ' + help.slice(0, 160));
+    click('[data-act="bt-view"][data-v="gross"]'); await W(150);
+    ok('미포함 보기: 표·위 숫자도 미포함 값', $$('#mh-rjc tbody tr')[2].cells[1].textContent === pc(r.m.skip.gross.cagr, 2) && $('#mh-bt .mb-kg').innerText.includes(pc(r.m.skip.gross.cagr, 2)));
+    click('[data-act="bt-view"][data-v="net"]'); await W(100);
+    click('#mh-rjc [data-act="bt-rj"][data-v="clamp"]'); await W(120);
+    ok('한도로 낮춰 넣기로 바꿈 → 위 숫자 = 그 처리', T.bt.rj === 'clamp' && r.net === r.m.clamp.net && $('#mh-bt .mb-kg').innerText.includes(pc(r.m.clamp.net.cagr, 2)));
+    click('#mh-rjc [data-act="bt-rj"][data-v="none"]'); await W(100);
+    const tx = $('#mh-rjc').innerText;
+    ok('되돌림 · 설명(시가 × 1.2 · 매도 그대로) · 무한매수법 용어 없음', T.bt.rj === 'none' && r.net === r.m.none.net && /시가 × 1\.2/.test(tx) && /매도 주문은 그대로/.test(tx) && !bad(tx), bad(tx) || tx.slice(0, 120));
+  } catch (e) { ok('거부 비교 오류', false, String(e && e.message)); }
   return R;
 }"""
 
@@ -539,6 +601,8 @@ def check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS):
     if not local:
         report('72 실시간 시세', page.evaluate(LQ_REAL_JS))
     report('72 백테스트', page.evaluate(BT_JS, not local))
+    report('72 백테스트 주문 거부', page.evaluate(RJ_JS, not local))
+    overflow('현재 화면(백테스트 주문 거부 비교)')
     # ㉜ 좁은 화면에서도 '세금·수수료 포함'·'미포함' 두 단추는 한 줄에 나란히 (따로 줄바꿈되지 않음)
     ROW1 = "() => { const v = [...document.querySelectorAll('#t7-root #mh-bt [data-act=\"bt-view\"]')]; return v.length === 2 && Math.abs(v[0].getBoundingClientRect().top - v[1].getBoundingClientRect().top) < 2; }"
     for w, fs in ((320, 1), (360, 1), (390, 1), (320, 1.3)):   # 글자 크기 130%(⋮ 메뉴 글자 크기)면 줄이 모자라 단추가 다음 줄로 — 그때도 두 단추는 함께

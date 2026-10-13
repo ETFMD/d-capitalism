@@ -802,8 +802,9 @@ def bot_etfcagr_check(fail):
             raise RuntimeError('야후 오류(시험)')
         ts = [int(dt.datetime(d.year, d.month, d.day, 9, 30, tzinfo=M.NY).timestamp()) for d in days]
         c = [100 + i * 0.1 for i in range(len(days))]; c[-1] = st['close']
+        op = [v * 0.995 for v in c]; op[5] = c[5] * 1.5; op[6] = c[6] * 1.012; op[7] = None; op[8] = c[8] * 0.986   # 시가: 범위 밖 0.5% 넘음 → 0 · 조금 위 → 고가로 · 없음 → 0 · 조금 아래 → 저가로
         return {'meta': {'currentTradingPeriod': {'regular': reg}}, 'timestamp': ts,
-                'indicators': {'quote': [{'close': c, 'high': [v * 1.01 for v in c], 'low': [v * 0.99 for v in c]}]},
+                'indicators': {'quote': [{'close': c, 'high': [v * 1.01 for v in c], 'low': [v * 0.99 for v in c], 'open': op}]},
                 'events': {'dividends': {'a': {'date': ts[-30], 'amount': 0.05}}}}
     M.yahoo_chart = chart
     M.ETFCAGR = os.path.join(tempfile.mkdtemp(), 'etfcagr.json')
@@ -843,6 +844,14 @@ def bot_etfcagr_check(fail):
     j['updated'] = '2026-10-12T21:00:00Z'; json.dump(j, open(M.ETFCAGR, 'w', encoding='utf-8'))
     j = run((2026, 10, 13, 4, 0), down=('SPY',))                     # SOXL 하루 뒤처짐 → TQQQ 가 같아도 모두 다시 · SPY 실패는 직전값 유지
     same('뒤처진 종목 → 모두 다시 받기', len(calls) == n and last(j['series']['SOXL']) == '2026-10-12' and last(j['series']['SPY']) == '2026-10-12', calls)
+    T = j['series']['TQQQ'] if 'TQQQ' in j['series'] else {}
+    want = [round((100 + i * 0.1) * 0.995, 4) for i in range(5)] + [0, round((100 + 6 * 0.1) * 1.01, 4), 0, round((100 + 8 * 0.1) * 0.99, 4), round((100 + 9 * 0.1) * 0.995, 4)]
+    same('시가 o (TQQQ·SOXL 만 · 종가와 같은 길이 · 저가~고가 밖 0.5% 넘으면 0 · 조금 벗어나면 안으로 · 없으면 0)',
+         T.get('o') is not None and len(T['o']) == len(T['c']) and T['o'][:10] == want and j['series']['SOXL'].get('o') and len(j['series']['SOXL']['o']) == len(j['series']['SOXL']['c'])
+         and all('o' not in j['series'][k] for k in M.ETF_CAGR if k not in M.ETFCAGR_HIGH), (T.get('o') or [])[:10])
+    del j['series']['SOXL']['o']; j['updated'] = '2026-10-13T08:30:00Z'; json.dump(j, open(M.ETFCAGR, 'w', encoding='utf-8'))
+    j = run((2026, 10, 13, 5, 0))                                    # 30분 전 갱신이지만 시가(o)가 없는 예전 형식 → 모두 다시 받아 채움
+    same('시가 없는 예전 형식 → 바로 모두 다시 받기', len(calls) == n and j['series']['SOXL'].get('o'), calls)
     ops = M.open_session_start({'meta': {'currentTradingPeriod': {'regular': reg}}}, at(2026, 10, 12, 16, 14)), M.open_session_start({'meta': {'currentTradingPeriod': {'regular': reg}}}, at(2026, 10, 12, 16, 16)), M.open_session_start({}, at(2026, 10, 12, 11, 0))
     same('정규장 끝 + 15분 경계', ops == (reg['start'], None, None), ops)
 
@@ -1555,6 +1564,40 @@ def main():
             badw = ['%s %r' % (k, a4[k]) for k, (t, on) in want.items() if a4[k]['v'] != t or a4[k]['on'] != on]
             if badw:
                 fail('muhan-backtest', '주소로 연 조건의 접은 요약이 다름: ' + ' / '.join(badw))
+            # ㉝ 증권사 주문 거부(rj) — 주소 rj=s 왕복 · 7. 고급 설정 요약 · 결과의 세 가지 비교 = 엔진 직접(옵션·자료를 따로 만들어) · 로컬은 시가를 만들어 넣어 거부가 생기게
+            page.goto('about:blank'); page.goto(base + 'muhan-backtest/#v=1.0&t=SOXL&c=100000&sp=72&tg=52.5&bg=13&fe=0.25&x=recover&rj=s', wait_until='load')
+            page.wait_for_function('window.MBTdebug && MBTdebug.R() && MBTdebug.R().cmp', timeout=90000)
+            rjs = page.evaluate("""async (live) => {
+              const W = ms => new Promise(r => setTimeout(r, ms)), out = [], okk = (n, c, i) => out.push([n, !!c, i == null ? '' : String(i).slice(0, 300)]);
+              let R = MBTdebug.R(); const S = MBTdebug.S(), sa = document.getElementById('mb-sum-adv');
+              okk('주소 rj=s → 그날 건너뛰기 · 고급 설정 요약(파란 글씨) · 주소 왕복', S.rej === 'skip' && R.rej && R.rej.mode === 'skip' && /(^|&|#)rj=s(&|$)/.test(location.hash) && /주문 거부 그날 건너뛰기/.test(sa.textContent) && sa.classList.contains('on'), location.hash + ' | ' + sa.textContent);
+              if (!live) { const D0 = await MBT.load('SOXL'); D0.o = D0.c.map((c, i) => i ? (i % 3 === 0 ? D0.c[i - 1] * 0.93 : D0.c[i - 1]) : c);
+                document.querySelector('#mb-set [data-act="run"]').click(); for (let i = 0; i < 400; i++) { const r2 = MBTdebug.R(); if (r2 && r2 !== R && r2.cmp) break; await W(150); } R = MBTdebug.R(); }
+              const D = await MBT.load('SOXL'), F = R.S.tax ? await MBT.fxData().catch(() => null) : null, fx = F ? MBT.fxFor(D.d, F) : null, cap = 100000, cfg = Object.assign(MHV.defaults('1.0', 'SOXL'), { splits: 72, target: 52.5, big: 13, exhaust: 'recover', ideal: false });
+              const base = { from: 1, to: D.d.length - 1, capital: cap, norm: 'auto', rows: false }, eq = (a, b) => ['final', 'cagr', 'mdd'].every(k => Math.abs((a[k] || 0) - (b[k] || 0)) <= 1e-9 * Math.max(1, Math.abs(a[k] || 0)));
+              const bad = [], vals = {};
+              for (const m of ['none', 'clamp', 'skip']) { const rj = m === 'none' ? null : { mode: m, cap: 1.2 };
+                const A = MHV.run(cfg, D, Object.assign({}, base, { fee: 0.0025, sec: 0.0000206, divTax: 0.15, tax: fx ? { fx: i => fx[i], method: 'fifo', harvest: false } : null, rej: rj })), G = MHV.run(cfg, D, Object.assign({}, base, { fee: 0, sec: 0, divTax: 0, tax: null, rej: rj }));
+                const a = MBT.stats(A, D, cap), g = MBT.stats(G, D, cap); vals[m] = [a.cagr, A.rj && A.rj.days];
+                if (!R.cmp || !eq(R.cmp[m].sn, a) || !eq(R.cmp[m].sg, g) || JSON.stringify(R.cmp[m].rjN) !== JSON.stringify(A.rj)) bad.push(m); }
+              okk('결과 거부 비교 3가지 = 엔진 직접 (포함·미포함 · 통계)', !bad.length && eq(R.sn, R.cmp.skip.sn), bad.join(',') + ' ' + JSON.stringify(vals));
+              okk('거부가 실제로 생김 · 위 결과 = 그날 건너뛰기 · 거부 일수 표시', R.net.rj && R.net.rj.days > 0 && R.net.rj.miss <= R.net.rj.days && document.querySelector('.mb-rj').innerText.includes(R.net.rj.days.toLocaleString() + '일') && document.querySelector('.mb-rj tr.on').getAttribute('data-rj') === 'skip', JSON.stringify(R.net.rj));
+              const tr = [...document.querySelectorAll('.mb-rj tbody tr')], pc = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(2) + '%';
+              okk('비교 표 3줄 = 계산 값', tr.length === 3 && ['none', 'clamp', 'skip'].every((m, i) => tr[i].cells[1].textContent === pc(R.cmp[m].sn.cagr)), tr.map(x => x.innerText.replace(/\\s+/g, ' ')).join(' | '));
+              okk('계산 가정에 거부 설명', /증권사 주문 거부\\(그날 건너뛰기\\)/.test(document.querySelector('.mb-assume').innerText));
+              return out; }""", not local)
+            for nm, okv, info in rjs:
+                if not okv:
+                    fail('muhan-backtest', '주문 거부 ' + nm + (' — ' + info if info else ''))
+            page.goto('about:blank'); page.goto(base + 'muhan-backtest/#v=2.2&t=TQQQ&c=10000&sp=40&tg=10&rj=c&e=2012-12-31', wait_until='load')
+            page.wait_for_function('window.MBTdebug && MBTdebug.R() && MBTdebug.R().cmp', timeout=90000)
+            rjc = page.evaluate("() => [MBTdebug.S().rej, /(^|&|#)rj=c(&|$)/.test(location.hash), document.querySelectorAll('.mb-rj tbody tr').length, document.querySelector('.mb-rj tr.on').getAttribute('data-rj')]")
+            if rjc != ['clamp', True, 3, 'clamp']:
+                fail('muhan-backtest', '주소 rj=c → 한도로 낮춰 넣기 복원·비교 표 실패 %r' % rjc)
+            page.goto('about:blank'); page.goto(base + 'muhan-backtest/#v=2.2&t=TQQQ&c=10000&sp=40&tg=10&e=2012-12-31', wait_until='load')
+            page.wait_for_function('window.MBTdebug && MBTdebug.R() && MBTdebug.R().S', timeout=90000)
+            if page.evaluate("() => [MBTdebug.S().rej, !!MBTdebug.R().rej, !!document.querySelector('.mb-rj'), /rj=/.test(location.hash)]") != ['', False, False, False]:
+                fail('muhan-backtest', '주소에 rj 가 없으면 거부 반영 안 함(카드 없음)이어야 함')
             page.evaluate("() => localStorage.setItem('mbt-open', JSON.stringify({ ver: true, tk: true, per: true, rule: true, exh: true, tax: true, adv: true }))")
             page.goto('about:blank'); page.goto(base + 'muhan-backtest/', wait_until='load')
             page.wait_for_function("document.querySelectorAll('#mb-set .mb-acc[open]').length === 7", timeout=30000)

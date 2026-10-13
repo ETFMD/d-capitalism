@@ -3,6 +3,7 @@
    · 라오어 공식 카페 원문 숫자: 주문표 예시 · 별% 공식 · 반복리 · LABU 2021 사례 · TQQQ 해마다 소진 횟수(2010~2021)
    · V4.0 = 기록 화면 엔진(MHE.backtest)과 날마다 같은 평가금 · 기록 화면 다시 계산(replay) = 백테스트 상태 · 무작위 불변식 · 양도소득세 계산
    · 가격 단위(상장 전 재현·액면 병합) · 양도세 현금 부족 · V3 반복리 완충 바닥 · 작은 원금(1회 < 1주) · 세금 포함 불변식
+   · ⑱ 증권사 주문 거부(o.rej — 한도 = 시가 × 1.2 · 한도로 낮춰 넣기 / 그날 건너뛰기)
    실패가 있으면 'FAIL …' 줄과 종료 코드 1 */
 'use strict';
 const fs = require('fs'), path = require('path');
@@ -274,6 +275,64 @@ function bdays(from, n, skip) { const out = []; let t = Date.parse(from + 'T12:0
   const c22 = MHV.defaults('2.2', 'TQQQ'), recs = [{ date: '2024-01-02', close: 52, fills: [{ side: 'S', q: 197, p: 52, tag: 'qs', m: 'LOC' }] }];
   const m22 = { qty: 790, avg: 50, cash: 500, one: 1000, T: 39.5 }, o22 = MHV.replay(c22, { capital: 40000, mid: m22 }, recs).st, n22 = MHV.replay(c22, { capital: 40000, mid: Object.assign({ xc: true }, m22) }, []).st;
   check('V2.2 예전 중간 진입(T 39.5) + 첫날 기록 → 평소 상태 그대로 · 새 중간 진입은 처음부터 소진(쿼터손절)', o22.mode === 'normal' && n22.mode !== 'normal', o22.mode + ' / ' + n22.mode); }
+
+/* ⑱ 증권사 주문 거부 (백테스트 선택 o.rej) — 매수 지정가 > 주문 시점 가격(그날 시가, 없으면 전날 종가) × 1.2(1센트 버림)
+   · clamp = 한도로 낮춰 넣기(수량 그대로) · skip = 그날 그 주문 없음 · 매도·MOC 는 그대로(매도가 시가 × 0.8 아래인 날은 셈만) */
+{ const RC = MHV.rejCap;
+  eq('한도 = 시가 × 1.2 1센트 버림 (118.42 → 142.10 · 120.91 → 145.09 · 100 → 120 · 1.5 → 1.80 · 3 → 3.60 부동소수 오차 없이)', [RC(118.42, 1.2), RC(120.91, 1.2), RC(100, 1.2), RC(1.15, 1.2), RC(120.9, 1.2), RC(1.5, 1.2), RC(3, 1.2), RC(3.8, 1.2)], [142.1, 145.09, 120, 1.38, 145.08, 1.8, 3.6, 4.56]);
+  { let badc = []; for (let c = 100; c <= 50000; c++) { const x = c / 100; if (RC(x, 1.2) !== Math.floor(c * 12 / 10) / 100) badc.push(x); }   /* $1 ~ $500 모든 센트: 정수로 셈한 값과 같음 */
+    check('한도 1센트 버림 = 정수 계산 ($1 ~ $500 모든 센트 가격)', !badc.length, badc.slice(0, 5).join(',')); }
+  const mk = () => [{ side: 'B', m: 'LOC', p: 145.09, q: 10, tag: 'first' }, { side: 'B', m: 'LOC', p: 142.1, q: 3, tag: 'avg' }, { side: 'B', m: 'MOC', p: 0, q: 2, tag: 'x' },
+                    { side: 'S', m: 'LMT', p: 200, q: 5, tag: 'tp' }, { side: 'S', m: 'MOC', p: 0, q: 3, tag: 'xall' }];
+  const S0 = () => ({ days: 0, rows: 0, miss: 0, noO: 0, sell: 0, first: null });
+  let rw = mk(), S = S0(), n = MHV.rejApply(rw, 118.42, { mode: 'clamp', cap: 1.2 }, { c: 125.06 }, S, '2026-10-13');
+  eq('clamp: 한도 넘는 줄만 한도로 (수량 그대로 · 원래 가격 rj) · 한도와 같은 줄·MOC·매도 그대로', rw.map(r => [r.side, r.m, r.p, r.q, r.rj || 0]),
+     [['B','LOC',142.1,10,145.09],['B','LOC',142.1,3,0],['B','MOC',0,2,0],['S','LMT',200,5,0],['S','MOC',0,3,0]]);
+  eq('clamp 통계: 거부 1일 · 1줄 · 종가 125.06 ≤ 한도라 결과 같음(miss 0)', [n, S.days, S.rows, S.miss, S.first], [1, 1, 1, 0, '2026-10-13']);
+  rw = mk(); S = S0(); MHV.rejApply(rw, 118.42, { mode: 'clamp', cap: 1.2 }, { c: 143 }, S, 'd');
+  eq('clamp: 종가 143 (한도 142.10 < 종가 ≤ 원래 145.09) → 그날 체결이 달라짐(miss) · 낮춘 줄은 안 됨 / 원래 줄은 됨', [S.days, S.miss, MHV.settle(rw, { c: 143 }).filter(f => f.side === 'B').map(f => f.tag), MHV.settle(mk(), { c: 143 }).filter(f => f.side === 'B').map(f => f.tag)], [1, 1, [], ['first']]);
+  rw = mk(); S = S0(); MHV.rejApply(rw, 118.42, { mode: 'skip', cap: 1.2 }, { c: 125.06 }, S, 'd');
+  eq('skip: 한도 넘는 줄 없앰 · 종가 ≤ 원래 가격이라 달라짐', [rw.map(r => r.tag), S.days, S.rows, S.miss], [['avg', 'x', 'tp', 'xall'], 1, 1, 1]);
+  rw = mk(); S = S0(); MHV.rejApply(rw, 118.42, { mode: 'skip', cap: 1.2 }, { c: 146 }, S, 'd');
+  eq('skip: 종가 146 > 원래 가격 → 어차피 안 됐을 주문 (miss 0)', [S.days, S.miss], [1, 0]);
+  rw = [{ side: 'S', m: 'LOC', p: 90, q: 5, tag: 'xrec' }, { side: 'S', m: 'MOC', p: 0, q: 5, tag: 'xall' }]; S = S0(); MHV.rejApply(rw, 118.42, { mode: 'clamp', cap: 1.2 }, { c: 120 }, S, 'd');
+  eq('매도 지정가 < 시가 × 0.8 → sell 셈만 (매도 줄은 그대로 · MOC 는 셈 안 함)', [S.sell, S.days, rw[0].p], [1, 0, 90]);
+  rw = mk(); S = S0(); MHV.rejApply(rw, 125, { mode: 'clamp', cap: 1.2 }, { c: 125 }, S, 'd');
+  eq('한도 안이면 아무것도 안 바뀜 (시가 125 → 한도 150)', [rw.map(r => r.p), S.days], [[145.09, 142.1, 0, 200, 0], 0]);
+  /* 주문 시점 가격 = 그날 시가 (종가가 아님): 둘째 날 시가 90 → 한도 108 < 상단 매수선 113 (종가 100 이면 한도 120 이라 거부 없음) */
+  { const cf = Object.assign(MHV.defaults('1.0', 'SOXL'), { splits: 10, big: 13 }), Dm = { d: ['2026-01-02', '2026-01-05', '2026-01-06', '2026-01-07'], c: [100, 100, 100, 100], h: [100, 100, 100, 100], o: [100, 100, 90, 100], dv: [0, 0, 0, 0] };
+    const om = { from: 1, to: 3, capital: 10000, norm: 'none', rows: true, fee: 0, sec: 0, divTax: 0, tax: null };
+    const Q = m => MHV.run(cf, Dm, Object.assign({}, om, { rej: m ? { mode: m, cap: 1.2 } : null }));
+    const N = Q(null), Cc = Q('clamp'), Sk = Q('skip');
+    eq('시가 90 인 날만 거부(1일·1줄) · 낮춰 넣으면 종가 100 ≤ 108 이라 같은 체결 · 건너뛰면 그 줄 없음', [Cc.rj.days, Cc.rj.rows, Cc.rj.miss, Cc.rj.first, Sk.rj.days, Sk.rj.miss, Cc.rows[1].rj, Cc.rows[1].bq === N.rows[1].bq, Sk.rows[1].bq < N.rows[1].bq],
+       [1, 1, 0, '2026-01-06', 1, 1, 1, true, true]);
+    const Dn = Object.assign({}, Dm, { o: null }), Q2 = MHV.run(cf, Dn, Object.assign({}, om, { rej: { mode: 'skip', cap: 1.2 } }));
+    eq('시가가 없으면 전날 종가(100)로 봄 → 거부 없음 · noO 3일', [Q2.rj.days, Q2.rj.noO, Q2.final === N.final], [0, 3, true]); }
+  /* run: 72루틴 설정(V1.0 · 72분할 · 상단 매수선 +13%) */
+  const c72 = Object.assign(MHV.defaults('1.0', 'SOXL'), { splits: 72, target: 52.5, big: 13, avgOff: 0, exhaust: 'recover', lines: 0 });
+  const base = { from: 1, to: SX.d.length - 1, capital: 100000, norm: 'auto', rows: true, fee: 0.0025, sec: 0.0000206, divTax: 0.15, tax: null };
+  const same = (A, B) => A.eq.length === B.eq.length && A.eq.every((v, i) => v === B.eq[i]) && A.final === B.final;
+  const R0 = MHV.run(c72, SX, base), Rn = MHV.run(c72, SX, Object.assign({}, base, { rej: null }));
+  check('rej 없음 = 지금까지와 같음 (날마다 평가금) · 통계 없음', same(R0, Rn) && R0.rj === null);
+  const Rc0 = MHV.run(c72, SX, Object.assign({}, base, { rej: { mode: 'clamp', cap: 1.2 } }));
+  check('시가 자료 없음 → 전날 종가로 봄: +13% 줄은 한도(+20%) 안 → 거부 0 · 결과 같음 · noO = 모든 날', same(Rc0, R0) && Rc0.rj.days === 0 && Rc0.rj.noO === base.to - base.from + 1, JSON.stringify(Rc0.rj));
+  const Rbig = MHV.run(Object.assign({}, c72, { big: 30 }), SX, Object.assign({}, base, { rej: { mode: 'skip', cap: 1.2 } }));
+  check('시가 없음 + 상단 매수선 +30% → 전날 종가 기준으로도 늘 한도 초과 (구조적 거부)', Rbig.rj.days > 100 && Rbig.rj.rows >= Rbig.rj.days, JSON.stringify(Rbig.rj));
+  /* 시가를 만들어 넣은 자료: 어떤 날은 '시가 = 종가 ÷ 1.15'(그 종가가 전날 × 1.08 아래인 날 → 한도 = 종가 × 1.0435 < 상단 매수선, 그리고 종가 ≤ 한도) */
+  const o = SX.c.map((c, i) => i && i % 3 === 0 && c < SX.c[i - 1] * 1.08 ? c / 1.15 : i ? SX.c[i - 1] : c), D2 = Object.assign({}, SX, { o });
+  const nTrig = o.filter((x, i) => i && i % 3 === 0 && SX.c[i] < SX.c[i - 1] * 1.08).length;
+  const Rc = MHV.run(c72, D2, Object.assign({}, base, { rej: { mode: 'clamp', cap: 1.2 } })), Rs = MHV.run(c72, D2, Object.assign({}, base, { rej: { mode: 'skip', cap: 1.2 } }));
+  check('clamp: 종가가 늘 한도 아래인 자료 → 거부는 있어도(' + Rc.rj.days + '일) 결과는 반영 안 함과 날마다 같음 · miss 0', Rc.rj.days > 50 && Rc.rj.miss === 0 && same(Rc, R0), JSON.stringify(Rc.rj));
+  check('skip: 같은 자료 → 거부된 날마다 그 주문은 체결됐을 것 (miss = days) · 결과 다름', Rs.rj.days > 50 && Rs.rj.miss === Rs.rj.days && !same(Rs, R0), JSON.stringify(Rs.rj));
+  check('skip: 거부된 날(행 rj > 0)엔 큰 줄(상단 매수선·처음 매수) 체결이 없음', Rs.rows.filter(r => r.rj > 0).every(r => !(r.tags.big || r.tags.first || r.tags.cap)), Rs.rows.filter(r => r.rj > 0 && (r.tags.big || r.tags.first || r.tags.cap)).length);
+  check('거부 줄이 생기는 날 ≤ 만든 갭 하락 날(' + nTrig + ')', Rc.rj.days <= nTrig && Rs.rj.days <= nTrig);
+  /* 다른 버전 · V4.0(MHE 주문표) · 정액 · 세금 장부 포함에서도 clamp(종가 ≤ 한도) = 반영 안 함, 현금 ≥ 0 */
+  const tx = { fx: () => 1300, method: 'fifo', harvest: false };
+  [['2.1', {}], ['2.2', {}], ['3.0', {}], ['4.0', {}], ['2.1', { ideal: true }], ['1.0', { big: 15 }]].forEach(([v, x]) => {
+    const cf = Object.assign(MHV.defaults(v, 'SOXL'), x), bb = Object.assign({}, base, { capital: 10000, tax: tx }), A = MHV.run(cf, D2, bb), B = MHV.run(cf, D2, Object.assign({}, bb, { rej: { mode: 'clamp', cap: 1.2 } })), C = MHV.run(cf, D2, Object.assign({}, bb, { rej: { mode: 'skip', cap: 1.2 } }));
+    check('V' + v + (x.ideal ? ' 정액' : '') + ': clamp(종가 ≤ 한도) = 반영 안 함 · skip 현금 ≥ 0 · 통계 일관 (거부 ' + B.rj.days + '일)', same(A, B) && B.rj.miss === 0 && C.rows.every(r => r.cash > -1e-6) && C.rj.miss <= C.rj.days && C.rj.rows >= C.rj.days, JSON.stringify([B.rj, C.rj]));
+  });
+}
 
 console.log((bad ? 'FAIL ' : 'OK ') + '무한매수법 버전 엔진 검사 ' + ok + ' / ' + (ok + bad));
 process.exit(bad ? 1 : 0);
