@@ -16586,7 +16586,7 @@ var VBD = (function () {
   /* 매매법 요약 + 시작 원금 + 세부옵션(접이식) */
   function paintSet() {
     var el = $('t7-set'); if (!el) return;
-    var tx = S.tax, h = '<div class="mb-h"><b>72매매법</b><button type="button" class="mh-btn mb-mini" data-act="reset" title="세부옵션을 처음 값으로">기본값</button></div>' +
+    var tx = S.tax, h = '<div class="mb-h"><b>72매매법</b><button type="button" class="mh-btn mb-mini" data-act="reset" title="세부옵션을 처음 값으로 (원금·기록 시작 방법은 그대로)">기본값</button></div>' +
       '<p class="t7-desc">SOXL 레버리지 종목을 72번 분할매수하여 규칙과 조건대로 매수·매도하는 방식이에요.</p>' +
       '<ul class="t7-rules"><li><b>사기</b> — 하루 한 번, 1회 매수금(원금 ÷ 72)어치를 반은 내 평단 가격, 반은 어제 종가 +13% 가격에 LOC로</li>' +
       '<li><b>팔기</b> — 평단보다 52.5% 오르면 전부 (지정가)</li>' +
@@ -16836,6 +16836,7 @@ var VBD = (function () {
     ED.rows.forEach(function (r) {
       if (!r.on) return; var q = num(r.q), p = num(r.p);
       if (!(q > 0) || !(p > 0)) { bad = '체크한 줄의 수량과 가격을 0보다 크게 넣어 주세요'; return; }
+      if (Math.abs(q - Math.round(q)) > 1e-9) { bad = '수량은 1주 단위(정수)로 넣어 주세요 — 72매매법은 1주 단위로 주문해요'; return; }
       out.push(fixFill({ side: r.side, p: p, q: q, tag: r.extra ? 'man' : r.tag }));
     });
     var sq = out.filter(function (f) { return f.side === 'S'; }).reduce(function (a, f) { return a + f.q; }, 0), hold = JR.days.filter(function (y) { return y.d < ED.d; }).slice(-1)[0];
@@ -16974,7 +16975,8 @@ var VBD = (function () {
       S.to = ''; saveS(); paintBt(); return;
     }
     switch (d.act) {
-      case 'reset': if (confirm('세부옵션과 시작 원금을 처음 값으로 되돌릴까요? (기록은 그대로예요)')) { var keep = { from: S.from, to: S.to }; S = Object.assign(defS(), keep); onSet(true); } return;
+      case 'reset': if (confirm('세부옵션(1회 매수금·새 사이클·수수료·양도세·분배금)을 처음 값으로 되돌릴까요? 시작 원금·기록 시작 방법은 그대로이고, 기록이 있으면 바뀐 조건으로 다시 계산돼요.')) {   /* 내 계좌를 나타내는 값(원금·중간 진입)·백테스트 기간은 남김 */
+        var keep = { cap: S.cap, entry: S.entry, mAvg: S.mAvg, mQty: S.mQty, mT: S.mT, mCash: S.mCash, from: S.from, to: S.to }; S = Object.assign(defS(), keep); onSet(true); } return;
       case 'refresh': t.disabled = true; load().then(function () { M.sig = sigOf(); paintLive(); sumSet(); paintPane(); }); return;
       case 'jstart': jStart(); return;
       case 'jdel': if (confirm('72매매법 기록을 모두 지울까요? (되돌릴 수 없어요 — 먼저 백업 파일을 받아 두세요)')) { J = null; saveJ(); JR = null; paintPane(); } return;

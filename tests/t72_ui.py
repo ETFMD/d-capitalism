@@ -121,6 +121,8 @@ LOG_JS = """async () => {
   $('#t7-sheet [data-act="ed-add"]').click(); await W(60);
   const ks2 = $$('#t7-sheet [data-eq]'), k2 = ks2.length - 1; $('#t7-sheet [data-eside="' + k2 + '"]').value = 'S'; ks2[k2].value = '999'; $('#t7-sheet [data-act="ed-save"]').click(); await W(80);
   ok('아침 보유보다 많이 팔기 → 저장 안 됨 · 안내', $('#t7-sheet .mh-sheet') && /팔 수 없어요/.test($('#t7-ed-msg').textContent), $('#t7-ed-msg') && $('#t7-ed-msg').textContent);
+  ks2[k2].value = '1.5'; $('#t7-sheet [data-eside="' + k2 + '"]').value = 'B'; $('#t7-sheet [data-act="ed-save"]').click(); await W(80);
+  ok('소수 수량 1.5주 → 저장 안 됨 · 1주 단위 안내', $('#t7-sheet .mh-sheet') && /1주 단위/.test($('#t7-ed-msg').textContent), $('#t7-ed-msg') && $('#t7-ed-msg').textContent);
   document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await W(60);
   ok('Esc → 수정 창 닫힘', !$('#t7-sheet .mh-sheet'));
   /* 되돌리기 */
@@ -217,6 +219,13 @@ def check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS):
     s = page.evaluate("() => T72debug.S()")
     if not (s['feeMode'] == 'custom' and s['feeC'] == 0.07 and s['restart'] == 'rsi' and s['harvest']):
         fail('72', '설정이 새로 연 뒤 남지 않음 %r' % s)
+    # [기본값] — 세부옵션만 처음 값 · 시작 원금·기록 시작 방법(중간 진입 값)은 그대로
+    page.evaluate("() => { const c = document.getElementById('t7-cap'); c.value = '15000'; c.dispatchEvent(new Event('input', { bubbles: true })); document.querySelector('#t7-set [data-k=\"entry\"][data-v=\"mid\"]').click(); }")
+    page.once('dialog', lambda d: d.accept())
+    page.click('#t7-set [data-act="reset"]'); page.wait_for_timeout(200)
+    s = page.evaluate("() => T72debug.S()")
+    if not (s['feeMode'] == 'def' and s['restart'] == 'next' and not s['harvest'] and s['cap'] == 15000 and s['entry'] == 'mid'):
+        fail('72', '[기본값]이 세부옵션만 되돌리지 않음 (원금·기록 시작 방법은 그대로여야) %r' % s)
     # 기록 (원금 $20,000 · RSI 새 사이클 · 수수료 기본 0.75%)
     _fresh(page, base, "() => localStorage.setItem('t72-set', JSON.stringify({ cap: 20000, restart: 'rsi' }))")
     page.wait_for_function('window.T72debug && T72debug.M.D', timeout=90000)
