@@ -7,7 +7,9 @@
 'use strict';
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
 const ROOT = path.join(__dirname, '..');
-const [TK, PER, OBJN] = process.argv.slice(2);
+const [TK, PER, OBJN, VERF] = process.argv.slice(2);
+const CONS = OBJN === 'cons';   /* 제약 탐색: 이웃 중앙 MDD·가운데 MDD·원금 10만$ MDD ≥ −60% 안에서 min(이웃 중앙 CAGR, 10만$ CAGR) 최대 · 하방 LOC 10줄 이하 */
+const LIM = -0.60;
 const TH = 0.02;
 function engine() {
   const src = fs.readFileSync(path.join(ROOT, 'src', 'index.html'), 'utf8');
@@ -48,7 +50,7 @@ if (process.env.OPT_WORKER) {
   return;
 }
 const W = Math.max(1, Number(process.env.OPT_W) || os.cpus().length), workers = [], pend = {}; let seq = 0;
-for (let k = 0; k < W; k++) { const w = cp.fork(__filename, [TK, PER, OBJN], { env: Object.assign({}, process.env, { OPT_WORKER: '1' }) }); w.on('message', m => { const f = pend[m.id]; delete pend[m.id]; f(m.out); }); workers.push(w); }
+for (let k = 0; k < W; k++) { const w = cp.fork(__filename, [TK, PER, OBJN, VERF || ''], { env: Object.assign({}, process.env, { OPT_WORKER: '1' }) }); w.on('message', m => { const f = pend[m.id]; delete pend[m.id]; f(m.out); }); workers.push(w); }
 const pack = r => ({ cagr: r[0], mdd: r[1], exh: r[2], cyc: r[3], nob: r[4], lack0: r[5], ext: r[6], fin: r[7], win: r[8], tsell: r[9] });
 function evalBatch(list, gross) {
   if (!list.length) return Promise.resolve([]);
@@ -88,10 +90,12 @@ const CRED = OBJN === 'cagrC' || OBJN === 'calmarC';
 async function smoothMany(cands, nbf) {
   const groups = cands.map(nbf || nb25), flat = [].concat(...groups);
   cands.forEach(p => flat.push(p));   /* 가운데 설정 — 살 수 없는 날(1주 값 > 주문 금액) 있는지 */
+  if (CONS) cands.forEach(p => flat.push(Object.assign({}, p, { cap: 100000 })));
   if (CRED) cands.forEach(p => { flat.push(Object.assign({}, p, { ser: 'act' }), Object.assign({}, p, { ser: 'hyb' })); });
   const res = await evalMany(flat);
   let k = 0; const out = groups.map(g => { const rs = res.slice(k, k + g.length); k += g.length; return { n: g.length, cagrMed: med(rs.map(r => r.cagr)), mddMed: med(rs.map(r => r.mdd)), cagrMin: Math.min(...rs.map(r => r.cagr)), mddMin: Math.min(...rs.map(r => r.mdd)) }; });
   out.forEach(s => { const c = res[k++]; s.nob = c.nob; s.cCagr = c.cagr; s.cMdd = c.mdd; });
+  if (CONS) out.forEach(s => { const c = res[k++]; s.c100 = c.cagr; s.m100 = c.mdd; });
   if (CRED) out.forEach(s => { const a = res[k++], h = res[k++]; s.dh = h.cagr - a.cagr; s.actCagr = a.cagr; s.cred = Math.abs(s.dh) <= TH; });
   return out;
 }
@@ -103,11 +107,13 @@ const t0 = Date.now(), log = s => console.log(((Date.now() - t0) / 1000).toFixed
   const out = { tk: TK, per: PER, objn: OBJN, floor: REG.floor, floorC: REG.floorC, th: TH, runs: [] };
   /* 모든 목표: 가운데 설정이 '살 수 없는 날' 없이 원래 방법대로 돌아가야 함(nob = 0, 화면에 ⚠ 없음) */
   const OBJ = { cagr: s => s.nob === 0 ? s.cagrMed : -Infinity, calmar: s => s.nob === 0 && s.cagrMed >= REG.floor && s.mddMed < 0 ? s.cagrMed / -s.mddMed : -Infinity,
+                cons: s => s.nob !== 0 ? -Infinity : Math.min(s.cagrMed, s.c100) - 10 * Math.max(0, LIM - Math.min(s.mddMed, s.cMdd, s.m100)),
                 cagrC: s => s.nob === 0 && s.cred ? s.cagrMed : -Infinity, calmarC: s => s.nob === 0 && s.cred && s.cagrMed >= REG.floorC && s.mddMed < 0 ? s.cagrMed / -s.mddMed : -Infinity };
-  const STARTS = CRED ? (REG.startsC || []).filter(s => s.obj === OBJN) : REG.starts.filter(s => s.obj === OBJN);
+  const STARTS = CONS ? (REG.startsK || []).filter(s => !VERF || s.ver === VERF) : CRED ? (REG.startsC || []).filter(s => s.obj === OBJN) : REG.starts.filter(s => s.obj === OBJN);
   for (const st of STARTS.slice(0, +process.env.OPT_NSTART || STARTS.length)) {
     const v = st.ver, COMBOS = combos(v), DIMS = dimsOf(v), obj = OBJN;
     let cur = Object.assign({ ver: v, big: 15, lines: 8, shares: 1, part: 5, capP: 5, avgOff: 0, money: v === '3.0' ? 'half' : v === '4.0' ? 'cash' : 'compound', exhaust: 'official', restart: 'next', tround: 'r2', rebase: false, noBig: false, method: 'fifo', harvest: false }, st.p);
+    if (CONS && cur.ver !== '1.0' && cur.ver !== '2.0') cur.lines = Math.min(Math.max(cur.lines, cur.ver === '4.0' ? 1 : 0), 10);   /* 하방 LOC 10줄 이하 */
     let curS = (await smoothMany([cur]))[0]; const trace = [];
     for (let round = 1; round <= (+process.env.OPT_ROUNDS || 4); round++) {
       let improved = false;
@@ -117,7 +123,7 @@ const t0 = Date.now(), log = s => console.log(((Date.now() - t0) / 1000).toFixed
         const win = a => { if (round === 1) return a; const i = a.findIndex(x => Math.abs(x - cur[dim]) < 1e-9); return i < 0 ? a : a.slice(Math.max(0, i - 12), i + 13); };
         if (dim === 'combo') cand = COMBOS.map(c => Object.assign({}, cur, c));
         else if (dim === 'shares' && !(cur.lines > 0)) continue;
-        else if (dim === 'lines') cand = win(v === '4.0' ? range(1, 80, 1) : range(0, 80, 1)).map(x => Object.assign({}, cur, { lines: x }));
+        else if (dim === 'lines') cand = win(v === '4.0' ? range(1, CONS ? 10 : 80, 1) : range(0, CONS ? 10 : 80, 1)).map(x => Object.assign({}, cur, { lines: x }));
         else cand = win(VALS[dim]).map(x => Object.assign({}, cur, { [dim]: x }));
         const sm = await smoothMany(cand);
         let bi = -1, bs = OBJ[obj](curS);
@@ -136,6 +142,6 @@ const t0 = Date.now(), log = s => console.log(((Date.now() - t0) / 1000).toFixed
   }
   out.nEval = nEval; out.sec = (Date.now() - t0) / 1000;
   fs.mkdirSync(path.join(__dirname, 'out'), { recursive: true });
-  fs.writeFileSync(path.join(__dirname, 'out', 'rob_' + TK + '_' + PER + '_' + OBJN + '.json'), JSON.stringify(out));
+  fs.writeFileSync(path.join(__dirname, 'out', 'rob_' + TK + '_' + PER + '_' + OBJN + (VERF ? '_' + VERF : '') + '.json'), JSON.stringify(out));
   log('끝 · 계산 ' + nEval + '번'); workers.forEach(w => w.kill());
 })().catch(e => { console.error(e); workers.forEach(w => w.kill()); process.exit(1); });
