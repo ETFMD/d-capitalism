@@ -94,7 +94,7 @@ HOME_ECOS_REFRESH_DAYS = 7
 ETF_CAGR = ['QQQ', 'SPY', 'SOXX', 'SSO', 'ROM', 'USD', 'QLD', 'TQQQ', 'TECL', 'SOXL', 'SPXL', 'UPRO']
 ETFCAGR = os.path.join(ROOT, 'etfcagr.json')
 ETFCAGR_MAX_AGE_H = 6
-ETFCAGR_HIGH = ['TQQQ', 'SOXL']   # 무한매수법·밸류리밸런싱 백테스트용 일별 고가(h)·저가(l)도 저장 (지정가 매도는 장중 고가, 지정가 매수는 장중 저가에 닿으면 체결)
+ETFCAGR_HIGH = ['TQQQ', 'SOXL']   # 무한매수법·밸류리밸런싱 백테스트용 일별 고가(h)·저가(l)·시가(o)도 저장 (지정가 매도는 장중 고가, 지정가 매수는 장중 저가에 닿으면 체결 · 시가 = 주문 거부 계산의 주문 시점 가격)
 ETFCAGR_VERSION = 2   # 2: 월봉 오류 수정 → 형식이 바뀌면 올려서 즉시 다시 수집
 # 야후는 range=max 로 요청하면 긴 종목을 '월봉'으로 바꿔 줌 → 항상 기간(period1~period2)을 지정해 일봉을 받음
 DAILY_ALL = 'period1=504921600&period2={now}&interval=1d&events=div'   # 1986-01-01 ~ 현재
@@ -664,21 +664,34 @@ def etfcagr_due(age_h, now=None):
     return ny.weekday() < 5 and ny >= settle and now - age_h * 3600 < settle.timestamp()
 
 
+def ok_open(op, hi, lo, cl):
+    """시가 확인 — 저가~고가 밖으로 0.5% 넘게 벗어난 값은 0(모름) · 조금 벗어나면 그 안으로 (화면 MBT.okOpen 과 같은 규칙)"""
+    if op is None or not op > 0:
+        return 0
+    op, cl = float(op), float(cl)
+    H = max(float(hi), cl) if hi is not None and hi > 0 else 0
+    L = min(float(lo), cl) if lo is not None and lo > 0 else 0
+    if (H and op > H * 1.005) or (L and op < L * 0.995):
+        return 0
+    return round(H if H and op > H else L if L and op < L else op, 4)
+
+
 def etfcagr_series(sym):
-    """야후 상장 이후 일봉 한 종목 → {d0, dd, c, div(, h, l)} · 종가가 확정되지 않은 오늘 일봉(장중 값)은 넣지 않음"""
+    """야후 상장 이후 일봉 한 종목 → {d0, dd, c, div(, h, l, o)} · 종가가 확정되지 않은 오늘 일봉(장중 값)은 넣지 않음"""
     res = yahoo_chart(sym, DAILY_ALL.format(now=int(time.time())))
     ny = lambda t: datetime.datetime.fromtimestamp(t, NY).date().toordinal() - 719163   # 미국 거래일 날짜
-    pts, his, los = {}, {}, {}
+    pts, his, los, ops = {}, {}, {}, {}
     q = ((res.get('indicators') or {}).get('quote') or [{}])[0]
     nts = len(res.get('timestamp') or [])
     open0 = open_session_start(res)
-    for t, cl, hi, lo in zip(res.get('timestamp') or [], q.get('close') or [], q.get('high') or [None] * nts, q.get('low') or [None] * nts):
+    for t, cl, hi, lo, op in zip(res.get('timestamp') or [], q.get('close') or [], q.get('high') or [None] * nts, q.get('low') or [None] * nts, q.get('open') or [None] * nts):
         if open0 is not None and t >= open0:
             continue                                   # 아직 끝나지 않은 오늘 일봉 (장중 값)
         if cl is not None and cl > 0:
             pts[ny(t)] = round(float(cl), 4)
             his[ny(t)] = round(max(float(hi), float(cl)), 4) if hi is not None and hi > 0 else round(float(cl), 4)
             los[ny(t)] = round(min(float(lo), float(cl)), 4) if lo is not None and lo > 0 else round(float(cl), 4)
+            ops[ny(t)] = ok_open(op, hi, lo, cl)
     days = sorted(pts)
     if len(days) < 250:
         raise ValueError(f'일봉 부족 ({len(days)}개)')
@@ -691,6 +704,7 @@ def etfcagr_series(sym):
     if sym in ETFCAGR_HIGH:
         out['h'] = [his[d] for d in days]   # 같은 날짜 순서의 일별 고가 (고가 없는 날은 종가)
         out['l'] = [los[d] for d in days]   # 일별 저가 (저가 없는 날은 종가)
+        out['o'] = [ops[d] for d in days]   # 일별 시가 (없거나 저가~고가 밖으로 0.5% 넘게 벗어나면 0 = 모름 · 증권사 주문 거부 계산의 '주문 시점 가격')
     return out
 
 
@@ -707,7 +721,7 @@ def build_etfcagr():
     series = dict(old.get('series') or {})
     if old.get('v') != ETFCAGR_VERSION:
         series = {}                               # 이전 형식(월봉 섞임)은 버리고 새로 수집
-    whole = set(ETF_CAGR) <= set(series) and all(series[t].get('h') and series[t].get('l') for t in ETFCAGR_HIGH)
+    whole = set(ETF_CAGR) <= set(series) and all(series[t].get('h') and series[t].get('l') and series[t].get('o') for t in ETFCAGR_HIGH)
     force = '--etfcagr' in sys.argv or not whole
     if not force and not etfcagr_due(age_h):
         print(f'  etfcagr.json: 최근 갱신({age_h:.1f}시간 전) — 건너뜀')

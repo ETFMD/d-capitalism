@@ -1137,6 +1137,23 @@ html[data-theme="light"] #page-vrbt{--m-ac-s:rgba(49,130,246,.10)}
 .mh-ordhl-k{font-size:10.5px;font-weight:600;letter-spacing:.02em;color:var(--m-ac)}
 .mh-ordhl-t{font-size:17px;font-weight:800;color:var(--m-tx);margin-top:2px}
 .mh-ordhl .mh-obox{padding:11px 12px}.mh-ordhl .mh-obox .p{font-size:15px}
+/* ── [MUHAN] ㉝ 증권사 주문 거부 — 오늘의 주문 한도 경고(P.rejWarn) · 백테스트 처리 비교(P.btRej) ── */
+.mh-rjw{margin:-2px 0 8px;padding:7px 10px;border-radius:9px;background:rgba(254,152,0,.10);border:1px solid rgba(254,152,0,.34);font-size:12px;line-height:1.45;color:var(--m-tx)}
+.mh-rjw b{color:var(--m-warn)}
+.mh-rjsum{margin:8px 0 2px;padding:8px 10px;border-radius:10px;background:var(--m-s2);color:var(--m-t2);font-size:12px;line-height:1.5}
+.mh-rjsum.warn{background:rgba(254,152,0,.10);border:1px solid rgba(254,152,0,.34);color:var(--m-tx)}
+.mh-rjc{margin-top:10px;padding:10px 10px 8px;border:1px solid var(--m-bd);border-radius:12px}
+.mh-rjc-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;font-size:12.5px}.mh-rjc-h .mh-faint{font-size:11px}
+.mh-rjc-sel{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 6px}.mh-rjc-sel .mh-btn{padding:4px 9px;font-size:11px}
+.mh-rjc-w{overflow-x:auto}
+.mh-rjt{width:100%;min-width:0;border-collapse:collapse;font-size:12px;font-family:var(--mono)}
+.mh-rjt th,.mh-rjt td{padding:6px 5px;min-width:0;border-bottom:1px solid var(--m-bd);text-align:right;white-space:nowrap}
+.mh-rjt thead th{font-family:var(--font);font-weight:600;color:var(--m-t2);font-size:11px;vertical-align:bottom}
+.mh-rjt tbody th{font-family:var(--font);font-weight:600;text-align:left;white-space:normal;min-width:4.6em}
+.mh-rjt small{display:block;font-size:10px;color:var(--m-t3);font-weight:400}
+.mh-rjt tr.on th,.mh-rjt tr.on td{background:var(--m-ac-s)}
+.mh-rjt tbody tr:last-child th,.mh-rjt tbody tr:last-child td{border-bottom:0}
+@media (max-width:360px){.mh-rjt{font-size:11px}.mh-rjt th,.mh-rjt td{padding:5px 3px}.mh-rjc{padding:9px 8px 7px}}
 body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-overlay) .dsh-fab,body:has(.mh-overlay) .kk-fabs,body:has(.mh-cel) .dsh-fab,body:has(.mh-cel) .kk-fabs{opacity:0;pointer-events:none}
 /* ═══ [MUHAN-BT] 무한매수법 백테스트 시뮬레이터 — 스타일 (.mh-* 부품 재사용 · 상승 빨강/하락 파랑) ═══ */
 #page-muhanbt .layout.mb-lay{grid-template-columns:372px minmax(0,1fr);gap:16px}
@@ -1189,6 +1206,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
 .mb-cnt{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;font-size:12px;color:var(--m-t2)}.mb-cnt b{font-family:var(--mono);color:var(--m-tx);font-size:13px}
 .mb-bh{margin-top:10px;padding-top:10px;border-top:1px dashed var(--m-bd);font-size:12px;color:var(--m-t2)}.mb-bh b{font-family:var(--mono)}.mb-bh small{color:var(--m-t3)}
 .mb-pre{font-size:12.5px;line-height:1.65;border-color:rgba(254,152,0,.35)!important}.mb-pre p{margin:6px 0 0;color:var(--m-t2)}.mb-pre .mb-pre-sum{color:var(--m-tx)}
+.mb-rj{font-size:12.5px}.mb-rj-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px}.mb-rj-h .mh-faint{font-size:11px}.mb-rj .mb-t tr.on td{background:var(--m-ac-s)}.mb-rj .mb-t tr.on td:first-child{font-weight:700}
 .mb-ch-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .mb-leg{display:flex;flex-wrap:wrap;gap:4px 12px;margin:8px 0 4px;font-size:11px;color:var(--m-t2)}.mb-leg i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}.mb-leg i.dash{height:0;border-top:2px dashed;background:none}
 .mb-cv{position:relative;height:340px}@media(max-width:560px){.mb-cv{height:260px}}.mb-cv canvas{max-width:100%}
