@@ -3,7 +3,7 @@
    · 최고 CAGR(한 점 그대로) · 안정 최고(이웃 25점 중앙값) · 균형(이웃 중앙 CAGR ÷ |이웃 중앙 MDD|, 이웃 중앙 CAGR ≥ 안정 최고의 절반)
    · 상장 전 포함은 '재현 믿음도' — dh = CAGR(상장 뒤 실제 종가 + 상장 전과 같은 추정 고가) − CAGR(실제) (추정 고가 탓),
      dSyn = CAGR(상장 뒤 재현 종가·추정 고가) − CAGR(실제) (재현 가격 전체 탓 — 경로가 조금만 달라도 결과가 크게 바뀌는 설정을 걸러 냄)
-     → |dh| ≤ 2%p 이고 |dSyn| ≤ 5%p 인 것 중 최고도 따로
+     → |dh| ≤ 2%p 이고 |dSyn| ≤ 5%p 이며 세전 dSyn(시뮬레이터 '상장 전 백테스트 오차' ② · 화면 ⚠ 알림 기준) < 5%p 인 것 중 최고도 따로
    · 다른 기간 시험: 상장 이후에서 고른 설정을 재현 구간만(처음~상장 전날)에서, 상장 전 포함에서 고른 설정을 상장 이후에서
    · 프런티어(MDD 한도별 최고 CAGR) · 버전별 표(CSV) */
 'use strict';
@@ -33,10 +33,19 @@ const DS = {}; const ds = (tk, k) => { if (DS[tk + k]) return DS[tk + k]; const 
 const CDIR = process.env.CACHE || OUT, CACHE = new Map(), NEW = {};
 if (fs.existsSync(CDIR)) for (const f of fs.readdirSync(CDIR)) if (/^cache.*\.json$/.test(f)) for (const [k, v] of Object.entries(JSON.parse(fs.readFileSync(path.join(CDIR, f), 'utf8')))) CACHE.set(k, v);
 const ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null;
+/* 고정할 설정 — 환경 변수 FIX='avgOff=0' 처럼 '이름=값' 을 쉼표로 (예: 평단 LOC 괴리율 0% 로 두고 탐색) · 고정한 값은 탐색하지 않고 출발점·기본값에도 그 값 */
+const FIX = (process.env.FIX || '').split(',').map(s => s.trim()).filter(Boolean).reduce((o, kv) => { const i = kv.indexOf('='), k = kv.slice(0, i).trim(), v = kv.slice(i + 1).trim(); o[k] = v === 'true' ? true : v === 'false' ? false : v !== '' && isFinite(+v) ? +v : v; return o; }, {});
 function run(tk, D, p, from, to) {
   to = to == null ? D.d.length - 1 : to; from = from || 1;
   const ck = D._k + '|' + from + '|' + to + '|' + kp(p); if (CACHE.has(ck)) return CACHE.get(ck);
   const o = run0(tk, D, p, from, to); CACHE.set(ck, o); NEW[ck] = o; return o;
+}
+/* 세전(수수료·세금 없음) — 시뮬레이터 '상장 전 백테스트 오차' ② 와 같은 조건 (화면 알림 '상장 전 구간 결과는 믿기 어려워요' 는 이 값 |d| ≥ 5%p) */
+function runG(tk, D, p) {
+  const ck = 'G|' + D._k + '|' + kp(p); if (CACHE.has(ck)) return CACHE.get(ck);
+  const R = MHV.run(cfgOf(tk, p), D, { from: 1, capital: 10000, norm: 'auto', rows: false });
+  const yrs = (dn(D.d[D.d.length - 1]) - dn(D.d[0])) / 365.25, o = { cagr: R.final > 0 ? Math.pow(R.final / 10000, 1 / yrs) - 1 : -1 };
+  CACHE.set(ck, o); NEW[ck] = o; return o;
 }
 function run0(tk, D, p, from, to) {
   const R = MHV.run(cfgOf(tk, p), D, { from, to, capital: 10000, norm: 'auto', rows: false, fee: 0.0007, sec: 0.0000206, divTax: 0.15, tax: { fx: i => D.fx[i], method: p.method || 'fifo', harvest: !!p.harvest } });
@@ -46,7 +55,7 @@ function run0(tk, D, p, from, to) {
 }
 function bh(D, from, to) { to = to == null ? D.d.length - 1 : to; from = from || 1; const days = dn(D.d[to]) - dn(D.d[from - 1]); let pk = -Infinity, m = 0; for (let i = from; i <= to; i++) { const e = D.c[i]; if (e > pk) pk = e; const d = e / pk - 1; if (d < m) m = d; } return { cagr: Math.pow(D.c[to] / D.c[from - 1], 365.25 / days) - 1, mdd: m }; }
 const med = a => { const b = a.slice().sort((x, y) => x - y), n = b.length; return n % 2 ? b[n >> 1] : (b[n / 2 - 1] + b[n / 2]) / 2; };
-const CRED_OK = x => x.dh != null && Math.abs(x.dh) <= 0.02 && Math.abs(x.dSyn) <= 0.05;   /* 상장 전 포함 '믿을 만함' */
+const CRED_OK = x => x.dh != null && Math.abs(x.dh) <= 0.02 && Math.abs(x.dSyn) <= 0.05 && (x.dSynG == null || Math.abs(x.dSynG) < 0.05);   /* 상장 전 포함 '믿을 만함' (+ 화면의 ⚠ 알림이 뜨지 않는 것) */
 function neigh(tk, D, p) { const rs = []; for (const dsp of [-2, -1, 0, 1, 2]) for (const dt of [-1, -0.5, 0, 0.5, 1]) { const s = p.splits + dsp, t = Math.round((p.target + dt) * 2) / 2; if (s >= 2 && s <= 100 && t >= 0.5 && t <= 100) rs.push(run(tk, D, Object.assign({}, p, { splits: s, target: t }))); }
   return { n: rs.length, cagrMed: med(rs.map(r => r.cagr)), mddMed: med(rs.map(r => r.mdd)), cagrMin: Math.min(...rs.map(r => r.cagr)), cagrMax: Math.max(...rs.map(r => r.cagr)) }; }
 const KEYS = ['ver', 'splits', 'target', 'big', 'lines', 'shares', 'part', 'capP', 'avgOff', 'money', 'exhaust', 'restart', 'tround', 'rebase', 'noBig', 'method', 'harvest'];
@@ -56,7 +65,7 @@ const list = (dir, re) => { const o = []; if (!dir || dir === '-' || !fs.existsS
 const C1 = list(D1, /^(TQQQ|SOXL|UPRO|TECL)_(act|pre)_\d\.\d\.json$/).map(f => JSON.parse(fs.readFileSync(f, 'utf8')));
 const C2 = list(D2, /^rob_(TQQQ|SOXL|UPRO|TECL)_(act|pre)_(cagr|calmar|cagrC|calmarC)\.json$/).map(f => JSON.parse(fs.readFileSync(f, 'utf8')));
 const f32 = b64 => { const b = Buffer.from(b64, 'base64'); return new Float32Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); };
-const RES = {}, CSV = [['종목', '기간', '버전', '뽑힘', '어디서 나온 후보', 'CAGR(세후)', 'MDD', '이웃 중앙 CAGR', '이웃 중앙 MDD', '이웃 최저 CAGR', '추정 고가 영향 dh(%p)', '재현 전체 차이 dSyn(%p)', '살 수 없는 날(일)', '분할', '목표%', '큰수%', '하방 LOC 줄', '줄당 주식', '1차 매도%', '큰수 상한%', '평단 괴리%', '1회 매수금', '소진 대응', '새 사이클', 'T 반올림', '다시 정하기', '큰수 미사용', '취득가액', '연말 절세', '시뮬레이터 주소']];
+const RES = {}, CSV = [['종목', '기간', '버전', '뽑힘', '어디서 나온 후보', 'CAGR(세후)', 'MDD', '이웃 중앙 CAGR', '이웃 중앙 MDD', '이웃 최저 CAGR', '추정 고가 영향 dh(%p)', '재현 전체 차이 dSyn(%p)', '화면 오차 ② 세전 d(%p)', '살 수 없는 날(일)', '분할', '목표%', '큰수%', '하방 LOC 줄', '줄당 주식', '1차 매도%', '큰수 상한%', '평단 괴리%', '1회 매수금', '소진 대응', '새 사이클', 'T 반올림', '다시 정하기', '큰수 미사용', '취득가액', '연말 절세', '시뮬레이터 주소']];
 const hashOf = (tk, p, per) => { const h = ['v=' + p.ver, 't=' + tk, 'c=10000', 'sp=' + p.splits, 'tg=' + p.target];
   if (p.ver === '2.0' || p.ver === '2.1') h.push('pt=' + p.part, 'cp=' + p.capP); h.push('bg=' + p.big, 'fe=0.07');
   if (p.ver !== '1.0' && p.ver !== '2.0') h.push('ln=' + p.lines, 'sh=' + p.shares); if (p.ver === '4.0' && p.noBig) h.push('nb=1');
@@ -68,15 +77,15 @@ for (const tk of ['TQQQ', 'SOXL', 'UPRO', 'TECL']) for (const per of ['act', 'pr
   if (ONLY && !ONLY.includes(tk)) continue;
   const cells = C1.filter(c => c.tk === tk && c.per === per); if (!cells.length) continue;
   const D = ds(tk, per), cand = new Map();
-  const add = (p, src, extra) => { p = clean(p); const k = kp(p); if (!cand.has(k)) cand.set(k, Object.assign({ p, src: [src] }, extra || {})); else cand.get(k).src.push(src); };
+  const add = (p, src, extra) => { p = clean(p); if (Object.keys(FIX).some(k => p[k] !== undefined && p[k] !== FIX[k])) return; const k = kp(p); if (!cand.has(k)) cand.set(k, Object.assign({ p, src: [src] }, extra || {})); else cand.get(k).src.push(src); };
   for (const c of cells) {
     for (const obj of ['cagr', 'calmar']) { const f = c.final[obj]; if (!f) continue; add(f.raw.p, '1단계 ' + obj + ' 최고'); add(f.robust.p, '1단계 ' + obj + ' 안정'); f.cands.forEach(x => add(Object.assign({ ver: c.ver, method: 'fifo', harvest: false }, x.p), '1단계 ' + obj + ' 후보')); }
     add(Object.assign({}, c.default.p), '원문 기본값');
   }
-  for (const r of C2.filter(c => c.tk === tk && c.per === per)) for (const x of r.runs) add(x.p, '2단계 ' + x.obj);
+  for (const r of C2.filter(c => c.tk === tk && c.per === per)) for (const x of r.runs) add(x.p, r.label || '2단계 ' + x.obj);   /* label: 이전 탐색 결과를 후보로 함께 넣을 때 출처 이름 */
   /* 모든 후보: 가운데 · 이웃 25점 · (상장 전 포함) 재현 믿음도 */
   const DA = ds(tk, 'act'), DL = per === 'pre' ? ds(tk, 'late') : null, DH = per === 'pre' ? ds(tk, 'hyb') : null, rows = [];
-  const credOf = p => { const a = run(tk, DA, p), h = run(tk, DH, p), l = run(tk, DL, p); return { dh: h.cagr - a.cagr, dSyn: l.cagr - a.cagr, actCagr: a.cagr }; };
+  const credOf = p => { const a = run(tk, DA, p), h = run(tk, DH, p), l = run(tk, DL, p); return { dh: h.cagr - a.cagr, dSyn: l.cagr - a.cagr, dSynG: runG(tk, DL, p).cagr - runG(tk, DA, p).cagr, actCagr: a.cagr }; };
   for (const [, c] of cand) {
     c.r = run(tk, D, c.p); c.n = neigh(tk, D, c.p);
     if (DH) Object.assign(c, credOf(c.p));
@@ -105,7 +114,7 @@ for (const tk of ['TQQQ', 'SOXL', 'UPRO', 'TECL']) for (const per of ['act', 'pr
     for (const x of sm) { if (!(x[1] >= L)) continue; if (nP >= 5 && (!DH || nC >= 5)) break; if (++tried > 400) break;
       const p = pOf(x), k = kp(p), o = infoOf(p); if (o.r.nob > 0) continue;
       const isC = DH && CRED_OK(o); if (nP >= 5 && !isC) continue;
-      if (!pool.has(k)) pool.set(k, Object.assign({ p, src: ['1단계 격자(매끈한 지도)'], r: o.r, n: neigh(tk, D, p) }, DH ? { dh: o.dh, dSyn: o.dSyn, actCagr: o.actCagr } : {}));
+      if (!pool.has(k)) pool.set(k, Object.assign({ p, src: ['1단계 격자(매끈한 지도)'], r: o.r, n: neigh(tk, D, p) }, DH ? { dh: o.dh, dSyn: o.dSyn, dSynG: o.dSynG, actCagr: o.actCagr } : {}));
       nP++; if (isC) nC++; } }
   /* 뽑기 — 후보 전부(1·2단계 + 격자 지도 후보) 중에서.
      살 수 없는 날(1주 값 > 주문 금액 — 화면에 ⚠)이 있는 설정은 원래 방법대로 돌지 않으므로 뽑지 않음 (rawAny 만 참고로) */
@@ -133,7 +142,7 @@ for (const tk of ['TQQQ', 'SOXL', 'UPRO', 'TECL']) for (const per of ['act', 'pr
   const tag = new Map(); const tg = (x, t) => { if (!x) return; const k = kp(x.p); tag.set(k, (tag.get(k) ? tag.get(k) + ' · ' : '') + t); };
   tg(raw, '최고 CAGR'); if (rawAny !== raw) tg(rawAny, '최고 CAGR(⚠ 살 수 없는 날 있음)'); tg(rob, '안정 최고'); tg(bal, '균형'); tg(credRob, '믿을 만한 안정 최고'); tg(credBal, '믿을 만한 균형');
   front.forEach(f => { tg(f.plain, '이웃 MDD ≥ ' + Math.round(f.L * 100) + '% 최고'); tg(f.cred, '믿을 만한 이웃 MDD ≥ ' + Math.round(f.L * 100) + '% 최고'); });
-  for (const x of [...pool.values()].sort((a, b) => (tag.has(kp(b.p)) - tag.has(kp(a.p))) || b.n.cagrMed - a.n.cagrMed)) { const p = x.p; CSV.push([tk, per === 'act' ? '상장 이후' : '상장 전 포함', p.ver, tag.get(kp(p)) || '', x.src.join(' / '), (x.r.cagr * 100).toFixed(2), (x.r.mdd * 100).toFixed(1), (x.n.cagrMed * 100).toFixed(2), (x.n.mddMed * 100).toFixed(1), (x.n.cagrMin * 100).toFixed(2), x.dh == null ? '' : (x.dh * 100).toFixed(2), x.dSyn == null ? '' : (x.dSyn * 100).toFixed(2), x.r.nob,
+  for (const x of [...pool.values()].sort((a, b) => (tag.has(kp(b.p)) - tag.has(kp(a.p))) || b.n.cagrMed - a.n.cagrMed)) { const p = x.p; CSV.push([tk, per === 'act' ? '상장 이후' : '상장 전 포함', p.ver, tag.get(kp(p)) || '', x.src.join(' / '), (x.r.cagr * 100).toFixed(2), (x.r.mdd * 100).toFixed(1), (x.n.cagrMed * 100).toFixed(2), (x.n.mddMed * 100).toFixed(1), (x.n.cagrMin * 100).toFixed(2), x.dh == null ? '' : (x.dh * 100).toFixed(2), x.dSyn == null ? '' : (x.dSyn * 100).toFixed(2), x.dSynG == null ? '' : (x.dSynG * 100).toFixed(2), x.r.nob,
     p.splits, p.target, p.big, p.ver === '1.0' || p.ver === '2.0' ? '' : p.lines, p.ver === '1.0' || p.ver === '2.0' ? '' : p.shares, p.ver === '2.0' || p.ver === '2.1' ? p.part : '', p.ver === '2.0' || p.ver === '2.1' ? p.capP : '', p.ver === '1.0' || p.ver === '2.0' || p.ver === '2.1' ? p.avgOff : '',
     /^(1\.0|2\.0|2\.1|2\.2)$/.test(p.ver) ? p.money : '', p.ver === '4.0' ? '' : p.exhaust, p.ver === '4.0' ? '' : p.restart, p.ver === '2.2' || p.ver === '3.0' ? p.tround : '', p.ver === '3.0' ? (p.rebase ? '켬' : '끔') : '', p.ver === '4.0' ? (p.noBig ? '켬' : '끔') : '', p.method, p.harvest ? '켬' : '끔', hashOf(tk, p, per)]); }
   const pc = x => (x * 100).toFixed(2) + '%';
