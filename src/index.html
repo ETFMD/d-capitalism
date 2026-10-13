@@ -23837,11 +23837,12 @@ var MHV = (function () {
     return { cash: capital, base: capital, qty: 0, avg: 0, one: 0, T: 0, t4: 0, mode: 'idle', qk: 0, qOne: 0, rev: false, revFirst: false,
              cum: 0, maxCum: 0, k: 1, cycCap: capital };
   }
-  /* 새 사이클 시작 (보유 0주일 때): 1회 매수금 = 복리 → 지금 현금 ÷ 분할 · 단리 → 처음 원금 ÷ 분할 */
+  /* 새 사이클 시작 (보유 0주일 때): 1회 매수금 = 복리 → 지금 현금 ÷ 분할 · 단리 → 처음 원금 ÷ 분할
+     · 일부분 복리(part · mix 0~1) → (처음 원금 + (지금 현금 − 처음 원금) × mix) ÷ 분할 — mix 1 = 복리 · 0 = 단리 (72매매법 선택) */
   function begin(cfg, st) {
     st.T = 0; st.t4 = 0; st.qk = 0; st.rev = false; st.revFirst = false; st.cycCap = st.cash; st.mode = 'idle';
     if (cfg.ver === '1.0' || cfg.ver === '2.0' || cfg.ver === '2.1' || cfg.ver === '2.2')
-      st.one = (cfg.money === 'simple' ? st.base : st.cash) / cfg.splits;
+      st.one = (cfg.money === 'simple' ? st.base : cfg.money === 'part' ? st.base + Math.max(0, Math.min(1, cfg.mix != null ? +cfg.mix : 1)) * (st.cash - st.base) : st.cash) / cfg.splits;
   }
   /* 1회 매수금 */
   function oneOf(cfg, st) {

@@ -243,5 +243,18 @@ function bdays(from, n, skip) { const out = []; let t = Date.parse(from + 'T12:0
   }
   check('무작위 불변식 · 세금 포함 (' + n + '번)', b0 === 0, b0 + '건 실패'); }
 
+/* ⑯ 1회 매수금 '일부분 복리'(money 'part' · mix) — mix 1 = 복리 · 0 = 단리와 날마다 같고, 그 사이는 (원금 + (현금 − 원금) × mix) ÷ 분할 (72매매법 선택) */
+{ const c72 = m => Object.assign(MHV.defaults('1.0', 'SOXL'), { splits: 72, target: 52.5, big: 13, avgOff: 0, exhaust: 'recover', restart: 'rsi' }, m);
+  const o = { from: 1, capital: 10000, rows: true, fee: 0.0075, sec: 0.0000206, divTax: 0.15, tax: { fx: () => 1300, method: 'fifo', harvest: false } };
+  const run = m => MHV.run(c72(m), SX, o), same = (a, b) => a.eq.length === b.eq.length && a.eq.every((x, i) => Math.abs(x - b.eq[i]) < 1e-9);
+  const C = run({ money: 'compound' }), S0 = run({ money: 'simple' }), P1 = run({ money: 'part', mix: 1 }), P0 = run({ money: 'part', mix: 0 }), PN = run({ money: 'part' });
+  check('일부분 복리 mix 1 = 복리 (날마다 평가금)', same(P1, C)); check('일부분 복리 mix 0 = 단리', same(P0, S0)); check('일부분 복리 mix 없음 = 복리', same(PN, C));
+  const cfg = c72({ money: 'part', mix: 0.3 }), s = MHV.init(cfg, 10000); s.cash = 13000; MHV.begin(cfg, s);
+  check('일부분 복리 30%: 이익 3,000 → 1회 = (10,000 + 900) ÷ 72', Math.abs(s.one - 10900 / 72) < 1e-9, s.one);
+  s.cash = 6000; MHV.begin(cfg, s);
+  check('일부분 복리 30%: 손실 4,000 → 1회 = (10,000 − 1,200) ÷ 72', Math.abs(s.one - 8800 / 72) < 1e-9, s.one);
+  const H = run({ money: 'part', mix: 0.5 });
+  check('일부분 복리 50%: 현금 ≥ 0 · 결과가 복리·단리와 다름', H.rows.every(r => r.cash > -1e-9) && !same(H, C) && !same(H, S0), [H.final, C.final, S0.final].map(Math.round).join(' / ')); }
+
 console.log((bad ? 'FAIL ' : 'OK ') + '무한매수법 버전 엔진 검사 ' + ok + ' / ' + (ok + bad));
 process.exit(bad ? 1 : 0);
