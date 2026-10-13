@@ -179,13 +179,20 @@ def check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS):
     a0 = page.evaluate(ST)
     if [x['k'] for x in a0] != ['ty', 'tk', 'per', 'rule', 'mode', 'tax', 'adv'] or [x['open'] for x in a0] != [True] + [False] * 6 or not all(x['v'] for x in a0) or any(x['on'] for x in a0):
         fail('vr-backtest', '설정 접이식 처음 상태가 다름 (1번만 펼침 · 요약 · 기본값은 회색) %r' % a0)
-    page.click('#vb-set .mb-acc[data-sec="rule"] > summary'); page.wait_for_timeout(450)
+    ACC_DONE = "([k, o]) => { const d = document.querySelector('#vb-set .mb-acc[data-sec=\"' + k + '\"]'); return d && d.open === o && d._accTarget == null; }"   # 여닫는 모션이 끝날 때까지 (고정 대기는 느린 기계에서 간헐 실패)
+
+    def acc_wait(k, o):
+        try:
+            page.wait_for_function(ACC_DONE, arg=[k, o], timeout=5000)
+        except Exception:
+            pass   # 아래 상태 검사가 실패로 알림
+    page.click('#vb-set .mb-acc[data-sec="rule"] > summary'); acc_wait('rule', True)
     page.evaluate("() => document.querySelector('#vb-set [data-ty=\"wd\"]').click()"); page.wait_for_timeout(150)
     a1 = page.evaluate(ST)
     _open(page, base, '')
     page.wait_for_function("document.querySelectorAll('#vb-set .mb-acc').length === 7", timeout=30000)
     a2 = page.evaluate(ST)
-    page.focus('#vb-set .mb-acc[data-sec="ty"] > summary'); page.keyboard.press('Enter'); page.wait_for_timeout(450)
+    page.focus('#vb-set .mb-acc[data-sec="ty"] > summary'); page.keyboard.press('Enter'); acc_wait('ty', False)
     page.evaluate("""() => { const e = document.getElementById('vb-cap'); e.value = '25000'; e.dispatchEvent(new Event('input', { bubbles: true }));
                              const g = document.getElementById('vb-g'); g.value = '25'; g.dispatchEvent(new Event('input', { bubbles: true })); }""")
     a3 = {x['k']: x for x in page.evaluate(ST)}
