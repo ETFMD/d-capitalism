@@ -1657,7 +1657,7 @@ def main():
         if os.path.isdir(os.path.join(ROOT, 'vr-backtest')):
             import vr_bt_ui
             vr_bt_ui.check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS)
-        # 72매매법 — 백테스트 = 엔진·무한매수법 백테스트 화면 · 기록(시세대로 = 같은 날 시작 백테스트 · 고치기·중간 진입·백업) · 휴장일 (tests/t72_ui.py)
+        # 72루틴 — 무한매수법 기록 화면(mhApp) 고정 규칙 프로필: 시작 화면·수수료 기본값·용어·기록 그래프·실시간 · 카드 = 엔진·시뮬레이터 · 상장 전 · 크게 보기 · 중간 진입 · 계정 저장 (tests/t72_ui.py)
         if os.path.isdir(os.path.join(ROOT, '72')):
             import t72_ui
             t72_ui.check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS)

@@ -1,193 +1,347 @@
-"""72매매법 회귀 검사 — run_regression.py 가 부름 (check)
+"""72루틴 회귀 검사 — run_regression.py 가 부름 (check)
 
-  · /72/ 백테스트: 기본값(수수료 0.75% 등) · 화면 숫자 = 같은 자료로 엔진(MHV.run)을 직접 돌린 값(포함·미포함) ·
-    같은 조건을 무한매수법 백테스트 화면 주소로 연 숫자와 같음(고정 7가지 = V1.0 72분할 52.5% 큰수 13% 괴리 0% 소진 recover 1주) ·
-    시작한 해별 표 = 엔진 · 보기·표 전환 · 기간 빠른 단추 · 세부옵션(접이식·양도세 미포함이면 하위 옵션 꺼짐·일부분 복리·수수료 직접 입력)
-  · /72/ 기록: 화면에서 시작 → 시세대로 채운 날마다 평가금 = 같은 날 시작한 백테스트(양도세 빼고) · RSI 대기 · 주문표 = 엔진 ·
-    체결 고치기(빼기·직접 추가·되돌리기) · 중간 진입 · 백업 내려받기/불러오기 · 새로고침 뒤 유지 · 휴장일 계산 · 지금 시세 RSI
-  · 폭 넘침(설정 모두 펼침 · 기록 · 백테스트) · 콘솔 오류
+  /72/ = 무한매수법 기록 화면(mhApp)을 고정 규칙 프로필([T72] P.lock)로 쓴 화면
+  · 시작 화면: 고정 규칙 7줄 · 세부옵션 접이식(수수료 기본 0.25% · 직접 입력 누르면 0.1% · 일부분 복리 비율 50% · 양도세 하위 옵션 ·
+    범위 밖 값이면 시작 꺼짐) → 시작 = V1.0 · SOXL · 72분할 · 목표 52.5% · 상단 매수선 13% · 평단 매수선 0% · 소진 recover · 1주 단위
+  · 현재 화면·주문표·⋮ 메뉴(수수료 기본/직접 입력 0.1% · 반영 비율)·도움말·기록 시트(3일 기록) · 기록 그래프 '수익률'(잔금 + 보유 × 종가)
+  · 화면 어디에도 무한매수법·라오어·큰수·괴리율·T값·별지점·전반전/후반전 같은 말이 없음 (설명글 포함)
+  · 백테스트 카드 = 엔진 직접(일부분 복리·RSI·절세·분배금 빼기 조건) · 기본 설정 카드 = 같은 조건 무한매수법 백테스트 화면 ·
+    상장 전 포함(배포: SOXL 재현 이어 붙임 · 상장일 표시 · |차이| ≥ 5%p 면 ⚠ / 로컬: 합성 자료엔 SOXL 식이 없어 안내) ·
+    크게 보기(전체 구간 숫자 = 카드 · 연도별 = 직접 계산 · 줄 누르면 그해 · 기간 단추 · 끌어서 확대 · 로그 눈금 · 포함/미포함 전환)
+  · 실시간 확인(시세가 그대로면 다시 그리지 않음 · 바뀌면 다시 그림) · 중간 진입(72회 다 씀 → 처음부터 소진 대응 · 매수 주문 없음)
+  · 저장 키 분리(r72-store · 무한매수법 muhan4-store 그대로) · 로그인 자동 저장(가짜 로그인 → GET·POST /udata/r72 · /udata/muhan 안 부름)
+  · 폭 넘침(시작 화면 세부옵션 펼침 · 현재 화면 · 크게 보기) · 콘솔 오류
 """
-import json, os
+import json, os, re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-KEYS = "['t72-set', 't72-log', 't72-tab', 't72-open']"
+CLEAR = "() => { Object.keys(localStorage).filter(k => /^(r72-|t72-)/.test(k)).forEach(k => localStorage.removeItem(k)); }"
 
-BT_JS = """async () => {
+PRE = """
   const W = ms => new Promise(r => setTimeout(r, ms)), R = [], ok = (name, c, info) => R.push({ name, ok: !!c, info: info == null ? '' : String(info).slice(0, 300) });
-  const $ = q => document.querySelector(q), $$ = q => document.querySelectorAll(q), T = window.T72debug, V = window.MHV, B = window.MBT;
-  for (let i = 0; i < 240 && !(T && T.R() && T.R().sn); i++) await W(250);
-  const r = T.R(); if (!r) return [{ name: '백테스트 결과 없음 (60초)', ok: false, info: ($('#t7-btres') || {}).innerText }];
-  const S = r.S, c = r.cfg;
-  ok('기본값: 원금 $10,000 · 복리 · 다음 날 · 수수료 0.75% · 양도세 선입선출 · 절세 안함 · 분배금 재투자 · 새로 시작 · 기간 처음부터',
-     S.cap === 10000 && S.money === 'compound' && S.restart === 'next' && r.fee === 0.75 && S.tax && S.method === 'fifo' && !S.harvest && S.divs && S.entry === 'new' && !S.from && !S.to, JSON.stringify([S, r.fee]));
-  ok('고정 7가지 (계산 조건): V1.0 · 72분할 · 52.5% · 큰수 13% · 평단 괴리 0% · 소진 recover · 1주 단위 · SOXL',
-     c.ver === '1.0' && c.splits === 72 && c.target === 52.5 && c.big === 13 && c.avgOff === 0 && c.exhaust === 'recover' && !c.ideal && c.lines === 0 && c.ticker === 'SOXL', JSON.stringify(c));
-  ok('기본 탭 = 백테스트 (기록이 없을 때)', $('#t7-tabs [data-tab="bt"]').classList.contains('on'));
-  /* 화면 숫자 = 엔진 직접 */
-  const D = r.D, F = await B.fxData().catch(() => null), fx = F ? B.fxFor(D.d, F) : null;
-  const base = { from: r.net.from, to: r.net.to, capital: S.cap, norm: 'auto', rows: true };
-  const Rn = V.run(c, D, Object.assign({}, base, { fee: 0.0075, sec: 0.0000206, divTax: 0.15, tax: fx ? { fx: i => fx[i], method: 'fifo', harvest: false } : null }));
-  const Rg = V.run(c, D, Object.assign({}, base, { fee: 0, sec: 0, divTax: 0, tax: null }));
-  const n2 = B.stats(Rn, D, S.cap), g2 = B.stats(Rg, D, S.cap), same = (a, b) => ['final', 'cagr', 'mdd', 'fees', 'tax', 'maxCost'].every(k => Math.abs((a[k] || 0) - (b[k] || 0)) <= 1e-9 * Math.max(1, Math.abs(a[k] || 0)));
-  ok('화면 숫자 = 엔진 직접 계산 (세금·수수료 포함·미포함)', fx && same(r.sn, n2) && same(r.sg, g2) && r.net.taxes.length > 0, JSON.stringify([r.sn.cagr, n2.cagr, r.sg.cagr, g2.cagr]));
-  const kb = [...$$('#t7-btres .mb-k b')].map(b => b.textContent);
-  ok('핵심 6칸 · 연평균 칸 = 계산값', kb.length === 6 && kb[1].replace('−', '-').replace('+', '') === (r.sn.cagr * 100).toFixed(2) + '%', kb.join(' | '));
-  /* 시작한 해별 = 엔진 (한 해 골라 직접) */
-  const rr = r.roll, mid = rr[Math.floor(rr.length / 2)], f = D.d.indexOf(mid.d);
-  const X = V.run(c, D, { from: f, to: r.net.to, capital: S.cap, norm: 'auto', rows: false, fee: 0.0075, sec: 0.0000206, divTax: 0.15, tax: fx ? { fx: i => fx[i], method: 'fifo', harvest: false } : null });
-  const cg = B.cagr(S.cap, X.final, B.dnum(D.d[r.net.to]) - B.dnum(D.d[f - 1]));
-  ok('시작한 해별 표: 2011년부터 해마다 한 줄 · 고른 해 = 엔진', rr.length >= 10 && rr[0].y === 2011 && rr.every((x, k) => !k || x.y === rr[k - 1].y + 1) && Math.abs(cg - mid.cagr) < 1e-12 && $$('.t7-roll tbody tr').length === rr.length, JSON.stringify([rr.length, mid.y, cg, mid.cagr]));
-  /* 보기·표 전환 */
-  const k0 = $('#t7-btres .mb-kpi').innerText;
-  $('#t7-btres [data-view="gross"]').click(); await W(80);
-  ok('보기 전환 (미포함)', $('#t7-btres .mb-kpi').innerText !== k0 && /분배금/.test($('#t7-btres .mb-kpi').innerText));
-  $('#t7-btres [data-btab="cycle"]').click(); await W(80);
-  ok('사이클별 표 = 사이클 수', $$('#t7-tb tbody tr').length === r.gross.cycles.length, $$('#t7-tb tbody tr').length + ' / ' + r.gross.cycles.length);
-  $('#t7-btres [data-view="net"]').click(); $('#t7-btres [data-btab="year"]').click(); await W(80);
-  ok('연도별 표', $$('#t7-tb tbody tr').length >= 15, $$('#t7-tb tbody tr').length);
-  ok('그래프 (Chart.js)', typeof Chart === 'undefined' || !!Chart.getChart(document.getElementById('t7-cb')));
-  /* 기간 빠른 단추 → 다시 계산 */
-  $('.t7-per [data-qf="2020-01-01"]').click();
-  for (let i = 0; i < 80 && !(T.R() && T.R().S.from === '2020-01-01'); i++) await W(100);
-  ok('기간 빠른 단추 2020~ → 2020년 첫 거래일부터', T.R() && T.R().D.d[T.R().net.from] >= '2020-01-01' && T.R().D.d[T.R().net.from - 1] < '2020-01-01', T.R() && T.R().D.d[T.R().net.from]);
-  $('.t7-per [data-qf=""]').click();
-  for (let i = 0; i < 80 && !(T.R() && T.R().S.from === ''); i++) await W(100);
-  /* 세부옵션 */
-  const acc = $('#t7-set .mb-acc');
-  ok('세부옵션: 접이식 · 처음엔 접힘 · 요약 회색', acc && !acc.open && /수수료 0\\.75%/.test($('#t7-sum').textContent) && !$('#t7-sum').classList.contains('on'), $('#t7-sum').textContent);
-  $('#t7-set [data-k="tax"][data-v="0"]').click(); await W(60);
-  ok('양도세 미포함 → 취득가액·연말 절세 단추 꺼짐 · 요약 파랑', [...$$('#t7-set [data-k="method"], #t7-set [data-k="harvest"]')].every(b => b.disabled) && $('#t7-sum').classList.contains('on'));
-  for (let i = 0; i < 80 && !(T.R() && !T.R().S.tax); i++) await W(100);
-  ok('양도세 미포함 → 백테스트 양도세 0', T.R() && !T.R().taxOn && T.R().sn.tax === 0);
-  $('#t7-set [data-k="tax"][data-v="1"]').click(); await W(60);
-  ok('양도세 포함 → 하위 옵션 켜짐', [...$$('#t7-set [data-k="method"], #t7-set [data-k="harvest"]')].every(b => !b.disabled));
-  $('#t7-set [data-k="money"][data-v="part"]').click(); await W(60);
-  const mx = $('#t7-mix'); ok('일부분 복리 → 비율 칸 (기본 50%)', mx && +mx.value === 50);
-  mx.value = '30'; mx.dispatchEvent(new Event('input', { bubbles: true }));
-  for (let i = 0; i < 80 && !(T.R() && T.R().cfg.money === 'part' && T.R().cfg.mix === 0.3); i++) await W(100);
-  const rp = T.R(); ok('일부분 복리 30% → 계산 조건 money part · mix 0.3 · 결과가 복리와 다름', rp && rp.cfg.money === 'part' && rp.cfg.mix === 0.3 && Math.abs(rp.sn.final - r.sn.final) > 1, rp && JSON.stringify([rp.cfg.money, rp.cfg.mix, rp.sn.final]));
-  $('#t7-set [data-k="money"][data-v="compound"]').click(); await W(60);
-  $('#t7-set [data-k="feeMode"][data-v="custom"]').click(); await W(60);
-  const fc = $('#t7-feec'); fc.value = '0.07'; fc.dispatchEvent(new Event('input', { bubbles: true }));
-  $('#t7-set [data-k="restart"][data-v="rsi"]').click(); await W(60); $('#t7-set [data-k="harvest"][data-v="1"]').click(); await W(60);
-  for (let i = 0; i < 80 && !(T.R() && T.R().fee === 0.07 && T.R().cfg.restart === 'rsi' && T.R().S.harvest); i++) await W(100);
-  const rf = T.R(); return { R, sim: { cagr: rf.sn.cagr, mdd: rf.sn.mdd, final: rf.sn.final, gc: rf.sg.cagr, fee: rf.fee, restart: rf.cfg.restart, hv: rf.S.harvest, from: rf.D.d[rf.net.from], to: rf.D.d[rf.net.to] } };
-}"""
+  const T = window.T72debug, MH = T.MH, rt = () => document.getElementById('t7-root'), $ = q => rt().querySelector(q), $$ = q => [...rt().querySelectorAll(q)];
+  const click = q => { const e = $(q); if (!e) throw new Error('없음 ' + q); e.click(); };
+  const fill = (q, v) => { const e = $(q); if (!e) throw new Error('없음 ' + q); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); };
+  const BAD = /무한매수법|라오어|큰수|괴리율|T값|별지점|전반전|후반전|쿼터|리버스|무한/;
+  const bad = t => { const m = String(t || '').match(BAD); return m ? m[0] + ' … ' + String(t).slice(Math.max(0, m.index - 30), m.index + 30) : ''; };
+  const ses = () => T.store.sessions.filter(x => x.id === T.store.activeSessionId)[0];
+  const card = () => { const s = ses().settings, c = T.bt.cache[T.btKey(s)]; return c && (c.st === 'ok' || c.st === 'err') ? c : null; };
+  const waitCard = async (ms) => { for (let i = 0; i < (ms || 180000) / 250 && !card(); i++) await W(250); return card(); };
+  const pc = (v, dd) => v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(dd == null ? 1 : dd) + '%';
+"""
 
-LOG_JS = """async () => {
-  const W = ms => new Promise(r => setTimeout(r, ms)), R = [], ok = (name, c, info) => R.push({ name, ok: !!c, info: info == null ? '' : String(info).slice(0, 300) });
-  const $ = q => document.querySelector(q), $$ = q => document.querySelectorAll(q), T = window.T72debug, V = window.MHV, B = window.MBT;
-  for (let i = 0; i < 240 && !(T && T.M.D); i++) await W(250);
-  if (!T || !T.M.D) return [{ name: '기록: 일봉 없음', ok: false }];
-  $('#t7-tabs [data-tab="log"]').click(); await W(80);
-  ok('기록 탭: 시작 카드 · 시작일 기본 = 다음 거래일', $('#t7-start') && $('#t7-start').value > T.M.D.d[T.M.D.d.length - 1], $('#t7-start') && $('#t7-start').value);
-  const st = $('#t7-start'); st.value = '2025-03-03'; $('[data-act="jstart"]').click();
-  for (let i = 0; i < 80 && !(T.JR() && T.JR().days.length); i++) await W(100);
-  const JR = T.JR(), D = T.M.D, S = T.S(), cfg = T.cfg();
-  ok('화면에서 기록 시작 (2025-03-03) → 날마다 기록', JR && JR.days.length > 100 && JR.days[0].d === '2025-03-03' && T.J().start === '2025-03-03', JR && JR.days.length);
-  /* 시세대로 = 같은 날 시작한 백테스트(양도세 빼고) */
-  const run = () => V.run(cfg, D, { from: T.JR().i0, capital: S.cap, norm: 'auto', rows: true, fee: S.feeMode === 'custom' ? S.feeC / 100 : 0.0075, sec: 0.0000206, divTax: 0.15, tax: null });
-  const eqOk = () => { const J2 = T.JR(), X = run(); return J2.days.length === X.eq.length && J2.days.every((x, k) => Math.abs(x.eq - X.eq[k]) < 1e-6) && J2.cycles.length === X.cycles.length; };
-  ok('시세대로 채운 기록 = 같은 날 시작한 백테스트 (날마다 평가금 · 사이클 수 · RSI 대기 ' + JR.days.filter(x => x.wait).length + '일)', eqOk() && JR.days.some(x => x.wait), JR.cycles.length);
-  /* 다음 주문표 = 엔진 (마지막 상태 + 마지막 종가) */
-  const N = JR.next, L = D.d.length - 1, s2 = JSON.parse(JSON.stringify(JR.st));
-  if (s2.qty === 0) V.begin(cfg, s2);
-  const P = N.wait ? { rows: [] } : V.plan(cfg, s2, { prev: D.c[L] }), rows = P.rows.map(x => [x.side, x.m, x.p, x.q, x.tag].join(':')).join(' ');
-  ok('다음 거래일 주문표 = 엔진 · 날짜 = 다음 거래일 · 화면 줄 수', N.prev === D.c[L] && N.date > D.d[L] && rows === N.P.rows.map(x => [x.side, x.m, x.p, x.q, x.tag].join(':')).join(' ') && $$('#t7-ord .mh-obox').length === N.P.rows.length, rows);
-  ok('상태 · 그래프 · 날짜별 표 (20줄씩)', $('#t7-stat') && (typeof Chart === 'undefined' || !!Chart.getChart(document.getElementById('t7-cj'))) && $$('#t7-days tbody tr').length === Math.min(20, JR.days.length));
-  /* 체결 고치기: 첫 매수일을 '체결 없음'으로 → 그날 매수 0 · 뒤가 다시 계산 · 되돌리면 그대로 */
-  const d1 = JR.days.find(x => x.ev.buyQ > 0).d, pg = () => $$('#t7-days .mb-pg button')[1];
-  for (let k = 0; k < 40 && !$('#t7-days [data-d="' + d1 + '"]') && pg() && !pg().disabled; k++) { pg().click(); await W(30); }
-  $('#t7-days [data-d="' + d1 + '"]').click(); await W(60);
-  ok('수정 창 열림 · 주문표 줄마다 체크', $('#t7-sheet .mh-sheet') && $$('#t7-sheet [data-eon]').length >= 1, $$('#t7-sheet [data-eon]').length);
-  $$('#t7-sheet [data-eon]').forEach(b => { b.checked = false; });
-  $('#t7-sheet [data-act="ed-save"]').click(); await W(120);
-  const x1 = T.JR().days.find(x => x.d === d1);
-  ok('고친 날: 체결 없음 → 그날 매수 0 · ✎ 표시 · 저장', !$('#t7-sheet .mh-sheet') && x1.ov && x1.ev.buyQ === 0 && JSON.stringify(T.J().ov[d1]) === '[]' && JSON.parse(localStorage.getItem('t72-log')).ov[d1].length === 0, JSON.stringify(T.J().ov));
-  ok('고친 날 뒤가 다시 계산 (시세대로와 달라짐)', !eqOk());
-  /* 직접 추가: 다음 날 주문표에 없던 매수 */
-  const d2 = T.JR().days.find(x => x.d > d1).d;
-  for (let k = 0; k < 40 && !$('#t7-days [data-d="' + d2 + '"]') && pg() && !pg().disabled; k++) { pg().click(); await W(30); }
-  $('#t7-days [data-d="' + d2 + '"]').click(); await W(60);
-  $$('#t7-sheet [data-eon]').forEach(b => { b.checked = false; });
-  $('#t7-sheet [data-act="ed-add"]').click(); await W(60);
-  const ks = $$('#t7-sheet [data-eq]'), kk = ks.length - 1;
-  ks[kk].value = '3'; $('#t7-sheet [data-ep="' + kk + '"]').value = '20'; $('#t7-sheet [data-act="ed-save"]').click(); await W(120);
-  const x2 = T.JR().days.find(x => x.d === d2);
-  ok('직접 추가 매수 3주 × $20 → 그날 매수 · 평단 $20 · 회차', x2.ev.buyQ === 3 && Math.abs(x2.avg - 20) < 1e-9 && x2.qty === 3 && x2.T > 0, JSON.stringify([x2.ev.buyQ, x2.avg, x2.qty, x2.T]));
-  /* 팔 수 있는 것보다 많이 팔기 → 막음 */
-  for (let k = 0; k < 40 && !$('#t7-days [data-d="' + d2 + '"]') && pg() && !pg().disabled; k++) { pg().click(); await W(30); }
-  $('#t7-days [data-d="' + d2 + '"]').click(); await W(60);
-  $('#t7-sheet [data-act="ed-add"]').click(); await W(60);
-  const ks2 = $$('#t7-sheet [data-eq]'), k2 = ks2.length - 1; $('#t7-sheet [data-eside="' + k2 + '"]').value = 'S'; ks2[k2].value = '999'; $('#t7-sheet [data-act="ed-save"]').click(); await W(80);
-  ok('아침 보유보다 많이 팔기 → 저장 안 됨 · 안내', $('#t7-sheet .mh-sheet') && /팔 수 없어요/.test($('#t7-ed-msg').textContent), $('#t7-ed-msg') && $('#t7-ed-msg').textContent);
-  ks2[k2].value = '1.5'; $('#t7-sheet [data-eside="' + k2 + '"]').value = 'B'; $('#t7-sheet [data-act="ed-save"]').click(); await W(80);
-  ok('소수 수량 1.5주 → 저장 안 됨 · 1주 단위 안내', $('#t7-sheet .mh-sheet') && /1주 단위/.test($('#t7-ed-msg').textContent), $('#t7-ed-msg') && $('#t7-ed-msg').textContent);
-  document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await W(60);
-  ok('Esc → 수정 창 닫힘', !$('#t7-sheet .mh-sheet'));
-  /* 되돌리기 */
-  for (const d of [d2, d1]) {
-    for (let k = 0; k < 40 && !$('#t7-days [data-d="' + d + '"]') && pg() && !pg().disabled; k++) { pg().click(); await W(30); }
-    $('#t7-days [data-d="' + d + '"]').click(); await W(60); $('#t7-sheet [data-act="ed-auto"]').click(); await W(120);
-  }
-  ok('시세대로 되돌리기 → 다시 백테스트와 같음', !Object.keys(T.J().ov).length && eqOk());
+SETUP_JS = """async () => {""" + PRE + """
+  try {
+    for (let i = 0; i < 100 && !$('[data-act="su-start"]'); i++) await W(100);
+    const rules = document.getElementById('mh-rules'), rtx = rules ? rules.innerText : '';
+    ok('시작 화면: 제목 72루틴 · 고정 규칙 7줄 (종목·분할·목표·평단 매수선·상단 매수선·소진 대응·주문 수량)',
+       /72루틴/.test($('h1').textContent) && rules && rules.querySelectorAll('.mh-row').length === 7 &&
+       ['SOXL', '72번', '+52.5%', '평단 매수선', '상단 매수선', '어제 종가 +13%', '−10%', '1주 단위'].every(w => rtx.includes(w)), rtx);
+    const pt = document.getElementById('page-t72').innerText;
+    ok('시작 화면·설명글에 무한매수법 용어 없음', !bad(pt), bad(pt));
+    ok('세부옵션 처음엔 접힘 · 요약 "지금은 모두 기본값"', !MH.setup.more && /모두 기본값/.test($('.mh-sumore').innerText) && !$('[data-act="su-feemode"]'));
+    click('[data-act="su-more"]'); await W(50);
+    const n = a => $$('[data-act="' + a + '"]').length;
+    ok('세부옵션 칸: 1회 매수금·새 사이클·수수료·양도세·취득가액·연말 절세·분배금 (버전·종목·분할·목표·상단 매수선 칸 없음)',
+       n('su-money') === 2 && n('su-restart') === 2 && n('su-feemode') === 2 && n('su-tax') === 2 && n('su-method') === 2 && n('su-harv') === 2 && n('su-divs') === 2 &&
+       !n('su-ver') && !n('su-ticker') && !n('su-splits') && !$('[data-in="su:target"]') && !$('[data-in="su:big"]') && !$('[data-in="su:avgOff"]'));
+    const fb = $('[data-act="su-feemode"][data-v="def"]');
+    ok('수수료 기본 0.25% 선택됨', fb.classList.contains('mh-btn-sel') && /기본 0\\.25%/.test(fb.textContent) && MH.setup.feeMode === 'def' && !$('[data-in="su:feeC"]'), fb.textContent);
+    click('[data-act="su-feemode"][data-v="custom"]'); await W(40);
+    const fc = $('[data-in="su:feeC"]');
+    ok('직접 입력을 누르면 0.1% 가 들어 있음 · 요약에 수수료 0.1%', fc && fc.value === '0.1' && /수수료 0\\.1%/.test($('.mh-sumore').innerText), fc && fc.value);
+    fill('[data-in="su:cap"]', '20000'); fill('[data-in="su:feeC"]', '2.5'); await W(30);
+    const dis1 = $('[data-act="su-start"]').disabled;
+    fill('[data-in="su:feeC"]', '0.1'); await W(30);
+    ok('수수료 범위 밖(2.5%)이면 시작하기 꺼짐 · 0.1% 면 켜짐', dis1 && !$('[data-act="su-start"]').disabled);
+    click('[data-act="su-money"][data-v="part"]'); await W(40);
+    const mx = $('[data-in="su:mix"]');
+    ok('일부분 복리: 반영 비율 기본 50%', mx && mx.value === '50', mx && mx.value);
+    fill('[data-in="su:mix"]', '120'); await W(30); const dis2 = $('[data-act="su-start"]').disabled;
+    fill('[data-in="su:mix"]', '30'); await W(30);
+    ok('반영 비율 범위 밖(120%)이면 시작하기 꺼짐 · 30% 면 켜짐', dis2 && !$('[data-act="su-start"]').disabled);
+    click('[data-act="su-tax"][data-v="0"]'); await W(40); const hid = !n('su-method') && !n('su-harv');
+    click('[data-act="su-tax"][data-v="1"]'); await W(40);
+    ok('양도세 미포함이면 취득가액·연말 절세 칸 숨김 · 포함이면 보임', hid && n('su-method') === 2 && n('su-harv') === 2);
+    click('[data-act="su-restart"][data-v="rsi"]'); await W(20); click('[data-act="su-harv"][data-v="1"]'); await W(20); click('[data-act="su-divs"][data-v="0"]'); await W(40);
+    const sm = $('.mh-sumore').innerText;
+    ok('요약: 일부분 복리 30% · RSI 60 이하 · 수수료 0.1% · 연말 절세 · 분배금 재투자 안 함', /일부분 복리 30%/.test(sm) && /RSI 60 이하/.test(sm) && /수수료 0\\.1%/.test(sm) && /연말 절세/.test(sm) && /재투자 안 함/.test(sm), sm);
+    const hint = document.getElementById('mh-su-dyn').innerText;
+    ok('시작 원금 안내: 지금 SOXL 가격 기준 하루 몇 주', !MH.market.SOXL || /SOXL 약 \\$[\\d.]+ 기준 1회 매수금으로 하루 \\d+주/.test(hint), hint);
+    click('[data-act="su-start"]'); await W(300);
+    const s = ses().settings, c = T.vcfg(s), o = T.btOpts(s);
+    ok('시작 → 고정 규칙으로 저장 (V1.0 · SOXL · 72 · 52.5 · 13 · 하방 0줄 · 1주 · recover) · 세션 이름 72루틴',
+       s.version === '1.0' && s.ticker === 'SOXL' && s.splits === 72 && s.targetProfit === 52.5 && s.bigNumPercent === 13 && s.lowerLocLines === 0 && s.lowerLocShares === 1 &&
+       s.exhaust === 'recover' && s.totalCapital === 20000 && ses().name === '72루틴', JSON.stringify(s) + ' ' + ses().name);
+    ok('계산 조건: 평단 매수선 0% · 일부분 복리 0.3 · RSI 60 · 소진 recover · 1주 단위',
+       c.ver === '1.0' && c.ticker === 'SOXL' && c.splits === 72 && c.target === 52.5 && c.big === 13 && c.avgOff === 0 && c.exhaust === 'recover' && !c.ideal && c.lines === 0 &&
+       c.money === 'part' && Math.abs(c.mix - 0.3) < 1e-12 && c.restart === 'rsi', JSON.stringify(c));
+    ok('카드 조건: 수수료 0.1 · 양도세 선입선출 · 연말 절세 · 분배금 빼기', o.fee === 0.1 && o.tax && o.method === 'fifo' && o.harvest && !o.divs, JSON.stringify(o));
+    const c2 = T.vcfg(Object.assign({}, s, { splits: 40, targetProfit: 10, bigNumPercent: 5, version: '4.0', exhaust: 'sellall', lowerLocLines: 8 }));
+    ok('저장된 값이 달라도 계산은 고정 규칙 (72 · 52.5 · 13 · V1.0 · recover · 하방 0줄)', c2.ver === '1.0' && c2.splits === 72 && c2.target === 52.5 && c2.big === 13 && c2.exhaust === 'recover' && c2.lines === 0, JSON.stringify(c2));
+    ok('저장 키 r72-store · 계정 키 /udata/r72', T.P.key === 'r72-store' && T.P.sync === '/udata/r72' && JSON.parse(localStorage.getItem('r72-store') || '{}').sessions.length === 1 && window.MHdebug && MHdebug.P.key === 'muhan4-store');
+  } catch (e) { ok('시작 화면 흐름 오류', false, String(e && e.message)); }
   return R;
 }"""
 
-MID_JS = """async () => {
-  const W = ms => new Promise(r => setTimeout(r, ms)), R = [], ok = (name, c, info) => R.push({ name, ok: !!c, info: info == null ? '' : String(info).slice(0, 300) });
-  const $ = q => document.querySelector(q), T = window.T72debug, V = window.MHV;
-  for (let i = 0; i < 240 && !(T && T.JR()); i++) await W(250);
-  const JR = T.JR(); if (!JR) return [{ name: '중간 진입: 기록 없음', ok: false, info: ($('#t7-pane') || {}).innerText }];
-  const x0 = JR.days[0], D = T.M.D, cfg = T.cfg();
-  ok('중간 진입: 평단 $40 · 30주 · 10회 · 남은 현금 비움(원금 − 평단×수량) → 시작 상태', JR.mid && JR.mid.avg === 40 && JR.mid.qty === 30 && JR.mid.T === 10 && JR.mid.cash === 20000 - 1200 && JR.base === 20000, JSON.stringify(JR.mid));
-  /* 첫날 주문표 = 그 상태로 엔진 */
-  const s = V.init(cfg, 20000); V.begin(cfg, s); Object.assign(s, { qty: 30, avg: 40, cash: 18800, T: 10, mode: 'normal' });
-  const P = V.plan(cfg, s, { prev: D.c[x0.i - 1] });
-  ok('중간 진입 첫날 주문 = 엔진 (평단·큰수 LOC + 목표 지정가)', JSON.stringify(P.rows.map(r => [r.side, r.p, r.q, r.tag])) === JSON.stringify(x0.P.rows.map(r => [r.side, r.p, r.q, r.tag])) && x0.P.rows.some(r => r.tag === 'tp' && r.q === 30), JSON.stringify(x0.P.rows.map(r => [r.side, r.p, r.q, r.tag])));
-  ok('중간 진입 회차 이어 감 (첫날 10회 이상)', x0.T >= 10, x0.T);
-  /* 잘못 넣으면 안내 */
-  const q = $('#t7-mqty'); q.value = '1.5'; q.dispatchEvent(new Event('input', { bubbles: true })); await W(500);
-  ok('보유 수량 1.5 → 안내 · 기록 대신 알림', /정수/.test(($('#t7-midh') || {}).textContent || '') && /중간 진입 값을 확인/.test($('#t7-pane').innerText), ($('#t7-midh') || {}).textContent);
-  q.value = '30'; q.dispatchEvent(new Event('input', { bubbles: true })); await W(500);
-  ok('바로잡으면 다시 기록', T.JR() && T.JR().mid && T.JR().mid.qty === 30);
+NOW_JS = """async () => {""" + PRE + """
+  try {
+    const top = document.querySelector('#t7-root .mh-top').innerText;
+    ok('머리: 72루틴 · SOXL · 72분할 칩 한 번 · 원금 $20,000', /^72루틴/.test(top.trim()) && (top.match(/SOXL · 72분할/g) || []).length === 1 && /원금 \\$20,000/.test(top), top);
+    const t0 = rt().innerText;
+    ok('현재 화면: 매수 회차 · 72번 중 · 처음 매수 · 무한매수법 용어 없음', /매수 회차 · 72번 중/.test(t0) && /처음 매수/.test(t0) && !bad(t0), bad(t0) || t0.slice(0, 160));
+    /* 도움말(ⓘ) 모두 */
+    const keys = [...new Set($$('[data-act^="i-"]').map(e => e.getAttribute('data-act')))], badI = [];
+    for (const k of keys) { MH.sheet = { kind: k }; T.render(); await W(30); const sh = document.querySelector('#t7-root .mh-sheet'); const b = bad(sh && sh.innerText); if (!sh || b) badI.push(k + ':' + (b || '창 없음')); }
+    MH.sheet = null; T.render();
+    ok('도움말 ' + keys.length + '개 (RSI·VIX·공포탐욕 …) 열림 · 무한매수법 용어 없음', keys.length >= 3 && !badI.length, badI.join(' | ') || keys.join(','));
+    /* ⋮ 메뉴: 수수료 직접 입력(0.1%) 선택됨 · 기본 ↔ 직접 입력 · 반영 비율 */
+    MH.menu = true; T.render(); await W(30);
+    let mt = document.querySelector('#t7-root .mh-menu').innerText;
+    ok('⋮ 메뉴: 고정 규칙 안내 · 무한매수법 용어 없음', /고정 규칙/.test(mt) && /바꿀 수 없어요/.test(mt) && !bad(mt), bad(mt));
+    const sel = v => { const b = $('.mh-menu [data-act="m-feemode"][data-v="' + v + '"]'); return b && b.classList.contains('mh-btn-sel'); };
+    ok('메뉴 수수료: 직접 입력 선택 · 칸 0.1', sel('custom') && !sel('def') && $('#mh-m-btfee') && $('#mh-m-btfee').value === '0.1', $('#mh-m-btfee') && $('#mh-m-btfee').value);
+    click('.mh-menu [data-act="m-feemode"][data-v="def"]'); await W(40); MH.menu = true; T.render();
+    const f1 = T.btOpts(ses().settings).fee, d1 = sel('def') && !$('#mh-m-btfee');
+    click('.mh-menu [data-act="m-feemode"][data-v="custom"]'); await W(40); MH.menu = true; T.render();
+    const f2 = T.btOpts(ses().settings).fee;
+    ok('메뉴 수수료: 기본 → 0.25 · 다시 직접 입력 → 0.1 이 들어감', f1 === 0.25 && d1 && f2 === 0.1 && $('#mh-m-btfee').value === '0.1', [f1, d1, f2]);
+    fill('.mh-menu #mh-m-mix', '40'); click('.mh-menu [data-act="ap-mix"]'); await W(40);
+    ok('메뉴 반영 비율 40% → 계산 조건 mix 0.4', Math.abs(T.vcfg(ses().settings).mix - 0.4) < 1e-12 && T.vcfg(ses().settings).money === 'part', JSON.stringify(T.vcfg(ses().settings)));
+    MH.menu = true; T.render(); fill('.mh-menu #mh-m-mix', '30'); click('.mh-menu [data-act="ap-mix"]'); await W(40);
+    MH.menu = false; T.render();
+    /* 기록 3일 (미국 거래일 + 1일 = 한국 날짜) → 기록 그래프 '수익률' */
+    const px = MH.market.SOXL && MH.market.SOXL.prices || [];
+    if (px.length >= 4) {
+      const us = px.slice(-3).map(p => p.date), kst = us.map(d => { const t = new Date(d + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10); });
+      for (const k of kst) {
+        click('[data-act="rec-open"]'); await W(150);
+        const di = document.querySelector('#t7-root [data-ch="vr-date"]'); di.value = k; di.dispatchEvent(new Event('change', { bubbles: true })); await W(150);
+        const sh = document.querySelector('#t7-root .mh-sheet').innerText;
+        if (bad(sh)) ok('기록 시트 ' + k + ' 무한매수법 용어 없음', false, bad(sh));
+        document.getElementById('mh-vr-save').click(); await W(200);
+      }
+      const D = T.curD();
+      ok('기록 3일 저장 (날짜 바꿔 기록 · 시세대로 미리 체크된 체결)', D.txs.length === 3 && D.hist.length === 3 && D.txs.every(t => t.close > 0), D.txs.map(t => t.date + ' ' + (t.fills || []).length).join(' | '));
+      const cv = rt().querySelector('canvas[data-chart="avg"]'), ch = cv && window.Chart && Chart.getChart(cv);
+      const tabOn = ($('[data-act="avg-tab"].on') || {}).getAttribute ? $('[data-act="avg-tab"].on').getAttribute('data-v') : '';
+      const r2 = x => Math.round(x * 100) / 100, cap = D.s.totalCapital, c0 = D.txs[0].close;
+      const A = D.hist.map((h, i) => r2(((h.remainingCapital + h.totalQuantity * D.txs[i].close) / cap - 1) * 100)), B = D.txs.map(t => r2((t.close / c0 - 1) * 100));
+      ok('기록 그래프: 처음 탭 = 수익률 · 72루틴 수익률 = (잔금 + 보유 × 그날 종가) ÷ 원금 − 1 · SOXL 그냥 보유',
+         tabOn === 'ret' && ch && ch.data.datasets[0].label === '72루틴 수익률' && ch.data.datasets[1].label === 'SOXL 그냥 보유' &&
+         JSON.stringify(ch.data.datasets[0].data) === JSON.stringify(A) && JSON.stringify(ch.data.datasets[1].data) === JSON.stringify(B),
+         ch ? JSON.stringify([tabOn, ch.data.datasets[0].data, A, ch.data.datasets[1].data, B]) : '그래프 없음');
+      click('[data-act="avg-tab"][data-v="tq"]'); await W(60);
+      const ch2 = Chart.getChart(rt().querySelector('canvas[data-chart="avg"]'));
+      ok('기록 그래프 탭 바꾸기 (회차 / 보유) · 이름에 T값 없음', ch2 && ch2.data.datasets.some(d => /회차/.test(d.label)) && !ch2.data.datasets.some(d => /T값/.test(d.label)), ch2 && ch2.data.datasets.map(d => d.label).join(','));
+      click('[data-act="avg-tab"][data-v="ret"]'); await W(40);
+      const t1 = rt().innerText, ord = document.querySelector('#t7-root').innerText;
+      ok('기록 뒤 현재 화면: 주문 이름 = 목표 +52.5% 지정가 (전량) · 평단/상단 매수선 · 단계 "매수 중" · 용어 없음',
+         /목표 \\+52\\.5% 지정가 \\(전량\\)/.test(ord) && /(평단 매수선|상단 매수선)/.test(ord) && /매수 중/.test(t1) && !bad(t1), bad(t1));
+    } else ok('기록 검사에 쓸 시세 없음', false, px.length);
+    /* 설명 단추 → 아래 설명글로 */
+    window.scrollTo(0, 0); click('.mh-top [data-act="guide"], [data-act="guide"]'); await W(700);
+    const g = document.getElementById('g-t72-h'), gy = g ? g.getBoundingClientRect().top : -1;
+    ok('설명 단추 → 설명글 제목으로 이동', g && gy >= -5 && gy < innerHeight, gy);
+    window.scrollTo(0, 0);
+  } catch (e) { ok('현재 화면 흐름 오류', false, String(e && e.message)); }
   return R;
 }"""
 
-MISC_JS = """async () => {
-  const W = ms => new Promise(r => setTimeout(r, ms)), R = [], ok = (name, c, info) => R.push({ name, ok: !!c, info: info == null ? '' : String(info).slice(0, 300) });
-  const $ = q => document.querySelector(q), T = window.T72debug, V = window.MHV;
-  for (let i = 0; i < 240 && !(T && T.M.D); i++) await W(250);
-  const D = T.M.D, L = D.d.length - 1, live = $('#t7-live').innerText, r1 = V.rsiW(D.c, L);
-  ok('지금 시세: 최근 종가 · RSI(14) = 엔진 와일더 RSI', live.includes('$' + D.c[L].toFixed(2)) && live.includes(r1.toFixed(1)), live.slice(0, 160));
-  /* 휴장일: 다음 거래일 계산 (추수감사절·성금요일·토요일 독립기념일 → 7/3·성탄 전날·2027 준틴스 대체) · 실제 일봉 날짜는 휴장일이 아님 · 일봉이 없는 평일 = 휴장일(임시 휴장 4일 빼고) */
-  const nb = T.nextBiz, cases = [['2026-11-25', '2026-11-27'], ['2026-04-02', '2026-04-06'], ['2026-07-02', '2026-07-06'], ['2026-12-24', '2026-12-28'], ['2027-06-17', '2027-06-21'], ['2026-10-09', '2026-10-12'], ['2026-12-31', '2027-01-04']];
-  const badN = cases.filter(c => nb(c[0]) !== c[1]).map(c => c[0] + '→' + nb(c[0]));
-  const have = new Set(D.d), badH = D.d.filter(x => T.isHoliday(x)), miss = [];
-  for (let t = new Date(D.d[0] + 'T12:00:00Z'); t.toISOString().slice(0, 10) <= D.d[L]; t.setUTCDate(t.getUTCDate() + 1)) { const ds = t.toISOString().slice(0, 10), w = t.getUTCDay(); if (w && w < 6 && !have.has(ds) && !T.isHoliday(ds)) miss.push(ds); }
-  const SPECIAL = ['2012-10-29', '2012-10-30', '2018-12-05', '2025-01-09'];   /* 허리케인 샌디 · 부시·카터 전 대통령 장례 (임시 휴장) */
-  ok('휴장일 계산: 다음 거래일 7가지 · 일봉 날짜에 휴장일 없음 · 일봉 없는 평일 = 휴장일(임시 휴장 빼고)', !badN.length && !badH.length && miss.every(x => SPECIAL.includes(x)), JSON.stringify([badN, badH, miss.filter(x => !SPECIAL.includes(x))]));
+LIVE_JS = """async () => {""" + PRE + """
+  try {
+    MH.sheet = null; MH.menu = false; T.render(); await W(30);
+    const mark = rt().firstElementChild; mark.__keep = 1;
+    const a = await T.liveTick(), same = rt().firstElementChild === mark;
+    const m = MH.market.SOXL; m.quote = Object.assign({}, m.quote || {}, { price: 0.01 });
+    const b = await T.liveTick(), redrawn = rt().firstElementChild !== mark, back = MH.market.SOXL.quote && MH.market.SOXL.quote.price !== 0.01;
+    ok('실시간 확인: 시세 그대로면 다시 그리지 않음 · 바뀌면 다시 그림(새 시세로)', a === false && same && b === true && redrawn && back, JSON.stringify([a, same, b, redrawn, back]));
+    MH.sheet = { kind: 'i-rsi' }; T.render(); const c = await T.liveTick(); MH.sheet = null; T.render();
+    ok('실시간 확인: 창이 열려 있으면 건너뜀', c === undefined, c);
+    const md = window.mdLoad, n0 = MH.market.SOXL.prices.length; window.mdLoad = () => Promise.reject(new Error('network'));
+    let f = null; try { f = await T.liveTick(); } finally { window.mdLoad = md; }
+    ok('실시간 확인이 잠깐 실패하면 있던 시세 그대로 (주문표가 사라지지 않음)', f === false && MH.market.SOXL.prices.length === n0 && n0 > 0 && !/불러오지 못/.test(rt().innerText), JSON.stringify([f, n0, MH.market.SOXL.prices.length]));
+  } catch (e) { ok('실시간 확인 오류', false, String(e && e.message)); }
+  return R;
+}"""
+
+BT_JS = """async (live) => {""" + PRE + """
+  try {
+    const s = ses().settings;
+    let r = await waitCard();
+    ok('카드 기본 기간 = 전체 · 계산 끝', r && r.st === 'ok' && $('#mh-bt [data-act="bt-per"][data-v="all"]').classList.contains('mh-btn-sel'), r && (r.st + ' ' + (r.msg || '')));
+    if (!r || r.st !== 'ok') return R;
+    const bt = document.getElementById('mh-bt').innerText;
+    ok('카드: 수수료 0.1% · 무한매수법 백테스트 링크 없음 · 크게 보기 단추 · 상장 전 포함 단추', /수수료 0\\.1%/.test(bt) && !document.querySelector('#mh-bt a[href*="muhan-backtest"]') && $('[data-act="btz-open"]') && $('#mh-bt [data-act="bt-per"][data-v="pre"]') && !bad(bt), bad(bt) || bt.slice(0, 200));
+    /* 카드 숫자 = 엔진 직접 (같은 자료 · 일부분 복리 0.3 · RSI · 절세 · 분배금 빼기) */
+    const D = await MBT.load('SOXL'), F = await MBT.fxData().catch(() => null), o = T.btOpts(s), c = T.vcfg(s), cap = s.totalCapital, fx = F && o.tax ? MBT.fxFor(D.d, F) : null;
+    const Dn = o.divs ? D : Object.assign({}, D, { dv: null }), base = { from: 1, to: D.d.length - 1, capital: cap, norm: 'auto', rows: false };
+    const Rn = MHV.run(c, Dn, Object.assign({}, base, { fee: o.fee / 100, sec: 0.0000206, divTax: 0.15, tax: fx ? { fx: i => fx[i], method: o.method, harvest: o.harvest } : null }));
+    const Rg = MHV.run(c, Dn, Object.assign({}, base, { fee: 0, sec: 0, divTax: 0, tax: null }));
+    const n2 = MBT.stats(Rn, D, cap), g2 = MBT.stats(Rg, D, cap), eq = (a, b) => ['final', 'cagr', 'mdd', 'fees', 'tax'].every(k => Math.abs((a[k] || 0) - (b[k] || 0)) <= 1e-9 * Math.max(1, Math.abs(a[k] || 0)));
+    ok('카드 숫자 = 엔진 직접 (포함·미포함 · 일부분 복리·RSI·절세·분배금 빼기)', fx && eq(r.net, n2) && eq(r.gross, g2) && r.from === D.d[1], JSON.stringify([r.net.cagr, n2.cagr, r.gross.cagr, g2.cagr]));
+    /* 크게 보기 — 전체 구간 = 카드 숫자 */
+    click('[data-act="btz-open"]'); await W(400);
+    const st = () => document.getElementById('mh-btz-st').innerText, cell = (row, col) => { const tr = [...document.querySelectorAll('#mh-btz-st tbody tr')].filter(x => x.cells[0].textContent === row)[0]; return tr ? tr.cells[col].textContent : null; };
+    const cvz = rt().querySelector('canvas[data-chart="btz"]'), chz = () => Chart.getChart(rt().querySelector('canvas[data-chart="btz"]'));
+    ok('크게 보기 창: 그래프 · 기간 단추 5개(전체 선택) · 연도별 표', cvz && chz() && $$('[data-act="btz-per"]').length === 5 && $('[data-act="btz-per"][data-v="0"]').classList.contains('mh-btn-sel') && $$('.mh-btz-y tbody tr[data-act="btz-year"]').length > 10);
+    ok('크게 보기 전체 구간 = 카드 (수익률·연평균·낙폭 · 그냥 보유 포함 · 시작 = 원금)',
+       cell('수익률', 1) === pc(r.net.ret) && cell('연평균 (CAGR)', 1) === pc(r.net.cagr, 2) && cell('최대 낙폭 (MDD)', 1) === pc(r.net.mdd) &&
+       cell('수익률', 2) === pc(r.net.bh.ret) && cell('연평균 (CAGR)', 2) === pc(r.net.bh.cagr, 2) && cell('최대 낙폭 (MDD)', 2) === pc(r.net.bh.mdd) && /^\\$20,000 →/.test(cell('시작 → 끝', 1)),
+       st().replace(/\\s+/g, ' ') + ' | card ' + [pc(r.net.ret), pc(r.net.cagr, 2), pc(r.net.mdd), pc(r.net.bh.ret), pc(r.net.bh.cagr, 2)].join(' '));
+    /* 연도별: 그해 마지막 거래일 ÷ 그 전해 마지막 거래일 (첫해는 원금) — 직접 계산 */
+    const d = r.ch.d, s1 = r.ch.net, bh = r.ch.bh, ends = []; d.forEach((x, i) => { if (i === d.length - 1 || d[i + 1].slice(0, 4) !== x.slice(0, 4)) ends.push(i); });
+    const yrRow = y => [...document.querySelectorAll('.mh-btz-y tbody tr[data-act="btz-year"]')].filter(tr => tr.cells[0].textContent.slice(0, 4) === String(y))[0];
+    let badY = [];
+    ends.forEach((i1, k) => { const i0 = k ? ends[k - 1] : -1, v0 = i0 < 0 ? r.cap : s1[i0], b0 = i0 < 0 ? r.cap : bh[i0], tr = yrRow(d[i1].slice(0, 4));
+      if (!tr || tr.cells[1].textContent !== pc(s1[i1] / v0 - 1) || tr.cells[2].textContent !== pc(bh[i1] / b0 - 1) || tr.getAttribute('data-v') !== i0 + ':' + i1) badY.push(d[i1].slice(0, 4)); });
+    ok('연도별 수익률 ' + ends.length + '년 = 직접 계산 (첫해는 원금 기준)', ends.length >= 10 && !badY.length, badY.join(','));
+    const ym = ends[Math.floor(ends.length / 2)], yy = d[ym].slice(0, 4), tr = yrRow(yy), want = tr.cells[1].textContent;
+    const capFull = chz().data.datasets.length === 3 && rt().querySelector('.mh-btz-cap').style.display !== 'none';
+    tr.click(); await W(200);
+    { const [i0, i1] = tr.getAttribute('data-v').split(':').map(Number), vis = []; for (let i = Math.max(0, i0); i <= i1; i++) vis.push(s1[i], bh[i]);
+      const lo = Math.min(...vis), hi = Math.max(...vis), on = r.cap >= lo / 1.5 && r.cap <= hi * 1.5;
+      ok('원금 선: 전체 구간엔 보이고 · 확대 구간이 원금과 멀면 숨김(눈금이 눌리지 않게)', capFull && chz().data.datasets.length === (on ? 3 : 2) && (rt().querySelector('.mh-btz-cap').style.display === 'none') === !on, JSON.stringify([capFull, on, chz().data.datasets.length, Math.round(lo)])); }
+    ok('연도 줄을 누르면 그해로 확대 (구간 수익률 = 표 값 · 기간 단추 선택 풀림)', cell('수익률', 1) === want && T.btz.per === null && !$$('[data-act="btz-per"].mh-btn-sel').length && new RegExp(yy + '-12-').test(st()), st().slice(0, 80) + ' / ' + want);
+    click('[data-act="btz-per"][data-v="1"]'); await W(200);
+    const y1 = (st().match(/· ([\\d.]+)년/) || [])[1];
+    ok('기간 1년 단추 → 1년 구간 · 단추 선택 표시', T.btz.per === '1' && $('[data-act="btz-per"][data-v="1"]').classList.contains('mh-btn-sel') && Math.abs(Number(y1) - 1) <= 0.05, y1);
+    click('[data-act="btz-per"][data-v="0"]'); await W(200);
+    const a0 = T.btz.a, b0 = T.btz.b, rc = rt().querySelector('canvas[data-chart="btz"]').getBoundingClientRect(), y = rc.top + rc.height / 2;
+    const pe = (t, x) => rt().querySelector('canvas[data-chart="btz"]').dispatchEvent(new PointerEvent(t, { bubbles: true, pointerId: 1, clientX: x, clientY: y }));
+    pe('pointerdown', rc.left + rc.width * 0.3); pe('pointermove', rc.left + rc.width * 0.5); pe('pointermove', rc.left + rc.width * 0.6); pe('pointerup', rc.left + rc.width * 0.6); await W(200);
+    ok('그래프를 끌면 고른 구간만 확대', a0 === -1 && T.btz.a > 0 && T.btz.b < b0 && T.btz.b - T.btz.a > 5 && T.btz.per === null, JSON.stringify([a0, b0, T.btz.a, T.btz.b]));
+    const lg = document.getElementById('mh-btz-log'), l0 = chz().options.scales.y.type; lg.click(); await W(200);
+    ok('로그 눈금 끄고 켜기', chz().options.scales.y.type !== l0 && document.getElementById('mh-btz-log').checked === (chz().options.scales.y.type === 'logarithmic'), l0 + ' → ' + chz().options.scales.y.type);
+    const ka = T.btz.a, kb = T.btz.b, sN = st();
+    click('.mh-sheet [data-act="bt-view"][data-v="gross"]'); await W(300);
+    ok('창 안에서 미포함으로 바꿔도 구간 그대로 · 숫자는 미포함', T.btz.a === ka && T.btz.b === kb && st() !== sN && rt().querySelector('.mh-sheet [data-act="bt-view"][data-v="gross"]').classList.contains('mh-btn-sel'));
+    click('.mh-sheet [data-act="bt-view"][data-v="net"]'); await W(200);
+    const sht = document.querySelector('#t7-root .mh-sheet').innerText;
+    ok('크게 보기 창 무한매수법 용어 없음', !bad(sht), bad(sht));
+    MH.sheet = null; T.render(); await W(50);
+    /* 상장 전 포함 */
+    click('#mh-bt [data-act="bt-per"][data-v="pre"]'); await W(100);
+    r = await waitCard(240000);
+    const tp = document.getElementById('mh-bt').innerText;
+    if (r && r.st === 'ok' && r.pre) {
+      const big = r.pre.d != null && Math.abs(r.pre.d) >= 0.05;
+      ok('상장 전 포함: 1990년대부터 재현 이어 붙임 · 상장일 표시 · 재현 구간 안내', r.preL > 0 && r.from < '2000-01-01' && /상장 전 재현/.test(tp) && /상장일/.test(tp) && r.pre.end < '2010-03-12', JSON.stringify(r.pre) + ' ' + r.from);
+      ok('상장 전 포함: |재현 차이| ≥ 5%p ⇔ ⚠ 안내', big === /⚠ 상장 전 구간 결과는 믿기 어려워요/.test(tp), r.pre.d);
+      click('[data-act="btz-open"]'); await W(400);
+      const s2 = document.querySelector('#t7-root .mh-sheet').innerText;
+      ok('상장 전 크게 보기: 재현 표시(연도 줄 · 구간 안내)', /재현/.test(s2) && /상장 전 재현 가격/.test(s2) && cell('연평균 (CAGR)', 1) === pc(r.net.cagr, 2), s2.slice(0, 160));
+      MH.sheet = null; T.render();
+    } else ok(live ? '상장 전 포함: 배포 사이트에선 SOXL 재현이 붙어야 함' : '상장 전 포함: 재현 식이 없으면 실제 일봉만 · 안내', !live && r && r.st === 'ok' && /실제 일봉만 썼어요/.test(tp), (r && (r.st + ' ' + (r.msg || r.preNote || ''))) + ' ' + tp.slice(0, 160));
+    click('#mh-bt [data-act="bt-per"][data-v="all"]'); await W(100); await waitCard();
+  } catch (e) { ok('백테스트 카드 흐름 오류', false, String(e && e.message)); }
+  return R;
+}"""
+
+MID_JS = """async () => {""" + PRE + """
+  try {
+    MH.menu = true; T.render(); click('.mh-menu [data-act="ses-add"]'); await W(150);
+    click('[data-act="su-mid"][data-v="1"]'); await W(40);
+    fill('[data-in="su:avg"]', '50'); fill('[data-in="su:qty"]', '100'); fill('[data-in="su:cash"]', '3000'); fill('[data-in="su:t"]', '72'); await W(40);
+    const hm = document.getElementById('mh-su-dyn').innerText;
+    ok('중간 진입 시작 화면: 72회를 다 썼으면 소진 대응으로 시작한다고 안내', /72회를 다 써서/.test(hm) && /원금 소진 대응으로 시작/.test(hm) && !/하루 \\d+주/.test(hm), hm);
+    click('[data-act="su-start"]'); await W(400);
+    const D = T.curD(), tx = rt().innerText, tags = D.orders.map(o => o.tag);
+    ok('중간 진입 72회 다 씀 → 처음부터 소진 대응 · 매수 주문 없음 · 목표 지정가 + 평단 −10% LOC 전량',
+       D.st.mode === 'xrec' && !D.orders.some(o => o.side === 'B') && tags.indexOf('tp') >= 0 && tags.indexOf('xrec') >= 0, D.st.mode + ' ' + tags.join(','));
+    ok('소진 안내: 회복 기다림 · 72루틴 고정 규칙 · 단계 "원금 소진" · 용어 없음', /소진 — 회복 기다림/.test(tx) && /72루틴 고정 규칙/.test(tx) && /원금 소진/.test(tx) && /평단 −10% LOC \\(전량\\)/.test(tx) && !bad(tx), bad(tx) || tx.slice(0, 200));
+    ok('두 번째 세션 이름 72루틴 2', ses().name === '72루틴 2', ses().name);
+  } catch (e) { ok('중간 진입 흐름 오류', false, String(e && e.message)); }
   return R;
 }"""
 
 
-def _wait_bt(page, ms=90000):
-    page.wait_for_function('window.T72debug && T72debug.R() && T72debug.R().sn', timeout=ms)
+CYCLE_JS = """async () => {""" + PRE + """
+  try {
+    const sid = 'cyc-test', st = T.store;
+    st.sessions.push({ id: sid, name: '72루틴 3', settings: { ticker: 'SOXL', splits: 72, targetProfit: 52.5, bigNumPercent: 13, lowerLocShares: 1, lowerLocLines: 0, version: '1.0', exhaust: 'recover', btFee: 0.25, cycleNo: 2, totalCapital: 26000, base: 20000 },
+      transactions: [{ id: 'c1', date: '2026-09-01T12:00:00', close: 100, fills: [{ side: 'B', p: 100, q: 2, tag: 'first', m: 'LOC' }] },
+                     { id: 'c2', date: '2026-09-02T12:00:00', close: 150, fills: [{ side: 'S', p: 152.5, q: 2, tag: 'tp', m: 'LMT' }] }],
+      isReverseMode: false, reverseStarPrice: null, archivedCycles: [], midEntry: null });
+    st.activeSessionId = sid; MH.sheet = null; T.render(); await W(150);
+    const bs = $$('[data-act="restart"], [data-act="cel-restart"]').map(b => [b.getAttribute('data-act'), b.getAttribute('data-v'), b.textContent.trim()]);
+    const base = bs.filter(b => /처음 원금으로 재시작/.test(b[2])), cont = bs.filter(b => /이어서 재시작/.test(b[2]));
+    ok('사이클 끝: 처음 원금으로 재시작 = 처음 원금 $20,000 (이번 원금 $26,000 아님) · 이어서 재시작 = 원금 + 번 돈',
+       base.length >= 1 && base.every(b => b[1] === '20000' && /\\$20,000/.test(b[2])) && cont.length >= 1 && cont.every(b => Math.abs(Number(b[1]) - 26105) < 1e-6), JSON.stringify(bs));
+    const tx = rt().innerText;
+    ok('사이클 끝 화면·축하 창 무한매수법 용어 없음', !bad(tx), bad(tx));
+    MH.sheet = null; T.render(); await W(50);
+    $$('[data-act="restart"]').filter(b => /처음 원금으로 재시작/.test(b.textContent))[0].click(); await W(150);
+    const s2 = ses().settings;
+    ok('처음 원금으로 재시작 → 새 사이클 원금 $20,000 · 지난 사이클 보관', s2.totalCapital === 20000 && s2.base === 20000 && ses().archivedCycles.length === 1 && !ses().transactions.length, JSON.stringify([s2.totalCapital, s2.base, ses().archivedCycles.length]));
+  } catch (e) { ok('사이클 끝 흐름 오류', false, String(e && e.message)); }
+  return R;
+}"""
 
 
-def _fresh(page, base, setup=None):
+def _fresh(page, base):
     page.goto('about:blank'); page.goto(base + '72/', wait_until='load')
-    page.evaluate("() => { %s.forEach(k => localStorage.removeItem(k)); }" % KEYS)
-    if setup:
-        page.evaluate(setup)
+    page.evaluate(CLEAR)
     page.goto('about:blank'); page.goto(base + '72/', wait_until='load')
+    page.wait_for_function("window.T72debug && document.querySelector('#t7-root [data-act=\"su-start\"]')", timeout=60000)
+
+
+def _sync(page, base, fail):
+    """가짜 로그인으로 계정 자동 저장 경로 확인 — Worker 요청은 모두 이 검사 안에서 가로채 답함 (실제 계정·서버 안 건드림)"""
+    calls = []
+    hd = {'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+          'Content-Type': 'application/json'}
+
+    def wk(route):
+        q = route.request
+        if '/etf?' in q.url:
+            return route.fallback()
+        path = re.sub(r'^https?://[^/]+', '', q.url).split('?')[0]
+        if q.method == 'OPTIONS':
+            return route.fulfill(status=204, headers=hd, body='')
+        if path.endswith('/auth/config'):
+            return route.fulfill(status=200, headers=hd, body=json.dumps({'providers': {'kakao': {'id': 'test'}}}))
+        if path.startswith('/udata/'):
+            calls.append((q.method, path, q.post_data or ''))
+            if q.method == 'GET':
+                return route.fulfill(status=200, headers=hd, body=json.dumps({'v': None, 't': 0}))
+            return route.fulfill(status=200, headers=hd, body=json.dumps({'t': 1700000000000 + len(calls)}))
+        return route.fulfill(status=200, headers=hd, body='{}')
+    pat = re.compile(r'^https://[^/]*workers\.dev/.*')
+    page.route(pat, wk)
+    try:
+        page.goto('about:blank'); page.goto(base + '72/', wait_until='load')
+        page.evaluate(CLEAR)
+        page.evaluate("() => localStorage.setItem('dc_auth', JSON.stringify({ token: 'test.test.test', exp: 4102444800, user: { id: 'u-test', nickname: '검사' } }))")
+        page.goto('about:blank'); page.goto(base + '72/', wait_until='load')
+        page.wait_for_function("window.T72debug && document.querySelector('#t7-root [data-act=\"su-start\"]')", timeout=60000)
+        page.wait_for_timeout(1200)
+        t0 = page.evaluate("() => document.getElementById('t7-root').innerText")
+        page.fill('#t7-root [data-in="su:cap"]', '15000'); page.click('#t7-root [data-act="su-start"]')
+        page.wait_for_timeout(2500)
+        posts = [c for c in calls if c[0] == 'POST' and c[1] == '/udata/r72']
+        v = json.loads(posts[-1][2]).get('v') if posts else None
+        if not any(c[0] == 'GET' and c[1] == '/udata/r72' for c in calls):
+            fail('72 계정', '로그인 상태로 열었는데 계정 기록을 읽지 않음 (GET /udata/r72) %r' % calls[:4])
+        if not v or v['sessions'][0]['settings'].get('version') != '1.0' or v['sessions'][0]['settings'].get('totalCapital') != 15000 or v['sessions'][0]['name'] != '72루틴':
+            fail('72 계정', '시작한 기록이 계정에 자동 저장되지 않음 (POST /udata/r72) %r' % [(c[0], c[1]) for c in calls])
+        if any('/udata/muhan' in c[1] or '/udata/vr' in c[1] for c in calls):
+            fail('72 계정', '72루틴 화면이 다른 기록 키를 부름 %r' % [(c[0], c[1]) for c in calls])
+        if '로그인 상태 — 계정에 자동 저장' not in t0:
+            fail('72 계정', '시작 화면에 로그인 자동 저장 안내가 없음')
+        print('    계정 자동 저장: %s' % ' → '.join('%s %s' % (c[0], c[1]) for c in calls[:4]), flush=True)
+    except Exception as e:
+        fail('72 계정', '로그인 자동 저장 검사 오류: %s' % str(e)[:160])
+    finally:
+        page.evaluate("() => { localStorage.removeItem('dc_auth'); }")
+        page.evaluate(CLEAR)
+        page.unroute(pat, wk)
 
 
 def check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS):
-    print('[T72] 72매매법', flush=True)
+    print('[T72] 72루틴', flush=True)
     errs.clear()
-    page.set_viewport_size({'width': 1280, 'height': 900})
-
+    page.set_viewport_size({'width': 430, 'height': 900})
     n = [0, 0]
 
     def report(where, ts):
@@ -196,93 +350,80 @@ def check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS):
             if not t['ok']:
                 n[1] += 1
                 fail(where, '%s%s' % (t['name'], (' — ' + t['info']) if t.get('info') else ''))
-    # 백테스트 (기본값 · 엔진 · 표 · 세부옵션) — 마지막엔 찾은 설정(수수료 0.07% · RSI · 연말 절세)으로 바꿔 둠
-    _fresh(page, base); _wait_bt(page)
-    out = page.evaluate(BT_JS)
-    report('72', out['R'] if isinstance(out, dict) else out)
-    sim = out.get('sim') if isinstance(out, dict) else None
-    # 같은 조건을 무한매수법 백테스트 화면 주소로 → 숫자가 같아야 함 (같은 엔진·같은 자료 · 고정 7가지가 V1.0 설정 그대로인지)
-    if sim:
-        page.goto('about:blank'); page.goto(base + 'muhan-backtest/#v=1.0&t=SOXL&c=10000&sp=72&tg=52.5&bg=13&fe=0.07&x=recover&r=rsi&hv=1', wait_until='load')
-        try:
-            page.wait_for_function('window.MBTdebug && MBTdebug.R() && MBTdebug.R().sn', timeout=90000)
-            m = page.evaluate("(() => { const R = MBTdebug.R(); return { cagr: R.sn.cagr, mdd: R.sn.mdd, final: R.sn.final, gc: R.sg.cagr, from: R.D.d[R.net.from], to: R.D.d[R.net.to] }; })()")
-            bad = [k for k in ('cagr', 'mdd', 'final', 'gc') if abs(m[k] - sim[k]) > 1e-9 * max(1, abs(m[k]))]
-            if bad or m['from'] != sim['from'] or m['to'] != sim['to']:
-                fail('72', '같은 조건 무한매수법 백테스트 화면과 숫자가 다름 %s — 72 %s · 시뮬레이터 %s' % (bad, json.dumps(sim), json.dumps(m)))
-            else:
-                print('  72 = 시뮬레이터 (수수료 0.07%% · RSI · 연말 절세): CAGR %.2f%% · MDD %.2f%%' % (sim['cagr'] * 100, sim['mdd'] * 100), flush=True)
-        except Exception as e:
-            fail('72', '무한매수법 백테스트 화면 비교 실패: %s' % str(e)[:150])
-    # 설정이 이 기기에 남음 (새로 열어도 그대로)
-    page.goto('about:blank'); page.goto(base + '72/', wait_until='load'); _wait_bt(page)
-    s = page.evaluate("() => T72debug.S()")
-    if not (s['feeMode'] == 'custom' and s['feeC'] == 0.07 and s['restart'] == 'rsi' and s['harvest']):
-        fail('72', '설정이 새로 연 뒤 남지 않음 %r' % s)
-    # [기본값] — 세부옵션만 처음 값 · 시작 원금·기록 시작 방법(중간 진입 값)은 그대로
-    page.evaluate("() => { const c = document.getElementById('t7-cap'); c.value = '15000'; c.dispatchEvent(new Event('input', { bubbles: true })); document.querySelector('#t7-set [data-k=\"entry\"][data-v=\"mid\"]').click(); }")
-    page.once('dialog', lambda d: d.accept())
-    page.click('#t7-set [data-act="reset"]'); page.wait_for_timeout(200)
-    s = page.evaluate("() => T72debug.S()")
-    if not (s['feeMode'] == 'def' and s['restart'] == 'next' and not s['harvest'] and s['cap'] == 15000 and s['entry'] == 'mid'):
-        fail('72', '[기본값]이 세부옵션만 되돌리지 않음 (원금·기록 시작 방법은 그대로여야) %r' % s)
-    # 기록 (원금 $20,000 · RSI 새 사이클 · 수수료 기본 0.75%)
-    _fresh(page, base, "() => localStorage.setItem('t72-set', JSON.stringify({ cap: 20000, restart: 'rsi' }))")
-    page.wait_for_function('window.T72debug && T72debug.M.D', timeout=90000)
-    report('72 기록', page.evaluate(LOG_JS))
-    # 새로고침 뒤 기록 유지 · 기록 탭으로 열림
-    page.reload(wait_until='load')
-    try:
-        page.wait_for_function('window.T72debug && T72debug.JR() && T72debug.JR().days.length > 100', timeout=60000)
-        if not page.evaluate("() => document.querySelector('#t7-tabs [data-tab=\"log\"]').classList.contains('on') && T72debug.J().start === '2025-03-03'"):
-            fail('72 기록', '새로고침 뒤 기록 탭·시작일이 남지 않음')
-    except Exception as e:
-        fail('72 기록', '새로고침 뒤 기록이 없음: %s' % str(e)[:120])
-    # 백업 내려받기 → 지우기 → 불러오기
-    try:
-        with page.expect_download(timeout=15000) as dl:
-            page.click('[data-act="exp"]')
-        path = dl.value.path()
-        bk = json.load(open(path, encoding='utf-8'))
-        if bk.get('app') != '72매매법' or bk['log']['start'] != '2025-03-03' or bk['set']['cap'] != 20000:
-            fail('72 기록', '백업 파일 내용이 다름 %r' % {k: bk.get(k) for k in ('app', 'v')})
-        page.once('dialog', lambda d: d.accept())
-        page.click('[data-act="jdel"]'); page.wait_for_timeout(200)
-        if page.evaluate("() => !!T72debug.J() || !!localStorage.getItem('t72-log') || !document.getElementById('t7-start')"):
-            fail('72 기록', '기록 지우기 뒤에도 기록이 남음')
-        page.set_input_files('#t7-imp', path); page.wait_for_timeout(500)
-        if not page.evaluate("() => T72debug.J() && T72debug.J().start === '2025-03-03' && T72debug.JR() && T72debug.JR().days.length > 100"):
-            fail('72 기록', '백업 불러오기 실패')
-        bad_path = os.path.join(os.path.dirname(path), 'bad.json')
-        open(bad_path, 'w', encoding='utf-8').write('{"app":"x"}')
-        msgs = []
-        page.once('dialog', lambda d: (msgs.append(d.message), d.accept()))
-        page.set_input_files('#t7-imp', bad_path); page.wait_for_timeout(400)
-        if not msgs or '백업 파일이 아니에요' not in msgs[0] or not page.evaluate("() => T72debug.J() && T72debug.J().start === '2025-03-03'"):
-            fail('72 기록', '잘못된 백업 파일 안내·기존 기록 보존 실패 %r' % msgs)
-    except Exception as e:
-        fail('72 기록', '백업 내려받기/불러오기 검사 오류: %s' % str(e)[:160])
-    # 중간 진입
-    _fresh(page, base, "() => { localStorage.setItem('t72-set', JSON.stringify({ cap: 20000, entry: 'mid', mAvg: '40', mQty: '30', mT: '10', mCash: '' })); localStorage.setItem('t72-log', JSON.stringify({ start: '2025-03-03', ov: {} })); localStorage.setItem('t72-open', 'true'); }")
-    report('72 중간 진입', page.evaluate(MID_JS))
-    report('72 시세', page.evaluate(MISC_JS))
-    # 폭 넘침 — 세부옵션 모두 펼친 기록 화면 · 백테스트 화면
-    for tab in ('log', 'bt'):
-        page.evaluate("t => document.querySelector('#t7-tabs [data-tab=\"' + t + '\"]').click()", tab)
-        if tab == 'bt':
-            try:
-                _wait_bt(page, 60000)
-            except Exception:
-                fail('72', '중간 진입 상태에서 백테스트 탭 결과 없음')
-        page.wait_for_timeout(200)
+
+    def overflow(what):
         for w in widths:
-            page.set_viewport_size({'width': w, 'height': 900}); page.wait_for_timeout(100)
+            page.set_viewport_size({'width': w, 'height': 900}); page.wait_for_timeout(120)
             r = page.evaluate(OVERFLOW_JS)
             if r['sw'] > r['vw'] + 1 or r['out']:
-                fail('72', '%s 화면 %dpx 넘침 (문서 %dpx)%s' % ('기록' if tab == 'log' else '백테스트', w, r['sw'], (' · ' + ', '.join(r['out'])) if r['out'] else ''))
-    page.set_viewport_size({'width': 1280, 'height': 900})
-    page.evaluate("() => { %s.forEach(k => localStorage.removeItem(k)); }" % KEYS)
+                fail('72', '%s %dpx 넘침 (문서 %dpx)%s' % (what, w, r['sw'], (' · ' + ', '.join(r['out'])) if r['out'] else ''))
+        page.set_viewport_size({'width': 430, 'height': 900}); page.wait_for_timeout(120)
+
+    _fresh(page, base)
+    mh0 = page.evaluate("() => localStorage.getItem('muhan4-store')")
+    # 예전 '72매매법' 화면 기록이 남아 있으면 안내 (옮기지 못함 · 중간 진입) · [알림 지우기] = 예전 키 삭제
+    page.evaluate("() => { localStorage.setItem('t72-log', JSON.stringify({ start: '2025-03-03', ov: {} })); localStorage.setItem('t72-set', '{}'); }")
+    page.goto('about:blank'); page.goto(base + '72/', wait_until='load')
+    page.wait_for_function("window.T72debug && document.querySelector('#t7-root [data-act=\"su-start\"]')", timeout=60000)
+    lg = page.evaluate("() => { const n = document.getElementById('mh-legacy'); return n ? n.innerText : ''; }")
+    n[0] += 1
+    if '2025-03-03' not in lg or '중간 진입' not in lg:
+        n[1] += 1; fail('72 시작', '예전 화면 기록 안내가 없음 %r' % lg[:120])
+    if page.query_selector('#mh-legacy [data-act="legacy-x"]'):
+        page.click('#mh-legacy [data-act="legacy-x"]'); page.wait_for_timeout(150)
+    else:
+        page.evaluate(CLEAR)   # 안내가 없으면(위에서 이미 실패) 예전 키만 지우고 계속
+    n[0] += 1
+    if page.evaluate("() => !!document.getElementById('mh-legacy') || !!localStorage.getItem('t72-log') || !!localStorage.getItem('t72-set')"):
+        n[1] += 1; fail('72 시작', '[알림 지우기] 뒤에도 예전 기록 안내·키가 남음')
+    page.evaluate("() => { const T = T72debug; T.MH.setup.more = true; T.render(); }")
+    overflow('시작 화면(세부옵션 펼침)')
+    page.evaluate("() => { const T = T72debug; T.MH.setup.more = false; T.render(); }")
+    report('72 시작', page.evaluate(SETUP_JS))
+    report('72 현재', page.evaluate(NOW_JS))
+    overflow('현재 화면(기록 3일)')
+    report('72 실시간', page.evaluate(LIVE_JS))
+    report('72 백테스트', page.evaluate(BT_JS, not local))
+    page.evaluate("() => { const T = T72debug; T.MH.sheet = { kind: 'btz', key: T.btKey(T.store.sessions[0].settings) }; T.render(); }")
+    page.wait_for_timeout(400)
+    overflow('크게 보기 창')
+    page.evaluate("() => { T72debug.MH.sheet = null; T72debug.render(); }")
+    report('72 중간 진입', page.evaluate(MID_JS))
+    report('72 사이클 끝', page.evaluate(CYCLE_JS))
+    # 새로고침 뒤 그대로 (세션 3개 · 첫 세션 기록 3일)
+    page.reload(wait_until='load')
+    try:
+        page.wait_for_function("window.T72debug && T72debug.store.sessions.length === 3 && document.querySelector('#t7-root .mh-top')", timeout=30000)
+        if page.evaluate("() => T72debug.store.sessions[0].transactions.length") != 3:
+            fail('72', '새로고침 뒤 첫 세션 기록 3일이 남지 않음')
+    except Exception as e:
+        fail('72', '새로고침 뒤 기록이 남지 않음: %s' % str(e)[:120])
+    if page.evaluate("() => localStorage.getItem('muhan4-store')") != mh0:
+        fail('72', '72루틴 화면이 무한매수법 기록(muhan4-store)을 바꿈')
+    # 기본 설정(원금 $10,000 · 수수료 0.25%) 카드 = 같은 조건 무한매수법 백테스트 화면 (같은 엔진·같은 자료 · 고정 규칙이 V1.0 설정 그대로)
+    _fresh(page, base)
+    page.fill('#t7-root [data-in="su:cap"]', '10000'); page.click('#t7-root [data-act="su-start"]')
+    try:
+        page.wait_for_function("() => { const T = T72debug, s = T.store.sessions[0].settings, c = s && T.bt.cache[T.btKey(s)]; return c && (c.st === 'ok' || c.st === 'err'); }", timeout=180000)
+        c = page.evaluate("() => { const T = T72debug, r = T.bt.cache[T.btKey(T.store.sessions[0].settings)]; return r.st === 'ok' ? { cagr: r.net.cagr, mdd: r.net.mdd, final: r.net.final, gc: r.gross.cagr, from: r.from, to: r.to, fee: r.o.fee } : { err: r.msg || 'err' }; }")
+        if c.get('err') or c.get('fee') != 0.25:
+            fail('72', '기본 설정 카드 계산 실패 또는 수수료가 0.25%%가 아님 %r' % c)
+        elif os.path.isdir(os.path.join(ROOT, 'muhan-backtest')) or not local:
+            page.goto('about:blank'); page.goto(base + 'muhan-backtest/#v=1.0&t=SOXL&c=10000&sp=72&tg=52.5&bg=13&fe=0.25&x=recover', wait_until='load')
+            page.wait_for_function('window.MBTdebug && MBTdebug.R() && MBTdebug.R().sn', timeout=180000)
+            m = page.evaluate("(() => { const R = MBTdebug.R(); return { cagr: R.sn.cagr, mdd: R.sn.mdd, final: R.sn.final, gc: R.sg.cagr, from: R.D.d[R.net.from], to: R.D.d[R.net.to] }; })()")
+            bad = [k for k in ('cagr', 'mdd', 'final', 'gc') if abs(m[k] - c[k]) > 1e-9 * max(1, abs(m[k]))]
+            if bad or m['from'] != c['from'] or m['to'] != c['to']:
+                fail('72', '기본 설정 카드와 같은 조건 무한매수법 백테스트 화면 숫자가 다름 %s — 72 %s · 시뮬레이터 %s' % (bad, json.dumps(c), json.dumps(m)))
+            else:
+                print('    72 카드 = 시뮬레이터 (기본 설정 · 수수료 0.25%%): CAGR %.2f%% · MDD %.2f%%' % (c['cagr'] * 100, c['mdd'] * 100), flush=True)
+    except Exception as e:
+        fail('72', '기본 설정 카드·시뮬레이터 비교 오류: %s' % str(e)[:160])
+    # 로그인 자동 저장
+    _sync(page, base, fail)
+    page.goto('about:blank'); page.goto(base + '72/', wait_until='load')
+    page.evaluate(CLEAR)
     for t in [t for t, u in errs if not ignorable(t, u)][:3]:
         fail('72', '콘솔 오류: ' + t[:200])
-    print('  72매매법 화면 검사 %d개 · 실패 %d' % (n[0], n[1]), flush=True)
+    print('  72루틴 화면 검사 %d개 · 실패 %d' % (n[0], n[1]), flush=True)
     page.set_viewport_size({'width': 1440, 'height': 900})
