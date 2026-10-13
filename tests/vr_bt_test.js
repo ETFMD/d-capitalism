@@ -181,17 +181,17 @@ check('매수표·매도표 비교 수 (충분히 많이)', nTable > 5000 && nCy
   for (let i = 0; i < 3200; i++) {
     const gap = i ? 0.05 * Math.sin(i * 2.3) * Math.sin(i * 0.77) : 0, op = ct(p * Math.exp(gap)), cl = i ? ct(op * Math.exp(0.03 * Math.sin(i * 1.3 + 0.4) + 0.012 * Math.sin(i * 0.011))) : 50;
     const hi = ct(Math.max(op, cl) * (1 + 0.012 * Math.abs(Math.sin(i * 0.9)))), lo = ct(Math.min(op, cl) * (1 - 0.012 * Math.abs(Math.cos(i * 1.1))));
-    d.push(new Date(t).toISOString().slice(0, 10)); c.push(cl); h.push(Math.max(hi, op, cl)); l.push(Math.min(lo, op, cl));
+    d.push(new Date(t).toISOString().slice(0, 10)); c.push(cl); h.push(i ? Math.max(hi, op, cl) : 60); l.push(i ? Math.min(lo, op, cl) : 40);   /* 첫날 범위를 넓게 — 첫날 사다리 체결이 있으면 드러나게 */
     o.push(i % 11 === 5 ? null : i % 13 === 7 ? ct(lo * 0.97) : i % 17 === 3 ? ct(hi * 1.03) : op);   /* 시가 없는 날 · 저가 아래 · 고가 위 (엔진이 안으로 맞춤) */
     p = cl; t += (new Date(t).getUTCDay() === 5 ? 3 : 1) * 864e5;
   }
   const DO = { d, c, h, l, o, dv: null }, DC = Object.assign({}, DO, { o: null });
   let nFill = 0, nGapB = 0, nGapS = 0, nClose = 0, nClamp = 0;
-  const verify = (D, R, name) => {
-    let okF = true, info = '';
-    const ptr = {}; R.cycles.forEach(cy => { ptr[cy.no] = [0, 0, cy]; });
+  const verify = (D, R, name, fee, sec) => {
+    let okF = true, info = '', okM = true, infoM = '', nMiss = 0;
+    const ptr = {}; R.cycles.forEach(cy => { ptr[cy.no] = [0, 0, cy, 0]; });
     R.rows.forEach((r, j) => {
-      if (!j || (!r.bq && !r.sq)) return;
+      if (!j) return;
       const P = ptr[r.n], cy = P[2], i = r.i, k = r.k, io = !!(D.o && D.o[i] > 0);
       const op = (io ? Math.min(Math.max(D.o[i], D.l[i]), D.h[i]) : D.c[i]) * k, lo = (io ? D.l[i] : D.c[i]) * k, hi = (io ? D.h[i] : D.c[i]) * k;
       let sb = 0, ss = 0;
@@ -202,7 +202,16 @@ check('매수표·매도표 비교 수 (충분히 많이)', nTable > 5000 && nCy
         const want = Math.max(sp, op); if (Math.abs(fq - want) > 1e-9 * Math.max(1, want) || hi < sp - 1e-9) { okF = false; info = info || [D.d[i], 'S', sp, fq, want, hi].join(' '); }
         if (io && fq > sp + 1e-9) nGapS++; if (!io) nClose++; if (io && (D.o[i] < D.l[i] || D.o[i] > D.h[i])) nClamp++; }
       if (Math.abs(sb - r.ba) > 1e-9 * Math.max(1, r.ba) || Math.abs(ss - r.sa) > 1e-9 * Math.max(1, r.sa)) { okF = false; info = info || [D.d[i], 'sum', sb, r.ba, ss, r.sa].join(' '); }
+      /* 놓친 체결 없음: 그날 체결 뒤 다음 매수점은 판단 저가보다 낮아야(한도·Pool 이 막지 않았으면) · 다음 매도점은 판단 고가보다 높아야(매도표·보유가 남았으면) */
+      if (!cy.dead && cy.n0 >= 1) {
+        for (let q = P[3]; q < P[0]; q++) P[4] = (P[4] || 0) + cy.bpx[q]; P[3] = P[0];
+        const nb = r2(cy.min / (cy.n0 + P[0])), ns = cy.n0 - P[1] >= 1 ? r2(cy.max / (cy.n0 - P[1])) : Infinity, used = P[4] || 0;
+        if (used + nb <= cy.L - 1e-6 && r.pool - r.sa > nb * (1 + fee) + 1 && lo <= nb + 1e-9) { okM = false; infoM = infoM || [D.d[i], '매수 놓침', nb, lo, used, cy.L].join(' '); }
+        if (ns < Infinity && r.q > 0 && hi >= ns - 1e-9) { okM = false; infoM = infoM || [D.d[i], '매도 놓침', ns, hi].join(' '); }
+        nMiss++;
+      }
     });
+    check('놓친 체결 없음 (닿은 매수점·매도점은 한도·Pool·매도표가 막지 않는 한 그날 체결) ' + name, okM && nMiss > 1000, infoM || nMiss);
     R.cycles.forEach(cy => { const P = ptr[cy.no]; if (P[0] !== cy.bpx.length || P[1] !== cy.spx.length) { okF = false; info = info || 'cycle ' + cy.no + ' 개수'; } });
     check('체결 규칙 (시가 반영 · 없는 날 종가) ' + name, okF, info);
     check('체결가가 지정가보다 나쁘지 않음 ' + name, R.cycles.every(cy => cy.fpx.every((x, q) => x <= cy.bpx[q] + 1e-9) && cy.fsx.every((x, q) => x >= cy.spx[q] - 1e-9)));
@@ -210,18 +219,23 @@ check('매수표·매도표 비교 수 (충분히 많이)', nTable > 5000 && nCy
   for (const type of ['hold', 'acc', 'wd']) for (const norm of ['none', 'auto']) {
     const cfg = { type, G: 10, band: 0.15, limit: VRE.TYPES[type].limit, amt: type === 'acc' ? 250 : type === 'wd' ? 30 : 0, mode: 'ladder', cycle: 'cal', pool0: 0.1 };
     const oo = { from: 0, capital: 20000, fee: 0.0025, sec: 0.0000206, norm, trace: true };
-    verify(DO, VRE.run(cfg, DO, oo), type + ' ' + norm + ' 시가 있음');
-    const RC = VRE.run(cfg, DC, oo); verify(DC, RC, type + ' ' + norm + ' 시가 없음');
+    verify(DO, VRE.run(cfg, DO, oo), type + ' ' + norm + ' 시가 있음', oo.fee, oo.sec);
+    const RC = VRE.run(cfg, DC, oo); verify(DC, RC, type + ' ' + norm + ' 시가 없음', oo.fee, oo.sec);
     check('시가 없으면 매수·매도 = 그날 종가 × 개수 ' + type + ' ' + norm, RC.rows.every((r, j) => !j || (Math.abs(r.ba - r.bq * DC.c[r.i] * r.k) < 1e-9 * Math.max(1, r.ba) && Math.abs(r.sa - r.sq * DC.c[r.i] * r.k) < 1e-9 * Math.max(1, r.sa))));
   }
   check('체결 규칙 시험이 갭 매수·갭 매도·종가 판단·시가 맞춤을 모두 지남', nGapB > 20 && nGapS > 20 && nClose > 50 && nClamp > 5 && nFill > 2000, [nFill, nGapB, nGapS, nClose, nClamp].join(' '));
   /* 기록 화면·가이드북 엔진(VRE.backtest)도 같은 규칙 — 수정주가 그대로 · 10거래일 · 세금·수수료 없음이면 날마다 같은 평가금 */
   const days = d.map((x, i) => ({ date: x, c: c[i], h: h[i], l: l[i], o: o[i] }));
-  for (const type of ['hold', 'acc']) { const lim = VRE.TYPES[type].limit, amt = type === 'acc' ? 250 : 0, n0 = Math.floor(10000 / c[0]), V0 = r2(n0 * c[0]);
+  for (const type of ['hold', 'acc', 'wd']) { const lim = VRE.TYPES[type].limit, amt = type === 'acc' ? 250 : type === 'wd' ? 30 : 0, n0 = Math.floor(10000 / c[0]), V0 = r2(n0 * c[0]);
     const A = VRE.backtest({ type, G: 10, band: 0.15, V0, P0: 0, amt, limit: lim }, days), B = VRE.run({ type, G: 10, band: 0.15, limit: lim, amt, mode: 'ladder', cycle: 'td', pool0: 0 }, DO, { from: 0, capital: V0, norm: 'none' });
     let md = 0; for (let i = 0; i < A.eq.length; i++) md = Math.max(md, Math.abs(A.eq[i] - B.eq[i]) / A.eq[i]);
     check('시가 있는 일봉: VRE.backtest = VRE.run ' + type, A.eq.length === B.eq.length && md < 1e-12 && A.sells === B.sells, md); }
 }
+
+/* 분배금: 분배락일 아침 보유분만 — 시작일이 분배락일이면 그날은 받지 않음(그날 종가에 처음 삼) · 전날 시작이면 받음 */
+{ const e = TQ.dv.findIndex((x, i) => x > 0 && i > 300), cfg = { type: 'hold', G: 10, band: 0.15, limit: 0.5, mode: 'ladder', cycle: 'cal' };
+  const A = VRE.run(cfg, TQ, { from: e, capital: 10000, norm: 'auto' }), B = VRE.run(cfg, TQ, { from: e - 1, capital: 10000, norm: 'auto' });
+  check('시작일이 분배락일이면 그날 분배금 없음 · 전날 시작이면 있음', e > 0 && A.rows[0].dv === 0 && A.divs === A.rows.reduce((s, r) => s + r.dv, 0) && B.rows[1].dv > 0, [TQ.d[e], A.rows[0].dv, B.rows[1].dv].join(' ')); }
 
 /* 같은 입력이면 같은 결과 · 평균 현금 비중 0~1 */
 { const cfg = { type: 'acc', G: 10, band: 0.15, limit: 0.75, amt: 250, mode: 'ladder', cycle: 'cal' }, o = { from: 0, capital: 10000, norm: 'auto' };

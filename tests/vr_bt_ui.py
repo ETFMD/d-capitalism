@@ -39,6 +39,13 @@ MAIN_JS = """async (local) => {
     const D = window.MBT.parseY(txt), X = D && window.VBD.ohlY(txt, D), J = x => JSON.stringify(x);
     ok('VBD.ohlY: 시가·저가·고가 맞춤 · 어긋난 날 3일 = 종가 판단', D && X && D.d.length === 7 && J(X.o) === J([10, null, 9, null, 21, 30, null]) && J(X.l) === J([9, 11.5, 9, 15.5, 20, 29, 6]) && J(X.h) === J([11, 11.5, 9.5, 15.5, 22, 31.5, 6]) && X.bad === 3,
        X && J([D.d.length, X.o, X.l, X.h, X.bad]));
+    /* VBD.trimLive — 장중에 받아 둔 원문을 마감 뒤 40분 안에 읽으면 그날 봉을 뺌 (마감 뒤 새 원문 · 40분 지남 · 장중은 그대로) */
+    const tl = (rmt, now) => { const j = JSON.parse(txt), m = j.chart.result[0].meta; m.regularMarketTime = rmt; m.currentTradingPeriod = { regular: { start: T(6), end: T(6) + 23400 } };
+      const D2 = window.MBT.parseY(j), X2 = window.VBD.ohlY(j, D2); D2.o = X2.o; D2.l = X2.l; D2.h = X2.h; const cut = window.VBD.trimLive(j, D2, now);
+      return [cut, D2.d.length, D2.c.length, D2.o.length, D2.l.length, D2.h.length, D2.dv.length].join(','); };
+    const E2 = T(6) + 23400;
+    ok('VBD.trimLive: 장중 원문을 마감 뒤 40분 안에 읽으면 그날 봉을 뺌 · 그 밖엔 그대로', tl(E2 - 3600, E2 + 600) === 'true,6,6,6,6,6,6' && tl(E2, E2 + 600) === 'false,7,7,7,7,7,7' && tl(E2 - 3600, E2 + 3000) === 'false,7,7,7,7,7,7' && tl(E2 - 3600, E2 - 60) === 'false,7,7,7,7,7,7',
+       [tl(E2 - 3600, E2 + 600), tl(E2, E2 + 600), tl(E2 - 3600, E2 + 3000), tl(E2 - 3600, E2 - 60)].join(' / '));
     const n0 = JSON.stringify({ chart: { result: [{ meta: { gmtoffset: 0 }, timestamp: [T(0), T(1)], indicators: { quote: [{ open: [1, 2], close: [1, 2] }] } }] } });
     ok('VBD.ohlY: 고가·저가가 없는 원문은 null (종가 판단)', window.VBD.ohlY(n0, window.MBT.parseY(n0)) === null);
     const cj = await window.mdLoad('etfcagr.json'), C = window.VBD.fromCagrD(cj.series.TQQQ), M = window.MBT.fromCagr(cj.series.TQQQ);
@@ -60,9 +67,14 @@ MAIN_JS = """async (local) => {
   const nc = $$('#vb-tb tbody tr').length;
   $('#vb-res [data-tab="day"]').click(); await W(100);
   ok('사이클별(50줄씩)·일자별(50줄씩) 표', nc === Math.min(50, r.gross.cycles.length) && $$('#vb-tb tbody tr').length === Math.min(50, r.gross.rows.length), nc + ' / ' + r.gross.cycles.length);
-  { const cells = [...$$('#vb-tb tbody tr')].map((tr, k) => [r.gross.rows[k].i, tr.children[4].innerText.trim()]);
-    const bad = cells.filter(([i, t]) => (r.D.o && r.D.o[i] != null) ? !/^\\$[\\d.,]+ · \\$[\\d.,]+ ~ \\$[\\d.,]+$/.test(t) : !/^없음 · 종가로 판단$/.test(t));
-    ok('일자별 표: 시가 · 저가 ~ 고가 칸 (없는 날은 종가로 판단)', /시가 · 저가 ~ 고가/.test($('#vb-tb thead').innerText) && cells.length && !bad.length, JSON.stringify(bad.slice(0, 3))); }
+  { /* 상장 뒤 사이클 하나를 골라 그 날들의 '시가 · 저가 ~ 고가' 칸 = 자료 × 가격 단위 (없는 날은 '없음 · 종가로 판단') */
+    const L = r.pre ? r.pre.L : 0, cy = r.gross.cycles.find(c => c.from >= L + 20 && c.from > r.gross.from), sel = $('#vb-cyc');
+    if (cy && sel) { sel.value = String(cy.no); sel.dispatchEvent(new Event('change', { bubbles: true })); await W(100); }
+    const px = v => { const a = Math.abs(v); return (v < 0 ? '−$' : '$') + (a >= 1 ? a.toFixed(2) : a.toPrecision(3)); };
+    const rs = cy ? r.gross.rows.filter(x => x.n === cy.no) : [], trs = [...$$('#vb-tb tbody tr')], D = r.D;
+    const bad = trs.map((tr, k) => { const x = rs[k], t = tr.children[4].innerText.trim(); if (!x) return 'no row ' + k; const i = x.i;
+      const want = D.o && D.o[i] != null ? px(D.o[i] * x.k) + ' · ' + px(D.l[i] * x.k) + ' ~ ' + px(D.h[i] * x.k) : '없음 · 종가로 판단'; return t === want ? null : D.d[i] + ' ' + t + ' ≠ ' + want; }).filter(Boolean);
+    ok('일자별 표: 상장 뒤 사이클의 시가 · 저가 ~ 고가 칸 = 자료 (없는 날은 종가로 판단)', /시가 · 저가 ~ 고가/.test($('#vb-tb thead').innerText) && cy && trs.length === rs.length && trs.length > 0 && !bad.length, JSON.stringify([cy && cy.no, trs.length, rs.length, bad.slice(0, 2)])); }
   /* 유형 바꾸기 → 그 유형의 공식 시작값 · 적립식은 IRR */
   $('#vb-set [data-ty="acc"]').click(); await W(50);
   const pre = $('#vb-pre'); pre.checked = false; pre.dispatchEvent(new Event('change', { bubbles: true }));
@@ -135,6 +147,31 @@ def check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS):
         w = page.evaluate("k => [(document.querySelector('#vb-res .mb-warns') || {}).innerText || '', VBTdebug.R().net[k]]", k)
         if pat not in w[0] or not w[1]:
             fail('vr-backtest', '알림 "%s" 이 없음 (%s) — %s' % (pat, h[:30], w[0][:120]))
+    # 주소 해시가 이상해도 화면이 그려짐 (유형 이름이 Object 속성 · 잘못된 %) · G 0.1~·밴드 ~99% 는 기록 화면 설정 범위라 그대로 · 첫날 1개도 못 사면 알림
+    for h, want in [('#ty=toString&t=TQQQ', None), ('#ty=constructor', None), ('#ty=hold&t=%E0&g=10', {'tk': 'TQQQ'}), ('#ty=hold&t=TQQQ&g=0.5&b=60', {'G': 0.5, 'band': 60})]:
+        _open(page, base, h)
+        try:
+            page.wait_for_function("document.querySelectorAll('#vb-set .mb-acc').length === 7 && window.VBTdebug", timeout=30000)
+            if want:
+                _wait(page)
+        except Exception as e:
+            fail('vr-backtest', '이상한 주소 %s 에서 화면이 안 그려짐: %s' % (h, str(e)[:120])); continue
+        if want:
+            got = page.evaluate("() => VBTdebug.R().S")
+            bad = [k for k, v in want.items() if got.get(k) != v]
+            if bad:
+                fail('vr-backtest', '주소 %s 조건이 다름: %s' % (h, ', '.join('%s=%r' % (k, got.get(k)) for k in bad)))
+        st = page.evaluate("() => ({ ty: VBTdebug.S().type, sum: (document.getElementById('vb-sum-ty') || {}).textContent || '' })")
+        if st['ty'] not in ('hold', 'acc', 'wd') or not st['sum']:
+            fail('vr-backtest', '이상한 주소 %s 에서 설정 화면이 깨짐 %r' % (h, st))
+    _open(page, base, '#ty=hold&t=TQQQ&c=100&p0=90')   # 1개 가격은 자동 단위라도 $10 이상 → $10 으로는 수수료 포함 0개
+    try:
+        page.wait_for_function("document.querySelector('#vb-res .mb-msg.bad') || (window.VBTdebug && VBTdebug.R())", timeout=60000)
+    except Exception:
+        pass
+    m0 = page.evaluate("() => (document.querySelector('#vb-res .mb-msg.bad') || {}).innerText || ''")
+    if '1개도 살 수 없어요' not in m0:
+        fail('vr-backtest', '원금으로 첫날 1개도 못 살 때 알림이 없음: %r' % m0[:120])
     # 접이식 — 처음엔 1번만 펼침 · 요약 · 기본값은 회색 · 펼침 기억 · 입력 즉시 요약
     page.evaluate("() => { localStorage.removeItem('vbt-open'); localStorage.removeItem('vbt-settings'); }")
     _open(page, base, '')
