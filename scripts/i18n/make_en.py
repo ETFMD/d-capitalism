@@ -200,7 +200,7 @@ SRC = ('Where does the data come from?', '<p>The current level comes from Yahoo 
 KRW = ('Why is the simulation in Korean won?', '<p>This site is built for Korean investors, so the simulation starts from ₩100 million (about the size of a typical lump-sum investment in Korea). The growth multiple is the same in any currency: ₩100M growing to ₩3B is the same 30× as $100K growing to $3M. Index growth itself is measured in U.S. dollars.</p>')
 
 TEXT.update({'밸류리밸런싱 VR 5.0 백테스트': 'Value rebalancing backtest (Korean)'})   # VR 백테스트 메뉴 이름 (도구 화면은 한국어만)
-TEXT.update({'72매매법': '72 Method (Korean)'})   # 72매매법 메뉴 이름 (도구 화면은 한국어만)
+TEXT.update({'72루틴': '72 Routine (Korean)'})   # 72루틴 메뉴 이름 (도구 화면은 한국어만)
 
 GUIDES = {}
 GUIDES['sp500'] = guide('sp500', 'How the S&amp;P 500 growth rate is calculated',

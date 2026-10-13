@@ -989,11 +989,11 @@
   #page-moneyspeed .card { margin-bottom: 16px; }
   #page-moneyspeed .card:last-child { margin-bottom: 0; }
 
-/* ═══ [MUHAN] 무한매수법 4.0 — 스타일 (사이트 색상 변수 사용, #page-muhan 범위) ═══ */
-#page-muhan,#page-vr,#page-muhanbt{--m-bg:var(--bg);--m-s1:var(--bg2);--m-s2:var(--bg3);--m-bd:var(--card-border);--m-tx:var(--text);--m-t2:var(--text2);--m-t3:var(--text3);
+/* ═══ [MUHAN] 무한매수법 4.0 — 스타일 (사이트 색상 변수 사용, #page-muhan 범위 · 72루틴 #page-t72 도 같은 화면 코드) ═══ */
+#page-muhan,#page-vr,#page-muhanbt,#page-t72{--m-bg:var(--bg);--m-s1:var(--bg2);--m-s2:var(--bg3);--m-bd:var(--card-border);--m-tx:var(--text);--m-t2:var(--text2);--m-t3:var(--text3);
  --m-ac:var(--accent);--m-ac-s:rgba(49,130,246,.12);--m-ac-b:rgba(49,130,246,.35);--m-ok:#3182f6;--m-bad:#f04452;--m-warn:#fe9800;--m-info:#3182f6;--m-rev:#3182f6;--m-on-ac:#ffffff}
-html[data-theme="light"] #page-muhan,html[data-theme="light"] #page-vr,html[data-theme="light"] #page-muhanbt{--m-ac-s:rgba(49,130,246,.10);--m-ac-b:rgba(49,130,246,.35);--m-ok:#3182f6;--m-bad:#f04452;--m-warn:#fe9800;--m-info:#3182f6;--m-rev:#3182f6;--m-on-ac:#ffffff}
-#mh-root,#vr-root{max-width:440px;margin:0 auto;color:var(--m-tx);font-family:var(--font);padding-bottom:96px}
+html[data-theme="light"] #page-muhan,html[data-theme="light"] #page-vr,html[data-theme="light"] #page-muhanbt,html[data-theme="light"] #page-t72{--m-ac-s:rgba(49,130,246,.10);--m-ac-b:rgba(49,130,246,.35);--m-ok:#3182f6;--m-bad:#f04452;--m-warn:#fe9800;--m-info:#3182f6;--m-rev:#3182f6;--m-on-ac:#ffffff}
+#mh-root,#vr-root,#t7-root{max-width:440px;margin:0 auto;color:var(--m-tx);font-family:var(--font);padding-bottom:96px}
 .mh-card{background:var(--m-s1);border:1px solid var(--m-bd);border-radius:16px;padding:14px;margin-bottom:10px}
 .mh-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .mh-h3{margin:0;font-size:13px;font-weight:600;color:var(--m-tx)}
@@ -1107,57 +1107,13 @@ html[data-theme="light"] #page-vrbt{--m-ac-s:rgba(49,130,246,.10)}
 #page-vr .vr-bt .mb-kg{grid-template-columns:repeat(2,minmax(0,1fr))}#page-vr .vr-bt .mb-k b{font-size:16px}
 #page-vr .vr-bt-sel{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0}
 .vrbt-h{margin:18px 0 6px;font-size:14px;color:var(--text)}
-/* ═══ [T72] 72매매법 — 기록 + 백테스트 한 페이지 (.mh-* · .mb-* 부품 재사용) · 이 페이지 범위 변수·배치·새 부품(.t7-*)만 ═══ */
-#page-t72{--m-bg:var(--bg);--m-s1:var(--bg2);--m-s2:var(--bg3);--m-bd:var(--card-border);--m-tx:var(--text);--m-t2:var(--text2);--m-t3:var(--text3);
- --m-ac:var(--accent);--m-ac-s:rgba(49,130,246,.12);--m-ac-b:rgba(49,130,246,.35);--m-ok:#3182f6;--m-bad:#f04452;--m-warn:#fe9800;--m-info:#3182f6;--m-rev:#3182f6;--m-on-ac:#ffffff}
-html[data-theme="light"] #page-t72{--m-ac-s:rgba(49,130,246,.10)}
-#page-t72 .layout.t7-lay{grid-template-columns:350px minmax(0,1fr);gap:16px}
-@media(max-width:980px){#page-t72 .layout.t7-lay{grid-template-columns:310px minmax(0,1fr)}}
-@media(max-width:780px){#page-t72 .layout.t7-lay{grid-template-columns:minmax(0,1fr)}}
-#page-t72 .card{padding:16px 18px;margin-bottom:12px}
-#t7-root.t7-ready .card{animation:none}
-#page-t72 .mb-k small{white-space:normal;overflow:visible}
-#page-t72 .t7-side>.card:last-child{margin-bottom:0}
-@media(max-width:780px){#page-t72 #t7-root.t7-has-log .layout.t7-lay{gap:0!important}#t7-root.t7-has-log .t7-side>.card:last-child{margin-bottom:12px}#t7-root.t7-has-log .t7-side{display:contents}#t7-root.t7-has-log .t7-live{order:1}#t7-root.t7-has-log .t7-main{order:2}#t7-root.t7-has-log .t7-set{order:3}}
-.t7-side,.t7-main{min-width:0}
-.t7-lh{display:flex;align-items:center;justify-content:space-between;gap:8px}.t7-lh b{font-size:15px}
-.t7-px{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-top:6px}.t7-px b{font-family:var(--mono);font-size:28px;font-weight:700;line-height:1.15}.t7-px span{font-family:var(--mono);font-size:14px;font-weight:600}
-.t7-kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:10px}
-.t7-kv>div{background:var(--m-s2);border:1px solid var(--m-bd);border-radius:10px;padding:7px 9px;min-width:0}
-.t7-kv span{display:block;font-size:10.5px;color:var(--m-t2)}.t7-kv b{display:block;font-family:var(--mono);font-size:15px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.t7-kv small{display:block;font-size:10px;color:var(--m-t3);margin-top:1px;line-height:1.4}
-.t7-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--m-t3);margin-right:5px;vertical-align:1px}.t7-dot.on{background:#f04452;box-shadow:0 0 0 3px rgba(240,68,82,.18)}
-.t7-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}.t7-foot .mh-help{margin:0}
-.t7-desc{font-size:13.5px;line-height:1.65;color:var(--m-tx);margin:6px 0 8px;word-break:keep-all}
-.t7-rules{margin:0 0 4px;padding-left:18px;font-size:12px;line-height:1.7;color:var(--m-t2);word-break:keep-all}.t7-rules li{margin:1px 0 3px}.t7-rules b{color:var(--m-tx)}
-.t7-cap{margin-top:12px}#t7-set a{color:var(--m-ac);text-decoration:none}#t7-set a:hover{text-decoration:underline}
-#t7-set .mb-acc{margin-top:12px}
-#t7-set .mb-acc>summary{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"t a" "v a";column-gap:10px;row-gap:3px;padding:11px 12px 11px 14px}
-#t7-set .mb-acc .inc-sec-t{grid-area:t;white-space:normal;font-size:13.5px}
-#t7-set .mb-acc .inc-sec-v{grid-area:v;min-width:0;max-width:none;text-align:left;padding-left:12px;font-size:11.5px;white-space:normal;line-height:1.5}
-#t7-set .mb-acc .acc-arrow{grid-area:a;align-self:center}
-#t7-set .mb-acc .inc-sec-in{padding:12px 14px 14px}
-.t7-opt{margin-top:14px}.t7-opt:first-child{margin-top:0}.t7-opt .mh-lbl{margin-bottom:5px}
-.t7-opt.t7-sub{margin:8px 0 0 12px;padding-left:10px;border-left:2px solid var(--m-bd)}
-.t7-opt.off .mb-seg{opacity:.45}.t7-opt.off .mb-seg button{cursor:not-allowed}
-.t7-in{display:flex;align-items:center;gap:6px;margin-top:6px;min-width:0}.t7-in .mh-in{padding:8px 10px;font-size:13px;min-width:0}.t7-in span{color:var(--m-t3);font-size:12px;white-space:nowrap}
-.t7-mid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.t7-mid .mh-lbl{margin:0 0 4px;font-size:11px}.t7-mid .mh-in{padding:8px 10px;font-size:13px}
-.t7-tabs{margin-bottom:12px}.t7-tabs .mb-seg button{font-size:14px;padding:9px 12px;font-weight:600}
-.t7-ol{min-width:0;flex:1 1 auto}.t7-ol b{font-size:13px}.t7-ol small{display:block;font-size:11px;color:var(--m-t2);margin-top:3px;line-height:1.45;word-break:keep-all}
-.t7-or{text-align:right;flex:0 0 auto}.t7-or .p{font-size:16px}.t7-or small{display:block;font-size:11px;color:var(--m-t2);font-family:var(--mono);margin-top:2px}
-.t7-exp{display:inline-block;margin-top:3px;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:5px;background:var(--m-s2);color:var(--m-t2)}.t7-exp.y{color:var(--m-ac);background:var(--m-ac-s)}
-.t7-tl{margin:10px 0 0}.t7-tl .mh-bar{margin-top:6px}
-.t7-cv{position:relative;height:260px;margin-top:4px}@media(max-width:560px){.t7-cv{height:220px}}.t7-cv canvas{max-width:100%}
-.t7-days .a{text-align:left!important;white-space:normal;min-width:150px;max-width:240px}.t7-days tr.ov td:first-child{color:var(--m-ac)}
-.t7-ed{padding:3px 8px;font-size:11px;border-radius:7px}
-.t7-btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.t7-er{padding:10px 0;border-bottom:1px solid var(--m-bd)}.t7-er:last-of-type{border-bottom:0}
-.t7-er .mb-chk{margin:0;align-items:center}.t7-er .t7-in .mh-in{width:auto;flex:1 1 0}.t7-er select.mh-in{flex:0 0 auto;font-family:var(--font)}
-.t7-roll td:first-child{white-space:nowrap}
-#t7-sheet .mh-sheet{max-width:480px}
-#page-t72 .mh-help.mh-warn{color:var(--m-warn)}
-body:has(#t7-sheet .mh-sheet-bg) .dsh-fab,body:has(#t7-sheet .mh-sheet-bg) .kk-fabs{opacity:0;pointer-events:none}   /* 체결 고치기 창이 열려 있으면 공유·카카오 버튼이 저장 단추를 가리지 않게 */
-/* [/T72] */
+/* ── [MUHAN] 공통 부품 추가 — 백테스트 그래프 크게 보기(mhApp P.btZoom) · 시트·⋮ 메뉴·축하 창이 열려 있으면 사이트 공유·카카오 버튼 숨김(단추를 가리지 않게) ── */
+.mh-btz-cv{position:relative;height:min(56vh,460px);min-height:260px;margin-top:4px}.mh-btz-cv canvas{max-width:100%}
+.mh-btz-sel{position:absolute;top:0;bottom:0;background:rgba(49,130,246,.14);border:1px solid rgba(49,130,246,.45);border-radius:4px;pointer-events:none}
+.mh-btz-y{width:100%;border-collapse:collapse;font-size:12px;font-family:var(--mono)}
+.mh-btz-y th,.mh-btz-y td{padding:6px 8px;border-bottom:1px solid var(--m-bd);text-align:right;white-space:nowrap}.mh-btz-y th:first-child,.mh-btz-y td:first-child{text-align:left}
+.mh-btz-y th{font-family:var(--font);font-weight:600;color:var(--m-t2);font-size:11px}.mh-btz-y tbody tr[data-act]{cursor:pointer}.mh-btz-y tbody tr[data-act]:hover td{background:var(--m-s2)}
+body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-overlay) .dsh-fab,body:has(.mh-overlay) .kk-fabs,body:has(.mh-cel) .dsh-fab,body:has(.mh-cel) .kk-fabs{opacity:0;pointer-events:none}
 /* ═══ [MUHAN-BT] 무한매수법 백테스트 시뮬레이터 — 스타일 (.mh-* 부품 재사용 · 상승 빨강/하락 파랑) ═══ */
 #page-muhanbt .layout.mb-lay{grid-template-columns:372px minmax(0,1fr);gap:16px}
 @media(max-width:980px){#page-muhanbt .layout.mb-lay{grid-template-columns:330px minmax(0,1fr)}}
@@ -1251,14 +1207,14 @@ body:has(#t7-sheet .mh-sheet-bg) .dsh-fab,body:has(#t7-sheet .mh-sheet-bg) .kk-f
   }
   html[data-theme="light"] body { background: var(--bg); color: var(--text); }
 
-:is(#page-muhan,#page-vr) .mh-info-body{font-size:13px;line-height:1.7;color:var(--m-tx)}:is(#page-muhan,#page-vr) .mh-info-body p{margin:10px 0}
-:is(#page-muhan,#page-vr) .mh-ibox{background:var(--m-ac-s);border-radius:12px;padding:12px 14px;font-size:12.5px}
-:is(#page-muhan,#page-vr) .mh-hr{border:0;border-top:1px solid var(--m-bd);margin:12px 0}
-:is(#page-muhan,#page-vr) .mh-tag.lim{background:rgba(49,130,246,.15);color:var(--m-rev)}:is(#page-muhan,#page-vr) .mh-tag.moc{background:rgba(240,68,82,.15);color:var(--m-bad)}
-:is(#page-muhan,#page-vr) .mh-odet{margin:-2px 0 8px;border-radius:10px;padding:10px 12px;font-size:11.5px;line-height:1.6;background:var(--m-ac-s);color:var(--m-t2)}
-:is(#page-muhan,#page-vr) .mh-done{width:100%;margin-top:10px;padding:12px;border-radius:12px;border:1px solid var(--m-ac-b);background:var(--m-ac-s);color:var(--m-t2);font:inherit;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
-:is(#page-muhan,#page-vr) .mh-done .ic{width:16px;height:16px;border-radius:50%;border:1.5px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:10px}
-:is(#page-muhan,#page-vr) .mh-done.on{background:rgba(49,130,246,.14);border-color:rgba(49,130,246,.45);color:var(--m-ok)}:is(#page-muhan,#page-vr) .mh-done.on .ic{background:var(--m-ok);border-color:var(--m-ok);color:var(--m-s1)}
+:is(#page-muhan,#page-vr,#page-t72) .mh-info-body{font-size:13px;line-height:1.7;color:var(--m-tx)}:is(#page-muhan,#page-vr,#page-t72) .mh-info-body p{margin:10px 0}
+:is(#page-muhan,#page-vr,#page-t72) .mh-ibox{background:var(--m-ac-s);border-radius:12px;padding:12px 14px;font-size:12.5px}
+:is(#page-muhan,#page-vr,#page-t72) .mh-hr{border:0;border-top:1px solid var(--m-bd);margin:12px 0}
+:is(#page-muhan,#page-vr,#page-t72) .mh-tag.lim{background:rgba(49,130,246,.15);color:var(--m-rev)}:is(#page-muhan,#page-vr,#page-t72) .mh-tag.moc{background:rgba(240,68,82,.15);color:var(--m-bad)}
+:is(#page-muhan,#page-vr,#page-t72) .mh-odet{margin:-2px 0 8px;border-radius:10px;padding:10px 12px;font-size:11.5px;line-height:1.6;background:var(--m-ac-s);color:var(--m-t2)}
+:is(#page-muhan,#page-vr,#page-t72) .mh-done{width:100%;margin-top:10px;padding:12px;border-radius:12px;border:1px solid var(--m-ac-b);background:var(--m-ac-s);color:var(--m-t2);font:inherit;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+:is(#page-muhan,#page-vr,#page-t72) .mh-done .ic{width:16px;height:16px;border-radius:50%;border:1.5px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:10px}
+:is(#page-muhan,#page-vr,#page-t72) .mh-done.on{background:rgba(49,130,246,.14);border-color:rgba(49,130,246,.45);color:var(--m-ok)}:is(#page-muhan,#page-vr,#page-t72) .mh-done.on .ic{background:var(--m-ok);border-color:var(--m-ok);color:var(--m-s1)}
   /* ETF 명칭 옆 티커(종목코드) */
   .etf-ticker { font-family:var(--mono); font-size:11px; font-weight:500; color:var(--text3); margin-left:4px; letter-spacing:.02em; }
   .etf-ticker-h1 { font-size:0.42em; vertical-align:middle; padding:3px 8px; border:1px solid var(--card-border); border-radius:6px; background:var(--card); }
