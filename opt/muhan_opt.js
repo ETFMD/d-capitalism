@@ -1,16 +1,19 @@
 /* 무한매수법 백테스트 설정 탐색 — 한 칸(종목 · 기간 · 버전)을 전부 계산
-   node opt/muhan_opt.js <TQQQ|SOXL|UPRO|TECL> <act|pre> <1.0|2.0|2.1|2.2|3.0|4.0>
+   node scripts/muhan_opt/muhan_opt.js <TQQQ|SOXL|UPRO|TECL> <act|pre> <1.0|2.0|2.1|2.2|3.0|4.0>
    · 엔진 = src/index.html 의 MHE·MHV 그대로 (사이트 시뮬레이터와 같은 코드)
-   · 자료 = opt/data/<종목>_<기간>.json (시뮬레이터 화면이 쓰는 일봉·재현 일봉·원/달러를 그대로 꺼낸 것)
+   · 자료 = scripts/muhan_opt/data/<종목>_<기간>.json (시뮬레이터 화면이 쓰는 일봉·재현 일봉·원/달러를 그대로 꺼낸 것)
    · 조건 = 시뮬레이터 기본 환경: 원금 $10,000 · 1주 단위 주문 · 수수료 0.07% + SEC · 분배금 원천징수 15% · 양도세 22%
    ① 전체 격자: 분할 2~100 × 목표 0.5~50(0.5 간격)+55~100(5 간격) × 버전의 모든 선택 조합(1회 매수금·소진 대응·새 사이클·T 반올림·다시 정하기·큰수 미사용)
    ② 좌표 탐색: 상위 출발점마다 분할·목표·큰수·하방 LOC 줄·줄당 주식·1차 매도·큰수 상한·평단 괴리·선택 조합을 UI 범위 전체로 하나씩 훑어 더 나아지지 않을 때까지
+      (FIX='avgOff=0' 처럼 고정한 설정은 훑지 않음)
    ③ 세금 계산 방식(선입선출·이동평균) × 연말 절세 매도 · ④ 이웃(분할 ±2 × 목표 ±1) 안정성 · 세전 값 */
 'use strict';
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
-const ROOT = path.join(__dirname, '..');
+const ROOT = (() => { let d = __dirname; while (!fs.existsSync(path.join(d, 'src', 'index.html')) && d !== path.dirname(d)) d = path.dirname(d); return d; })();   /* 저장소 맨 위 (src/index.html 이 있는 곳) */
 const [TK, PER, VER] = process.argv.slice(2);
 const PILOT = !!process.env.OPT_PILOT;
+/* 고정할 설정 — 환경 변수 FIX='avgOff=0' 처럼 '이름=값' 을 쉼표로 (예: 평단 LOC 괴리율 0% 로 두고 탐색) · 고정한 값은 탐색하지 않고 출발점·기본값에도 그 값 */
+const FIX = (process.env.FIX || '').split(',').map(s => s.trim()).filter(Boolean).reduce((o, kv) => { const i = kv.indexOf('='), k = kv.slice(0, i).trim(), v = kv.slice(i + 1).trim(); o[k] = v === 'true' ? true : v === 'false' ? false : v !== '' && isFinite(+v) ? +v : v; return o; }, {});
 
 function engine() {
   const src = fs.readFileSync(path.join(ROOT, 'src', 'index.html'), 'utf8');
@@ -99,12 +102,12 @@ function combos(v) {
 }
 const COMBOS = combos(VER);
 const base = Object.assign({ ver: VER, splits: DEF.splits, target: DEF.target, big: DEF.big, lines: DEF.lines, shares: 1, part: DEF.part || 5, capP: DEF.cap || 5, avgOff: 0,
-  money: VER === '3.0' ? 'half' : VER === '4.0' ? 'cash' : 'compound', exhaust: 'official', restart: 'next', tround: 'r2', rebase: false, noBig: false, method: 'fifo', harvest: false });
+  money: VER === '3.0' ? 'half' : VER === '4.0' ? 'cash' : 'compound', exhaust: 'official', restart: 'next', tround: 'r2', rebase: false, noBig: false, method: 'fifo', harvest: false }, FIX);
 const DIMS = ['target', 'splits', 'big']
   .concat(VER !== '1.0' && VER !== '2.0' ? ['lines', 'shares'] : [])
   .concat(VER === '2.0' || VER === '2.1' ? ['part', 'capP'] : [])
   .concat(VER === '1.0' || VER === '2.0' || VER === '2.1' ? ['avgOff'] : [])
-  .concat(['combo']);
+  .concat(['combo']).filter(d => !(d in FIX));
 const VALS = { target: TGT, splits: SPLITS.length > 10 ? SPLITS : range(2, 100, 1), big: BIG, lines: LINES, shares: SHARES, part: PART, capP: CAPP, avgOff: AVGOFF };
 const keyOf = p => [p.splits, p.target, p.big, p.lines, p.shares, p.part, p.capP, p.avgOff, p.money, p.exhaust, p.restart, p.tround, p.rebase ? 1 : 0, p.noBig ? 1 : 0, p.method, p.harvest ? 1 : 0].join('|');
 const memo = new Map(); let nEval = 0; const refPts = new Map();   /* 격자 밖(좌표 탐색·마지막 단계)에서 계산한 점 */
@@ -118,7 +121,7 @@ async function evalMany(list) {
 const t0 = Date.now(), log = s => console.log(((Date.now() - t0) / 1000).toFixed(0) + 's ' + s);
 
 (async () => {
-  const out = { tk: TK, per: PER, ver: VER, from: DATA.d[0], to: DATA.d[DATA.d.length - 1], L: DATA.L || 0, listing: DATA.L ? DATA.d[DATA.L] : DATA.d[0],
+  const out = { tk: TK, per: PER, ver: VER, fix: FIX, from: DATA.d[0], to: DATA.d[DATA.d.length - 1], L: DATA.L || 0, listing: DATA.L ? DATA.d[DATA.L] : DATA.d[0],
                 env: '원금 $10,000 · 1주 단위 · 수수료 0.07% + SEC 0.00206% · 분배 원천징수 15% · 양도세 22% (결제일 매매기준율, 5월 말 납부)', combos: COMBOS, splits: SPLITS, targets: TGT_A };
   /* 원문 기본값 */
   const d0 = (await evalMany([Object.assign({}, base, VER === '4.0' ? {} : {})]))[0];

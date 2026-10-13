@@ -1,15 +1,17 @@
 /* 무한매수법 설정 탐색 2단계 — '안정 최고': 이웃 9점(분할 −2·0·+2 × 목표 −1·0·+1%) 중앙값을 최대로
-   node opt/muhan_rob.js <종목> <act|pre> <cagr|calmar|cagrC|calmarC>   · 출발점 = opt/regions.json
+   node scripts/muhan_opt/muhan_rob.js <종목> <act|pre> <cagr|calmar|cagrC|calmarC|cons> [버전]   · 출발점 = scripts/muhan_opt/regions.json (cons = 제약 탐색, 버전으로 출발점 거르기)
    · cagr·calmar: 1단계 격자를 매끈하게 만든 지도에서 고른 곳에서 출발
    · cagrC·calmarC (상장 전 포함만): '재현 믿음도' |dh| ≤ 2%p 인 설정만 — dh = CAGR(실제 종가 + 추정 고가) − CAGR(실제), 상장 이후 구간
    · 좌표 탐색: 목표·분할·큰수·하방 LOC 줄·줄당 주식·1차 매도·큰수 상한·평단 괴리·선택 조합 — UI 범위 전체, 매번 이웃 9점 중앙값으로 판단
    · 마지막: 이웃 25점(분할 ±2 × 목표 ±1, 0.5 간격) 통계 · 세금 계산 방식 × 연말 절세 · 세전 · 원금·수수료 바꿔 보기 */
 'use strict';
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
-const ROOT = path.join(__dirname, '..');
+const ROOT = (() => { let d = __dirname; while (!fs.existsSync(path.join(d, 'src', 'index.html')) && d !== path.dirname(d)) d = path.dirname(d); return d; })();   /* 저장소 맨 위 (src/index.html 이 있는 곳) */
 const [TK, PER, OBJN, VERF] = process.argv.slice(2);
 const CONS = OBJN === 'cons';   /* 제약 탐색: 이웃 중앙 MDD·가운데 MDD·원금 10만$ MDD ≥ −60% 안에서 min(이웃 중앙 CAGR, 10만$ CAGR) 최대 · 하방 LOC 10줄 이하 */
 const LIM = -0.60;
+/* 고정할 설정 — 환경 변수 FIX='avgOff=0' 처럼 '이름=값' 을 쉼표로 (예: 평단 LOC 괴리율 0% 로 두고 탐색) · 고정한 값은 탐색하지 않고 출발점·기본값에도 그 값 */
+const FIX = (process.env.FIX || '').split(',').map(s => s.trim()).filter(Boolean).reduce((o, kv) => { const i = kv.indexOf('='), k = kv.slice(0, i).trim(), v = kv.slice(i + 1).trim(); o[k] = v === 'true' ? true : v === 'false' ? false : v !== '' && isFinite(+v) ? +v : v; return o; }, {});
 const TH = 0.02;
 function engine() {
   const src = fs.readFileSync(path.join(ROOT, 'src', 'index.html'), 'utf8');
@@ -72,7 +74,7 @@ function combos(v) {
   }
   return out;
 }
-const dimsOf = v => ['target', 'splits', 'big'].concat(v !== '1.0' && v !== '2.0' ? ['lines', 'shares'] : []).concat(v === '2.0' || v === '2.1' ? ['part', 'capP'] : []).concat(v === '1.0' || v === '2.0' || v === '2.1' ? ['avgOff'] : []).concat(['combo']);
+const dimsOf = v => ['target', 'splits', 'big'].concat(v !== '1.0' && v !== '2.0' ? ['lines', 'shares'] : []).concat(v === '2.0' || v === '2.1' ? ['part', 'capP'] : []).concat(v === '1.0' || v === '2.0' || v === '2.1' ? ['avgOff'] : []).concat(['combo']).filter(d => !(d in FIX));
 const keyOf = p => [p.ser || '', p.ver, p.splits, p.target, p.big, p.lines, p.shares, p.part, p.capP, p.avgOff, p.money, p.exhaust, p.restart, p.tround, p.rebase ? 1 : 0, p.noBig ? 1 : 0, p.method, p.harvest ? 1 : 0, p.cap || 0, p.fee == null ? '' : p.fee].join('|');
 const memo = new Map(); let nEval = 0;
 async function evalMany(list) {
@@ -104,7 +106,7 @@ const t0 = Date.now(), log = s => console.log(((Date.now() - t0) / 1000).toFixed
   const REG = JSON.parse(fs.readFileSync(path.join(__dirname, 'regions.json'), 'utf8'))[TK + '_' + PER];
   if (!REG) { log('regions.json 에 ' + TK + '_' + PER + ' 없음 — 이번에는 건너뜀'); workers.forEach(w => w.kill()); return; }
   if (CRED && PER !== 'pre') { log('상장 이후는 재현 믿음도 탐색이 필요 없음'); workers.forEach(w => w.kill()); return; }
-  const out = { tk: TK, per: PER, objn: OBJN, floor: REG.floor, floorC: REG.floorC, th: TH, runs: [] };
+  const out = { tk: TK, per: PER, objn: OBJN, fix: FIX, floor: REG.floor, floorC: REG.floorC, th: TH, runs: [] };
   /* 모든 목표: 가운데 설정이 '살 수 없는 날' 없이 원래 방법대로 돌아가야 함(nob = 0, 화면에 ⚠ 없음) */
   const OBJ = { cagr: s => s.nob === 0 ? s.cagrMed : -Infinity, calmar: s => s.nob === 0 && s.cagrMed >= REG.floor && s.mddMed < 0 ? s.cagrMed / -s.mddMed : -Infinity,
                 cons: s => s.nob !== 0 ? -Infinity : Math.min(s.cagrMed, s.c100) - 10 * Math.max(0, LIM - Math.min(s.mddMed, s.cMdd, s.m100)),
@@ -112,7 +114,7 @@ const t0 = Date.now(), log = s => console.log(((Date.now() - t0) / 1000).toFixed
   const STARTS = CONS ? (REG.startsK || []).filter(s => !VERF || s.ver === VERF) : CRED ? (REG.startsC || []).filter(s => s.obj === OBJN) : REG.starts.filter(s => s.obj === OBJN);
   for (const st of STARTS.slice(0, +process.env.OPT_NSTART || STARTS.length)) {
     const v = st.ver, COMBOS = combos(v), DIMS = dimsOf(v), obj = OBJN;
-    let cur = Object.assign({ ver: v, big: 15, lines: 8, shares: 1, part: 5, capP: 5, avgOff: 0, money: v === '3.0' ? 'half' : v === '4.0' ? 'cash' : 'compound', exhaust: 'official', restart: 'next', tround: 'r2', rebase: false, noBig: false, method: 'fifo', harvest: false }, st.p);
+    let cur = Object.assign({ ver: v, big: 15, lines: 8, shares: 1, part: 5, capP: 5, avgOff: 0, money: v === '3.0' ? 'half' : v === '4.0' ? 'cash' : 'compound', exhaust: 'official', restart: 'next', tround: 'r2', rebase: false, noBig: false, method: 'fifo', harvest: false }, st.p, FIX);
     if (CONS && cur.ver !== '1.0' && cur.ver !== '2.0') cur.lines = Math.min(Math.max(cur.lines, cur.ver === '4.0' ? 1 : 0), 10);   /* 하방 LOC 10줄 이하 */
     let curS = (await smoothMany([cur]))[0]; const trace = [];
     for (let round = 1; round <= (+process.env.OPT_ROUNDS || 4); round++) {
