@@ -125,6 +125,12 @@ MUHANBT_JS = """async () => {
   for (let i = 0; i < 240 && !(res() && (!res().pre || res().pre.err)); i++) await W(250);
   const r = res(); if (!r) return [{ name: '백테스트 결과 없음 (60초)', ok: false, info: document.getElementById('mb-res') && document.getElementById('mb-res').innerText.slice(0, 200) }];
   ok('주소(#v=2.2&t=TQQQ…)로 조건 복원·자동 실행', r.S.ver === '2.2' && r.tk === 'TQQQ' && r.S.splits === 40 && r.S.target === 10, JSON.stringify([r.S.ver, r.tk, r.S.splits, r.S.target]));
+  // 실행 기록: 실행만으로는 남지 않고 [📌 실행 기록에 저장]을 누른 것만 (같은 결과는 한 번만)
+  const H = () => JSON.parse(localStorage.getItem('mbt-history') || '[]'), sb = () => document.getElementById('mb-save');
+  const nA = H().length, sb0 = sb();
+  ok('실행해도 실행 기록 자동 저장 안 함 · 저장 단추', nA === 0 && sb0 && !sb0.disabled && /실행 기록에 저장/.test(sb0.textContent), nA + ' ' + (sb0 && sb0.textContent));
+  sb0.click(); await W(80); sb() && sb().click(); await W(80);
+  ok('저장 단추 → 1건 저장 · 저장됨 표시 · 다시 눌러도 그대로', H().length === nA + 1 && sb().disabled && /저장됨/.test(sb().textContent) && H()[0].S.ver === '2.2' && document.querySelectorAll('#mb-hist .mb-hi').length === nA + 1, H().length + ' ' + sb().textContent);
   ok('핵심 숫자 6칸 · 버전 6개', document.querySelectorAll('#mb-res .mb-k').length === 6 && document.querySelectorAll('#mb-set .mb-ver').length === 6);
   ok('세금·수수료 포함 보기만 수수료·세금 계산 (미포함 보기는 0)', r.sn.fees > 0 && r.sg.fees === 0 && r.sg.tax === 0 && r.net.taxes.length > 0 && !r.gross.taxes.length, JSON.stringify([r.sn.fees, r.sg.fees, r.sn.tax]));
   ok('연도별 표', document.querySelectorAll('#mb-tb tbody tr').length >= 5);
@@ -143,7 +149,11 @@ MUHANBT_JS = """async () => {
   for (let i = 0; i < 120 && !(res() && res().S.ver === '1.0' && res().tk === 'SOXL'); i++) await W(250);
   const r2 = res();
   ok('V1.0 SOXL 다시 실행 · 기본값(40분할·10%·큰수 15%) · 주소 갱신', r2.S.ver === '1.0' && r2.S.splits === 40 && r2.S.target === 10 && r2.S.big === 15 && /v=1\\.0/.test(location.hash) && /t=SOXL/.test(location.hash), location.hash);
-  ok('실행 기록 저장', (JSON.parse(localStorage.getItem('mbt-history') || '[]')).length >= 2);
+  ok('다시 실행해도 자동 저장 안 함 · 저장 단추 다시 켜짐', H().length === nA + 1 && sb() && !sb().disabled, H().length);
+  sb().click(); await W(80);
+  ok('두 번째 결과 저장 → 2건 (새 것이 위) · 기록마다 무한매수법 시작 단추', H().length === nA + 2 && H()[0].S.ver === '1.0' && H()[0].tk === 'SOXL' && document.querySelectorAll('#mb-hist [data-hgo]').length === nA + 2, H().map(x => x.S.ver + x.tk).join(','));
+  document.querySelector('#mb-hist [data-hdel="0"]').click(); await W(80);
+  ok('지금 결과의 기록을 지우면 저장 단추가 다시 켜짐', H().length === nA + 1 && !sb().disabled, H().length);
   document.querySelector('#mb-set [data-ver="3.0"]').click(); await W(50);
   const rb = document.getElementById('mb-rebase');
   ok('V3.0: 손실이 커지면 1회 매수금 다시 정하기 (원문에 없음 표시 · 기본 꺼짐)', rb && !rb.checked && /원문에 없음/.test(rb.parentElement.textContent));
@@ -160,8 +170,14 @@ MUHANV_JS = """async () => {
   const click = q => { const e = $(q); if (!e) throw new Error('없음 ' + q); e.click(); }, fill = (q, v) => { const e = $(q); e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); };
   try {
     ok('설정: 버전 6개 (V1.0~V4.0) · 50~100분할 단추 없음', document.querySelectorAll('[data-act="su-ver"]').length === 6 && !document.querySelector('[data-act="su-splits"][data-v="50"]'));
+    ok('새 세션 기본 종목 SOXL (목표 20%)', MH.setup.ticker === 'SOXL' && !MH.setup.custom && MH.setup.target === '20' && $('[data-act="su-ticker"][data-v="SOXL"]').classList.contains('mh-btn-sel'), JSON.stringify([MH.setup.ticker, MH.setup.target]));
+    fill('[data-in="su:cap"]', '20000'); fill('[data-in="su:target"]', '75');
+    ok('목표 수익률 50% 초과(75%)도 시작하기 켜짐 (백테스트 범위 0.5~100%)', !$('[data-act="su-start"]').disabled, $('[data-in="su:target"]').getAttribute('max'));
+    fill('[data-in="su:target"]', '100.5');
+    ok('목표 수익률 100% 초과는 시작하기 꺼짐', $('[data-act="su-start"]').disabled);
+    fill('[data-in="su:target"]', '20'); fill('[data-in="su:cap"]', '');
     click('[data-act="su-ver"][data-v="2.2"]'); await W(50);
-    ok('V2.2 기본값 (40분할 · R 10 · 큰수 15)', MH.setup.splits === 40 && MH.setup.target === '10' && MH.setup.big === '15', JSON.stringify(MH.setup));
+    ok('V2.2 SOXL 기본값 (40분할 · R 12 · 큰수 15)', MH.setup.splits === 40 && MH.setup.target === '12' && MH.setup.big === '15', JSON.stringify(MH.setup));
     fill('[data-in="su:cap"]', '20000'); click('[data-act="su-start"]'); await W(300);
     let D = MHdebug.curD();
     ok('V2.2 세션 시작 → 처음 매수 주문', D.old && D.ver === '2.2' && D.st.phase === '처음매수' && (D.close == null || D.orders.some(o => o.tag === 'first')), D.st.phase + ' ' + D.orders.length);
@@ -173,6 +189,28 @@ MUHANV_JS = """async () => {
     }
     for (let i = 0; i < 80 && !/총수익률|받지 못/.test(($('#mh-bt') || {}).innerText || ''); i++) await W(250);
     ok('화면 안 백테스트 (V2.2 · 기간 단추 · 자세히 링크)', /총수익률/.test($('#mh-bt').innerText) && document.querySelectorAll('#mh-bt [data-act="bt-per"]').length === 5 && /muhan-backtest\\/#v=2\\.2/.test($('#mh-bt a').getAttribute('href')), ($('#mh-bt') || {}).innerText);
+    {  // 카드 그래프: 총자산·그냥 보유 선 · 끝값 = 카드 숫자 · 보기(포함/미포함)를 바꾸면 선도 바뀜 · 수수료 0.25%
+      const ln = () => [...document.querySelectorAll('#mh-bt .mh-bt-ch polyline')].map(p => p.getAttribute('points'));
+      const r0 = Object.values(MHdebug.bt.cache).filter(x => x && x.st === 'ok' && x.ch)[0], l0 = ln();
+      const endOk = r0 && Math.abs(r0.ch[MHdebug.bt.view === 'net' ? 'net' : 'gross'].slice(-1)[0] - (MHdebug.bt.view === 'net' ? r0.net : r0.gross).final) < 1e-6 && r0.ch.d.length === r0.ch.net.length && r0.ch.d[0] === r0.from;
+      ok('카드 그래프 (총자산·그냥 보유 2선 · 끝값 = 최종 자산 · 날짜 수 = 자료)', l0.length === 2 && l0.every(p => p.split(' ').length >= 2) && endOk && /수수료 0\\.25%/.test($('#mh-bt').innerText), l0.length + ' ' + endOk);
+      const vb = $('#mh-bt [data-act="bt-view"]:not(.mh-btn-sel)'); vb.click(); await W(150); const l1 = ln();
+      ok('카드 그래프: 포함/미포함 보기 전환 → 총자산 선 바뀜 · 그냥 보유 그대로', l1.length === 2 && l1[1] !== l0[1] && l1[0] === l0[0]);
+      $('#mh-bt [data-act="bt-view"]:not(.mh-btn-sel)').click(); await W(100);
+      const svg = $('#mh-bt .mh-bt-ch svg'), rc = svg.getBoundingClientRect();
+      svg.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: rc.left + rc.width / 2, clientY: rc.top + 20 })); await W(30);
+      ok('카드 그래프: 가리키면 그날 값', /^\\d{4}-\\d{2}-\\d{2} · \\$/.test($('#mh-bt .mh-bt-hv').textContent) && $('#mh-bt .mh-bt-cur').getAttribute('visibility') === 'visible', $('#mh-bt .mh-bt-hv').textContent);
+    }
+    {  // ⋮ 메뉴 글자 크기: 끌면 옆 %도 바로 · 화면 확대
+      MH.menu = true; MHdebug.render(); const sl = $('.mh-menu [data-in="font"]');
+      sl.value = '1.3'; sl.dispatchEvent(new Event('input', { bubbles: true })); await W(30);
+      const t1 = $('#mh-font-v').textContent, z1 = document.getElementById('mh-root').style.zoom;
+      sl.value = '1.15'; sl.dispatchEvent(new Event('input', { bubbles: true })); await W(30);
+      const t2 = $('#mh-font-v').textContent;
+      sl.value = '1'; sl.dispatchEvent(new Event('input', { bubbles: true })); await W(30);
+      ok('글자 크기: 슬라이더를 옮기면 % 표시가 바로 바뀜 (130% · 115% · 100%)', t1 === '130%' && t2 === '115%' && $('#mh-font-v').textContent === '100%' && z1 === '1.3' && localStorage.getItem('muhan4-fontScale') === '1', [t1, t2, z1].join(' '));
+      MH.menu = false; MHdebug.render();
+    }
     MH.menu = true; MHdebug.render(); click('.mh-menu [data-act="ses-add"]'); await W(100);
     fill('[data-in="su:spc"]', '25'); fill('[data-in="su:cap"]', '20000'); click('[data-act="su-start"]'); await W(300);
     D = MHdebug.curD();
@@ -1263,6 +1301,73 @@ def main():
             for t in page.evaluate(MUHANBT_JS):
                 if not t['ok']:
                     fail('muhan-backtest', '%s%s' % (t['name'], (' — ' + str(t.get('info'))[:200]) if t.get('info') else ''))
+            # 닷컴버블 최고점 단추 — '상장 전 백테스트 포함'을 켰을 때만 눌러짐 · 누르면 1999~2000년 중 (재현) 종가가 가장 높았던 날이 시작일
+            dot = page.evaluate("""async () => {
+              const W = ms => new Promise(r => setTimeout(r, ms)), $ = id => document.getElementById(id), out = {};
+              const setPre = async v => { const pre = $('mb-pre'); pre.checked = v; pre.dispatchEvent(new Event('change', { bubbles: true })); await W(80); };
+              await setPre(false); out.offDis = !!($('mb-dot') && $('mb-dot').disabled);
+              await setPre(true); out.onDis = $('mb-dot').disabled;
+              // 기대값은 같은 종목을 상장 전 포함으로 돌린 결과의 일봉(재현 + 실제)에서 따로 구함
+              document.querySelector('#mb-set [data-tk="TQQQ"]').click(); await W(80);   // TQQQ: 로컬 합성 재현도 1999년부터 있음
+              const r0 = MBTdebug.R(); document.querySelector('#mb-set [data-act="run"]').click();
+              for (let i = 0; i < 240 && !(MBTdebug.R() !== r0 && MBTdebug.R().S.pre); i++) await W(250);
+              const D = MBTdebug.R().D; out.tk = MBTdebug.R().tk;
+              let best = -1; for (let i = 0; i < D.d.length; i++) { if (D.d[i] < '1999-01-01' || D.d[i] > '2000-12-31') continue; if (best < 0 || D.c[i] > D.c[best]) best = i; }
+              out.want = best >= 0 ? D.d[best] : null;
+              $('mb-dot').click();
+              for (let i = 0; i < 160 && ($('mb-dot').disabled || !$('mb-dot-msg')); i++) await W(250);
+              out.from = MBTdebug.S().from; out.inp = $('mb-from').value; out.msg = ($('mb-dot-msg') || {}).textContent || '';
+              return out; }""")
+            if not dot['offDis'] or dot['onDis']:
+                fail('muhan-backtest', "닷컴버블 최고점 단추가 '상장 전 포함'에 따라 켜지고 꺼지지 않음 %r" % dot)
+            elif dot['want'] and (dot['from'] != dot['want'] or dot['inp'] != dot['want'] or dot['want'] not in dot['msg']):
+                fail('muhan-backtest', '닷컴버블 최고점 시작일이 다름 (기대 %s) %r' % (dot['want'], dot))
+            elif not dot['want'] and (local or '닷컴버블' not in dot['msg']):   # 로컬 합성 TQQQ 는 1999-03 부터라 반드시 찾아야 함
+                fail('muhan-backtest', '닷컴버블 구간이 없는데 안내가 없음 %r' % dot)
+            print('    닷컴버블 최고점: %s (%s)' % (dot['from'], dot['msg'][:60]), flush=True)
+            # 기본값: 종목 SOXL · 수수료 0.25% (예전 기본 0.07% 로 저장된 조건은 한 번 0.25% 로 · 새로 고른 0.07% 는 그대로)
+            dfl = []
+            for seed, want_fee in [(None, 0.25), ('{"ver":"2.2","tk":"TQQQ","fee":0.07}', 0.25), ('{"ver":"2.2","tk":"TQQQ","fee":0.07,"sv":2}', 0.07), ('{"ver":"2.2","tk":"TQQQ","fee":0.1}', 0.1)]:
+                page.evaluate("v => { localStorage.removeItem('mbt-settings'); if (v) localStorage.setItem('mbt-settings', v); }", seed)
+                page.goto('about:blank'); page.goto(base + 'muhan-backtest/', wait_until='load')
+                page.wait_for_function('window.MBTdebug && MBTdebug.S()', timeout=30000)
+                g = page.evaluate("(() => { const S = MBTdebug.S(); return { tk: S.tk, custom: S.custom, fee: S.fee, on: !!document.querySelector('#mb-set [data-fee=\"0.25\"].on') }; })()")
+                want_tk = 'SOXL' if seed is None else 'TQQQ'
+                if g['tk'] != want_tk or g['custom'] or abs(g['fee'] - want_fee) > 1e-12 or (want_fee == 0.25) != g['on']:
+                    dfl.append('%s → %r (기대 %s · %s%%)' % (seed, g, want_tk, want_fee))
+            page.evaluate("() => localStorage.removeItem('mbt-settings')")
+            for x in dfl:
+                fail('muhan-backtest', '기본값(SOXL · 수수료 0.25%%) 이상: %s' % x)
+            # 실행 기록 → '이 조건으로 무한매수법 시작': 기록 화면 새 세션(진행 중 세션은 그대로)의 시작 화면에 조건이 채워지고, 시작하면 그 설정
+            if os.path.isdir(os.path.join(ROOT, 'muhan')):
+                page.evaluate("""() => { localStorage.removeItem('mbt-history');
+                  localStorage.setItem('muhan4-store', JSON.stringify({ activeSessionId: 'a1', sessions: [{ id: 'a1', name: 'TQQQ 40분할', settings: { ticker: 'TQQQ', splits: 40, totalCapital: 20000, targetProfit: 15, bigNumPercent: 12, lowerLocLines: 8, lowerLocShares: 1 },
+                    transactions: [], isReverseMode: false, reverseStarPrice: null, archivedCycles: [], midEntry: null }] })); }""")
+                page.goto('about:blank'); page.goto(base + 'muhan-backtest/#v=2.1&t=SOXL&c=20000&sp=10&tg=100&pt=4&cp=6&bg=10&ln=5&sh=2&x=hold&r=rsi', wait_until='load')
+                pr = None
+                try:
+                    page.wait_for_function('window.MBTdebug && MBTdebug.R() && document.getElementById("mb-save")', timeout=90000)
+                    page.evaluate("() => document.getElementById('mb-save').click()"); page.wait_for_timeout(100)
+                    with page.expect_navigation(timeout=30000):
+                        page.evaluate("() => document.querySelector('#mb-hist [data-hgo=\"0\"]').click()")
+                    page.wait_for_function('window.MH && MH.setup && MH.setup.preset', timeout=30000)
+                except Exception as e:
+                    fail('muhan-backtest', '실행 기록 → 무한매수법 시작: 저장·이동·조건 채우기 실패 (%s)' % str(e).split('\n')[0][:160])
+                pr = (page.evaluate("""async () => { const u = MH.setup, W = ms => new Promise(r => setTimeout(r, ms)), st = MHdebug.store;
+                  const o = { u: { ver: u.ver, ticker: u.ticker, custom: u.custom, splits: u.splits, spc: u.spc, target: u.target, big: u.big, part: u.part, capP: u.capP, lines: u.lines, shares: u.shares, exhaust: u.exhaust, cap: u.cap },
+                    note: (document.getElementById('mh-preset') || {}).innerText || '', dis: document.querySelector('[data-act="su-start"]').disabled, live: st.sessions.filter(s => !s.archived).length, left: localStorage.getItem('muhan4-preset') };
+                  document.querySelector('[data-act="su-start"]').click(); await W(300);
+                  const a = st.sessions.filter(s => s.id === st.activeSessionId)[0], old = st.sessions.filter(s => s.id === 'a1')[0];
+                  o.s = a.settings; o.oldOk = !!(old && old.settings && old.settings.ticker === 'TQQQ' && old.settings.splits === 40); o.n = st.sessions.length; return o; }""") if page.evaluate("() => !!(window.MH && MH.setup && MH.setup.preset)") else None)
+                wu = {'ver': '2.1', 'ticker': 'SOXL', 'custom': False, 'splits': 10, 'spc': '10', 'target': '100', 'big': '10', 'part': '4', 'capP': '6', 'lines': '5', 'shares': '2', 'exhaust': 'hold', 'cap': '20000'}
+                if pr is None: pr = {'u': {}, 'dis': True, 'live': 0, 'left': None, 'note': '', 'oldOk': False, 's': {}}
+                bu = [k for k, v in wu.items() if pr['u'].get(k) != v]
+                s_ = pr.get('s') or {}
+                if bu or pr['dis'] or pr['live'] != 2 or pr['left'] is not None or 'RSI' not in pr['note'] or not pr['oldOk'] \
+                        or s_.get('version') != '2.1' or s_.get('targetProfit') != 100 or s_.get('splits') != 10 or s_.get('partPct') != 4 or s_.get('capPct') != 6 \
+                        or s_.get('lowerLocLines') != 5 or s_.get('lowerLocShares') != 2 or s_.get('exhaust') != 'hold' or s_.get('totalCapital') != 20000 or s_.get('ticker') != 'SOXL':
+                    fail('muhan-backtest', '실행 기록 → 무한매수법 시작 이상 — 다른 칸 %s · %r' % (bu, {k: pr[k] for k in ('u', 'dis', 'live', 'left', 'oldOk', 's')}))
+                page.evaluate("() => { localStorage.removeItem('muhan4-store'); localStorage.removeItem('mbt-history'); }")
             # 주소만으로 같은 조건 — 평단 괴리율·취득가액·연말 절세·분배금(V2.1) · T 반올림(V2.2) 이 주소에 남고 다시 열면 그대로
             for h, want in [('#v=2.1&t=SOXL&c=20000&sp=33&tg=12.5&pt=4&cp=6&bg=10&fe=0.1&ln=5&sh=2&x=hold&r=rsi&ao=-1.5&tm=avg&hv=1&dv=0',
                              {'ver': '2.1', 'tk': 'SOXL', 'cap': 20000, 'splits': 33, 'target': 12.5, 'part': 4, 'capP': 6, 'big': 10, 'fee': 0.1, 'lines': 5, 'shares': 2, 'exhaust': 'hold', 'restart': 'rsi', 'avgOff': -1.5, 'method': 'avg', 'harvest': True, 'divs': False}),
