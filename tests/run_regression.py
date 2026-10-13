@@ -1522,6 +1522,10 @@ def main():
             for t in [t for t, u in errs if not ignorable(t, u)][:3]:
                 fail('vr', '콘솔 오류: ' + t[:200])
             page.set_viewport_size({'width': 1440, 'height': 900})
+        # 밸류리밸런싱 VR 5.0 백테스트 — 엔진(tests/vr_bt_test.js) · 화면 · 기록 화면 카드 (tests/vr_bt_ui.py)
+        if os.path.isdir(os.path.join(ROOT, 'vr-backtest')):
+            import vr_bt_ui
+            vr_bt_ui.check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS)
         # 홈 첫 화면 — AI 시대, 노동자에서 자본가로: 두 힘·하나의 답 숫자 · 데이터 탭 · 직업 검색
         print('[홈] 첫 화면', flush=True)
         errs.clear()

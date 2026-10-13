@@ -199,6 +199,8 @@ SIM = ('Can I rely on the ₩100 million projection?', '<p>It simply assumes the
 SRC = ('Where does the data come from?', '<p>The current level comes from Yahoo Finance. Historical values for the “Last N years” buttons come from weekly data that this site collects with GitHub Actions (data/history.json). Press <b>Refresh</b> to reload the current level.</p>')
 KRW = ('Why is the simulation in Korean won?', '<p>This site is built for Korean investors, so the simulation starts from ₩100 million (about the size of a typical lump-sum investment in Korea). The growth multiple is the same in any currency: ₩100M growing to ₩3B is the same 30× as $100K growing to $3M. Index growth itself is measured in U.S. dollars.</p>')
 
+TEXT.update({'밸류리밸런싱 VR 5.0 백테스트': 'Value rebalancing backtest (Korean)'})   # VR 백테스트 메뉴 이름 (도구 화면은 한국어만)
+
 GUIDES = {}
 GUIDES['sp500'] = guide('sp500', 'How the S&amp;P 500 growth rate is calculated',
     'The S&amp;P 500 tracks 500 large U.S. companies by market value. This page calculates how much the index has grown per year on average (CAGR) from January 3, 1928 (17.66), or over the last 5–30 years, using today’s level.',
