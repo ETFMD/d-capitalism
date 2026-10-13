@@ -1,0 +1,240 @@
+# 무한매수법 백테스트 설정 탐색 — 수동 실행 전용 (scripts/muhan_opt · README 참고 · 사이트 배포·자동 갱신과 무관)
+# 순서: data(시뮬레이터 화면이 쓰는 일봉·재현 일봉·시가를 파일로) → s1(1단계: 격자 + 좌표 탐색, 칸마다) → prep2(2단계 출발점·상장 전 재현 믿음도)
+#       → s2(2단계: 이웃 25곳 중앙값 탐색) → final(최종 정리 · CSV · 보고 표) — 한 번 실행으로 끝까지, 또는 from_run 의 결과로 중간부터
+# rej: 증권사 주문 거부 처리(REJ — clamp 한도로 낮춰 넣기 · skip 그날 건너뛰기 · none 반영 안 함 · both = clamp·skip 둘 다)
+# 원격 브랜치를 쓰지 않으려고(동시작업 규칙) main 에서 workflow_dispatch 로만 돎 — push 로는 돌지 않음
+# 다른 자동 작업(시세 봇 등)이 줄 서지 않게 동시에 16칸까지만
+name: 무한매수법 설정 탐색 (수동)
+on:
+  workflow_dispatch:
+    inputs:
+      rej:
+        description: '증권사 주문 거부 처리 (both = clamp·skip 둘 다)'
+        type: choice
+        options: [both, clamp, skip, none]
+        default: both
+      fix:
+        description: '고정 설정 FIX (예: avgOff=0 — 평단 LOC 괴리율 0%)'
+        default: 'avgOff=0'
+      stage:
+        description: '어디부터 (all = 자료부터 끝까지 · s2 = from_run 의 자료·1단계로 2단계부터 · final = from_run 의 자료·1·2단계로 최종 정리만)'
+        type: choice
+        options: [all, s2, final]
+        default: all
+      from_run:
+        description: '앞 단계 결과가 있는 실행 번호(run id) — stage 가 s2·final 일 때'
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: muhan-opt
+  cancel-in-progress: false
+
+env:
+  FIX: ${{ inputs.fix }}
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      rej: ${{ steps.p.outputs.rej }}
+      src: ${{ steps.p.outputs.src }}
+    steps:
+      - id: p
+        run: |
+          case "${{ inputs.rej }}" in both) echo 'rej=["clamp","skip"]' >> "$GITHUB_OUTPUT";; *) echo 'rej=["${{ inputs.rej }}"]' >> "$GITHUB_OUTPUT";; esac
+          if [ "${{ inputs.stage }}" = "all" ]; then echo "src=${{ github.run_id }}" >> "$GITHUB_OUTPUT"; else test -n "${{ inputs.from_run }}" && echo "src=${{ inputs.from_run }}" >> "$GITHUB_OUTPUT"; fi
+
+  data:
+    needs: plan
+    if: inputs.stage == 'all'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Playwright 설치
+        run: |
+          pip install playwright==1.63.0
+          python -m playwright install --with-deps chromium
+      - name: 화면 자료 꺼내기 (광고·분석 요청 차단 · 야후 일봉 직접)
+        run: |
+          python scripts/i18n/make_en.py > /dev/null && python scripts/build_pages.py > /dev/null
+          python scripts/muhan_opt/dump.py
+          node scripts/muhan_opt/prep.js - - scripts/muhan_opt/data src/index.html
+          ls -la scripts/muhan_opt/data
+      - uses: actions/upload-artifact@v4
+        with:
+          name: data
+          path: scripts/muhan_opt/data/
+          retention-days: 14
+
+  s1:
+    needs: [plan, data]
+    if: inputs.stage == 'all'
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        rej: ${{ fromJSON(needs.plan.outputs.rej) }}
+        per: [pre, act]
+        ver: ['2.2', '3.0', '2.1', '2.0', '1.0', '4.0']
+        tk: [TQQQ, SOXL, UPRO, TECL]
+    env:
+      REJ: ${{ matrix.rej }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@v4
+        with:
+          name: data
+          path: scripts/muhan_opt/data
+      - name: 1단계 ${{ matrix.rej }} ${{ matrix.tk }} ${{ matrix.per }} V${{ matrix.ver }}
+        run: nproc && node scripts/muhan_opt/muhan_opt.js ${{ matrix.tk }} ${{ matrix.per }} ${{ matrix.ver }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: s1-${{ matrix.rej }}-${{ matrix.tk }}-${{ matrix.per }}-${{ matrix.ver }}
+          path: scripts/muhan_opt/out/
+          retention-days: 14
+
+  prep2:
+    needs: [plan, s1]
+    if: always() && (inputs.stage == 'all' && needs.s1.result != 'cancelled' || inputs.stage == 's2')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        rej: ${{ fromJSON(needs.plan.outputs.rej) }}
+    env:
+      REJ: ${{ matrix.rej }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@v4
+        with:
+          name: data
+          path: scripts/muhan_opt/data
+          run-id: ${{ needs.plan.outputs.src }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: s1-${{ matrix.rej }}-*
+          path: s1
+          run-id: ${{ needs.plan.outputs.src }}
+          github-token: ${{ github.token }}
+      - name: 2단계 출발점 · 상장 전 재현 믿음도 (${{ matrix.rej }})
+        run: |
+          ls s1 | wc -l
+          node scripts/muhan_opt/regions.js s1 scripts/muhan_opt/regions.json
+          node scripts/muhan_opt/prep.js s1 scripts/muhan_opt/regions.json scripts/muhan_opt/data src/index.html
+          mkdir -p reg && cp scripts/muhan_opt/regions.json reg/regions.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: regions-${{ matrix.rej }}
+          path: reg/
+          retention-days: 14
+
+  s2:
+    needs: [plan, prep2]
+    if: always() && (needs.prep2.result == 'success' || needs.prep2.result == 'failure') && inputs.stage != 'final'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        rej: ${{ fromJSON(needs.plan.outputs.rej) }}
+        tk: [TQQQ, SOXL, UPRO, TECL]
+        job: [act-cagr, act-calmar, pre-cagr, pre-calmar, pre-cagrC, pre-calmarC]
+    env:
+      REJ: ${{ matrix.rej }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@v4
+        with:
+          name: data
+          path: scripts/muhan_opt/data
+          run-id: ${{ needs.plan.outputs.src }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: regions-${{ matrix.rej }}
+          path: scripts/muhan_opt
+      - name: 2단계 ${{ matrix.rej }} ${{ matrix.tk }} ${{ matrix.job }}
+        run: |
+          J="${{ matrix.job }}"
+          nproc && node scripts/muhan_opt/muhan_rob.js ${{ matrix.tk }} "${J%%-*}" "${J#*-}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: s2-${{ matrix.rej }}-${{ matrix.tk }}-${{ matrix.job }}
+          path: scripts/muhan_opt/out/
+          retention-days: 14
+
+  final:
+    needs: [plan, s2]
+    if: always() && (inputs.stage == 'final' || needs.s2.result == 'success' || needs.s2.result == 'failure')   # 2단계 칸 몇 개가 실패해도 있는 결과로 정리
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        rej: ${{ fromJSON(needs.plan.outputs.rej) }}
+        tk: [TQQQ, SOXL, UPRO, TECL]
+    env:
+      REJ: ${{ matrix.rej }}
+      ONLY: ${{ matrix.tk }}
+      TAG: ${{ matrix.rej }}-${{ matrix.tk }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@v4
+        with:
+          name: data
+          path: scripts/muhan_opt/data
+          run-id: ${{ needs.plan.outputs.src }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: s1-${{ matrix.rej }}-${{ matrix.tk }}-*
+          path: s1
+          run-id: ${{ needs.plan.outputs.src }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: s2-${{ matrix.rej }}-${{ matrix.tk }}-*
+          path: s2
+          run-id: ${{ inputs.stage == 'final' && needs.plan.outputs.src || github.run_id }}
+          github-token: ${{ github.token }}
+      - name: 최종 정리 ${{ matrix.rej }} ${{ matrix.tk }}
+        run: |
+          mkdir -p fin
+          CACHE=fin node scripts/muhan_opt/final.js s1 s2 scripts/muhan_opt/data src/index.html fin
+          node scripts/muhan_opt/report.js fin/final.json > fin/report.md
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: final-${{ matrix.rej }}-${{ matrix.tk }}
+          path: fin/
+          retention-days: 14

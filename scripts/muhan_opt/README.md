@@ -2,7 +2,14 @@
 
 시뮬레이터(`/muhan-backtest/`)의 모든 설정을 TQQQ·SOXL·UPRO·TECL × 상장 이후·상장 전 포함으로 훑어
 CAGR 최고 · 안정 최고(이웃 25곳 중앙값) · 균형(이웃 중앙 CAGR ÷ |MDD|) 설정을 찾는다. 엔진은 `src/index.html` 의 MHE·MHV 를 그대로 읽는다.
-사이트 배포·자동 갱신과는 무관 — 필요할 때만 돌린다. 결과(2026-10-13)는 인수인계 문서 ㉓, 평단 LOC 괴리율 0% 고정으로 다시 돈 결과는 ㉖.
+사이트 배포·자동 갱신과는 무관 — 필요할 때만 돌린다. 결과(2026-10-13)는 인수인계 문서 ㉓, 평단 LOC 괴리율 0% 고정으로 다시 돈 결과는 ㉗, 거기에 증권사 주문 거부 처리까지 넣은 결과는 ㉝.
+
+**증권사 주문 거부(2026-10-14 ㉝)** — `muhan_opt.js`·`muhan_rob.js`·`prep.js`·`final.js` 는 환경 변수 `REJ=clamp`(한도로 낮춰 넣기) · `REJ=skip`(그날 건너뛰기)를 받는다(없으면 반영 안 함).
+매수 지정가 > 그날 시가 × 1.2(1센트 버림)이면 증권사가 주문을 받지 않는다고 보고 엔진 `MHV.run` 의 `o.rej` 로 계산 — 시뮬레이터 '7. 고급 설정 → 증권사 주문 거부'·주소 `rj=c|s` 와 같은 계산.
+자료에 시가 `o` 가 있어야 함(`dump.py` 가 화면의 `MBT.withOpen`·`MBT.preOpen` 으로 꺼냄 — 상장 전 재현 구간은 같은 지수 ETF(QQQ·SOXX·SMH·SPY·XLK) 시가 변화 × 3, 그것도 없는 날은 0 = 전날 종가로 봄).
+`final.js`·`report.js` 의 시뮬레이터 주소엔 `rj=`·`e=<자료 끝날>` 이 붙어 같은 조건·같은 기간으로 열린다.
+**GitHub Actions** — 원격 브랜치를 쓰지 않으려고(동시작업 규칙) main 의 `.github/workflows/muhan-opt.yml`(수동 실행 전용)로 돌린다: Actions → '무한매수법 설정 탐색 (수동)' → rej(both·clamp·skip·none)·fix·stage(all·s2·final)·from_run.
+한 번 실행으로 자료(dump) → 1단계(칸 = 거부 처리 × 기간 × 버전 × 종목, 동시에 16칸) → 2단계 출발점(regions.js·prep.js) → 2단계 → 최종 정리(final.js·report.js — 종목마다)까지 하고, 결과는 실행의 artifact(`final-<rej>-<종목>`).
 
 **설정 고정** — 세 스크립트(`muhan_opt.js`·`muhan_rob.js`·`final.js`)와 `cons_starts.js` 모두 환경 변수 `FIX='avgOff=0'` 처럼 `이름=값`(쉼표로 여러 개)을 받는다.
 고정한 값은 탐색하지 않고 출발점·기본값에도 그 값을 쓰며, `final.js` 는 다른 값을 가진 후보를 뺀다. 이름은 설정 키(`splits`·`target`·`big`·`lines`·`shares`·`part`·`capP`·`avgOff`·`money`·`exhaust`·`restart`·`tround`·`rebase`·`noBig`·`method`·`harvest`).

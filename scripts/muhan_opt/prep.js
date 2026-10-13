@@ -8,6 +8,9 @@
 const fs = require('fs'), path = require('path');
 const [D1, REGF, DATA, SRC] = process.argv.slice(2);
 const TH = 0.02;
+/* 증권사 주문 거부 — 환경 변수 REJ='clamp'(한도로 낮춰 넣기) | 'skip'(그날 건너뛰기) · 없으면 반영 안 함 (시뮬레이터 '7. 고급 설정' · 주소 rj=c|s 와 같은 계산)
+   매수 지정가 > 그날 시가(자료 o — 0·없음이면 전날 종가) × 1.2 를 1센트 버림 → MHV.run o.rej · 자료의 시가는 dump.py 가 화면(MBT.withOpen·preOpen)에서 꺼냄 */
+const REJ = /^(clamp|skip)$/.test(process.env.REJ || '') ? { mode: process.env.REJ, cap: 1.2 } : null;
 const src = fs.readFileSync(SRC, 'utf8');
 const gr = (n, e) => { const a = src.indexOf('var ' + n + ' = (function'), b = src.indexOf(e, a); if (a < 0 || b < 0) throw new Error(n); return src.slice(a, b); };
 const MHE = new Function(gr('MHE', "if (typeof module !== 'undefined') module.exports = MHE;") + '\nreturn MHE;')();
@@ -28,7 +31,7 @@ const dn = s => Date.parse(s + 'T00:00:00Z') / 864e5;
 const rd = (tk, k) => JSON.parse(fs.readFileSync(path.join(DATA, tk + '_' + k + '.json'), 'utf8'));
 function run(tk, D, p) {
   const from = 1, to = D.d.length - 1;
-  const R = MHV.run(cfgOf(tk, p), D, { from, to, capital: 10000, norm: 'auto', rows: false, fee: 0.0007, sec: 0.0000206, divTax: 0.15, tax: { fx: i => D.fx[i], method: p.method || 'fifo', harvest: !!p.harvest } });
+  const R = MHV.run(cfgOf(tk, p), D, { from, to, capital: 10000, norm: 'auto', rows: false, fee: 0.0007, sec: 0.0000206, divTax: 0.15, tax: { fx: i => D.fx[i], method: p.method || 'fifo', harvest: !!p.harvest }, rej: REJ });
   const days = dn(D.d[to]) - dn(D.d[from - 1]), cagr = R.final > 0 ? Math.pow(R.final / 10000, 365.25 / days) - 1 : -1;
   let pk = -Infinity, m = 0; for (const e of R.eq) { if (e > pk) pk = e; const dd = e / pk - 1; if (dd < m) m = dd; }
   return { cagr, mdd: m, nob: R.nob || 0 };

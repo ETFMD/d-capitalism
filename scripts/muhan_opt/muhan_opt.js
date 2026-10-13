@@ -14,6 +14,9 @@ const [TK, PER, VER] = process.argv.slice(2);
 const PILOT = !!process.env.OPT_PILOT;
 /* 고정할 설정 — 환경 변수 FIX='avgOff=0' 처럼 '이름=값' 을 쉼표로 (예: 평단 LOC 괴리율 0% 로 두고 탐색) · 고정한 값은 탐색하지 않고 출발점·기본값에도 그 값 */
 const FIX = (process.env.FIX || '').split(',').map(s => s.trim()).filter(Boolean).reduce((o, kv) => { const i = kv.indexOf('='), k = kv.slice(0, i).trim(), v = kv.slice(i + 1).trim(); o[k] = v === 'true' ? true : v === 'false' ? false : v !== '' && isFinite(+v) ? +v : v; return o; }, {});
+/* 증권사 주문 거부 — 환경 변수 REJ='clamp'(한도로 낮춰 넣기) | 'skip'(그날 건너뛰기) · 없으면 반영 안 함 (시뮬레이터 '7. 고급 설정' · 주소 rj=c|s 와 같은 계산)
+   매수 지정가 > 그날 시가(자료 o — 0·없음이면 전날 종가) × 1.2 를 1센트 버림 → MHV.run o.rej · 자료의 시가는 dump.py 가 화면(MBT.withOpen·preOpen)에서 꺼냄 */
+const REJ = /^(clamp|skip)$/.test(process.env.REJ || '') ? { mode: process.env.REJ, cap: 1.2 } : null;
 
 function engine() {
   const src = fs.readFileSync(path.join(ROOT, 'src', 'index.html'), 'utf8');
@@ -23,7 +26,7 @@ function engine() {
 }
 function dataOf(tk, per) {
   const D = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', tk + '_' + per + '.json'), 'utf8')), n = Number(process.env.OPT_TRUNC) || 0;
-  if (n > 0) for (const k of ['d', 'c', 'h', 'dv', 'fx']) if (D[k]) D[k] = D[k].slice(0, n);   /* 시험용으로 앞부분만 */
+  if (n > 0) for (const k of ['d', 'c', 'h', 'o', 'dv', 'fx']) if (D[k]) D[k] = D[k].slice(0, n);   /* 시험용으로 앞부분만 */
   return D;
 }
 
@@ -46,8 +49,8 @@ function evaluator(MHV, tk, D) {
   const fx = i => D.fx[i];
   return function (p, gross) {
     const cap = p.cap || 10000, fee = p.fee != null ? p.fee : 0.0007;
-    const o = gross ? { from, to, capital: cap, norm: 'auto', rows: false, fee: 0, sec: 0, divTax: 0, tax: null }
-                    : { from, to, capital: cap, norm: 'auto', rows: false, fee, sec: fee > 0 ? 0.0000206 : 0, divTax: 0.15, tax: { fx, method: p.method || 'fifo', harvest: !!p.harvest } };
+    const o = gross ? { from, to, capital: cap, norm: 'auto', rows: false, fee: 0, sec: 0, divTax: 0, tax: null, rej: REJ }
+                    : { from, to, capital: cap, norm: 'auto', rows: false, fee, sec: fee > 0 ? 0.0000206 : 0, divTax: 0.15, tax: { fx, method: p.method || 'fifo', harvest: !!p.harvest }, rej: REJ };
     const R = MHV.run(cfgOf(MHV, tk, p), D, o);
     const cagr = R.final > 0 ? Math.pow(R.final / cap, 365.25 / days) - 1 : -1;
     let pk = -Infinity, m = 0; for (let i = 0; i < R.eq.length; i++) { const e = R.eq[i]; if (e > pk) pk = e; const dd = e / pk - 1; if (dd < m) m = dd; }
@@ -84,6 +87,7 @@ function evalBatch(list, gross) {
 }
 
 const MHV0 = engine(), DEF = MHV0.defaults(VER, TK), DATA = dataOf(TK, PER);
+if (REJ && !(DATA.o && DATA.o.length === DATA.d.length)) throw new Error('REJ=' + REJ.mode + ' 에는 시가(o)가 든 자료가 필요해요 — dump.py 를 다시 돌리세요');
 const range = (a, b, s) => { const o = []; for (let x = a; x <= b + 1e-9; x += s) o.push(Math.round(x * 100) / 100); return o; };
 const SPLITS = PILOT ? [5, 10, 20, 30, 40] : range(2, 100, 1);
 const TGT_A = PILOT ? [5, 10, 15, 20] : range(0.5, 50, 0.5).concat(range(55, 100, 5));
@@ -121,8 +125,8 @@ async function evalMany(list) {
 const t0 = Date.now(), log = s => console.log(((Date.now() - t0) / 1000).toFixed(0) + 's ' + s);
 
 (async () => {
-  const out = { tk: TK, per: PER, ver: VER, fix: FIX, from: DATA.d[0], to: DATA.d[DATA.d.length - 1], L: DATA.L || 0, listing: DATA.L ? DATA.d[DATA.L] : DATA.d[0],
-                env: '원금 $10,000 · 1주 단위 · 수수료 0.07% + SEC 0.00206% · 분배 원천징수 15% · 양도세 22% (결제일 매매기준율, 5월 말 납부)', combos: COMBOS, splits: SPLITS, targets: TGT_A };
+  const out = { tk: TK, per: PER, ver: VER, fix: FIX, rej: REJ ? REJ.mode : 'none', from: DATA.d[0], to: DATA.d[DATA.d.length - 1], L: DATA.L || 0, listing: DATA.L ? DATA.d[DATA.L] : DATA.d[0],
+                env: '원금 $10,000 · 1주 단위 · 수수료 0.07% + SEC 0.00206% · 분배 원천징수 15% · 양도세 22% (결제일 매매기준율, 5월 말 납부)' + (REJ ? ' · 증권사 주문 거부 ' + REJ.mode + '(시가 × 1.2)' : ''), combos: COMBOS, splits: SPLITS, targets: TGT_A };
   /* 원문 기본값 */
   const d0 = (await evalMany([Object.assign({}, base, VER === '4.0' ? {} : {})]))[0];
   out.default = { p: base, r: d0 }; log('기본값 CAGR ' + (d0.cagr * 100).toFixed(2) + '% MDD ' + (d0.mdd * 100).toFixed(1) + '%');

@@ -28,13 +28,16 @@ function cfgOf(tk, p) {
 const dn = s => Date.parse(s + 'T00:00:00Z') / 864e5;
 const DS = {}; const ds = (tk, k) => { if (DS[tk + k]) return DS[tk + k]; const D = JSON.parse(fs.readFileSync(path.join(DATA, tk + '_' + k + '.json'), 'utf8'));
   /* 계산 저장 열쇠: 종목·종류 + 자료 길이·끝 날짜·끝 종가·끝 고가 (자료가 바뀌면 다시 계산) */
-  D._k = tk + '_' + k + '@' + D.d.length + ':' + D.d[D.d.length - 1] + ':' + D.c[D.c.length - 1] + ':' + D.h[D.h.length - 1] + ':' + D.h[Math.floor(D.h.length / 2)]; return (DS[tk + k] = D); };
+  D._k = tk + '_' + k + '@' + D.d.length + ':' + D.d[D.d.length - 1] + ':' + D.c[D.c.length - 1] + ':' + D.h[D.h.length - 1] + ':' + D.h[Math.floor(D.h.length / 2)] + (REJ ? ':rej=' + REJ.mode + ':o=' + (D.o ? D.o[D.o.length - 1] + '/' + D.o.filter(x => x > 0).length : 'none') : ''); return (DS[tk + k] = D); };   /* 주문 거부 계산은 시가까지 열쇠에 */
 /* 계산 결과 저장(같은 설정·같은 구간은 다시 돌리지 않음) — CACHE 폴더의 cache*.json 을 읽고, 이번에 새로 계산한 것은 cache_<TAG>.json 으로 */
 const CDIR = process.env.CACHE || OUT, CACHE = new Map(), NEW = {};
 if (fs.existsSync(CDIR)) for (const f of fs.readdirSync(CDIR)) if (/^cache.*\.json$/.test(f)) for (const [k, v] of Object.entries(JSON.parse(fs.readFileSync(path.join(CDIR, f), 'utf8')))) CACHE.set(k, v);
 const ONLY = process.env.ONLY ? process.env.ONLY.split(',') : null;
 /* 고정할 설정 — 환경 변수 FIX='avgOff=0' 처럼 '이름=값' 을 쉼표로 (예: 평단 LOC 괴리율 0% 로 두고 탐색) · 고정한 값은 탐색하지 않고 출발점·기본값에도 그 값 */
 const FIX = (process.env.FIX || '').split(',').map(s => s.trim()).filter(Boolean).reduce((o, kv) => { const i = kv.indexOf('='), k = kv.slice(0, i).trim(), v = kv.slice(i + 1).trim(); o[k] = v === 'true' ? true : v === 'false' ? false : v !== '' && isFinite(+v) ? +v : v; return o; }, {});
+/* 증권사 주문 거부 — 환경 변수 REJ='clamp'(한도로 낮춰 넣기) | 'skip'(그날 건너뛰기) · 없으면 반영 안 함 (시뮬레이터 '7. 고급 설정' · 주소 rj=c|s 와 같은 계산)
+   매수 지정가 > 그날 시가(자료 o — 0·없음이면 전날 종가) × 1.2 를 1센트 버림 → MHV.run o.rej · 자료의 시가는 dump.py 가 화면(MBT.withOpen·preOpen)에서 꺼냄 */
+const REJ = /^(clamp|skip)$/.test(process.env.REJ || '') ? { mode: process.env.REJ, cap: 1.2 } : null;
 function run(tk, D, p, from, to) {
   to = to == null ? D.d.length - 1 : to; from = from || 1;
   const ck = D._k + '|' + from + '|' + to + '|' + kp(p); if (CACHE.has(ck)) return CACHE.get(ck);
@@ -43,12 +46,12 @@ function run(tk, D, p, from, to) {
 /* 세전(수수료·세금 없음) — 시뮬레이터 '상장 전 백테스트 오차' ② 와 같은 조건 (화면 알림 '상장 전 구간 결과는 믿기 어려워요' 는 이 값 |d| ≥ 5%p) */
 function runG(tk, D, p) {
   const ck = 'G|' + D._k + '|' + kp(p); if (CACHE.has(ck)) return CACHE.get(ck);
-  const R = MHV.run(cfgOf(tk, p), D, { from: 1, capital: 10000, norm: 'auto', rows: false });
+  const R = MHV.run(cfgOf(tk, p), D, { from: 1, capital: 10000, norm: 'auto', rows: false, rej: REJ });
   const yrs = (dn(D.d[D.d.length - 1]) - dn(D.d[0])) / 365.25, o = { cagr: R.final > 0 ? Math.pow(R.final / 10000, 1 / yrs) - 1 : -1 };
   CACHE.set(ck, o); NEW[ck] = o; return o;
 }
 function run0(tk, D, p, from, to) {
-  const R = MHV.run(cfgOf(tk, p), D, { from, to, capital: 10000, norm: 'auto', rows: false, fee: 0.0007, sec: 0.0000206, divTax: 0.15, tax: { fx: i => D.fx[i], method: p.method || 'fifo', harvest: !!p.harvest } });
+  const R = MHV.run(cfgOf(tk, p), D, { from, to, capital: 10000, norm: 'auto', rows: false, fee: 0.0007, sec: 0.0000206, divTax: 0.15, tax: { fx: i => D.fx[i], method: p.method || 'fifo', harvest: !!p.harvest }, rej: REJ });
   const days = dn(D.d[to]) - dn(D.d[from - 1]), cagr = R.final > 0 ? Math.pow(R.final / 10000, 365.25 / days) - 1 : -1;
   let pk = -Infinity, m = 0; for (const e of R.eq) { if (e > pk) pk = e; const dd = e / pk - 1; if (dd < m) m = dd; }
   return { cagr, mdd: m, exh: R.n.exh, cyc: R.cycles.length, win: R.n.win, nob: R.nob || 0, lack0: R.lack0 || 0, ext: R.taxExt || 0, tsell: R.tsell || 0 };
@@ -72,6 +75,7 @@ const hashOf = (tk, p, per) => { const h = ['v=' + p.ver, 't=' + tk, 'c=10000', 
   if (/^(1\.0|2\.0|2\.1|2\.2)$/.test(p.ver) && p.money !== 'compound') h.push('m=' + p.money); if (p.ver !== '4.0' && p.exhaust !== 'official') h.push('x=' + p.exhaust); if (p.ver !== '4.0' && p.restart === 'rsi') h.push('r=rsi');
   if (per === 'pre') h.push('p=1'); if (p.ver === '3.0' && p.rebase) h.push('rb=1'); if ((p.ver === '1.0' || p.ver === '2.0' || p.ver === '2.1') && p.avgOff) h.push('ao=' + p.avgOff);
   if ((p.ver === '2.2' || p.ver === '3.0') && p.tround === 'c1') h.push('tr=c1'); if (p.method === 'avg') h.push('tm=avg'); if (p.harvest) h.push('hv=1');
+  if (REJ) h.push('rj=' + (REJ.mode === 'clamp' ? 'c' : 's')); const D0 = ds(tk, per); h.push('e=' + D0.d[D0.d.length - 1]);   /* 같은 기간(자료 끝날)으로 열리게 */
   return 'https://d-capitalism.com/muhan-backtest/#' + h.join('&'); };
 for (const tk of ['TQQQ', 'SOXL', 'UPRO', 'TECL']) for (const per of ['act', 'pre']) {
   if (ONLY && !ONLY.includes(tk)) continue;
@@ -134,7 +138,7 @@ for (const tk of ['TQQQ', 'SOXL', 'UPRO', 'TECL']) for (const per of ['act', 'pr
     nSm: sm.length, nPool: pool.size };
   /* 뽑힌 설정: 원금·수수료 바꿔 보기 · 세전 */
   for (const x of [raw, rawAny, rob, bal, credRob, credBal]) if (x && !x.alt) {
-    const alt = o => { const R = MHV.run(cfgOf(tk, x.p), D, Object.assign({ from: 1, to: D.d.length - 1, norm: 'auto', rows: false }, o)); const days = dn(D.d[D.d.length - 1]) - dn(D.d[0]); return R.final > 0 ? Math.pow(R.final / o.capital, 365.25 / days) - 1 : -1; };
+    const alt = o => { const R = MHV.run(cfgOf(tk, x.p), D, Object.assign({ from: 1, to: D.d.length - 1, norm: 'auto', rows: false, rej: REJ }, o)); const days = dn(D.d[D.d.length - 1]) - dn(D.d[0]); return R.final > 0 ? Math.pow(R.final / o.capital, 365.25 / days) - 1 : -1; };
     const tx = { fx: i => D.fx[i], method: x.p.method || 'fifo', harvest: !!x.p.harvest };
     x.alt = { cap100k: alt({ capital: 100000, fee: 0.0007, sec: 0.0000206, divTax: 0.15, tax: tx }), cap1m: alt({ capital: 1000000, fee: 0.0007, sec: 0.0000206, divTax: 0.15, tax: tx }),
               fee025: alt({ capital: 10000, fee: 0.0025, sec: 0.0000206, divTax: 0.15, tax: tx }), gross: alt({ capital: 10000, fee: 0, sec: 0, divTax: 0, tax: null }) };
@@ -166,7 +170,7 @@ for (const tk of ['TQQQ', 'SOXL', 'UPRO', 'TECL']) {
 }
 fs.mkdirSync(OUT, { recursive: true }); fs.mkdirSync(CDIR, { recursive: true });
 fs.writeFileSync(path.join(CDIR, 'cache_' + (process.env.TAG || 'main') + '.json'), JSON.stringify(NEW));
-fs.writeFileSync(path.join(OUT, 'final.json'), JSON.stringify({ RES, OOS }, null, 1));
+fs.writeFileSync(path.join(OUT, 'final.json'), JSON.stringify({ RES, OOS, rej: REJ ? REJ.mode : 'none', fix: FIX }, null, 1));
 fs.writeFileSync(path.join(OUT, '무한매수법_설정탐색_후보.csv'), '﻿' + CSV.map(r => r.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(',')).join('\n'));
 console.log('\n다른 기간 시험');
 for (const [tk, o] of Object.entries(OOS)) for (const [nm, x] of Object.entries(o)) console.log(tk, nm, ['synth', 'act', 'pre'].map(s => s + ' ' + (x.o[s].cagr * 100).toFixed(1) + '%/' + (x.o[s].mdd * 100).toFixed(0) + '%').join(' · '));

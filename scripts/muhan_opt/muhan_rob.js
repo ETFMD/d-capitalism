@@ -12,6 +12,9 @@ const CONS = OBJN === 'cons';   /* 제약 탐색: 이웃 중앙 MDD·가운데 M
 const LIM = -0.60;
 /* 고정할 설정 — 환경 변수 FIX='avgOff=0' 처럼 '이름=값' 을 쉼표로 (예: 평단 LOC 괴리율 0% 로 두고 탐색) · 고정한 값은 탐색하지 않고 출발점·기본값에도 그 값 */
 const FIX = (process.env.FIX || '').split(',').map(s => s.trim()).filter(Boolean).reduce((o, kv) => { const i = kv.indexOf('='), k = kv.slice(0, i).trim(), v = kv.slice(i + 1).trim(); o[k] = v === 'true' ? true : v === 'false' ? false : v !== '' && isFinite(+v) ? +v : v; return o; }, {});
+/* 증권사 주문 거부 — 환경 변수 REJ='clamp'(한도로 낮춰 넣기) | 'skip'(그날 건너뛰기) · 없으면 반영 안 함 (시뮬레이터 '7. 고급 설정' · 주소 rj=c|s 와 같은 계산)
+   매수 지정가 > 그날 시가(자료 o — 0·없음이면 전날 종가) × 1.2 를 1센트 버림 → MHV.run o.rej · 자료의 시가는 dump.py 가 화면(MBT.withOpen·preOpen)에서 꺼냄 */
+const REJ = /^(clamp|skip)$/.test(process.env.REJ || '') ? { mode: process.env.REJ, cap: 1.2 } : null;
 const TH = 0.02;
 function engine() {
   const src = fs.readFileSync(path.join(ROOT, 'src', 'index.html'), 'utf8');
@@ -20,7 +23,7 @@ function engine() {
   return new Function('MHE', g('MHV', "if (typeof module !== 'undefined') module.exports = MHV;") + '\nreturn MHV;')(MHE);
 }
 function dataOf(tk, per) { const D = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', tk + '_' + per + '.json'), 'utf8'));
-  if (process.env.OPT_TRUNC) for (const k of ['d', 'c', 'h', 'dv', 'fx']) if (D[k]) D[k] = D[k].slice(0, +process.env.OPT_TRUNC);   /* 시험용 */
+  if (process.env.OPT_TRUNC) for (const k of ['d', 'c', 'h', 'o', 'dv', 'fx']) if (D[k]) D[k] = D[k].slice(0, +process.env.OPT_TRUNC);   /* 시험용 */
   return D; }
 function cfgOf(MHV, tk, p) {
   const c = MHV.defaults(p.ver, tk);
@@ -38,8 +41,8 @@ function evaluator(MHV, tk, D) {
   const dn = s => Date.parse(s + 'T00:00:00Z') / 864e5, from = 1, to = D.d.length - 1, days = dn(D.d[to]) - dn(D.d[from - 1]), fx = i => D.fx[i];
   return function (p, gross) {
     const cap = p.cap || 10000, fee = p.fee != null ? p.fee : 0.0007;
-    const o = gross ? { from, to, capital: cap, norm: 'auto', rows: false, fee: 0, sec: 0, divTax: 0, tax: null }
-                    : { from, to, capital: cap, norm: 'auto', rows: false, fee, sec: fee > 0 ? 0.0000206 : 0, divTax: 0.15, tax: { fx, method: p.method || 'fifo', harvest: !!p.harvest } };
+    const o = gross ? { from, to, capital: cap, norm: 'auto', rows: false, fee: 0, sec: 0, divTax: 0, tax: null, rej: REJ }
+                    : { from, to, capital: cap, norm: 'auto', rows: false, fee, sec: fee > 0 ? 0.0000206 : 0, divTax: 0.15, tax: { fx, method: p.method || 'fifo', harvest: !!p.harvest }, rej: REJ };
     const R = MHV.run(cfgOf(MHV, tk, p), D, o), cagr = R.final > 0 ? Math.pow(R.final / cap, 365.25 / days) - 1 : -1;
     let pk = -Infinity, m = 0; for (let i = 0; i < R.eq.length; i++) { const e = R.eq[i]; if (e > pk) pk = e; const dd = e / pk - 1; if (dd < m) m = dd; }
     return [cagr, m, R.n.exh, R.cycles.length, R.nob || 0, R.lack0 || 0, R.taxExt || 0, R.final, R.n.win, R.tsell || 0];
@@ -62,6 +65,7 @@ function evalBatch(list, gross) {
     .then(parts => { const out = new Array(list.length); parts.forEach((pt, k) => pt.forEach((r, j) => { out[idx[k][j]] = pack(r); })); return out; });
 }
 const MHV0 = engine(), DATA = dataOf(TK, PER);
+if (REJ && !(DATA.o && DATA.o.length === DATA.d.length)) throw new Error('REJ=' + REJ.mode + ' 에는 시가(o)가 든 자료가 필요해요 — dump.py 를 다시 돌리세요');
 const range = (a, b, s) => { const o = []; for (let x = a; x <= b + 1e-9; x += s) o.push(Math.round(x * 100) / 100); return o; };
 const VALS = { target: range(0.5, 100, 0.5), splits: range(2, 100, 1), big: range(0, 40, 0.5), shares: range(1, 20, 1), part: range(0.5, 50, 0.5), capP: range(0, 50, 0.5), avgOff: range(-20, 20, 0.5) };
 function combos(v) {
@@ -106,7 +110,7 @@ const t0 = Date.now(), log = s => console.log(((Date.now() - t0) / 1000).toFixed
   const REG = JSON.parse(fs.readFileSync(path.join(__dirname, 'regions.json'), 'utf8'))[TK + '_' + PER];
   if (!REG) { log('regions.json 에 ' + TK + '_' + PER + ' 없음 — 이번에는 건너뜀'); workers.forEach(w => w.kill()); return; }
   if (CRED && PER !== 'pre') { log('상장 이후는 재현 믿음도 탐색이 필요 없음'); workers.forEach(w => w.kill()); return; }
-  const out = { tk: TK, per: PER, objn: OBJN, fix: FIX, floor: REG.floor, floorC: REG.floorC, th: TH, runs: [] };
+  const out = { tk: TK, per: PER, objn: OBJN, fix: FIX, rej: REJ ? REJ.mode : 'none', floor: REG.floor, floorC: REG.floorC, th: TH, runs: [] };
   /* 모든 목표: 가운데 설정이 '살 수 없는 날' 없이 원래 방법대로 돌아가야 함(nob = 0, 화면에 ⚠ 없음) */
   const OBJ = { cagr: s => s.nob === 0 ? s.cagrMed : -Infinity, calmar: s => s.nob === 0 && s.cagrMed >= REG.floor && s.mddMed < 0 ? s.cagrMed / -s.mddMed : -Infinity,
                 cons: s => s.nob !== 0 ? -Infinity : Math.min(s.cagrMed, s.c100) - 10 * Math.max(0, LIM - Math.min(s.mddMed, s.cMdd, s.m100)),
