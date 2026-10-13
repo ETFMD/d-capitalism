@@ -1,36 +1,32 @@
-# 무한매수법 설정 탐색 2단계 — 이웃 중앙값 최대화 (임시 브랜치 muhan-opt 전용 — main 에는 없음)
-# 2026-10-13 다시: 평단 LOC 괴리율 0% 고정(FIX=avgOff=0) · 1단계가 끝난 뒤 regions.json 을 올리고 손으로 실행
-name: 무한매수법 설정 탐색 2단계
+# 무한매수법 설정 탐색 — 제약 탐색(이웃 중앙 MDD·가운데·원금 10만$ MDD ≥ −60%, 하방 LOC 10줄 이하) (임시 브랜치 muhan-opt 전용 — main 에는 없음)
+# 2026-10-13 다시: 평단 LOC 괴리율 0% 고정(FIX=avgOff=0) · 출발점 = 새 1단계 격자 지도 + 새 후보 + 이전 추천을 괴리율 0% 로
+name: 무한매수법 설정 탐색 제약
 on:
+  push:
+    branches: [muhan-opt]
   workflow_dispatch:
 jobs:
-  rob:
+  cons:
     runs-on: ubuntu-latest
-    timeout-minutes: 340
+    timeout-minutes: 120
     env:
       FIX: avgOff=0
     strategy:
       fail-fast: false
       max-parallel: 24
       matrix:
-        per: [pre, act]
-        obj: [cagrC, calmarC, cagr, calmar]
-        tk: [UPRO, TQQQ, SOXL, TECL]
-        exclude:
-          - per: act
-            obj: cagrC
-          - per: act
-            obj: calmarC
+        ver: ['2.1', '2.0', '1.0', '2.2', '3.0', '4.0']
+        tk: [TQQQ, SOXL, UPRO, TECL]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: 2단계 ${{ matrix.tk }} ${{ matrix.per }} ${{ matrix.obj }}
-        run: nproc && node opt/muhan_rob.js ${{ matrix.tk }} ${{ matrix.per }} ${{ matrix.obj }}
+      - name: 제약 탐색 ${{ matrix.tk }} V${{ matrix.ver }}
+        run: nproc && node opt/muhan_rob.js ${{ matrix.tk }} act cons ${{ matrix.ver }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: rob-${{ matrix.tk }}-${{ matrix.per }}-${{ matrix.obj }}
+          name: cons-${{ matrix.tk }}-${{ matrix.ver }}
           path: opt/out/
           retention-days: 7
