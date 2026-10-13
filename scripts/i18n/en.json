@@ -340,6 +340,7 @@
   "데이터: Yahoo Finance 일봉 (GitHub Actions로 6시간마다 수집) · 종목 정보: 각 운용사 공식 페이지(Invesco, State Street, iShares, ProShares, Direxion) 기준, 보수는 변경될 수 있음": "Data: Yahoo Finance daily prices (collected every 6 hours via GitHub Actions) · ETF details from each issuer (Invesco, State Street, iShares, ProShares, Direxion); fees may change.",
   "ETF 12종 CAGR 추이 비교 차트": "CAGR trend chart for 12 ETFs",
   "밸류리밸런싱 VR 5.0 백테스트": "Value rebalancing backtest (Korean)",
+  "72매매법": "72 Method (Korean)",
   "차트 비교": "Chart Comparison",
   "국내 상장": "Korea-listed",
   "여 개 · 미국 상장": " · U.S.-listed",
