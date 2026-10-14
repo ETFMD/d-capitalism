@@ -4,6 +4,8 @@
 # rej: 증권사 주문 거부 처리(REJ — clamp 한도로 낮춰 넣기 · skip 그날 건너뛰기 · none 반영 안 함 · both = clamp·skip 둘 다)
 # 원격 브랜치를 쓰지 않으려고(동시작업 규칙) main 에서 workflow_dispatch 로만 돎 — push 로는 돌지 않음
 # 다른 자동 작업(시세 봇 등)이 줄 서지 않게 동시에 16칸까지만
+# 앞 단계 결과는 gh run download 로 받음 — actions/download-artifact 에 run-id 를 주면 실행의 artifact 목록을 100개까지만 읽어
+#   (1단계 96칸 + 2단계 48칸이면 넘음) 최종 정리에 1단계 칸이 빠졌던 것(2026-10-14 run 38466555263)을 바로잡음 · 받은 칸 수가 모자라면 경고
 name: 무한매수법 설정 탐색 (수동)
 on:
   workflow_dispatch:
@@ -126,21 +128,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - uses: actions/download-artifact@v4
-        with:
-          name: data
-          path: scripts/muhan_opt/data
-          run-id: ${{ needs.plan.outputs.src }}
-          github-token: ${{ github.token }}
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: s1-${{ matrix.rej }}-*
-          path: s1
-          run-id: ${{ needs.plan.outputs.src }}
-          github-token: ${{ github.token }}
+      - name: 앞 단계 결과 받기 (자료 · 1단계 ${{ matrix.rej }})
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SRC: ${{ needs.plan.outputs.src }}
+        run: |
+          gh run download "$SRC" -R "$GITHUB_REPOSITORY" -n data -D scripts/muhan_opt/data
+          gh run download "$SRC" -R "$GITHUB_REPOSITORY" -p "s1-${{ matrix.rej }}-*" -D s1
+          n=$(ls s1 | wc -l); echo "1단계 칸 $n"; [ "$n" -eq 48 ] || echo "::warning::1단계 ${{ matrix.rej }} 칸이 48개가 아님($n) — 빠진 칸은 출발점에서 빠짐"
       - name: 2단계 출발점 · 상장 전 재현 믿음도 (${{ matrix.rej }})
         run: |
-          ls s1 | wc -l
           node scripts/muhan_opt/regions.js s1 scripts/muhan_opt/regions.json
           node scripts/muhan_opt/prep.js s1 scripts/muhan_opt/regions.json scripts/muhan_opt/data src/index.html
           mkdir -p reg && cp scripts/muhan_opt/regions.json reg/regions.json
@@ -169,12 +166,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - uses: actions/download-artifact@v4
-        with:
-          name: data
-          path: scripts/muhan_opt/data
-          run-id: ${{ needs.plan.outputs.src }}
-          github-token: ${{ github.token }}
+      - name: 자료 받기
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SRC: ${{ needs.plan.outputs.src }}
+        run: gh run download "$SRC" -R "$GITHUB_REPOSITORY" -n data -D scripts/muhan_opt/data
       - uses: actions/download-artifact@v4
         with:
           name: regions-${{ matrix.rej }}
@@ -209,24 +205,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - uses: actions/download-artifact@v4
-        with:
-          name: data
-          path: scripts/muhan_opt/data
-          run-id: ${{ needs.plan.outputs.src }}
-          github-token: ${{ github.token }}
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: s1-${{ matrix.rej }}-${{ matrix.tk }}-*
-          path: s1
-          run-id: ${{ needs.plan.outputs.src }}
-          github-token: ${{ github.token }}
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: s2-${{ matrix.rej }}-${{ matrix.tk }}-*
-          path: s2
-          run-id: ${{ inputs.stage == 'final' && needs.plan.outputs.src || github.run_id }}
-          github-token: ${{ github.token }}
+      - name: 앞 단계 결과 받기 (자료 · 1단계 · 2단계 ${{ matrix.rej }} ${{ matrix.tk }})
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SRC: ${{ needs.plan.outputs.src }}
+          SRC2: ${{ inputs.stage == 'final' && needs.plan.outputs.src || github.run_id }}
+        run: |
+          gh run download "$SRC" -R "$GITHUB_REPOSITORY" -n data -D scripts/muhan_opt/data
+          gh run download "$SRC" -R "$GITHUB_REPOSITORY" -p "s1-${{ matrix.rej }}-${{ matrix.tk }}-*" -D s1
+          gh run download "$SRC2" -R "$GITHUB_REPOSITORY" -p "s2-${{ matrix.rej }}-${{ matrix.tk }}-*" -D s2 || echo "::warning::2단계 결과 없음 — 1단계 후보만으로 정리"
+          n1=$(ls s1 | wc -l); n2=$(ls s2 2>/dev/null | wc -l); echo "1단계 칸 $n1 · 2단계 칸 $n2"
+          [ "$n1" -eq 12 ] || echo "::warning::1단계 칸이 12개가 아님($n1)"; [ "$n2" -eq 6 ] || echo "::warning::2단계 칸이 6개가 아님($n2)"
       - name: 최종 정리 ${{ matrix.rej }} ${{ matrix.tk }}
         run: |
           mkdir -p fin

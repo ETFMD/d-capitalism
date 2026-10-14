@@ -10,6 +10,9 @@ CAGR 최고 · 안정 최고(이웃 25곳 중앙값) · 균형(이웃 중앙 CAG
 `final.js`·`report.js` 의 시뮬레이터 주소엔 `rj=`·`e=<자료 끝날>` 이 붙어 같은 조건·같은 기간으로 열린다.
 **GitHub Actions** — 원격 브랜치를 쓰지 않으려고(동시작업 규칙) main 의 `.github/workflows/muhan-opt.yml`(수동 실행 전용)로 돌린다: Actions → '무한매수법 설정 탐색 (수동)' → rej(both·clamp·skip·none)·fix·stage(all·s2·final)·from_run.
 한 번 실행으로 자료(dump) → 1단계(칸 = 거부 처리 × 기간 × 버전 × 종목, 동시에 16칸) → 2단계 출발점(regions.js·prep.js) → 2단계 → 최종 정리(final.js·report.js — 종목마다)까지 하고, 결과는 실행의 artifact(`final-<rej>-<종목>`).
+앞 단계 결과는 `gh run download` 로 받는다(`actions/download-artifact` 에 run-id 를 주면 artifact 목록을 100개까지만 읽어, ㉝ 첫 실행의 최종 정리에서 1단계 칸이 빠졌음 · 받은 칸 수가 모자라면 경고).
+**보고할 숫자는 보고 직전 화면 자료로** — 실행의 자료는 실행을 건 커밋의 시세 봇 자료와 그때 야후 일봉이라, 그 뒤 시세 봇 시가(소수 4자리 반올림)·야후 과거 값(상장 전 재현에 쓰는 지수 ETF, 1e-6 수준)이 바뀌면
+화면과 아주 조금 달라진다(㉝: 20:55Z 와 21:50Z 사이에 바뀜). 그래서 ㉝ 은 1·2단계 결과(후보)는 실행 것을 쓰고, `dump.py` 로 다시 꺼낸 화면 자료로 `final.js` 를 로컬에서 돌려 뽑고(이전 탐색 후보·다른 거부 방식의 후보도 `label` 로 함께 넣음), 뽑힌 설정을 화면 주소로 열어 숫자가 같은지 확인했다.
 
 **설정 고정** — 세 스크립트(`muhan_opt.js`·`muhan_rob.js`·`final.js`)와 `cons_starts.js` 모두 환경 변수 `FIX='avgOff=0'` 처럼 `이름=값`(쉼표로 여러 개)을 받는다.
 고정한 값은 탐색하지 않고 출발점·기본값에도 그 값을 쓰며, `final.js` 는 다른 값을 가진 후보를 뺀다. 이름은 설정 키(`splits`·`target`·`big`·`lines`·`shares`·`part`·`capP`·`avgOff`·`money`·`exhaust`·`restart`·`tround`·`rebase`·`noBig`·`method`·`harvest`).
