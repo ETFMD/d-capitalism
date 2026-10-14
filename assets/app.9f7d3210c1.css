@@ -1142,6 +1142,13 @@ html[data-theme="light"] #page-vrbt{--m-ac-s:rgba(49,130,246,.10)}
 .mh-rjw b{color:var(--m-warn)}
 .mh-rjsum{margin:8px 0 2px;padding:8px 10px;border-radius:10px;background:var(--m-s2);color:var(--m-t2);font-size:12px;line-height:1.5}
 .mh-rjsum.warn{background:rgba(254,152,0,.10);border:1px solid rgba(254,152,0,.34);color:var(--m-tx)}
+/* ── [MUHAN] 72루틴 오늘의 주문 — 마감 30분 전 다시 걸기(P.recheck) ── */
+.mh-rck{margin:10px 0 2px;padding:10px 11px 9px;border:1px dashed var(--m-bd);border-radius:10px;background:var(--m-s2);font-size:12px;line-height:1.5;color:var(--m-tx)}
+.mh-rck.now{border:1px solid rgba(254,152,0,.55);background:rgba(254,152,0,.10)}
+.mh-rck-h{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 8px}.mh-rck-h b{font-size:12.5px}
+.mh-rck-h .mh-chip{font-size:11px;padding:2px 8px;white-space:normal}.mh-rck.now .mh-rck-h .mh-chip{border-color:rgba(254,152,0,.55);color:var(--m-warn);font-weight:700}
+.mh-rck-r{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:2px 10px;padding:5px 0;border-top:1px solid var(--m-bd)}
+.mh-rck-r .mh-tag{margin-left:4px}.mh-rck-r b{font-size:13px}.mh-rck-r s{margin-right:2px}
 .mh-rjc{margin-top:10px;padding:10px 10px 8px;border:1px solid var(--m-bd);border-radius:12px}
 .mh-rjc-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;font-size:12.5px}.mh-rjc-h .mh-faint{font-size:11px}
 .mh-rjc-sel{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 6px}.mh-rjc-sel .mh-btn{padding:4px 9px;font-size:11px}

@@ -403,6 +403,60 @@ BT_JS = """async (live) => {""" + PRE + """
   return R;
 }"""
 
+# ㉟ 오늘의 주문 '마감 30분 전 다시 걸기' — 지금 가격(LOC 카드 기준가 · 손으로 넣어 정함)으로 세 경우 · 넣을 가격 · 한도 안 · 마감 시각(휴장일·조기 폐장·서머타임)
+RCK_JS = """async () => {""" + PRE + r"""
+  try {
+    MH.sheet = null; MH.menu = false; MH.view = 'now'; T.render(); await W(120);
+    const R = MH.rck, box = () => $('#mh-rck'), rows = () => $$('#mh-rck .mh-rck-r').map(e => Number(e.getAttribute('data-rck'))), kase = () => { const e = $('#mh-rck [data-rck-k]'); return e ? e.getAttribute('data-rck-k') : ''; };
+    const D = T.curD(), C = D && D.close, loc = (D ? D.orders : []).filter(o => o.type === 'buy' && o.method === 'LOC' && o.price > 0 && o.quantity > 0);
+    ok('오늘의 주문 아래 \'마감 30분 전 다시 걸기\' 상자 · 매수 LOC 줄마다 · 전일 종가 = 주문표 기준 · 72 프로필만', box() && R && R.c === C && R.big === 13 && R.rows.length === loc.length && loc.length > 0 &&
+       R.rows.every((r, i) => r.p === loc[i].price && r.q === loc[i].quantity) && T.P.recheck && T.P.recheck.min === 30 && T.P.recheck.lo === 2 && T.P.recheck.up === 10 && (!window.MHdebug || !MHdebug.P.recheck), JSON.stringify([R, C, loc.length]));
+    if (!R || !(C > 0)) return R;
+    const orig = R.rows.map(r => r.p), top = Math.max(...orig), usd = v => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    ok('가장 높은 매수 줄 = 전일 종가 +13% (사용자 절차의 \'원래 가격\')', Math.abs(top - C * 1.13) <= 0.0051, top + ' vs ' + C * 1.13);
+    const setP = async v => { fill('#mh-loc [data-in="cap"]', String(v)); await W(60); };
+    const chk = async (v, k, name) => { await setP(v); const np = Math.floor(v * 110 + 1e-7) / 100, want = orig.map(p => k === '3' ? Math.min(p, np) : p), got = rows(), cap = T.capOf(v);
+      const capEl = $('#mh-rck [data-rck-cap]'), txt = box().innerText;
+      ok(name + ' — 지금 ' + v + ' (' + ((v / C - 1) * 100).toFixed(2) + '%) → 경우 ' + k, kase() === k && got.length === want.length && got.every((p, i) => Math.abs(p - want[i]) < 1e-9) && got.every(p => p <= cap + 1e-9) &&
+         capEl && Number(capEl.getAttribute('data-rck-cap')) === cap && /✓ 모두 지금 한도/.test(capEl.innerText) && txt.includes(usd(v)) && txt.includes(usd(C)) &&
+         (k !== '3' || (txt.includes(usd(np)) && got.some((p, i) => p < orig[i]) === orig.some(p => p > np) && $$('#mh-rck .mh-rck-r s').length === orig.filter(p => p > np).length)) && (k === '3' || !$('#mh-rck .mh-rck-r s')),
+         JSON.stringify([kase(), got, want, cap]));
+    };
+    await chk(Math.round(C * 1.05 * 100) / 100, '1', '−2% ~ +13% 사이 → 원래 가격 그대로');
+    await chk(Math.ceil(C * 0.98 * 100) / 100, '1', '경계 −2% (그 위) → 원래 가격');
+    await chk(Math.floor(C * 0.98 * 100) / 100 - 0.01, '3', '경계 −2% 아래 → 지금 가격 +10%');
+    await chk(Math.floor(C * 1.13 * 100) / 100, '1', '경계 +13% (그 아래) → 원래 가격');
+    await chk(Math.ceil(C * 1.13 * 100) / 100 + 0.01, '2', '+13% 넘음 → 원래 가격 (지금 가격보다 낮음)');
+    await chk(Math.round(C * 1.4 * 100) / 100, '2', '+40% → 원래 가격');
+    await chk(Math.round(C * 0.9 * 100) / 100, '3', '−10% → 지금 가격 +10% · 그보다 높은 줄도 같은 가격 · 수량 그대로');
+    let v6 = Math.round(C * 0.6 * 100) / 100; while ((Math.round(v6 * 100) * 110) % 100 < 50) v6 = Math.round(v6 * 100 + 1) / 100;   /* × 1.10 의 1센트 아래가 0.5 넘는 가격 — 버림/반올림이 갈리게 */
+    await chk(v6, '3', '−40% (사용자 예: 100 → 60) → 지금 가격 +10% (1센트 버림 · +13% 아님)');
+    ok('수량은 그대로 (줄마다 원래 수량 표시)', $$('#mh-rck .mh-rck-r').every((e, i) => e.innerText.includes(Number(R.rows[i].q).toLocaleString() + '주')), $$('#mh-rck .mh-rck-r').map(e => e.innerText).join(' | '));
+    /* 마감 30분 전 시각 — 미국 동부 15:30 · 한국시간 서머타임 04:30 · 그 밖 05:30 · 휴장일 건너뜀 · 조기 폐장(13:00) 12:30 */
+    const cb = (iso) => { const t = T.closeBefore(Date.parse(iso), 30); return [t.ds, t.kst, t.et, t.early, t.now]; };
+    const tc = [['2026-10-15T00:00:00Z', ['2026-10-15', '10/16(금) 04:30', '15:30', false, false]], ['2026-12-15T15:00:00Z', ['2026-12-15', '12/16(수) 05:30', '15:30', false, false]],
+                ['2026-11-26T15:00:00Z', ['2026-11-27', '11/28(토) 02:30', '12:30', true, false]], ['2026-10-17T15:00:00Z', ['2026-10-19', '10/20(화) 04:30', '15:30', false, false]],
+                ['2026-10-15T19:45:00Z', ['2026-10-15', '10/16(금) 04:30', '15:30', false, true]], ['2026-10-15T19:29:00Z', ['2026-10-15', '10/16(금) 04:30', '15:30', false, false]],
+                ['2026-10-15T20:00:00Z', ['2026-10-16', '10/17(토) 04:30', '15:30', false, false]], ['2026-07-02T20:30:00Z', ['2026-07-06', '7/7(화) 04:30', '15:30', false, false]],
+                ['2026-11-27T17:45:00Z', ['2026-11-27', '11/28(토) 02:30', '12:30', true, true]], ['2026-03-09T13:00:00Z', ['2026-03-09', '3/10(화) 04:30', '15:30', false, false]]];
+    const badT = tc.filter(([iso, w]) => JSON.stringify(cb(iso)) !== JSON.stringify(w)).map(([iso]) => iso + ' ' + JSON.stringify(cb(iso)));
+    ok('마감 30분 전 시각 10가지 (서머타임·표준시·추수감사절 휴장 → 다음 날 조기 폐장·주말·마감 뒤·휴장 7/3·서머타임 시작 주)', !badT.length, badT.join(' | '));
+    const hol = [['2026-04-03', 1], ['2026-07-03', 1], ['2027-07-05', 1], ['2027-06-18', 1], ['2027-12-24', 1], ['2028-01-01', 0], ['2026-11-26', 1], ['2026-10-14', 0]].filter(([d, w]) => +T.nyHoliday(d) !== w);
+    const ear = [['2026-11-27', 1], ['2026-12-24', 1], ['2026-07-02', 0], ['2027-07-02', 0], ['2027-11-26', 1], ['2027-12-24', 0], ['2028-07-03', 1], ['2028-11-24', 1], ['2025-07-03', 1], ['2025-12-24', 1]].filter(([d, w]) => +T.nyEarly(d) !== w);
+    ok('뉴욕증권거래소 휴장일·조기 폐장 = 발표 달력 (2025~2028)', !hol.length && !ear.length, JSON.stringify([hol, ear]));
+    const real = Date.now; try { Date.now = () => Date.parse('2026-10-15T19:45:00Z'); T.rckPaint();
+      ok('그 시간대(마감 30분 전 ~ 마감)엔 \'지금 확인할 때\' 강조', box().classList.contains('now') && /지금 확인할 때/.test($('#mh-rck-t').textContent), $('#mh-rck-t').textContent);
+      Date.now = () => Date.parse('2026-10-15T21:00:00Z'); T.rckPaint();
+      ok('그 밖엔 다음 마감 30분 전 시각만', !box().classList.contains('now') && /한국시간 10\/17\(토\) 04:30/.test($('#mh-rck-t').textContent) && !/지금 확인할 때/.test($('#mh-rck-t').textContent), $('#mh-rck-t').textContent);
+    } finally { Date.now = real; T.rckPaint(); }
+    const tx = box().innerText;
+    ok('설명: 세 경우(−2% 아래 → 지금 가격 +10%) · 15:30 · 04:30 · 05:30 · 수량 그대로 · 접수 마감 · 무한매수법 용어 없음', /−2% ~ \+13%/.test(tx) && /−2% 아래 → 지금 가격 \+10%/.test(tx) && /15:30/.test(tx) && /04:30/.test(tx) && /05:30/.test(tx) && /수량은 그대로/.test(tx) && /접수 마감/.test(tx) && !bad(tx), bad(tx) || tx.slice(0, 160));
+    await setP(Math.round(C * 0.6 * 100) / 100);
+    ok('지금 한도 경고 요약에 \'마감 30분 전 다시 걸기\' 안내', /마감 30분 전 다시 걸기/.test(($('#mh-rjsum') || {}).innerText || ''), ($('#mh-rjsum') || {}).innerText);
+  } catch (e) { ok('마감 30분 전 다시 걸기 오류', false, String(e && e.message)); }
+  return R;
+}"""
+
 # ㉝ 백테스트 '증권사 주문 거부' — 반영 안 함 · 한도로 낮춰 넣기 · 그날 건너뛰기 = 엔진 직접 (같은 자료 · 로컬은 시가를 만들어 넣어 거부가 생기게, 배포는 실제 시가)
 RJ_JS = """async (live) => {""" + PRE + r"""
   try {
@@ -502,6 +556,9 @@ FL_JS = """async (live) => {""" + PRE + r"""
     click('#mh-rjc [data-act="bt-rj"][data-v="none"]'); await W(100); click('#mh-flc [data-act="bt-fl"][data-v="none"]'); await W(120);
     const tx = $('#mh-flc').innerText;
     ok('되돌림 · 설명(LOC 매수는 셋 다 종가 · 프리장 고가 모름) · 무한매수법 용어 없음', T.bt.fl === 'none' && T.bt.rj === 'none' && r.net === r.m['none|none'].net && /LOC 매수는 셋 다 종가/.test(tx) && /프리장 고가는 몰라/.test(tx) && localStorage.getItem('r72-bt-fl') === 'none' && !bad(tx) && !bad($('#mh-bt').innerText), bad(tx) || bad($('#mh-bt').innerText) || tx.slice(0, 120));
+    click('#mh-flc [data-act="bt-fl"][data-v="pre"]'); await W(150);
+    ok('프리장 시작: 거부 기준은 전날 종가로 근사라고 설명 · 거부 표에 \'마감 30분 전 다시 걸기를 지키면 반영 안 함과 거의 같음\'', /전날 종가로 근사/.test($('#mh-flc').innerText) && /마감 30분 전 다시 걸기를 지키면/.test($('#mh-rjc').innerText) && !bad($('#mh-bt').innerText), $('#mh-flc').innerText.slice(-200));
+    click('#mh-flc [data-act="bt-fl"][data-v="none"]'); await W(120);
   } catch (e) { ok('주문 넣는 때 비교 오류', false, String(e && e.message)); }
   return R;
 }"""
@@ -659,6 +716,9 @@ def check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS):
     overflow('현재 화면(기록 3일)')
     report('72 실시간', page.evaluate(LIVE_JS))
     report('72 실시간 시세', page.evaluate(LQ_JS))
+    report('72 마감 30분 전 다시 걸기', page.evaluate(RCK_JS))
+    overflow('현재 화면(마감 30분 전 다시 걸기 · −40% → 지금 가격 +10%)')
+    page.evaluate("() => { const T = T72debug; T.MH.capEdited = false; T.MH.capBase = null; T.render(); }")
     if not local:
         report('72 실시간 시세', page.evaluate(LQ_REAL_JS))
     report('72 백테스트', page.evaluate(BT_JS, not local))

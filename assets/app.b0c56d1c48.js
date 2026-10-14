@@ -12676,7 +12676,7 @@ function mhApp(P) {
     if (sells.length) h += '<div class="mh-small mh-bad" style="font-weight:600;margin:4px 0 6px">● 매도</div>' + sells.map(function (o) { return orderRow(o, cur, false); }).join('');
     if (buys.length) h += '<div class="mh-small mh-ok" style="font-weight:600;margin:10px 0 6px">● 매수</div>' + buys.map(function (o) {   /* P.rejWarn: 줄 아래 한도 경고 칸(rjPaint 가 채움) */
       return orderRow(o, cur, false) + (P.rejWarn && o.method !== 'MOC' && o.price > 0 ? '<div class="mh-rjw" data-rjp="' + o.price + '" hidden></div>' : ''); }).join('') +
-      (P.rejWarn ? '<div class="mh-rjsum" id="mh-rjsum" hidden></div>' : '');
+      (P.rejWarn ? '<div class="mh-rjsum" id="mh-rjsum" hidden></div>' : '') + (P.recheck ? rckBox(D, buys) : '');
     h += '<p class="mh-help">' + (PL.sp != null && PL.star ? '별% ' + sign(PL.sp) + (+PL.sp).toFixed(2) + '% · 별지점 ' + fmt(PL.star, cur, 2) + ' · ' : '') + '1회 ' + fmt(PL.one || 0, cur, 2) + ' · 기준 = 전일 종가 ' + fmt(D.close, cur, 2) +
       (D.cfg.ideal ? ' · 정액 주문(소수 주) — 매수 수량 = 주문 금액 ÷ 가격 (소수점 주문이 되는 증권사에서 그대로 따라 할 수 있어요)' : ' · 수량은 1주 단위 내림') + ' · LOC는 종가로, 지정가는 장중에 그 값에 닿으면 체결</p>';
     if (MH.todo) h += '<button class="mh-done' + (D.orderDone ? ' on' : '') + '" data-act="order-done">' + (D.orderDone ? '<span class="ic">✓</span> 오늘 주문 완료 · 내일 자동 초기화' : '<span class="ic"></span> 오늘 주문 다 넣었어요') + '</button>';
@@ -12916,7 +12916,8 @@ function mhApp(P) {
       '<div class="mh-rjc-sel" role="group" aria-label="주문 거부 처리">' + sel + '</div>' +
       '<div class="mh-rjc-w"><table class="mh-rjt"><thead><tr><th scope="col">처리</th><th scope="col">연평균</th><th scope="col">MDD</th><th scope="col">최종</th><th scope="col">거부<small>달라진 날</small></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
       '<p class="mh-tiny mh-faint" style="margin:6px 0 0">매수 지정가가 주문 넣는 때 가격(' + (pre ? '전날 종가' : '그날 시가') + ')의 120%(1센트 버림)를 넘으면 증권사가 받지 않는다고 보고 다시 계산했어요 · <b>한도로 낮춰 넣기</b> = 수량은 그대로 한도 가격에 — LOC는 종가에 체결돼서 종가가 한도 아래면 결과가 같아요 · <b>그날 건너뛰기</b> = 거부된 주문 없이 그날을 보냄 · 거부 = 한도를 넘은 날 · 달라진 날 = 그 처리로 그날 체결이 바뀐 날(그 뒤 사이클 흐름이 달라져 숫자 차이는 더 커질 수 있어요) · 매도 주문은 그대로' +
-      (r.noO > 0 && !pre ? ' · 시가를 모르는 ' + r.noO.toLocaleString() + '일(상장 전 재현 구간 중 같은 지수 ETF 시가도 없는 때 등)은 전날 종가 무렵에 주문했다고 봤어요' : '') + '</p></div>';
+      (r.noO > 0 && !pre ? ' · 시가를 모르는 ' + r.noO.toLocaleString() + '일(상장 전 재현 구간 중 같은 지수 ETF 시가도 없는 때 등)은 전날 종가 무렵에 주문했다고 봤어요' : '') +
+      (P.recheck ? ' · \'오늘의 주문\'의 마감 ' + P.recheck.min + '분 전 다시 걸기를 지키면 결과는 \'반영 안 함\'과 거의 같아요(전일 종가 −' + P.recheck.lo + '% 아래인 날 마지막 ' + P.recheck.min + '분에 크게 오를 때만 다름)' : '') + '</p></div>';
   }
   /* 주문 넣는 때 비교 (P.btFill) — 세 가지 시각을 같은 자료·조건(고른 주문 거부 처리 포함)으로 · 단추로 고른 시각이 위 숫자·그래프·크게 보기에 쓰임 */
   function btFlView(r) {
@@ -12932,7 +12933,7 @@ function mhApp(P) {
       '<div class="mh-rjc-sel" role="group" aria-label="주문 넣는 때">' + sel + '</div>' +
       '<div class="mh-rjc-w"><table class="mh-rjt"><thead><tr><th scope="col">주문 넣는 때</th><th scope="col">연평균</th><th scope="col">MDD</th><th scope="col">최종</th><th scope="col">비싸게<small>팔린 날</small></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
       '<p class="mh-tiny mh-faint" style="margin:6px 0 0"><b>기존 계산</b> = 그날 고가가 지정가 매도가에 닿으면 지정가에 체결(몇 시인지 따지지 않는 일봉 가정) · <b>정규장 시작 전</b> = 정규장이 지정가보다 높게 시작하면(갭 상승) 그날 시가에 체결 · ' +
-        '<b>프리장 시작</b> = 한국 오후 5시(서머타임)·6시, 미국 프리마켓이 열릴 때 넣음 — 전날 종가가 이미 지정가 이상이면 전날 종가에, 아니면 고가가 닿을 때 지정가에 체결(프리장 고가는 몰라 갭 상승도 지정가로 — 실제보다 조금 낮게 나올 수 있어요) · 주문 거부 한도의 기준도 전날 종가 · ' +
+        '<b>프리장 시작</b> = 한국 오후 5시(서머타임)·6시, 미국 프리마켓이 열릴 때 넣음 — 전날 종가가 이미 지정가 이상이면 전날 종가에, 아니면 고가가 닿을 때 지정가에 체결(프리장 고가는 몰라 갭 상승도 지정가로 — 실제보다 조금 낮게 나올 수 있어요) · 주문 거부 한도의 기준은 전날 종가로 근사(일봉엔 그 시각 가격이 없음 — 애프터장에서 크게 빠진 날은 실제로 거부될 수 있어요 · 그런 날은 \'오늘의 주문\'의 마감 30분 전 다시 걸기) · ' +
         '비싸게 팔린 날 = 지정가 매도가 지정가보다 비싸게 체결된 날</p></div>';
   }
   /* 카드 그래프 — 날마다 총자산(지금 보기: 포함/미포함) · 그냥 보유 · 원금 선 · 값 차이가 크면 로그 눈금 · 손가락/마우스를 대면 그날 값 */
@@ -13229,6 +13230,34 @@ function mhApp(P) {
   function marketState(d) { var n = nyParts(d); if (n.wd === 'Sat' || n.wd === 'Sun') return 'CLOSED';
     return n.min >= 240 && n.min < 570 ? 'PRE' : n.min >= 570 && n.min < 960 ? 'REGULAR' : n.min >= 960 && n.min < 1200 ? 'POST' : 'CLOSED'; }
   function isEDT(d) { return (new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', timeZoneName: 'short' }).formatToParts(d || new Date()).filter(function (x) { return x.type === 'timeZoneName'; })[0] || {}).value === 'EDT'; }
+  /* 뉴욕증권거래소 정규 휴장일 (새해·마틴 루서 킹·대통령의 날·성금요일·메모리얼·준틴스(2022~)·독립기념일·노동절·추수감사절·성탄절 — 토요일이면 전날 · 일요일이면 다음 날 · 새해가 토요일이면 대체 없음)
+     · 조기 폐장(미국 동부 13:00): 7월 3일이 월~목 · 추수감사절 다음 날 · 12월 24일이 월~목 — NYSE 2026~2028 발표 달력과 같음 (임시 휴장은 모름) */
+  var NYHOL = {};
+  function nyHolidays(y) {
+    if (NYHOL[y]) return NYHOL[y];
+    var o = {}, dw = function (m, d) { return new Date(Date.UTC(y, m - 1, d)).getUTCDay(); }, key = function (m, d) { return y + '-' + ('0' + m).slice(-2) + '-' + ('0' + d).slice(-2); };
+    var fix = function (m, d, ny) { var w = dw(m, d); if (w === 6) { if (!ny) o[key(m, d - 1)] = 1; } else if (w === 0) o[key(m, d + 1)] = 1; else o[key(m, d)] = 1; };
+    var nth = function (m, wd, n) { return 1 + (wd - dw(m, 1) + 7) % 7 + (n - 1) * 7; }, lastW = function (m, wd) { var dl = new Date(Date.UTC(y, m, 0)).getUTCDate(); return dl - (dw(m, dl) - wd + 7) % 7; };
+    var a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30,
+        i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, mm = Math.floor((a + 11 * h + 22 * l) / 451), em = Math.floor((h + l - 7 * mm + 114) / 31), ed = (h + l - 7 * mm + 114) % 31 + 1;
+    fix(1, 1, true); o[key(1, nth(1, 1, 3))] = 1; o[key(2, nth(2, 1, 3))] = 1; o[new Date(Date.UTC(y, em - 1, ed - 2)).toISOString().slice(0, 10)] = 1; o[key(5, lastW(5, 1))] = 1;   /* 성금요일 = 부활절 이틀 전 */
+    if (y >= 2022) fix(6, 19); fix(7, 4); o[key(9, nth(9, 1, 1))] = 1; o[key(11, nth(11, 4, 4))] = 1; fix(12, 25);
+    return (NYHOL[y] = o);
+  }
+  function nyHoliday(ds) { return !!nyHolidays(+ds.slice(0, 4))[ds]; }
+  function nyEarly(ds) { var y = +ds.slice(0, 4), w = new Date(ds + 'T12:00:00Z').getUTCDay(), md = ds.slice(5);
+    if ((md === '07-03' || md === '12-24') && w >= 1 && w <= 4) return true;
+    var n1 = new Date(Date.UTC(y, 10, 1)).getUTCDay(), tg = 1 + (4 - n1 + 7) % 7 + 21; return md === '11-' + ('0' + (tg + 1)).slice(-2); }   /* 추수감사절(11월 넷째 목요일) 다음 날 */
+  function nyNextBiz(ds) { var t = new Date(ds + 'T12:00:00Z'), s2; do { t.setUTCDate(t.getUTCDate() + 1); s2 = t.toISOString().slice(0, 10); } while (t.getUTCDay() === 0 || t.getUTCDay() === 6 || nyHoliday(s2)); return s2; }
+  /* 다음(또는 지금) 정규장 마감 before 분 전 — {ds 미국 날짜, early 조기 폐장, et '15:30', kst '10/16(금) 04:30', now 지금 그 시간대(마감 before 분 전 ~ 마감), t0, t1} */
+  function closeBefore(ms, before) {
+    var n = nyParts(new Date(ms)), ds = n.date, cm = function (x) { return nyEarly(x) ? 780 : 960; };
+    if (n.wd === 'Sat' || n.wd === 'Sun' || nyHoliday(ds) || n.min >= cm(ds)) ds = nyNextBiz(ds);
+    var c = cm(ds), m0 = c - before, off = isEDT(new Date(ds + 'T16:00:00Z')) ? 4 : 5, p2 = function (v) { return ('0' + v).slice(-2); };
+    var t0 = Date.UTC(+ds.slice(0, 4), +ds.slice(5, 7) - 1, +ds.slice(8, 10)) + m0 * 60e3 + off * 3600e3, k = new Date(t0 + 9 * 3600e3);
+    return { ds: ds, early: c === 780, et: p2(Math.floor(m0 / 60)) + ':' + p2(m0 % 60), kst: (k.getUTCMonth() + 1) + '/' + k.getUTCDate() + '(' + '일월화수목금토'.charAt(k.getUTCDay()) + ') ' + p2(k.getUTCHours()) + ':' + p2(k.getUTCMinutes()),
+             now: ms >= t0 && ms < t0 + before * 60e3, t0: t0, t1: t0 + before * 60e3 };
+  }
   /* 확정 종가만 (오늘 미국장 마감 전 일봉 제외) */
   function settledOnly(list) { var n = nyParts(); var afterClose = n.min >= 960;
     var seen = {}; return list.filter(function (p) { if (seen[p.date]) return false; seen[p.date] = 1; return p.date < n.date || (p.date === n.date && afterClose); })
@@ -13386,7 +13415,7 @@ function mhApp(P) {
     if (MH.sheet && MH.sheet.kind === 'celebrate' && !(D && D.celebrate && D.cycleKey === MH.sheet.key)) MH.sheet = null;
     root.innerHTML = html + '<div id="mh-sheet-host">' + (MH.sheet ? viewSheet() : '') + '</div>' + (MH.pop ? viewPop() : '');
     initCharts();
-    rjPaint();  /* 오늘의 주문 한도 경고 (P.rejWarn — 'LOC 매수 상한' 카드가 정한 기준가로) */
+    rjPaint(); rckPaint();  /* 오늘의 주문 한도 경고 (P.rejWarn — 'LOC 매수 상한' 카드가 정한 기준가로) · 마감 30분 전 다시 걸기 (P.recheck) */
     lqKick();   /* LOC 매수 상한 카드가 보이면 실시간 시세 주기 갱신 (안 보이면 멈춤) */
   }
 
@@ -14046,7 +14075,7 @@ function mhApp(P) {
   /* 한도 = 기준가 × 1.2 를 1센트 버림 (백테스트 '증권사 주문 거부'와 같은 식 — MHV.rejCap) */
   function capOf(v) { var n = Number(v); return isFinite(n) && n > 0 ? (VX ? VX.rejCap(n, 1.2) : Math.floor(n * 120 + 1e-7) / 100) : 0; }
   function capOut(cur) { var n = Number(MH.capVal), ok = isFinite(n) && n > 0, t = ok ? fmt(capOf(n), cur, 2) : '-';
-    if ($('mh-cap-out')) $('mh-cap-out').textContent = t; if ($('mh-cap-out2')) $('mh-cap-out2').textContent = ok ? t : '—'; rjPaint(); }
+    if ($('mh-cap-out')) $('mh-cap-out').textContent = t; if ($('mh-cap-out2')) $('mh-cap-out2').textContent = ok ? t : '—'; rjPaint(); rckPaint(); }
   /* 오늘의 주문 (P.rejWarn) — 매수 지정가가 지금 한도('LOC 매수 상한' 카드의 기준가 × 1.2)를 넘으면 그 줄 아래 경고 + 한도로 낮춘 입력 가격
      · 기준가가 바뀌면(실시간 시세 · 손으로 고침 · ↻ 자동) 이 칸들만 고침 · 수량은 그대로 (LOC 는 종가에 체결 — 종가가 한도 아래면 결과가 같음) */
   function rjPaint() {
@@ -14061,8 +14090,40 @@ function mhApp(P) {
     if (!sum) return;
     if (!(cap > 0) || !ws.length) { sum.hidden = true; return; }
     sum.hidden = false; sum.className = 'mh-rjsum' + (n ? ' warn' : '');
-    sum.innerHTML = n ? '<b class="mh-warn">⚠ 지금 증권사 한도 <span class="mh-mono">' + fmt(cap, cur, 2) + '</span></b> (기준가 <span class="mh-mono">' + fmt(base, cur, 2) + '</span> × 1.2) — 넘는 매수 ' + n + '건은 그대로 넣으면 거부될 수 있어요. 한도 가격으로 넣으면 LOC는 종가에 체결돼서 종가가 한도 아래면 결과가 같아요.'
+    sum.innerHTML = n ? '<b class="mh-warn">⚠ 지금 증권사 한도 <span class="mh-mono">' + fmt(cap, cur, 2) + '</span></b> (기준가 <span class="mh-mono">' + fmt(base, cur, 2) + '</span> × 1.2) — 넘는 매수 ' + n + '건은 그대로 넣으면 거부될 수 있어요. 한도 가격으로 넣으면 LOC는 종가에 체결돼서 종가가 한도 아래면 결과가 같아요.' + (P.recheck ? ' 거부됐다면 아래 \'마감 ' + P.recheck.min + '분 전 다시 걸기\'대로 넣으세요.' : '')
       : '✓ 매수 지정가가 모두 지금 한도 안이에요 (기준가 <span class="mh-mono">' + fmt(base, cur, 2) + '</span> × 1.2 = <span class="mh-mono">' + fmt(cap, cur, 2) + '</span>)';
+  }
+  /* 오늘의 주문 (P.recheck — 72루틴 · 사용자 절차 2026-10-14) — 프리장·정규장에서 매수 주문이 증권사 한도(현재가 × 1.2)에 걸려 거부됐다면
+     정규장 마감 P.recheck.min 분 전에 지금 가격 Pn 을 보고 다시 걸기: 전일 종가 C 대비 −lo% ~ +상단% → 원래 가격 · +상단% 넘음 → 원래 가격(지금 가격보다 낮아 거부 없음)
+     · −lo% 아래 → Pn × (1 + up%)(1센트 버림 · 사용자 정정 2026-10-14: +13% → +10%) — 그보다 높은 매수 줄도 같은 가격으로 · 수량은 그대로 · 세 경우 모두 주문 가격 ≤ Pn × 1.2 라 거부되지 않음
+     · Pn = 'LOC 매수 상한' 카드의 기준가(실시간 /q · 손으로 고친 값 · MH.capVal) */
+  function rckBox(D, buys) {
+    var rows = buys.filter(function (o) { return o.method === 'LOC' && o.price > 0 && o.quantity > 0; }); if (!rows.length || !(D.close > 0)) { MH.rck = null; return ''; }
+    MH.rck = { c: D.close, cur: D.cur, big: Number(D.cfg.big) || 0, rows: rows.map(function (o) { return { p: o.price, q: o.quantity, l: o.label || 'LOC' }; }) };
+    var R = P.recheck, T = closeBefore(Date.now(), R.min);
+    return '<div class="mh-rck' + (T.now ? ' now' : '') + '" id="mh-rck"><div class="mh-rck-h"><b>⏰ 주문이 거부됐다면 — 마감 ' + R.min + '분 전에 다시 걸기</b><span class="mh-chip" id="mh-rck-t">' + rckWhen(T) + '</span></div>' +
+      '<div id="mh-rck-b"></div>' +
+      '<p class="mh-tiny mh-faint" style="margin:6px 0 0">프리장·정규장에서 매수 주문이 증권사 한도(현재가 +20%)에 걸려 거부됐다면, 정규장 마감 ' + R.min + '분 전(미국 동부 ' + hm(960 - R.min) + ' — 한국시간 서머타임 ' + hm(960 - R.min + 780) + ' · 그 밖 ' + hm(960 - R.min + 840) + ' · 조기 폐장일은 3시간 앞당겨)에 지금 가격을 보고 다시 걸어요 — ' +
+        '<b>전일 종가 −' + R.lo + '% ~ +' + MH.rck.big + '%</b> → 원래 가격 · <b>+' + MH.rck.big + '% 넘음</b> → 원래 가격(지금 가격보다 낮은 매수라 거부되지 않음) · <b>−' + R.lo + '% 아래</b> → 지금 가격 +' + R.up + '%(1센트 버림 · 그보다 높은 매수 줄도 같은 가격으로). ' +
+        '수량은 그대로 — 세 경우 모두 주문 가격이 지금 가격 × 1.2 아래라 거부되지 않고, 종가가 지금 가격 근처에서 끝나면 원래 주문과 같은 결과예요. LOC 접수 마감(증권사마다 다름 — 예: 정규장 마감 10분 전) 전에 넣으세요. 지금 가격 = 위 \'LOC 매수 상한\' 카드의 기준가(실시간 · 손으로 고친 값).</p></div>';
+  }
+  function hm(m) { m = ((m % 1440) + 1440) % 1440; return ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + m % 60).slice(-2); }   /* 하루 안의 분 → HH:MM */
+  function rckWhen(T) { return (T.now ? '⏰ 지금 확인할 때 · ' : '') + '한국시간 ' + T.kst + (T.early ? ' · 조기 폐장일' : ''); }
+  function rckPaint() {
+    var rt = $(P.root), box = rt && rt.querySelector('#mh-rck'), R = MH.rck; if (!P.recheck || !box || !R) return;
+    var T = closeBefore(Date.now(), P.recheck.min), ch = box.querySelector('#mh-rck-t'), b = box.querySelector('#mh-rck-b'), cur = R.cur, lo = P.recheck.lo, up = P.recheck.up, big = R.big;
+    box.classList.toggle('now', T.now); if (ch) ch.textContent = rckWhen(T);
+    var Pn = Number(MH.capVal), C = R.c;
+    if (!(Pn > 0)) { b.innerHTML = '<p class="mh-small mh-muted" style="margin:6px 0 0">지금 가격을 받으면(위 \'LOC 매수 상한\' 카드) 넣을 가격을 보여 드려요.</p>'; return; }
+    var g = Pn / C - 1, kase = Pn < C * (1 - lo / 100) - 1e-9 ? 3 : Pn > C * (1 + big / 100) + 1e-9 ? 2 : 1;
+    var np = Math.floor(Pn * (100 + up) + 1e-7) / 100, cap = capOf(Pn), bad = 0, sg = function (v) { return (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(2) + '%'; };
+    var rows = R.rows.map(function (r) { var p2 = kase === 3 ? Math.min(r.p, np) : r.p, ch2 = p2 < r.p - 1e-9; if (p2 > cap + 1e-9) bad++;
+      return '<div class="mh-rck-r" data-rck="' + p2 + '"><span>' + esc(r.l) + ' <span class="mh-tag">LOC</span></span><span class="mh-mono">' + (ch2 ? '<s class="mh-faint">' + fmt(r.p, cur, 2) + '</s> → ' : '') + '<b>' + fmt(p2, cur, 2) + '</b> · ' + fmtQ(r.q) + '주</span></div>'; }).join('');
+    b.innerHTML = '<p class="mh-small" style="margin:6px 0 6px">지금 가격 <b class="mh-mono">' + fmt(Pn, cur, 2) + '</b> · 전일 종가 <span class="mh-mono">' + fmt(C, cur, 2) + '</span> 대비 <b class="mh-mono" data-rck-g="' + g + '">' + sg(g) + '</b> → ' +
+      (kase === 1 ? '<b class="mh-ok" data-rck-k="1">−' + lo + '% ~ +' + big + '% 사이</b> — 원래 가격 그대로 다시 걸기'
+        : kase === 2 ? '<b class="mh-ok" data-rck-k="2">+' + big + '% 넘음</b> — 원래 가격 그대로 (지금 가격보다 낮은 매수라 거부되지 않아요 · 종가가 그 가격 이하로 내려와야 체결)'
+        : '<b class="mh-warn" data-rck-k="3">−' + lo + '% 아래</b> — 지금 가격 +' + up + '% = <b class="mh-mono">' + fmt(np, cur, 2) + '</b> 로 (그보다 높은 매수 줄도 같은 가격)') + '</p>' + rows +
+      '<p class="mh-tiny ' + (bad ? 'mh-bad' : 'mh-ok') + '" style="margin:6px 0 0" data-rck-cap="' + cap + '">' + (bad ? '⚠ ' + bad + '건이 지금 한도 ' + fmt(cap, cur, 2) + ' 를 넘어요 — 기준가를 확인해 주세요' : '✓ 모두 지금 한도 ' + fmt(cap, cur, 2) + '(지금 가격 × 1.2) 안 — 거부되지 않아요') + '</p>';
   }
   /* 실시간 시세가 오면 카드의 숫자만 바꿈 */
   function lqPaint() {
@@ -14072,6 +14133,7 @@ function mhApp(P) {
     var h = $('mh-loc-hint'); if (h) h.innerHTML = locHint(L, D);
     var ch = $('mh-loc-ses'); if (ch) ch.textContent = LQ_SES[L.ses];
     var nt = $('mh-loc-note'); if (nt) nt.textContent = locNote(L);
+    rckPaint();   /* 가격이 그대로여도 '지금 확인할 때' 표시는 시각에 따라 */
   }
   function locNote(L) { return L.live ? '실시간 시세(야후 1분봉 마지막 체결가)를 20초마다 다시 받아요' + (L.ses === 'closed' ? ' (장 마감 중에는 5분마다)' : '') + ' · 몇십 초 늦을 수 있고, 종가는 마감 때 정해져요. 참고용으로만 사용하세요.'
     : '시세는 최대 15분 지연될 수 있고, 종가는 마감 시 변동됩니다. 참고용으로만 사용하세요.'; }
@@ -14956,7 +15018,7 @@ function mhApp(P) {
   /* 탭 진입 시 호출 ([NAV] switchSubTab 의 훅) */
   window[P.init] = function () { bind(); MH.now = new Date(); takePreset(); if (!SY.inited) { SY.inited = true; SY.uid = authUid(); if (SY.uid) SY.st = 'pull'; if (window.dcAuth && window.dcAuth.ready) window.dcAuth.ready().then(function (ok) { if (SY.can !== ok) { SY.can = ok; render(); } }).catch(function () {}); } render(); if (SY.uid && SY.st === 'pull') pull(); };
   window[P.debug] = { get store() { return store; }, derive: derive, deriveOld: deriveOld, curD: curD, vCompute: vCompute, render: render, bt: BT, restart: startNewCycle, vcfg: vcfg, btOpts: btOpts,
-                      MH: MH, P: P, btKey: btKey, btz: BTZ, mixOf: mixOf, liveTick: liveTick, lq: LQ, lqKick: lqKick, rjPaint: rjPaint, capOf: capOf };
+                      MH: MH, P: P, btKey: btKey, btz: BTZ, mixOf: mixOf, liveTick: liveTick, lq: LQ, lqKick: lqKick, rjPaint: rjPaint, capOf: capOf, rckPaint: rckPaint, closeBefore: closeBefore, nyHoliday: nyHoliday, nyEarly: nyEarly };
 }
 mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan', key: 'muhan4-store', oldKey: 'muhan4_data', ls: 'muhan4-', sync: '/udata/muhan',
         init: 'muhanInit', debug: 'MHdebug', globalMH: true, preset: true });   /* 무한매수법 기록 (/muhan/) — 72루틴 프로필은 [T72] 에서 */
@@ -15167,7 +15229,7 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
       (v === '2.2' || v === '3.0' ? '<label class="mh-lbl" style="margin-top:8px">T값 반올림</label>' + seg('T값', [['r2', '셋째 자리 반올림 (2024-09 수정)'], ['c1', '둘째 자리 올림 (처음 원문)']], S.tround, 'tround') : '') +
       '<label class="mh-lbl" style="margin-top:8px">주문 넣는 때</label>' + seg('주문 넣는 때', FILL_SEL, S.fill || '', 'fill') +
       '<p class="mh-help">' + (S.fill === 'open' ? '<b>정규장 시작 전 주문</b>: 정규장이 지정가 매도가보다 높게 시작하면(갭 상승) 그날 시가에 체결 · 주문 거부 한도의 기준도 그날 시가' :
-        S.fill === 'pre' ? '<b>프리장 시작(한국 오후 5~6시) 주문</b>: 전날 종가가 이미 지정가 매도가 이상이면 전날 종가에 체결, 아니면 그날 고가가 닿을 때 지정가에 체결(프리장 고가는 몰라 갭 상승도 지정가로 — 보수적) · 주문 거부 한도의 기준은 전날 종가' :
+        S.fill === 'pre' ? '<b>프리장 시작(한국 오후 5~6시) 주문</b>: 전날 종가가 이미 지정가 매도가 이상이면 전날 종가에 체결, 아니면 그날 고가가 닿을 때 지정가에 체결(프리장 고가는 몰라 갭 상승도 지정가로 — 보수적) · 주문 거부 한도의 기준은 전날 종가로 근사(애프터장·주간거래에서 크게 빠진 날은 실제로 거부될 수 있어 거부를 적게 셈)' :
         '<b>기존 계산</b>: 그날 고가가 지정가 매도가에 닿으면 지정가에 체결 (몇 시인지는 따지지 않는 일봉 가정 · 지금까지 결과와 같음)') +
         ' · LOC 매수는 어느 쪽이든 종가에 체결 · 고르면 결과에 세 가지 비교가 함께 나와요</p>' +
       '<label class="mh-lbl" style="margin-top:8px">증권사 주문 거부</label>' + seg('증권사 주문 거부', RJ_SEL, S.rej || '', 'rej') +
@@ -15336,7 +15398,7 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
         var x = C[m[0]], st = VIEW === 'net' ? x.sn : x.sg, fx = VIEW === 'net' ? x.fxN : x.fxG, rj = VIEW === 'net' ? x.rjN : x.rjG;
         return '<tr' + (m[1] === (cur || '') ? ' class="on"' : '') + ' data-fl="' + m[0] + '"><td>' + FILL_ROW[m[0]][0] + '<br><small>' + FILL_ROW[m[0]][1] + '</small></td><td class="' + cls(st.cagr) + '">' + pct(st.cagr, 2) + '</td><td class="mb-dn">' + pct(st.mdd) + '</td><td>' + usd(st.final) + '</td><td>' + (fx ? fx.days.toLocaleString() + '일' : '—') + '</td>' +
           (R.rej ? '<td>' + (rj ? rj.days.toLocaleString() + '일' : '—') + '</td>' : '') + '</tr>';
-      }).join('') + '</tbody></table></div><p class="mh-help">LOC 매수는 셋 다 종가에 체결 — 달라지는 건 지정가 매도 체결 가격과 주문 거부 한도의 기준(정규장 시작 전 = 그날 시가 · 프리장 시작 = 전날 종가)이에요 · ' +
+      }).join('') + '</tbody></table></div><p class="mh-help">LOC 매수는 셋 다 종가에 체결 — 달라지는 건 지정가 매도 체결 가격과 주문 거부 한도의 기준(정규장 시작 전 = 그날 시가 · 프리장 시작 = 전날 종가로 근사 — 애프터장에서 크게 빠진 날은 실제로 거부될 수 있어요)이에요 · ' +
         '프리장 시작은 프리장 고가를 몰라 갭 상승도 지정가에 팔았다고 봐서 실제보다 조금 낮게 나올 수 있어요 · 한국 오후 5시(서머타임) / 6시 = 미국 프리마켓 시작(동부 4시)</p></div>';
   }
 
@@ -15414,7 +15476,7 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
         '그날 고가가 지정가에 닿으면 지정가로 체결(몇 시인지 따지지 않는 일봉 가정)') + ' · MOC 는 종가 (' + (R.fill === 'pre' ? '애프터장' : '프리·애프터장') + ' 체결·일부 체결은 없다고 봄)</li>' +
       '<li>주문 수량은 원문대로 1주 단위' + (R.cfg && R.cfg.ideal ? ' — 지금은 고급 설정 <b>정액(소수 주)</b>' : '') + ' · 수정주가가 $10 아래·$2,000 위이거나 상장 전 재현 가격이면 사이클마다 시작가를 $50 단위로, 사이클 안에서 $1 아래로 떨어지면 액면 병합처럼 10배 단위로 바꿔 계산(1센트·1주 반올림 왜곡 방지, 손익은 같음)</li>' +
       '<li>세금·수수료 포함 보기: 매매 수수료 ' + R.S.fee + '% + 매도 SEC 0.00206% · 분배금 미국 원천징수 15%' + (R.taxOn ? ' · 양도소득세 22%(250만 원 공제, ' + (R.S.method === 'avg' ? '이동평균' : '선입선출') + ', 결제일 매매기준율, 다음 해 5월 말 이 계좌 현금에서 납부 — 모자라면 그날 종가에 보유를 팔아 냄)' + (R.S.harvest ? ' · 연말 절세 매도·재매수' : '') : '') + '</li>' +
-      (R.rej ? '<li>증권사 주문 거부(' + RJ_NM[R.rej.mode] + '): 매수 지정가가 주문 넣는 때 가격(' + (R.fill === 'pre' ? '전날 종가 — 프리장 시작 주문' : '그날 시가') + ')의 120%(1센트 버림)를 넘으면 증권사가 받지 않는다고 봄 — ' + (R.rej.mode === 'clamp' ? '수량 그대로 한도 가격에 넣음' : '그날 그 주문은 없음') + ' · 매도 주문은 그대로' + (R.fill === 'pre' ? '' : ' · 시가를 모르는 날(상장 전 재현 중 같은 지수 ETF 시가도 없는 때)은 전날 종가 무렵에 주문했다고 봄') + ' · 상장 전 재현 구간의 시가 = 같은 지수 ETF(TQQQ ← QQQ · SOXL ← SOXX·SMH · UPRO ← SPY · TECL ← XLK)의 시가 ÷ 전날 종가 변화 × 3</li>' : '') +
+      (R.rej ? '<li>증권사 주문 거부(' + RJ_NM[R.rej.mode] + '): 매수 지정가가 주문 넣는 때 가격(' + (R.fill === 'pre' ? '전날 종가 — 프리장 시작 주문' : '그날 시가') + ')의 120%(1센트 버림)를 넘으면 증권사가 받지 않는다고 봄 — ' + (R.rej.mode === 'clamp' ? '수량 그대로 한도 가격에 넣음' : '그날 그 주문은 없음') + ' · 매도 주문은 그대로' + (R.fill === 'pre' ? ' · 프리장 시작의 전날 종가 기준은 근사(증권사는 주문 순간 현재가로 정해 애프터장에서 크게 빠진 날은 거부될 수 있음 — 이 계산은 거부를 적게 셈)' : ' · 시가를 모르는 날(상장 전 재현 중 같은 지수 ETF 시가도 없는 때)은 전날 종가 무렵에 주문했다고 봄') + ' · 상장 전 재현 구간의 시가 = 같은 지수 ETF(TQQQ ← QQQ · SOXL ← SOXX·SMH · UPRO ← SPY · TECL ← XLK)의 시가 ÷ 전날 종가 변화 × 3</li>' : '') +
       '<li>환전 수수료·현금 이자·다른 해외주식 손익과의 합산·금융소득종합과세는 빼고 계산 · 과거 기간에도 지금 세법(2026년)을 적용</li></ul></div>';
     $('mb-res').innerHTML = h;
     drawChart(X, st);
@@ -17164,6 +17226,7 @@ var VBD = (function () {
          · 공포탐욕·VIX 띠 그라데이션(grad) · 오늘의 주문 강조(ordHl) · RSI 표시 기본 와일더(rsiDef — 새 사이클 'RSI 60 이하' 판단과 같은 방식)
    · ㉝: 오늘의 주문 한도 경고(rejWarn — 'LOC 매수 상한' 카드 기준가 × 1.2 를 넘는 매수 줄 아래 경고 + 입력 가격 · 실시간 시세와 함께)
          · 백테스트 '증권사 주문 거부'(btRej — 반영 안 함 / 한도로 낮춰 넣기 / 그날 건너뛰기를 함께 계산해 표로 · 고른 것이 카드 숫자·그래프 · 'r72-bt-rj')
+   · ㉟: 오늘의 주문 '마감 30분 전 다시 걸기'(recheck — 사용자 절차: 프리장·정규장에서 거부되면 마감 30분 전 지금 가격으로 판정 · 'LOC 매수 상한' 기준가 · 뉴욕증권거래소 휴장일·조기 폐장 달력)
    · ㉞: 백테스트 '주문 넣는 때'(btFill — 기존 계산 / 정규장 시작 전(갭 상승은 시가) / 프리장 시작(한국 17~18시 · 주문 거부 기준 전날 종가)을 표로 · 'r72-bt-fl')
    · 화면·설명글에는 무한매수법·라오어 이름을 쓰지 않음 (사용자 지시 2026-10-13) — 큰수 → 상단 매수선 · 평단 LOC 괴리율 → 평단 매수선 · T값 → 회차
 ════════════════════════════════════════════════════════════ */
@@ -17177,7 +17240,7 @@ var VBD = (function () {
             ['원금 소진 대응', '원금을 다 쓰면 매수를 멈추고, 종가가 평단 −10% 안으로 오면 전량 매도'], ['주문 수량', '실제 주문 (1주 단위)']],
     feeDef: 0.25, feeCustom: 0.1, mixDef: 0.5, btPre: true, btZoom: true, btPer: 'all', live: true,
     capDef: 100000, indBottom: true, fold: true, grad: true, ordHl: true, rsiDef: 'wilder', btRange: true,   /* ㉜ 시작 원금 기본 · 시장 지표 카드 맨 아래 · 접기 · 그라데이션 · 오늘의 주문 강조 · RSI 와일더 · 백테스트 기간설정 */
-    rejWarn: true, btRej: true, btFill: true,   /* ㉞ 백테스트: 주문 넣는 때 3가지 비교 · ㉝ 오늘의 주문: 매수 지정가가 지금 한도(기준가 × 1.2)를 넘으면 경고 + 한도로 낮춘 입력 가격 · 백테스트: 증권사 주문 거부 처리 3가지 비교 */
+    rejWarn: true, btRej: true, btFill: true, recheck: { min: 30, lo: 2, up: 10 },   /* ㉟ 오늘의 주문: 주문이 거부됐다면 마감 30분 전 다시 걸기(전일 종가 −2% ~ +13% · +13% 넘음 → 원래 가격 · −2% 아래 → 지금 가격 +10%) · ㉞ 백테스트: 주문 넣는 때 3가지 비교 · ㉝ 오늘의 주문: 매수 지정가가 지금 한도(기준가 × 1.2)를 넘으면 경고 + 한도로 낮춘 입력 가격 · 백테스트: 증권사 주문 거부 처리 3가지 비교 */
     legacy: { log: 't72-log', keys: ['t72-set', 't72-log', 't72-tab', 't72-open'] } });   /* 예전 '72매매법' 화면(2026-10-13 저녁 잠깐) 기록 — 옮기지 못함 안내 */
   function go() { if (document.getElementById('t7-root') && window.t72Init) window.t72Init(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
