@@ -411,37 +411,98 @@ RJ_JS = """async (live) => {""" + PRE + r"""
     if (!live) D.o = D.c.map((c, i) => i ? (i % 3 === 0 ? D.c[i - 1] * 0.93 : D.c[i - 1]) : c);   /* 3일마다 시가 = 전날 × 0.93 → 한도 1.116 < 상단 매수선 1.13 */
     else await MBT.withOpen(D);
     if (MH.fold) MH.fold.bt = false; MH.sheet = null; MH.menu = false; MH.view = 'now';
-    T.bt.per = 'all'; T.bt.pre = false; T.bt.rj = 'none'; for (const k in T.bt.cache) delete T.bt.cache[k]; T.render();
-    const r = await waitCard();
-    ok('카드: 세 가지 처리 모두 계산 · 거부 비교 표 3줄', r && r.st === 'ok' && r.m && r.m.none && r.m.clamp && r.m.skip && $$('#mh-rjc tbody tr').length === 3, r && (r.st + ' ' + (r.msg || '')));
-    if (!r || r.st !== 'ok' || !r.m || !r.m.skip) return R;
+    T.bt.per = 'all'; T.bt.pre = false; T.bt.rj = 'none'; T.bt.fl = 'none'; for (const k in T.bt.cache) delete T.bt.cache[k]; T.render();
+    const r = await waitCard(), M = r && r.m ? { none: r.m['none|none'], clamp: r.m['none|clamp'], skip: r.m['none|skip'] } : {};
+    ok('카드: 세 가지 처리 모두 계산 · 거부 비교 표 3줄', r && r.st === 'ok' && M.none && M.clamp && M.skip && $$('#mh-rjc tbody tr').length === 3, r && (r.st + ' ' + (r.msg || '')));
+    if (!r || r.st !== 'ok' || !M.skip) return R;
     const F = await MBT.fxData().catch(() => null), o = T.btOpts(s), c = T.vcfg(s), cap = s.totalCapital, fx = F && o.tax ? MBT.fxFor(D.d, F) : null;
     const Dn = o.divs ? D : Object.assign({}, D, { dv: null }), base = { from: 1, to: D.d.length - 1, capital: cap, norm: 'auto', rows: false };
     const run = (rej, net) => MHV.run(c, Dn, Object.assign({}, base, net ? { fee: o.fee / 100, sec: 0.0000206, divTax: 0.15, tax: fx ? { fx: i => fx[i], method: o.method, harvest: o.harvest } : null } : { fee: 0, sec: 0, divTax: 0, tax: null }, { rej }));
     const eq = (a, b) => ['final', 'cagr', 'mdd'].every(k => Math.abs((a[k] || 0) - (b[k] || 0)) <= 1e-9 * Math.max(1, Math.abs(a[k] || 0)));
     const badM = [];
     for (const m of ['none', 'clamp', 'skip']) { const rj = m === 'none' ? null : { mode: m, cap: 1.2 }, A = run(rj, true), G = run(rj, false);
-      if (!eq(r.m[m].net, MBT.stats(A, D, cap)) || !eq(r.m[m].gross, MBT.stats(G, D, cap)) || JSON.stringify(r.m[m].rjN) !== JSON.stringify(A.rj) || JSON.stringify(r.m[m].rjG) !== JSON.stringify(G.rj)) badM.push(m); }
+      if (!eq(M[m].net, MBT.stats(A, D, cap)) || !eq(M[m].gross, MBT.stats(G, D, cap)) || JSON.stringify(M[m].rjN) !== JSON.stringify(A.rj) || JSON.stringify(M[m].rjG) !== JSON.stringify(G.rj)) badM.push(m); }
     ok('세 가지 = 엔진 직접 (포함·미포함 · 거부 통계)', !badM.length, badM.join(','));
-    const Sc = r.m.clamp.rjN, Ss = r.m.skip.rjN;
-    ok('거부가 실제로 생김 (' + (live ? '실제 시가' : '만든 시가') + ') · 달라진 날 ≤ 거부된 날 · 반영 안 함과 숫자가 다름', Sc.days > 0 && Sc.miss <= Sc.days && Ss.days > 0 && Ss.miss <= Ss.days && r.m.skip.net.final !== r.m.none.net.final, JSON.stringify([Sc, Ss]));
+    const Sc = M.clamp.rjN, Ss = M.skip.rjN;
+    ok('거부가 실제로 생김 (' + (live ? '실제 시가' : '만든 시가') + ') · 달라진 날 ≤ 거부된 날 · 반영 안 함과 숫자가 다름', Sc.days > 0 && Sc.miss <= Sc.days && Ss.days > 0 && Ss.miss <= Ss.days && M.skip.net.final !== M.none.net.final, JSON.stringify([Sc, Ss]));
     const rows = $$('#mh-rjc tbody tr');
-    ok('표 = 계산 값 (연평균·MDD · 거부 일수)', ['none', 'clamp', 'skip'].every((m, i) => rows[i].cells[1].textContent === pc(r.m[m].net.cagr, 2) && rows[i].cells[2].textContent === pc(r.m[m].net.mdd, 1)) &&
+    ok('표 = 계산 값 (연평균·MDD · 거부 일수)', ['none', 'clamp', 'skip'].every((m, i) => rows[i].cells[1].textContent === pc(M[m].net.cagr, 2) && rows[i].cells[2].textContent === pc(M[m].net.mdd, 1)) &&
        rows[1].cells[4].textContent.startsWith(Sc.days.toLocaleString() + '일') && rows[2].cells[4].textContent.startsWith(Ss.days.toLocaleString() + '일'), rows.map(tr => tr.innerText.replace(/\s+/g, ' ')).join(' | '));
-    ok('기본 = 반영 안 함 (카드 숫자 = 반영 안 함 · 단추 눌림)', T.bt.rj === 'none' && r.net === r.m.none.net && r.ch.net === r.m.none.eqN && $('#mh-rjc [data-act="bt-rj"][data-v="none"]').getAttribute('aria-pressed') === 'true');
+    ok('기본 = 반영 안 함 (카드 숫자 = 반영 안 함 · 단추 눌림)', T.bt.rj === 'none' && r.net === M.none.net && r.ch.net === M.none.eqN && $('#mh-rjc [data-act="bt-rj"][data-v="none"]').getAttribute('aria-pressed') === 'true');
     click('#mh-rjc [data-act="bt-rj"][data-v="skip"]'); await W(150);
     const kg = $('#mh-bt .mb-kg').innerText, help = $('#mh-bt .mh-help').innerText;
-    ok('그날 건너뛰기를 고르면 위 숫자·그래프 = 그 처리 · 이 기기에 기억 · 설명 줄에 처리 이름', T.bt.rj === 'skip' && r.net === r.m.skip.net && r.ch.net === r.m.skip.eqN && kg.includes(pc(r.m.skip.net.cagr, 2)) &&
+    ok('그날 건너뛰기를 고르면 위 숫자·그래프 = 그 처리 · 이 기기에 기억 · 설명 줄에 처리 이름', T.bt.rj === 'skip' && r.net === M.skip.net && r.ch.net === M.skip.eqN && kg.includes(pc(M.skip.net.cagr, 2)) &&
        localStorage.getItem('r72-bt-rj') === 'skip' && $('#mh-rjc tr.on').getAttribute('data-rj') === 'skip' && /증권사 주문 거부 그날 건너뛰기/.test(help), kg.slice(0, 120) + ' | ' + help.slice(0, 160));
     click('[data-act="bt-view"][data-v="gross"]'); await W(150);
-    ok('미포함 보기: 표·위 숫자도 미포함 값', $$('#mh-rjc tbody tr')[2].cells[1].textContent === pc(r.m.skip.gross.cagr, 2) && $('#mh-bt .mb-kg').innerText.includes(pc(r.m.skip.gross.cagr, 2)));
+    ok('미포함 보기: 표·위 숫자도 미포함 값', $$('#mh-rjc tbody tr')[2].cells[1].textContent === pc(M.skip.gross.cagr, 2) && $('#mh-bt .mb-kg').innerText.includes(pc(M.skip.gross.cagr, 2)));
     click('[data-act="bt-view"][data-v="net"]'); await W(100);
     click('#mh-rjc [data-act="bt-rj"][data-v="clamp"]'); await W(120);
-    ok('한도로 낮춰 넣기로 바꿈 → 위 숫자 = 그 처리', T.bt.rj === 'clamp' && r.net === r.m.clamp.net && $('#mh-bt .mb-kg').innerText.includes(pc(r.m.clamp.net.cagr, 2)));
+    ok('한도로 낮춰 넣기로 바꿈 → 위 숫자 = 그 처리', T.bt.rj === 'clamp' && r.net === M.clamp.net && $('#mh-bt .mb-kg').innerText.includes(pc(M.clamp.net.cagr, 2)));
     click('#mh-rjc [data-act="bt-rj"][data-v="none"]'); await W(100);
     const tx = $('#mh-rjc').innerText;
-    ok('되돌림 · 설명(시가 × 1.2 · 매도 그대로) · 무한매수법 용어 없음', T.bt.rj === 'none' && r.net === r.m.none.net && /시가 × 1\.2/.test(tx) && /매도 주문은 그대로/.test(tx) && !bad(tx), bad(tx) || tx.slice(0, 120));
+    ok('되돌림 · 설명(시가 × 1.2 · 매도 그대로) · 무한매수법 용어 없음', T.bt.rj === 'none' && r.net === M.none.net && /시가 × 1\.2/.test(tx) && /매도 주문은 그대로/.test(tx) && !bad(tx), bad(tx) || tx.slice(0, 120));
   } catch (e) { ok('거부 비교 오류', false, String(e && e.message)); }
+  return R;
+}"""
+
+# ㉞ 백테스트 '주문 넣는 때' — 기존 계산 · 정규장 시작 전(갭 상승 = 시가) · 프리장 시작(전날 종가 · 주문 거부 기준 전날 종가) = 엔진 직접
+#   로컬은 이틀마다 시가 = 그날 고가로 만들어 넣어(그날 고가가 지정가에 닿으면 고가에 팔림) 차이가 생기게 · 배포는 실제 시가
+FL_JS = """async (live) => {""" + PRE + r"""
+  try {
+    const s = ses().settings;
+    const D = await MBT.load('SOXL');
+    if (!live) D.o = D.c.map((c, i) => i % 2 === 0 && D.h ? Math.max(D.h[i], c) : i ? D.c[i - 1] : c);
+    else await MBT.withOpen(D);
+    if (MH.fold) MH.fold.bt = false; MH.sheet = null; MH.menu = false; MH.view = 'now';
+    T.bt.per = 'all'; T.bt.pre = false; T.bt.rj = 'none'; T.bt.fl = 'none'; for (const k in T.bt.cache) delete T.bt.cache[k]; T.render();
+    const r = await waitCard();
+    const ks = () => Object.keys((r && r.m) || {}).sort().join(',');
+    ok('카드: 주문 넣는 때 비교 표 3줄 · 거부 표 3줄 · 계산한 조합 = 고른 것 + 두 표에 필요한 것만 (5개)', r && r.st === 'ok' && $$('#mh-flc tbody tr').length === 3 && $$('#mh-rjc tbody tr').length === 3 && ks() === 'none|clamp,none|none,none|skip,open|none,pre|none', r && (r.st + ' ' + (r.msg || '') + ' ' + ks()));
+    if (!r || r.st !== 'ok' || !r.m['open|none']) return R;
+    const F = await MBT.fxData().catch(() => null), o = T.btOpts(s), c = T.vcfg(s), cap = s.totalCapital, fx = F && o.tax ? MBT.fxFor(D.d, F) : null;
+    const Dn = o.divs ? D : Object.assign({}, D, { dv: null }), base = { from: 1, to: D.d.length - 1, capital: cap, norm: 'auto', rows: false };
+    const run = (fill, rej, net) => MHV.run(c, Dn, Object.assign({}, base, net ? { fee: o.fee / 100, sec: 0.0000206, divTax: 0.15, tax: fx ? { fx: i => fx[i], method: o.method, harvest: o.harvest } : null } : { fee: 0, sec: 0, divTax: 0, tax: null }, { rej, fill }));
+    const eq = (a, b) => ['final', 'cagr', 'mdd'].every(k => Math.abs((a[k] || 0) - (b[k] || 0)) <= 1e-9 * Math.max(1, Math.abs(a[k] || 0)));
+    const chk = (k) => { const [fl, rj] = k.split('|'), f = fl === 'none' ? null : fl, j = rj === 'none' ? null : { mode: rj, cap: 1.2 }, A = run(f, j, true), G = run(f, j, false), x = r.m[k];
+      return !!x && eq(x.net, MBT.stats(A, D, cap)) && eq(x.gross, MBT.stats(G, D, cap)) && JSON.stringify(x.fxN) === JSON.stringify(A.fx) && JSON.stringify(x.fxG) === JSON.stringify(G.fx) && JSON.stringify(x.rjN) === JSON.stringify(A.rj); };
+    const badK = ['none|none', 'open|none', 'pre|none'].filter(k => !chk(k));
+    ok('세 가지 시각 = 엔진 직접 (포함·미포함 · 비싸게 팔린 날 통계)', !badK.length, badK.join(','));
+    const Fo = r.m['open|none'].fxN;
+    ok('정규장 시작 전: 비싸게 팔린 날 있음 (' + (live ? '실제 시가' : '만든 시가') + ') · 숫자가 기존과 다름 · 기존은 통계 없음', Fo.days > 0 && r.m['open|none'].net.final !== r.m['none|none'].net.final && r.m['none|none'].fxN === null, JSON.stringify(Fo));
+    const rows = $$('#mh-flc tbody tr');
+    ok('표 = 계산 값 (연평균·MDD · 비싸게 팔린 날) · 줄 이름', ['none', 'open', 'pre'].every((m, i) => rows[i].cells[1].textContent === pc(r.m[m + '|none'].net.cagr, 2) && rows[i].cells[2].textContent === pc(r.m[m + '|none'].net.mdd, 1) && rows[i].getAttribute('data-fl') === m) &&
+       rows[1].cells[4].textContent === Fo.days.toLocaleString() + '일' && rows[0].cells[4].textContent === '—' && /기존 계산/.test(rows[0].cells[0].textContent) && /프리장 시작/.test(rows[2].cells[0].textContent) && /한국 17~18시/.test(rows[2].cells[0].textContent),
+       rows.map(tr => tr.innerText.replace(/\s+/g, ' ')).join(' | '));
+    ok('기본 = 기존 계산 (카드 숫자 = 기존 · 단추 눌림)', T.bt.fl === 'none' && r.net === r.m['none|none'].net && $('#mh-flc [data-act="bt-fl"][data-v="none"]').getAttribute('aria-pressed') === 'true');
+    click('#mh-flc [data-act="bt-fl"][data-v="open"]'); await W(150);
+    let kg = $('#mh-bt .mb-kg').innerText, help = $('#mh-bt .mh-help').innerText;
+    ok('정규장 시작 전을 고르면 위 숫자·그래프 = 그 시각 · 이 기기에 기억 · 설명 줄 · 거부 표도 그 시각으로 계산', T.bt.fl === 'open' && r.net === r.m['open|none'].net && r.ch.net === r.m['open|none'].eqN && kg.includes(pc(r.m['open|none'].net.cagr, 2)) &&
+       localStorage.getItem('r72-bt-fl') === 'open' && $('#mh-flc tr.on').getAttribute('data-fl') === 'open' && /정규장 시작 전에 넣었다고 봄/.test(help) && !!r.m['open|clamp'] && !!r.m['open|skip'] && $$('#mh-rjc tbody tr').length === 3 && /그날 시가 × 1\.2/.test($('#mh-rjc').innerText),
+       kg.slice(0, 100) + ' | ' + help.slice(0, 160) + ' | ' + ks());
+    ok('정규장 시작 전 × 주문 거부 = 엔진 직접', ['open|clamp', 'open|skip'].every(chk));
+    click('#mh-flc [data-act="bt-fl"][data-v="pre"]'); await W(150);
+    help = $('#mh-bt .mh-help').innerText; const rjt = $('#mh-rjc').innerText;
+    ok('프리장 시작: 위 숫자 = 그 시각 · 거부 표 기준 = 전날 종가 × 1.2 · 설명', T.bt.fl === 'pre' && r.net === r.m['pre|none'].net && /프리장 시작\(한국 오후 5~6시\)에 넣었다고 봄/.test(help) && /전날 종가 × 1\.2/.test(rjt) && /주문 넣는 때 가격\(전날 종가\)/.test(rjt), help.slice(0, 160) + ' | ' + rjt.slice(0, 160));
+    const Pc = r.m['pre|clamp'], Ps = r.m['pre|skip'];
+    ok('프리장 시작 × 주문 거부 = 엔진 직접 · 상단 매수선 +13% < 전날 종가 × 1.2 → 거부 0일 · 세 처리 숫자 같음', ['pre|clamp', 'pre|skip'].every(chk) && Pc.rjN.days === 0 && Ps.rjN.days === 0 && Pc.net.final === r.m['pre|none'].net.final && Ps.net.final === r.m['pre|none'].net.final &&
+       $$('#mh-rjc tbody tr')[2].cells[4].textContent.startsWith('0일'), JSON.stringify([Pc.rjN, Ps.rjN]));
+    click('[data-act="bt-per"][data-v="5y"]'); const r5 = await waitCard();
+    ok('프리장 시작을 고른 채 기간 5년 → 새 결과도 프리장 시작 (카드 숫자 = r.m[pre|none] · 표 3줄)', r5 && r5 !== r && r5.st === 'ok' && r5.net === r5.m['pre|none'].net && $('#mh-flc tr.on').getAttribute('data-fl') === 'pre' && $$('#mh-flc tbody tr').length === 3, r5 && Object.keys(r5.m || {}).join(','));
+    click('[data-act="bt-per"][data-v="all"]'); await W(150);
+    click('#mh-flc [data-act="bt-fl"][data-v="open"]'); await W(150);
+    ok('전체 기간에서 정규장 시작 전으로 바꿔도 5년 결과는 그대로(보여 줄 때 계산) → 5년을 다시 열면 정규장 시작 전', r.net === r.m['open|none'].net && r5.pk === 'pre|none' && !r5.m['open|clamp'], r5.pk);
+    click('[data-act="bt-per"][data-v="5y"]'); await W(200);
+    ok('5년 다시 열기 → 정규장 시작 전 결과', card() === r5 && r5.pk === 'open|none' && r5.net === r5.m['open|none'].net, r5.pk);
+    click('[data-act="bt-per"][data-v="all"]'); await W(150); click('#mh-flc [data-act="bt-fl"][data-v="pre"]'); await W(150);
+    click('#mh-rjc [data-act="bt-rj"][data-v="skip"]'); await W(150);
+    ok('거부 처리를 바꾸면 시각 표가 그 처리로 (줄마다 r.m[시각|skip]) · 머리말에 처리 이름', ['none', 'open', 'pre'].every((m, i) => r.m[m + '|skip'] && $$('#mh-flc tbody tr')[i].cells[1].textContent === pc(r.m[m + '|skip'].net.cagr, 2)) && /주문 거부 그날 건너뛰기/.test($('#mh-flc .mh-rjc-h').innerText) && $$('#mh-flc thead th').length === 5);
+    click('[data-act="bt-view"][data-v="gross"]'); await W(150);
+    ok('미포함 보기: 시각 표도 미포함 값', $$('#mh-flc tbody tr')[1].cells[1].textContent === pc(r.m['open|skip'].gross.cagr, 2) && $$('#mh-flc tbody tr')[1].cells[4].textContent === r.m['open|skip'].fxG.days.toLocaleString() + '일');
+    click('[data-act="bt-view"][data-v="net"]'); await W(100);
+    click('#mh-rjc [data-act="bt-rj"][data-v="none"]'); await W(100); click('#mh-flc [data-act="bt-fl"][data-v="none"]'); await W(120);
+    const tx = $('#mh-flc').innerText;
+    ok('되돌림 · 설명(LOC 매수는 셋 다 종가 · 프리장 고가 모름) · 무한매수법 용어 없음', T.bt.fl === 'none' && T.bt.rj === 'none' && r.net === r.m['none|none'].net && /LOC 매수는 셋 다 종가/.test(tx) && /프리장 고가는 몰라/.test(tx) && localStorage.getItem('r72-bt-fl') === 'none' && !bad(tx) && !bad($('#mh-bt').innerText), bad(tx) || bad($('#mh-bt').innerText) || tx.slice(0, 120));
+  } catch (e) { ok('주문 넣는 때 비교 오류', false, String(e && e.message)); }
   return R;
 }"""
 
@@ -603,6 +664,14 @@ def check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS):
     report('72 백테스트', page.evaluate(BT_JS, not local))
     report('72 백테스트 주문 거부', page.evaluate(RJ_JS, not local))
     overflow('현재 화면(백테스트 주문 거부 비교)')
+    report('72 백테스트 주문 넣는 때', page.evaluate(FL_JS, not local))
+    CLK = "(q) => { const e = document.querySelector('#t7-root ' + q); if (e) e.click(); return !!e; }"
+    n[0] += 1
+    if not (page.evaluate(CLK, '#mh-flc [data-act="bt-fl"][data-v="pre"]') and page.evaluate(CLK, '#mh-rjc [data-act="bt-rj"][data-v="skip"]')):
+        n[1] += 1; fail('72 백테스트', '주문 넣는 때·거부 처리 단추를 찾지 못함')
+    page.wait_for_timeout(300)
+    overflow('현재 화면(주문 넣는 때 프리장 시작 + 그날 건너뛰기)')
+    page.evaluate(CLK, '#mh-rjc [data-act="bt-rj"][data-v="none"]'); page.evaluate(CLK, '#mh-flc [data-act="bt-fl"][data-v="none"]'); page.wait_for_timeout(200)
     # ㉜ 좁은 화면에서도 '세금·수수료 포함'·'미포함' 두 단추는 한 줄에 나란히 (따로 줄바꿈되지 않음)
     ROW1 = "() => { const v = [...document.querySelectorAll('#t7-root #mh-bt [data-act=\"bt-view\"]')]; return v.length === 2 && Math.abs(v[0].getBoundingClientRect().top - v[1].getBoundingClientRect().top) < 2; }"
     for w, fs in ((320, 1), (360, 1), (390, 1), (320, 1.3)):   # 글자 크기 130%(⋮ 메뉴 글자 크기)면 줄이 모자라 단추가 다음 줄로 — 그때도 두 단추는 함께

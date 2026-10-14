@@ -8,6 +8,11 @@ CAGR 최고 · 안정 최고(이웃 25곳 중앙값) · 균형(이웃 중앙 CAG
 매수 지정가 > 그날 시가 × 1.2(1센트 버림)이면 증권사가 주문을 받지 않는다고 보고 엔진 `MHV.run` 의 `o.rej` 로 계산 — 시뮬레이터 '7. 고급 설정 → 증권사 주문 거부'·주소 `rj=c|s` 와 같은 계산.
 자료에 시가 `o` 가 있어야 함(`dump.py` 가 화면의 `MBT.withOpen`·`MBT.preOpen` 으로 꺼냄 — 상장 전 재현 구간은 같은 지수 ETF(QQQ·SOXX·SMH·SPY·XLK) 시가 변화 × 3, 그것도 없는 날은 0 = 전날 종가로 봄).
 `final.js`·`report.js` 의 시뮬레이터 주소엔 `rj=`·`e=<자료 끝날>` 이 붙어 같은 조건·같은 기간으로 열린다.
+**주문 넣는 때(2026-10-14 ㉞)** — 다섯 스크립트(`muhan_opt.js`·`muhan_rob.js`·`prep.js`·`final.js`·`report.js`)는 환경 변수 `FILL=open`(정규장 시작 전 주문: 정규장이 지정가 매도가보다 높게 시작하면 그날 시가에 팔림)
+· `FILL=pre`(프리장 시작 — 한국 17~18시 — 주문: 전날 종가가 이미 지정가 이상이면 전날 종가에 팔림, 주문 거부 한도의 기준도 전날 종가)를 받는다(없으면 기존 계산 = 그날 고가가 닿으면 지정가).
+엔진 `MHV.run` 의 `o.fill` · 시뮬레이터 '7. 고급 설정 → 주문 넣는 때' · 주소 `ft=o|p` 와 같은 계산이고, `final.js`·`report.js`·`verify.py` 의 주소에도 `ft=` 가 붙는다. `final.js` 계산 저장 열쇠에 FILL(과 시가)이 들어가 다른 시각의 결과를 섞지 않는다.
+Actions 는 입력 `fill`(none·open·pre)이 모든 단계에 같은 값으로 들어간다. 일봉엔 프리장 고가가 없어 `pre` 는 갭 상승도 지정가에 팔았다고 보는 보수적 계산.
+
 **GitHub Actions** — 원격 브랜치를 쓰지 않으려고(동시작업 규칙) main 의 `.github/workflows/muhan-opt.yml`(수동 실행 전용)로 돌린다: Actions → '무한매수법 설정 탐색 (수동)' → rej(both·clamp·skip·none)·fix·stage(all·s2·final)·from_run.
 한 번 실행으로 자료(dump) → 1단계(칸 = 거부 처리 × 기간 × 버전 × 종목, 동시에 16칸) → 2단계 출발점(regions.js·prep.js) → 2단계 → 최종 정리(final.js·report.js — 종목마다)까지 하고, 결과는 실행의 artifact(`final-<rej>-<종목>`).
 앞 단계 결과는 `gh run download` 로 받는다(`actions/download-artifact` 에 run-id 를 주면 artifact 목록을 100개까지만 읽어, ㉝ 첫 실행의 최종 정리에서 1단계 칸이 빠졌음 · 받은 칸 수가 모자라면 경고).
@@ -37,7 +42,8 @@ CAGR 최고 · 안정 최고(이웃 25곳 중앙값) · 균형(이웃 중앙 CAG
 7. **증권사 주문 거부 점검**(㉝): `node scripts/muhan_opt/modes.js <데이터> src/index.html <이름=final.json> …` — 뽑힌 설정을 반영 안 함·한도로 낮춰 넣기·그날 건너뛰기에 모두 넣어 표로
    · `node scripts/muhan_opt/rejsens.js <데이터> src/index.html <건너뛰기 final.json>` — 한도 배수(×1.15~×1.5)·기준가(시가/전날 종가)를 바꿔도 버티는지(건너뛰기로 뽑힌 높은 숫자는 ×1.2 에만 맞춰진 경우가 많음)
    · `node scripts/muhan_opt/robust.js <데이터> src/index.html <출력.json> <두 방식 후보.csv …>` — 6가지 가정(반영 안 함 · 낮춰 넣기 · 건너뛰기 ×1.2·×1.15·×1.25·전날 종가) 중 가장 나쁜 값으로 최고·안정·균형
-8. **화면 확인**: `python3 scripts/muhan_opt/verify.py snap <데이터>`(지금 화면 자료와 비교 · `verify/data_now/` 에 씀 → `node scripts/muhan_opt/prep.js - - scripts/muhan_opt/verify/data_now src/index.html` 로 hyb 를 만든 뒤 보고용 final.js 는 이 자료로) · `verify.py picks <final.json …>` · `verify.py urls <목록.json>`
+8. **주문 넣는 때 점검**(㉞): 1·2단계 결과(후보)는 그대로 두고 `FILL=pre REJ=clamp node scripts/muhan_opt/final.js …` 처럼 최종 정리만 다시 돌리면 같은 후보 안에서 그 시각 기준으로 다시 고른다(전체 격자 재탐색은 Actions 에 `fill` 을 넣어 처음부터)
+9. **화면 확인**: `python3 scripts/muhan_opt/verify.py snap <데이터>`(지금 화면 자료와 비교 · `verify/data_now/` 에 씀 → `node scripts/muhan_opt/prep.js - - scripts/muhan_opt/verify/data_now src/index.html` 로 hyb 를 만든 뒤 보고용 final.js 는 이 자료로) · `verify.py picks <final.json …>` · `verify.py urls <목록.json>`
    — 저장소 페이지를 127.0.0.1 로 열고 광고·분석 요청은 막음 · 야후 일봉은 `verify/ysnap/` 에 저장해 같은 원문으로(환경 변수 `VERIFY_DIR`·`CHARTJS` 선택)
 
 ## 기준

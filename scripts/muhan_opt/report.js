@@ -1,8 +1,8 @@
 /* final.json → 보고용 표(마크다운) — node report.js <final.json> [더 많은 final.json …] */
 'use strict';
 const fs = require('fs');
-const RES = {}, OOS = {}; let RJ = 'none';
-for (const f of process.argv.slice(2)) { const j = JSON.parse(fs.readFileSync(f, 'utf8')); Object.assign(RES, j.RES); Object.assign(OOS, j.OOS); if (j.rej) RJ = j.rej; }   /* rej: 증권사 주문 거부 처리 (final.js 의 REJ) */
+const RES = {}, OOS = {}; let RJ = 'none', FL = 'none';
+for (const f of process.argv.slice(2)) { const j = JSON.parse(fs.readFileSync(f, 'utf8')); Object.assign(RES, j.RES); Object.assign(OOS, j.OOS); if (j.rej) RJ = j.rej; if (j.fill) FL = j.fill; }   /* rej: 증권사 주문 거부 처리 (final.js 의 REJ) */
 const sg = x => { const v = Math.round(x * 1000) / 10; return (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1); };
 const pc = (x, d) => x == null || !isFinite(x) ? '—' : (x * 100).toFixed(d == null ? 1 : d) + '%';
 const EXH = { official: '원문', sellall: '소진 시 전량 매도', recover: '소진 시 매수 멈추고 평단 −10% 안 전량 매도', hold: '소진 시 매수 멈추고 보유' };
@@ -27,7 +27,7 @@ const hashOf = (tk, p, per) => { const h = ['v=' + p.ver, 't=' + tk, 'c=10000', 
   if (/^(1\.0|2\.0|2\.1|2\.2)$/.test(p.ver) && p.money !== 'compound') h.push('m=' + p.money); if (p.ver !== '4.0' && p.exhaust !== 'official') h.push('x=' + p.exhaust); if (p.ver !== '4.0' && p.restart === 'rsi') h.push('r=rsi');
   if (per === 'pre') h.push('p=1'); if (p.ver === '3.0' && p.rebase) h.push('rb=1'); if ((p.ver === '1.0' || p.ver === '2.0' || p.ver === '2.1') && p.avgOff) h.push('ao=' + p.avgOff);
   if ((p.ver === '2.2' || p.ver === '3.0') && p.tround === 'c1') h.push('tr=c1'); if (p.method === 'avg') h.push('tm=avg'); if (p.harvest) h.push('hv=1');
-  if (RJ === 'clamp' || RJ === 'skip') h.push('rj=' + (RJ === 'clamp' ? 'c' : 's')); const E = RES[tk + '_' + per]; if (E && E.to) h.push('e=' + E.to);
+  if (RJ === 'clamp' || RJ === 'skip') h.push('rj=' + (RJ === 'clamp' ? 'c' : 's')); if (FL === 'open' || FL === 'pre') h.push('ft=' + (FL === 'open' ? 'o' : 'p')); const E = RES[tk + '_' + per]; if (E && E.to) h.push('e=' + E.to);
   return 'https://d-capitalism.com/muhan-backtest/#' + h.join('&'); };
 const link = (tk, x, per) => '[열기](' + hashOf(tk, x.p, per) + ')';
 const out = [];

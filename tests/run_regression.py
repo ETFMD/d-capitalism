@@ -1598,6 +1598,50 @@ def main():
             page.wait_for_function('window.MBTdebug && MBTdebug.R() && MBTdebug.R().S', timeout=90000)
             if page.evaluate("() => [MBTdebug.S().rej, !!MBTdebug.R().rej, !!document.querySelector('.mb-rj'), /rj=/.test(location.hash)]") != ['', False, False, False]:
                 fail('muhan-backtest', '주소에 rj 가 없으면 거부 반영 안 함(카드 없음)이어야 함')
+            # ㉞ 주문 넣는 때(ft) — 주소 ft=p 왕복 · 고급 설정 요약 · 결과의 세 시각 비교 = 엔진 직접(거부 처리 그날 건너뛰기와 함께) · 프리장 시작이면 거부 기준 = 전날 종가
+            #   로컬은 이틀마다 시가 = 그날 고가로 만들어 넣어 정규장 시작 전과 차이가 생기게, 배포는 실제 시가
+            page.goto('about:blank'); page.goto(base + 'muhan-backtest/#v=1.0&t=SOXL&c=100000&sp=72&tg=52.5&bg=13&fe=0.25&x=recover&rj=s&ft=p', wait_until='load')
+            page.wait_for_function('window.MBTdebug && MBTdebug.R() && MBTdebug.R().cmp && MBTdebug.R().fcmp', timeout=90000)
+            fls = page.evaluate("""async (live) => {
+              const W = ms => new Promise(r => setTimeout(r, ms)), out = [], okk = (n, c, i) => out.push([n, !!c, i == null ? '' : String(i).slice(0, 300)]);
+              let R = MBTdebug.R(); const S = MBTdebug.S(), sa = document.getElementById('mb-sum-adv');
+              okk('주소 ft=p → 프리장 시작 주문 · 고급 설정 요약(파란 글씨) · 주소 왕복(rj=s 와 함께)', S.fill === 'pre' && R.fill === 'pre' && /(^|&|#)ft=p(&|$)/.test(location.hash) && /(^|&|#)rj=s(&|$)/.test(location.hash) && /프리장 시작 주문/.test(sa.textContent) && sa.classList.contains('on'), location.hash + ' | ' + sa.textContent);
+              if (!live) { const D0 = await MBT.load('SOXL'); D0.o = D0.c.map((c, i) => i % 2 === 0 && D0.h ? Math.max(D0.h[i], c) : i ? D0.c[i - 1] : c);
+                document.querySelector('#mb-set [data-act="run"]').click(); for (let i = 0; i < 400; i++) { const r2 = MBTdebug.R(); if (r2 && r2 !== R && r2.cmp && r2.fcmp) break; await W(150); } R = MBTdebug.R(); }
+              const D = await MBT.load('SOXL'), F = R.S.tax ? await MBT.fxData().catch(() => null) : null, fx = F ? MBT.fxFor(D.d, F) : null, cap = 100000, cfg = Object.assign(MHV.defaults('1.0', 'SOXL'), { splits: 72, target: 52.5, big: 13, exhaust: 'recover', ideal: false });
+              const base = { from: 1, to: D.d.length - 1, capital: cap, norm: 'auto', rows: false }, eq = (a, b) => ['final', 'cagr', 'mdd'].every(k => Math.abs((a[k] || 0) - (b[k] || 0)) <= 1e-9 * Math.max(1, Math.abs(a[k] || 0)));
+              const run = (fill, rj, net) => MHV.run(cfg, D, Object.assign({}, base, net ? { fee: 0.0025, sec: 0.0000206, divTax: 0.15, tax: fx ? { fx: i => fx[i], method: 'fifo', harvest: false } : null } : { fee: 0, sec: 0, divTax: 0, tax: null }, { rej: rj, fill }));
+              const bad = [], vals = {};
+              for (const m of ['none', 'open', 'pre']) { const f = m === 'none' ? null : m, A = run(f, { mode: 'skip', cap: 1.2 }, true), G = run(f, { mode: 'skip', cap: 1.2 }, false), a = MBT.stats(A, D, cap), g = MBT.stats(G, D, cap); vals[m] = [a.cagr, A.fx && A.fx.days, A.rj.days];
+                const x = R.fcmp && R.fcmp[m]; if (!x || !eq(x.sn, a) || !eq(x.sg, g) || JSON.stringify(x.fxN) !== JSON.stringify(A.fx) || JSON.stringify(x.fxG) !== JSON.stringify(G.fx) || JSON.stringify(x.rjN) !== JSON.stringify(A.rj)) bad.push(m); }
+              okk('결과 주문 넣는 때 비교 3가지 = 엔진 직접 (그날 건너뛰기와 함께 · 포함·미포함 · 통계) · 위 결과 = 프리장 시작', !bad.length && eq(R.sn, R.fcmp.pre.sn), bad.join(',') + ' ' + JSON.stringify(vals));
+              okk('정규장 시작 전: 비싸게 팔린 날 있음 · 기존 계산은 통계 없음 · 정규장 시작 전·기존은 그날 시가 기준이라 거부 있음', R.fcmp.open.fxN.days > 0 && R.fcmp.none.fxN === null && R.fcmp.open.rjN.days > 0 && R.fcmp.none.rjN.days > 0, JSON.stringify(vals));
+              const badr = [];
+              for (const m of ['none', 'clamp', 'skip']) { const rj = m === 'none' ? null : { mode: m, cap: 1.2 }, A = run('pre', rj, true); if (!R.cmp || !eq(R.cmp[m].sn, MBT.stats(A, D, cap)) || JSON.stringify(R.cmp[m].rjN) !== JSON.stringify(A.rj)) badr.push(m); }
+              okk('프리장 시작 × 거부 비교 3가지 = 엔진 직접 · 기준 전날 종가 → 상단 매수선 +13% 거부 0일 · 세 처리 같음', !badr.length && R.cmp.clamp.rjN.days === 0 && R.cmp.skip.rjN.days === 0 && R.cmp.skip.sn.final === R.cmp.none.sn.final, badr.join(',') + ' ' + JSON.stringify([R.cmp.clamp.rjN, R.cmp.skip.rjN]));
+              const fc = document.querySelector('.mb-fl'), tr = fc ? [...fc.querySelectorAll('tbody tr')] : [], pc = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(2) + '%';
+              okk('주문 넣는 때 표 3줄 = 계산 값 · 고른 줄 = 프리장 시작 · 거부 열 · 카드 순서(주문 넣는 때 → 거부)', tr.length === 3 && ['none', 'open', 'pre'].every((m, i) => tr[i].cells[1].textContent === pc(R.fcmp[m].sn.cagr) && tr[i].getAttribute('data-fl') === m) && fc.querySelector('tr.on').getAttribute('data-fl') === 'pre' &&
+                  tr[1].cells[4].textContent === R.fcmp.open.fxN.days.toLocaleString() + '일' && tr[0].cells[4].textContent === '—' && fc.querySelectorAll('thead th').length === 6 && !!(fc.compareDocumentPosition(document.querySelector('.mb-rj')) & 4), tr.map(x => x.innerText.replace(/\\s+/g, ' ')).join(' | '));
+              const rjh = document.querySelector('.mb-rj').innerText, asm = document.querySelector('.mb-assume').innerText;
+              okk('거부 카드 기준 = 전날 종가 × 1.2 · 계산 가정에 프리장 시작 · 거부 기준 전날 종가', /전날 종가 × 1\\.2 \\(프리장 시작 주문\\)/.test(rjh) && /프리장 시작\\(한국 오후 5~6시\\) 주문/.test(asm) && /주문 넣는 때 가격\\(전날 종가 — 프리장 시작 주문\\)/.test(asm), rjh.slice(0, 120) + ' | ' + asm.slice(0, 200));
+              document.querySelector('#mb-set [data-fill="open"]').click(); await W(80);
+              const hp = [...document.querySelectorAll('#mb-set .mh-help')].map(e => e.textContent).join(' ');   /* 접힌 칸 안 글자도 (innerText 는 접힌 칸에서 빈 글자) */
+              okk('7. 고급 설정 단추로 정규장 시작 전 → 조건·설명·요약 바뀜 (주소는 실행 때)', MBTdebug.S().fill === 'open' && /정규장 시작 전 주문: 정규장이/.test(hp) && /정규장 시작 전 주문/.test(document.getElementById('mb-sum-adv').textContent) && /주문 넣는 때 가격\\(그날 시가\\)/.test(hp), [MBTdebug.S().fill, /정규장 시작 전 주문: 정규장이/.test(hp), document.getElementById('mb-sum-adv').textContent, /주문 넣는 때 가격\\(그날 시가\\)/.test(hp)].join(' | '));
+              document.querySelector('#mb-set [data-fill=""]').click(); await W(60);
+              okk('기존 계산으로 되돌림 → 요약에서 빠짐', MBTdebug.S().fill === '' && !/정규장|프리장/.test(document.getElementById('mb-sum-adv').textContent), document.getElementById('mb-sum-adv').textContent);
+              return out; }""", not local)
+            for nm, okv, info in fls:
+                if not okv:
+                    fail('muhan-backtest', '주문 넣는 때 ' + nm + (' — ' + info if info else ''))
+            page.goto('about:blank'); page.goto(base + 'muhan-backtest/#v=2.2&t=TQQQ&c=10000&sp=40&tg=10&ft=o&e=2012-12-31', wait_until='load')
+            page.wait_for_function('window.MBTdebug && MBTdebug.R() && MBTdebug.R().fcmp', timeout=90000)
+            flo = page.evaluate("() => [MBTdebug.S().fill, /(^|&|#)ft=o(&|$)/.test(location.hash), document.querySelectorAll('.mb-fl tbody tr').length, document.querySelector('.mb-fl tr.on').getAttribute('data-fl'), !!document.querySelector('.mb-rj'), document.querySelectorAll('.mb-fl thead th').length]")
+            if flo != ['open', True, 3, 'open', False, 5]:
+                fail('muhan-backtest', '주소 ft=o → 정규장 시작 전 복원·비교 표 실패 %r' % flo)
+            page.goto('about:blank'); page.goto(base + 'muhan-backtest/#v=2.2&t=TQQQ&c=10000&sp=40&tg=10&e=2012-12-31', wait_until='load')
+            page.wait_for_function('window.MBTdebug && MBTdebug.R() && MBTdebug.R().S', timeout=90000)
+            if page.evaluate("() => [MBTdebug.S().fill, !!MBTdebug.R().fill, !!document.querySelector('.mb-fl'), /ft=/.test(location.hash), MBTdebug.R().net.fx]") != ['', False, False, False, None]:
+                fail('muhan-backtest', '주소에 ft 가 없으면 기존 계산(카드 없음 · fx 통계 없음)이어야 함')
             page.evaluate("() => localStorage.setItem('mbt-open', JSON.stringify({ ver: true, tk: true, per: true, rule: true, exh: true, tax: true, adv: true }))")
             page.goto('about:blank'); page.goto(base + 'muhan-backtest/', wait_until='load')
             page.wait_for_function("document.querySelectorAll('#mb-set .mb-acc[open]').length === 7", timeout=30000)

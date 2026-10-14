@@ -4,6 +4,7 @@
    · V4.0 = 기록 화면 엔진(MHE.backtest)과 날마다 같은 평가금 · 기록 화면 다시 계산(replay) = 백테스트 상태 · 무작위 불변식 · 양도소득세 계산
    · 가격 단위(상장 전 재현·액면 병합) · 양도세 현금 부족 · V3 반복리 완충 바닥 · 작은 원금(1회 < 1주) · 세금 포함 불변식
    · ⑱ 증권사 주문 거부(o.rej — 한도 = 시가 × 1.2 · 한도로 낮춰 넣기 / 그날 건너뛰기)
+   · ⑲ 주문 넣는 때(o.fill — 'open' 정규장 시작 전: 갭 상승이면 시가 · 'pre' 프리장 시작: 전날 종가가 이미 넘으면 전날 종가, 주문 거부 기준 전날 종가)
    실패가 있으면 'FAIL …' 줄과 종료 코드 1 */
 'use strict';
 const fs = require('fs'), path = require('path');
@@ -331,6 +332,59 @@ function bdays(from, n, skip) { const out = []; let t = Date.parse(from + 'T12:0
   [['2.1', {}], ['2.2', {}], ['3.0', {}], ['4.0', {}], ['2.1', { ideal: true }], ['1.0', { big: 15 }]].forEach(([v, x]) => {
     const cf = Object.assign(MHV.defaults(v, 'SOXL'), x), bb = Object.assign({}, base, { capital: 10000, tax: tx }), A = MHV.run(cf, D2, bb), B = MHV.run(cf, D2, Object.assign({}, bb, { rej: { mode: 'clamp', cap: 1.2 } })), C = MHV.run(cf, D2, Object.assign({}, bb, { rej: { mode: 'skip', cap: 1.2 } }));
     check('V' + v + (x.ideal ? ' 정액' : '') + ': clamp(종가 ≤ 한도) = 반영 안 함 · skip 현금 ≥ 0 · 통계 일관 (거부 ' + B.rj.days + '일)', same(A, B) && B.rj.miss === 0 && C.rows.every(r => r.cash > -1e-6) && C.rj.miss <= C.rj.days && C.rj.rows >= C.rj.days, JSON.stringify([B.rj, C.rj]));
+  });
+}
+
+/* ⑲ 주문 넣는 때 (백테스트 선택 o.fill) — 지정가 매도 체결 가격과 주문 거부 기준가만 바뀜 · LOC·MOC 는 그대로 · 없으면 지금까지와 같음 */
+{
+  const one = (bar) => { const f = MHV.settle([{ side: 'S', m: 'LMT', p: 100, q: 5, tag: 'tp' }], bar)[0]; return f ? [f.p, f.gap || 0] : null; };
+  eq('기존(fm 없음): 고가 101 ≥ 100 → 지정가 100 (시가 103·전날 종가 120 이 있어도 무시)', one({ c: 99, h: 101, o: 103, pc: 120 }), [100, 0]);
+  eq('open: 시가 103 · 고가 105 → 시가 103 에 (gap 1)', one({ c: 99, h: 105, o: 103, fm: 'open', pc: 98 }), [103, 1]);
+  eq('open: 시가 98 · 고가 101 → 지정가 100 (gap 0)', one({ c: 99, h: 101, o: 98, fm: 'open', pc: 98 }), [100, 0]);
+  eq('open: 시가 모름(0) · 고가 105 → 지정가 100', one({ c: 99, h: 105, o: 0, fm: 'open', pc: 98 }), [100, 0]);
+  eq('open: 시가 110 > 고가 105 (자료 어긋남) → 고가 105 까지만', one({ c: 99, h: 105, o: 110, fm: 'open', pc: 98 }), [105, 1]);
+  eq('open: 고가 99 < 지정가 → 체결 없음 (시가 99)', one({ c: 98, h: 99, o: 99, fm: 'open', pc: 98 }), null);
+  eq('pre: 전날 종가 102 ≥ 지정가 → 전날 종가 102 에 (그날 고가 99 여도)', one({ c: 97, h: 99, o: 98, fm: 'pre', pc: 102 }), [102, 1]);
+  eq('pre: 전날 종가 98 · 시가 103 갭 상승 → 지정가 100 (프리장에서 걸림 — 보수적)', one({ c: 99, h: 105, o: 103, fm: 'pre', pc: 98 }), [100, 0]);
+  eq('pre: 전날 종가 98 · 고가 99 → 체결 없음', one({ c: 98, h: 99, o: 98, fm: 'pre', pc: 98 }), null);
+  eq('pre: 전날 종가 = 지정가 100 → 100 (gap 0)', one({ c: 95, h: 96, o: 96, fm: 'pre', pc: 100 }), [100, 0]);
+  const lb = m => MHV.settle([{ side: 'B', m: 'LOC', p: 50, q: 2, tag: 'avg' }, { side: 'S', m: 'LOC', p: 48, q: 1, tag: 'q' }, { side: 'S', m: 'MOC', p: 0, q: 1, tag: 'x' }], { c: 49, h: 60, o: 55, fm: m, pc: 70 }).map(f => [f.side, f.p, f.q]);
+  eq('LOC 매수·LOC 매도·MOC 는 셋 다 같음 (종가 49)', [lb(undefined), lb('open'), lb('pre')], [[['B',49,2],['S',49,1],['S',49,1]], [['B',49,2],['S',49,1],['S',49,1]], [['B',49,2],['S',49,1],['S',49,1]]]);
+  /* 작은 자료로 run 끝까지: V1.0 10분할 목표 10% — 1일째 종가 100 매수 → 2일째 시가 112 · 고가 115 (지정가 110) */
+  const cf = Object.assign(MHV.defaults('1.0', 'SOXL'), { splits: 10, target: 10, big: 13 }), Dm = { d: ['2026-01-02', '2026-01-05', '2026-01-06', '2026-01-07'], c: [100, 100, 111, 111], h: [100, 100, 115, 111], o: [100, 100, 112, 111], dv: [0, 0, 0, 0] };
+  const om = { from: 1, to: 3, capital: 10000, norm: 'none', rows: true, fee: 0, sec: 0, divTax: 0, tax: null };
+  const Rf = m => MHV.run(cf, Dm, Object.assign({}, om, { fill: m }));
+  const A0 = Rf(null), Ao = Rf('open'), Ap = Rf('pre'), q1 = A0.rows[0].bq;
+  eq('run: 2일째 매도 수량 같음 · 기존 = 지정가 110 × 수량 · 정규장 시작 전 = 시가 112 × 수량 · 프리장 시작 = 110 (전날 종가 100 < 110)', [A0.rows[1].sq === q1, Ao.rows[1].sq === q1, Math.round(A0.rows[1].sa * 100) / 100, Math.round(Ao.rows[1].sa * 100) / 100, Math.round(Ap.rows[1].sa * 100) / 100],
+     [true, true, Math.round(110 * q1 * 100) / 100, Math.round(112 * q1 * 100) / 100, Math.round(110 * q1 * 100) / 100]);
+  eq('run: 통계 fx — 기존 null · open 1일 · pre 0일 · 최종 차이 = 2 × 수량', [A0.fx, Ao.fx.days, Ap.fx.days, Math.round((Ao.final - A0.final) * 1e6) / 1e6], [null, 1, 0, 2 * q1]);
+  /* 실제 SOXL(시가 포함) · 72루틴 설정 */
+  const so = J.series.SOXL, SXo = Object.assign({}, SX, { o: so.o && so.o.length === SX.c.length ? so.o : null });
+  check('etfcagr SOXL 시가 o 가 있음 (종가와 같은 길이)', !!SXo.o, so.o ? so.o.length + ' vs ' + SX.c.length : '없음');
+  const c72 = Object.assign(MHV.defaults('1.0', 'SOXL'), { splits: 72, target: 52.5, big: 13, avgOff: 0, exhaust: 'recover', lines: 0 });
+  const base = { from: 1, to: SX.d.length - 1, capital: 100000, norm: 'auto', rows: true, fee: 0.0025, sec: 0.0000206, divTax: 0.15, tax: null };
+  const same = (A, B) => A.eq.length === B.eq.length && A.eq.every((v, i) => v === B.eq[i]) && A.final === B.final;
+  const R0 = MHV.run(c72, SXo, base), Rn = MHV.run(c72, SXo, Object.assign({}, base, { fill: null })), Rx = MHV.run(c72, SXo, Object.assign({}, base, { fill: 'zzz' }));
+  check('fill 없음·이상한 값 = 지금까지와 같음 (fx null)', same(R0, Rn) && same(R0, Rx) && R0.fx === null && Rx.fx === null);
+  const Ro = MHV.run(c72, SXo, Object.assign({}, base, { fill: 'open' })), Rp = MHV.run(c72, SXo, Object.assign({}, base, { fill: 'pre' }));
+  const fd = (A, B) => { for (let i = 0; i < A.rows.length; i++) if (A.rows[i].sa !== B.rows[i].sa || A.rows[i].bq !== B.rows[i].bq) return i; return -1; };
+  const io = fd(R0, Ro);
+  check('open: 갭 상승 매도 날 ' + Ro.fx.days + '일 · 처음 달라진 날 = 같은 수량을 더 비싸게 판 날', Ro.fx.days > 0 && io >= 0 && Ro.rows[io].sq === R0.rows[io].sq && Ro.rows[io].sa > R0.rows[io].sa && Ro.rows[io].bq === R0.rows[io].bq, 'i ' + io);
+  check('pre(주문 거부 없음): 전날 종가가 이미 지정가 이상인 날이 없으면 기존과 같음 (' + Rp.fx.days + '일)', (Rp.fx.days === 0) === same(Rp, R0));
+  const P3 = ['clamp', 'skip'].map(m => MHV.run(c72, SXo, Object.assign({}, base, { fill: 'pre', rej: { mode: m, cap: 1.2 } })));
+  check('pre: 주문 거부 기준 = 전날 종가 → 상단 매수선 +13% 는 한도(+20%) 안 → 거부 0 · 결과 = pre 반영 안 함 · noO 0', P3.every(R => R.rj.days === 0 && R.rj.noO === 0 && same(R, Rp)), JSON.stringify(P3.map(R => R.rj)));
+  const O3 = ['clamp', 'skip'].map(m => MHV.run(c72, SXo, Object.assign({}, base, { fill: 'open', rej: { mode: m, cap: 1.2 } }))), L3 = MHV.run(c72, SXo, Object.assign({}, base, { rej: { mode: 'skip', cap: 1.2 } }));
+  check('open·기존: 주문 거부 기준 = 그날 시가 → 갭 하락 날 거부 있음 (' + O3[1].rj.days + ' · ' + L3.rj.days + '일)', O3[1].rj.days > 0 && L3.rj.days > 0 && O3[0].rj.noO === L3.rj.noO);
+  const Pb = MHV.run(Object.assign({}, c72, { big: 30 }), SXo, Object.assign({}, base, { fill: 'pre', rej: { mode: 'skip', cap: 1.2 } }));
+  check('pre + 상단 매수선 +30% → 전날 종가 × 1.2 를 늘 넘음 (구조적 거부)', Pb.rj.days > 100 && Pb.rj.noO === 0, JSON.stringify(Pb.rj));
+  const Ronull = MHV.run(c72, SX, Object.assign({}, base, { fill: 'open' }));
+  check('open + 시가 자료 없음 → 지정가로 봄 = 기존과 같음 · fx.noO > 0 · days 0', same(Ronull, R0) && Ronull.fx.days === 0 && Ronull.fx.noO > 0, JSON.stringify(Ronull.fx));
+  /* 다른 버전 · V4.0(MHE 주문표) · 정액 · 세금 장부: open 의 지정가 매도 체결가 ≥ 지정가 (현금 ≥ 0 · 날마다 매도 금액 ≥ 같은 날 기존 매도 금액, 처음 달라진 날까지) */
+  const tx = { fx: () => 1300, method: 'fifo', harvest: false };
+  [['2.1', {}], ['2.2', {}], ['3.0', {}], ['4.0', {}], ['2.1', { ideal: true }]].forEach(([v, x]) => {
+    const cf2 = Object.assign(MHV.defaults(v, 'SOXL'), x), bb = Object.assign({}, base, { capital: 10000, tax: tx }), A = MHV.run(cf2, SXo, bb), B = MHV.run(cf2, SXo, Object.assign({}, bb, { fill: 'open' })), C = MHV.run(cf2, SXo, Object.assign({}, bb, { fill: 'pre', rej: { mode: 'clamp', cap: 1.2 } }));
+    const i = fd(A, B);
+    check('V' + v + (x.ideal ? ' 정액' : '') + ': open 처음 달라진 날 = 더 비싸게 판 날 · 현금 ≥ 0 · fx 통계 (' + B.fx.days + '일 · pre ' + C.fx.days + '일)', B.fx.days > 0 && i >= 0 && B.rows[i].sa > A.rows[i].sa && B.rows.every(r => r.cash > -1e-6) && C.rows.every(r => r.cash > -1e-6) && C.rj.noO === 0, 'i ' + i);
   });
 }
 

@@ -11616,15 +11616,24 @@ var MHV = (function () {
     return n;
   }
 
-  /* ── 체결: 지정가 매도 = 그날 고가가 닿으면 지정가 · LOC 매수 = 종가 ≤ 주문가 · LOC 매도 = 종가 ≥ 주문가 · MOC = 종가 ── */
+  /* ── 체결: 지정가 매도 = 그날 고가가 닿으면 지정가 · LOC 매수 = 종가 ≤ 주문가 · LOC 매도 = 종가 ≥ 주문가 · MOC = 종가 ──
+     주문 넣는 때(bar.fm · 백테스트 선택 · 기본 없음 = 위 그대로):
+       'open' 정규장 시작 전에 넣음 — 지정가 매도는 고가가 닿으면 max(지정가, 시가 bar.o) (갭 상승이면 시가에 팔림 · 시가를 모르면 지정가)
+       'pre'  프리장 시작(한국 17~18시)에 넣음 — 그 시각 가격(≈ 전날 종가 bar.pc)이 이미 지정가 이상이면 그 가격, 아니면 고가가 닿을 때 지정가
+              (갭은 프리장에서 생기므로 지정가에 걸림 · 일봉엔 프리장 고가가 없어 프리장에서만 잠깐 닿은 날은 못 셈 — 보수적) */
   function settle(rows, bar, ideal) {
-    var c = bar.c, h = bar.h != null && bar.h > c ? bar.h : c, f = [];
+    var c = bar.c, h = bar.h != null && bar.h > c ? bar.h : c, f = [], fm = bar.fm;
     rows.forEach(function (r) {
       if (!(r.q > 0)) return;
       if (r.side === 'S') {
         if (r.m === 'MOC') f.push({ side: 'S', q: r.q, p: c, tag: r.tag, m: 'MOC' });
         else if (r.m === 'LOC') { if (c >= r.p) f.push({ side: 'S', q: r.q, p: c, tag: r.tag, m: 'LOC' }); }
-        else if (h >= r.p) f.push({ side: 'S', q: r.q, p: r.p, tag: r.tag, m: 'LMT' });
+        else {
+          var fp = null;
+          if (fm === 'pre' && bar.pc > 0 && bar.pc >= r.p) fp = bar.pc;
+          else if (h >= r.p) fp = fm === 'open' && bar.o > 0 ? Math.max(r.p, Math.min(bar.o, h)) : r.p;
+          if (fp != null) f.push({ side: 'S', q: r.q, p: fp, tag: r.tag, m: 'LMT', gap: fp > r.p + 1e-9 ? 1 : 0 });
+        }
       } else if (c <= r.p) f.push({ side: 'B', q: ideal && r.amt ? r.amt / c : r.q, p: c, tag: r.tag, m: 'LOC' });   /* 정액(원문 백테스트): 주문 금액 ÷ 종가 (소수 주) */
     });
     return f;
@@ -11728,7 +11737,8 @@ var MHV = (function () {
   /* ════ 백테스트 ════
      D = { d:[YYYY-MM-DD], c:[종가], h:[고가]|null, dv:[주당 분배금]|null, o:[시가 — 0·없음은 모름]|null, L: 앞쪽 상장 전 재현 일수(MBT.join) }  (수정 종가 · 같은 길이)
      o = { from, to: 시작·끝 인덱스 (from ≥ 1 — 첫 매수는 from 날, 주문표는 그 전날 종가로) · capital · fee · sec · divTax ·
-           rej: { mode: 'clamp'|'skip', cap: 1.2 } | null — 증권사 주문 거부(rejApply · 주문 시점 가격 = 그날 시가 D.o, 없으면 전날 종가) → out.rj 통계 ·
+           rej: { mode: 'clamp'|'skip', cap: 1.2 } | null — 증권사 주문 거부(rejApply · 주문 시점 가격 = 그날 시가 D.o, 없으면 전날 종가 · fill 'pre' 면 전날 종가) → out.rj 통계 ·
+           fill: 'open'|'pre'|없음 — 주문 넣는 때(settle 참고 · 'open' 은 시가 D.o 필요) → out.fx {mode, days(지정가보다 비싸게 팔린 날), noO(지정가 매도가 있는데 시가를 몰라 지정가로 본 날)} ·
            norm: 'auto'(unitK — 실제 가격이 $10~$2000 안이면 그대로 · 밖이거나 상장 전 재현 가격이면 사이클마다 $50 단위 · 사이클 안에서 $1 아래면 액면 병합처럼 10배)
                  | 'always'(사이클마다 $50 — MHE.backtest 와 같음) | 'none' ·
            tax: { fx(인덱스 → 원/달러), method: 'fifo'|'avg', harvest } | null · rows: 날마다 기록 남김 }
@@ -11752,10 +11762,11 @@ var MHV = (function () {
   function run(cfg, D, o) {
     var c = D.c, h = D.h, dv = D.dv, from = Math.max(1, o.from || 1), to = Math.min(c.length - 1, o.to != null ? o.to : c.length - 1);
     var fee = o.fee || 0, sec = o.sec || 0, divTax = o.divTax || 0, norm = o.norm || 'auto', keep = o.rows !== false, syn = D.L > 0 ? D.L : 0;
-    var rj = o.rej && (o.rej.mode === 'clamp' || o.rej.mode === 'skip') ? o.rej : null, Do = D.o || null;
+    var rj = o.rej && (o.rej.mode === 'clamp' || o.rej.mode === 'skip') ? o.rej : null, Do = D.o || null, fm = o.fill === 'open' || o.fill === 'pre' ? o.fill : null;
     var st = init(cfg, o.capital), out = { eq: [], cash: [], cycles: [], rows: keep ? [] : null, fees: 0, divs: 0, taxPaid: 0, taxes: [], ev: [], minCash: o.capital,
                                            rs: 0, nob: 0, nobFrom: null, over: 0, overFrom: null, rebase: 0, lack: 0, lack0: 0, lack0From: null, tsell: 0, taxExt: 0,
-                                           rj: rj ? { mode: rj.mode, cap: rj.cap || 1.2, days: 0, rows: 0, miss: 0, noO: 0, sell: 0, first: null } : null };
+                                           rj: rj ? { mode: rj.mode, cap: rj.cap || 1.2, days: 0, rows: 0, miss: 0, noO: 0, sell: 0, first: null } : null,
+                                           fx: fm ? { mode: fm, days: 0, noO: 0 } : null };
     /* rs 액면 병합 · nob 1회 매수금 < 1주 가격인 날 · over V3 사이클 시작 때 현금 < 1회 × 분할 · rebase V3 다시 정함
        · lack 잔금 소진(T 가 아니라 현금 < 1회)으로 소진한 날 · lack0 (V3.0 만) 그것도 전반전(T < 분할/2)에 — 반복리 완충이 바닥난 표시 · tsell 세금 내려 판 해 · taxExt 밖에서 낸 세금($) */
     var cyc = null, cs = from, n = { win: 0, loss: 0, part: 0, ql: 0, xsell: 0, rev: 0, exh: 0 }, maxCost = 0, d4 = '9999-12-31';
@@ -11804,9 +11815,14 @@ var MHV = (function () {
       var P = st.mode === 'wait' ? { rows: [] } : plan(cfg, st, { prev: prev, avg5: avg5, date: D.d[i], inject: o.inject });
       if (!cfg.ideal && (st.mode === 'idle' || st.mode === 'first' || st.mode === 'normal') && !(cfg.ver === '4.0' && st.rev) && st.cash >= prev &&
           (cfg.ver === '4.0' ? (P.one || 0) < prev : !P.rows.some(function (r) { return r.side === 'B' && r.q >= 1 - 1e-9; }))) { out.nob++; if (!out.nobFrom) out.nobFrom = D.d[i]; }   /* 1회 매수금 < 1주 가격 — V1~V3 은 그날 못 삼 · V4 는 주문표대로 1주씩(1회보다 많이) */
-      var bar = { c: c[i] * k, h: h ? h[i] * k : null }, nrj = 0;
-      if (rj) { var oi = Do ? Do[i] : 0; if (!(oi > 0)) out.rj.noO++; if (P.rows.length) nrj = rejApply(P.rows, oi > 0 ? oi * k : prev, rj, bar, out.rj, D.d[i]); }   /* 증권사 주문 거부 (선택) */
+      var oi = Do ? Do[i] : 0, bar = { c: c[i] * k, h: h ? h[i] * k : null }, nrj = 0;
+      if (fm) { bar.fm = fm; bar.o = oi > 0 ? oi * k : 0; bar.pc = prev; }
+      if (rj) {                                                     /* 증권사 주문 거부 (선택) — 주문 시점 가격: 프리장(fill 'pre')이면 전날 종가 · 아니면 그날 시가(없으면 전날 종가) */
+        var po = fm === 'pre' ? prev : oi > 0 ? oi * k : prev; if (fm !== 'pre' && !(oi > 0)) out.rj.noO++;
+        if (P.rows.length) nrj = rejApply(P.rows, po, rj, bar, out.rj, D.d[i]);
+      }
       var fills = settle(P.rows, bar, cfg.ideal);
+      if (fm) { if (fills.some(function (x) { return x.gap; })) out.fx.days++; if (fm === 'open' && !(oi > 0) && P.rows.some(function (r) { return r.side === 'S' && r.m === 'LMT' && r.q > 0; })) out.fx.noO++; }
       var ev = apply(cfg, st, P, fills, bar, { fee: fee, sec: sec, date: cfg.ver === '4.0' ? d4 : D.d[i], prev: prev, inject: o.inject });
       if (st.cash < out.minCash) out.minCash = st.cash;
       out.fees += ev.fee;
@@ -12794,10 +12810,14 @@ function mhApp(P) {
   /* ── 이 설정으로 백테스트 (기록 화면 안 간단판 — 자세한 건 '무한매수법 백테스트' 화면) ── */
   var BT = { cache: {}, per: LS(PX + 'bt-per', P.btPer || '5y'), view: LS(PX + 'bt-view', 'net'), span: {},   /* 세금·수수료는 세션 설정(btOpts — 기본 수수료 0.25% = 무한매수법 백테스트 기본값) */
              pre: !!P.btPre && LS(PX + 'bt-pre', '0') === '1', cf: LS(PX + 'bt-cf', ''), ct: LS(PX + 'bt-ct', ''),    /* pre: 상장 전 포함(P.btPre) · cf~ct: 기간설정(P.btRange) */
-             rj: P.btRej ? LS(PX + 'bt-rj', 'none') : 'none' };   /* rj: 증권사 주문 거부 처리(P.btRej) — 카드 숫자·그래프에 쓰는 것 (세 가지는 늘 함께 계산해 표로 비교) */
+             rj: P.btRej ? LS(PX + 'bt-rj', 'none') : 'none',   /* rj: 증권사 주문 거부 처리(P.btRej) — 카드 숫자·그래프에 쓰는 것 (세 가지는 늘 함께 계산해 표로 비교) */
+             fl: P.btFill ? LS(PX + 'bt-fl', 'none') : 'none' };   /* fl: 주문 넣는 때(P.btFill) — 기존 계산 · 정규장 시작 전 · 프리장 시작 (MHV.run o.fill) */
   /* 증권사 주문 거부 처리 — 매수 지정가가 그날 시가 × 1.2(1센트 버림)를 넘으면 증권사가 받지 않는다고 볼 때 (MHV.run o.rej) */
   var RJ_M = [['none', '반영 안 함'], ['clamp', '한도로 낮춰 넣기'], ['skip', '그날 건너뛰기']];
   if (!RJ_M.some(function (m) { return m[0] === BT.rj; })) BT.rj = 'none';
+  /* 주문 넣는 때 — 기존 계산: 그날 고가가 지정가 매도가에 닿으면 지정가 · 정규장 시작 전: 갭 상승이면 그날 시가 · 프리장 시작(한국 17~18시): 전날 종가가 이미 넘으면 전날 종가, 주문 거부 기준도 전날 종가 */
+  var FL_M = [['none', '기존 계산', '장중 지정가'], ['open', '정규장 시작 전', '갭 상승은 시가'], ['pre', '프리장 시작', '한국 17~18시']];
+  if (!FL_M.some(function (m) { return m[0] === BT.fl; })) BT.fl = 'none';
   if (BT.per === 'pre') { BT.per = 'all'; BT.pre = !!P.btPre; }   /* ㉛ 의 '상장 전 포함' 칩(전체 기간만) → 전체 + 상장 전 포함 켬 */
   /* 기간 — 상장 전 포함을 켜면 20년·30년도 (상장 뒤 자료만으로는 '전체'와 같아서 숨김) · 기간설정 = 시작일 ~ 끝일 (P.btRange) */
   var BT_PER = [['1y', '1년', 1], ['3y', '3년', 3], ['5y', '5년', 5], ['10y', '10년', 10]].concat(P.btPre ? [['20y', '20년', 20, 1], ['30y', '30년', 30, 1]] : []).concat([['all', '전체', 0]]).concat(P.btRange ? [['custom', '기간설정', -2]] : []);
@@ -12853,11 +12873,13 @@ function mhApp(P) {
     return h;
   }
   function btSum(r) {   /* 접힌 카드 요약 */
+    btSync(r);
     if (!r || r.st !== 'ok') return r && r.st === 'err' ? '계산 못 함' : '펼치면 계산해요';
     var X = BT.view === 'net' ? r.net : r.gross, pc = function (v, d) { return v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(d); };
     return '<span class="mh-mono ' + (X.ret >= 0 ? 'mh-ok' : 'mh-bad') + '">' + pc(X.ret, 1) + '%</span> · 연 <span class="mh-mono">' + pc(X.cagr, 2) + '%</span> · ' + esc(btPerNow()[1]) + (BT.pre ? ' · 상장 전 포함' : '');
   }
   function btBody(s, r) {
+    btSync(r);
     var ol = optList(s);
     var h = '<div class="mh-row" style="align-items:flex-start"><div><div class="mh-h3">📊 이 설정으로 백테스트</div><p class="mh-tiny mh-faint" style="margin:2px 0 0">' + esc(String(s.ticker).toUpperCase()) + ' · ' + (LK ? '' : verName(verOf(s)) + ' · ') + btCfg(s).splits + '분할 · 목표 ' + btCfg(s).target + '%' + (ol.length ? ' · ' + esc(ol.join(' · ')) : '') + (BT.pre ? ' · 상장 전 재현 + 실제 일봉' : ' · 실제 일봉') + '</p></div>' + foldB('bt', '이 설정으로 백테스트') + '</div>' + btCtl();
     if (r.st === 'load') return h + '<p class="mh-small mh-muted" style="margin:6px 0">계산 중…</p>';
@@ -12866,11 +12888,12 @@ function mhApp(P) {
     var cl = function (v) { return v > 0 ? 'mh-ok' : v < 0 ? 'mh-bad' : ''; }, k = function (a, b, c, d) { return '<div class="mb-k"><span>' + a + '</span><b class="' + (d || '') + '">' + b + '</b>' + (c ? '<small>' + c + '</small>' : '') + '</div>'; };
     return h + '<div class="mb-kg">' + k('총수익률', pc(X.ret), '최종 $' + Math.round(X.final).toLocaleString(), cl(X.ret)) + k('연평균 (CAGR)', pc(X.cagr, 2), '그냥 보유 ' + pc(X.bh.cagr, 2), cl(X.cagr)) +
       k('최대 낙폭 (MDD)', pc(X.mdd), '그냥 보유 ' + pc(X.bh.mdd), 'mh-bad') + k('사이클', n.win + '익절 · ' + (n.exh || 0) + '소진', r.cyc + '회 시작' + (r.open ? ' · 마지막 진행 중' : '')) + '</div>' +
-      btChart(r) + btRjView(r) +
+      btChart(r) + btFlView(r) + btRjView(r) +
       (r.nob > 0 ? '<p class="mh-small mh-warn" style="margin:6px 0 0">⚠ 1회 매수금이 1주 가격보다 작은 날이 ' + r.nob.toLocaleString() + '일 — 원금을 늘리거나 분할 수를 줄여 보세요</p>' : '') +
       (r.lack0 > 0 ? '<p class="mh-small mh-warn" style="margin:6px 0 0">⚠ 손실로 남은 현금이 1회 매수금보다 적어 전반전에 벌써 잔금 소진이 된 날 ' + r.lack0.toLocaleString() + '일 (원문 반복리가 다루지 않는 상황) — 자세히 보기에서 \'1회 매수금 다시 정하기\'와 비교해 보세요</p>' : '') +
-      '<p class="mh-help">' + r.from + ' ~ ' + r.to + ' · 원금 $' + Math.round(r.cap).toLocaleString() + ' · LOC는 종가, 지정가는 그날 고가가 닿으면 체결' +
-        (P.btRej && r.m && r.m.clamp ? ' · 증권사 주문 거부 ' + RJ_M.filter(function (m) { return m[0] === BT.rj; })[0][1] : '') + (BT.view === 'net' ? ' · 수수료 ' + r.o.fee + '% + SEC' + (r.o.divs ? ' · 분배금 원천징수 15%' : ' · 분배금 끔') +
+      '<p class="mh-help">' + r.from + ' ~ ' + r.to + ' · 원금 $' + Math.round(r.cap).toLocaleString() + ' · LOC는 종가, ' +
+        (BT.fl === 'open' ? '지정가는 정규장 시작 전에 넣었다고 봄(갭 상승이면 그날 시가, 아니면 고가가 닿을 때 지정가)' : BT.fl === 'pre' ? '지정가는 프리장 시작(한국 오후 5~6시)에 넣었다고 봄(전날 종가가 이미 넘으면 전날 종가, 아니면 고가가 닿을 때 지정가)' : '지정가는 그날 고가가 닿으면 지정가에 체결') +
+        (P.btRej && r.m ? ' · 증권사 주문 거부 ' + RJ_M.filter(function (m) { return m[0] === BT.rj; })[0][1] : '') + (BT.view === 'net' ? ' · 수수료 ' + r.o.fee + '% + SEC' + (r.o.divs ? ' · 분배금 원천징수 15%' : ' · 분배금 끔') +
         (r.tax ? ' · 양도소득세 22%(250만 원 공제 · ' + (r.o.method === 'avg' ? '이동평균' : '선입선출') + (r.o.harvest ? ' · 연말 절세' : '') + ')' : r.taxOff ? ' · 양도세 제외' : ' · 원/달러 자료가 없어 양도세 빼고') : ' · 세금·수수료 빼고' + (r.o.divs ? '' : ' · 분배금 끔')) +
         (r.pre ? ' · <b>' + (r.pre.all ? '이 기간 전부(' + r.pre.from + ' ~ ' + r.pre.end + ')가' : r.pre.from + ' ~ ' + r.pre.end + '은') + ' 상장 전 재현 가격</b>(지수·비슷한 ETF로 다시 만든 값 · 가격 예상 오차 연 ±' + (Math.max(r.pre.x || 0, r.pre.xc || 0) * 100).toFixed(1) + '%p · 고가는 추정)' : '') + ' · 과거 결과는 미래를 보장하지 않아요</p>' +
       (r.preNote ? '<p class="mh-small mh-warn" style="margin:6px 0 0">' + esc(r.preNote) + '</p>' : '') + (r.clip ? '<p class="mh-small mh-warn" style="margin:6px 0 0">' + esc(r.clip) + '</p>' : '') +
@@ -12881,19 +12904,36 @@ function mhApp(P) {
   /* 증권사 주문 거부 비교 (P.btRej) — 세 가지 처리를 같은 자료·조건으로 · 단추로 고른 처리가 위 숫자·그래프·크게 보기에 쓰임 */
   function usdK(v) { if (v == null || !isFinite(v)) return '—'; var a = Math.abs(v), s = a >= 1e9 ? (a / 1e9).toFixed(2) + 'B' : a >= 1e6 ? (a / 1e6).toFixed(a >= 1e8 ? 0 : a >= 1e7 ? 1 : 2) + 'M' : a >= 1e4 ? Math.round(a / 1e3) + 'K' : Math.round(a).toLocaleString(); return (v < 0 ? '−$' : '$') + s; }
   function btRjView(r) {
-    if (!P.btRej || !r.m || !r.m.clamp || !r.m.skip) return '';
-    var net = BT.view === 'net', pc = function (v, d) { return v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(d) + '%'; };
+    if (!P.btRej || !r.m || !RJ_M.every(function (m) { return r.m[BT.fl + '|' + m[0]]; })) return '';
+    var net = BT.view === 'net', pc = function (v, d) { return v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(d) + '%'; }, pre = BT.fl === 'pre';
     var sel = RJ_M.map(function (m) { var on = BT.rj === m[0]; return '<button class="mh-btn' + (on ? ' mh-btn-sel' : '') + '" data-act="bt-rj" data-v="' + m[0] + '" aria-pressed="' + on + '">' + m[1] + '</button>'; }).join('');
     var rows = RJ_M.map(function (m) {
-      var x = r.m[m[0]], X = net ? x.net : x.gross, S = net ? x.rjN : x.rjG;
+      var x = r.m[BT.fl + '|' + m[0]], X = net ? x.net : x.gross, S = net ? x.rjN : x.rjG;
       return '<tr' + (BT.rj === m[0] ? ' class="on"' : '') + ' data-rj="' + m[0] + '"><th scope="row">' + m[1] + '</th><td>' + pc(X.cagr, 2) + '</td><td>' + pc(X.mdd, 1) + '</td><td title="$' + Math.round(X.final).toLocaleString() + '">' + usdK(X.final) + '</td>' +
         '<td>' + (S ? S.days.toLocaleString() + '일<small>' + S.miss.toLocaleString() + '일</small>' : '—') + '</td></tr>';
     }).join('');
-    return '<div class="mh-rjc" id="mh-rjc"><div class="mh-rjc-h"><b>증권사 주문 거부 반영</b><span class="mh-faint">한도 = 그날 시가 × 1.2 · 위 숫자·그래프 = 고른 처리</span></div>' +
+    return '<div class="mh-rjc" id="mh-rjc"><div class="mh-rjc-h"><b>증권사 주문 거부 반영</b><span class="mh-faint">한도 = ' + (pre ? '전날 종가 × 1.2 (프리장 시작 주문)' : '그날 시가 × 1.2') + ' · 위 숫자·그래프 = 고른 처리</span></div>' +
       '<div class="mh-rjc-sel" role="group" aria-label="주문 거부 처리">' + sel + '</div>' +
       '<div class="mh-rjc-w"><table class="mh-rjt"><thead><tr><th scope="col">처리</th><th scope="col">연평균</th><th scope="col">MDD</th><th scope="col">최종</th><th scope="col">거부<small>달라진 날</small></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-      '<p class="mh-tiny mh-faint" style="margin:6px 0 0">매수 지정가가 주문 넣는 때 가격(그날 시가)의 120%(1센트 버림)를 넘으면 증권사가 받지 않는다고 보고 다시 계산했어요 · <b>한도로 낮춰 넣기</b> = 수량은 그대로 한도 가격에 — LOC는 종가에 체결돼서 종가가 한도 아래면 결과가 같아요 · <b>그날 건너뛰기</b> = 거부된 주문 없이 그날을 보냄 · 거부 = 한도를 넘은 날 · 달라진 날 = 그 처리로 그날 체결이 바뀐 날(그 뒤 사이클 흐름이 달라져 숫자 차이는 더 커질 수 있어요) · 매도 주문은 그대로' +
-      (r.noO > 0 ? ' · 시가를 모르는 ' + r.noO.toLocaleString() + '일(상장 전 재현 구간 중 같은 지수 ETF 시가도 없는 때 등)은 전날 종가 무렵에 주문했다고 봤어요' : '') + '</p></div>';
+      '<p class="mh-tiny mh-faint" style="margin:6px 0 0">매수 지정가가 주문 넣는 때 가격(' + (pre ? '전날 종가' : '그날 시가') + ')의 120%(1센트 버림)를 넘으면 증권사가 받지 않는다고 보고 다시 계산했어요 · <b>한도로 낮춰 넣기</b> = 수량은 그대로 한도 가격에 — LOC는 종가에 체결돼서 종가가 한도 아래면 결과가 같아요 · <b>그날 건너뛰기</b> = 거부된 주문 없이 그날을 보냄 · 거부 = 한도를 넘은 날 · 달라진 날 = 그 처리로 그날 체결이 바뀐 날(그 뒤 사이클 흐름이 달라져 숫자 차이는 더 커질 수 있어요) · 매도 주문은 그대로' +
+      (r.noO > 0 && !pre ? ' · 시가를 모르는 ' + r.noO.toLocaleString() + '일(상장 전 재현 구간 중 같은 지수 ETF 시가도 없는 때 등)은 전날 종가 무렵에 주문했다고 봤어요' : '') + '</p></div>';
+  }
+  /* 주문 넣는 때 비교 (P.btFill) — 세 가지 시각을 같은 자료·조건(고른 주문 거부 처리 포함)으로 · 단추로 고른 시각이 위 숫자·그래프·크게 보기에 쓰임 */
+  function btFlView(r) {
+    if (!P.btFill || !r.m || !FL_M.every(function (m) { return r.m[m[0] + '|' + BT.rj]; })) return '';
+    var net = BT.view === 'net', pc = function (v, d) { return v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(d) + '%'; };
+    var sel = FL_M.map(function (m) { var on = BT.fl === m[0]; return '<button class="mh-btn' + (on ? ' mh-btn-sel' : '') + '" data-act="bt-fl" data-v="' + m[0] + '" aria-pressed="' + on + '">' + m[1] + '</button>'; }).join('');
+    var rows = FL_M.map(function (m) {
+      var x = r.m[m[0] + '|' + BT.rj], X = net ? x.net : x.gross, F = net ? x.fxN : x.fxG;
+      return '<tr' + (BT.fl === m[0] ? ' class="on"' : '') + ' data-fl="' + m[0] + '"><th scope="row">' + m[1] + '<small>' + m[2] + '</small></th><td>' + pc(X.cagr, 2) + '</td><td>' + pc(X.mdd, 1) + '</td><td title="$' + Math.round(X.final).toLocaleString() + '">' + usdK(X.final) + '</td>' +
+        '<td>' + (F ? F.days.toLocaleString() + '일' : '—') + '</td></tr>';
+    }).join('');
+    return '<div class="mh-rjc mh-flc" id="mh-flc"><div class="mh-rjc-h"><b>주문 넣는 때 비교</b><span class="mh-faint">LOC 매수는 셋 다 종가 · 위 숫자·그래프 = 고른 시각' + (P.btRej ? ' · 주문 거부 ' + RJ_M.filter(function (m) { return m[0] === BT.rj; })[0][1] : '') + '</span></div>' +
+      '<div class="mh-rjc-sel" role="group" aria-label="주문 넣는 때">' + sel + '</div>' +
+      '<div class="mh-rjc-w"><table class="mh-rjt"><thead><tr><th scope="col">주문 넣는 때</th><th scope="col">연평균</th><th scope="col">MDD</th><th scope="col">최종</th><th scope="col">비싸게<small>팔린 날</small></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<p class="mh-tiny mh-faint" style="margin:6px 0 0"><b>기존 계산</b> = 그날 고가가 지정가 매도가에 닿으면 지정가에 체결(몇 시인지 따지지 않는 일봉 가정) · <b>정규장 시작 전</b> = 정규장이 지정가보다 높게 시작하면(갭 상승) 그날 시가에 체결 · ' +
+        '<b>프리장 시작</b> = 한국 오후 5시(서머타임)·6시, 미국 프리마켓이 열릴 때 넣음 — 전날 종가가 이미 지정가 이상이면 전날 종가에, 아니면 고가가 닿을 때 지정가에 체결(프리장 고가는 몰라 갭 상승도 지정가로 — 실제보다 조금 낮게 나올 수 있어요) · 주문 거부 한도의 기준도 전날 종가 · ' +
+        '비싸게 팔린 날 = 지정가 매도가 지정가보다 비싸게 체결된 날</p></div>';
   }
   /* 카드 그래프 — 날마다 총자산(지금 보기: 포함/미포함) · 그냥 보유 · 원금 선 · 값 차이가 크면 로그 눈금 · 손가락/마우스를 대면 그날 값 */
   var BT_CW = 600, BT_CH = 150;
@@ -12934,22 +12974,39 @@ function mhApp(P) {
   document.addEventListener('pointermove', btHover, { passive: true });
   document.addEventListener('pointerdown', btHover, { passive: true });
   document.addEventListener('pointerleave', function (e) { if (e.target && e.target.classList && e.target.classList.contains('mh-bt-ch')) btHover(e); }, true);
-  function btPick(r) {   /* 증권사 주문 거부 처리(P.btRej) 중 고른 것을 카드 숫자·그래프·크게 보기에 (세 가지 결과는 r.m 에 함께) */
-    var x = r && r.m && (r.m[BT.rj] || r.m.none); if (!x) return;
+  /* 주문 넣는 때(P.btFill) × 주문 거부 처리(P.btRej) 결과 — 고른 것과 두 비교 표에 필요한 것만 계산해 r.m['시각|처리'] 에 둠 (나머지는 단추를 누를 때) */
+  function btCombo(r, fl, rj) {
+    var k = fl + '|' + rj, c = r.cx; if (r.m[k] || !c) return;
+    var o = { rej: rj === 'none' ? null : { mode: rj, cap: 1.2 }, fill: fl === 'none' ? null : fl }, Rn = VX.run(c.cfg, c.Dn, Object.assign({}, c.oN, o)), Rg = VX.run(c.cfg, c.Dn, Object.assign({}, c.oG, o)), B = window.MBT;
+    r.m[k] = { net: B.stats(Rn, c.DD, c.cap), gross: B.stats(Rg, c.DD, c.cap), nN: Rn.n, nG: Rg.n, cyc: Rn.cycles.length, nob: Rn.nob, lack0: Rn.lack0,
+               open: !!(Rn.cycles.length && Rn.cycles[Rn.cycles.length - 1].open), rjN: Rn.rj, rjG: Rg.rj, fxN: Rn.fx, fxG: Rg.fx, eqN: Rn.eq.slice(), eqG: Rg.eq.slice() };
+  }
+  function btEnsure(r) {
+    if (!r || !r.m || !r.cx) return;
+    var fl = P.btFill ? BT.fl : 'none', rj = P.btRej ? BT.rj : 'none';
+    btCombo(r, fl, rj);
+    if (P.btRej) RJ_M.forEach(function (m) { btCombo(r, fl, m[0]); });
+    if (P.btFill) FL_M.forEach(function (m) { btCombo(r, m[0], rj); });
+  }
+  function btPk() { return (P.btFill ? BT.fl : 'none') + '|' + (P.btRej ? BT.rj : 'none'); }
+  function btSync(r) { if (r && r.st === 'ok' && r.m && r.pk !== btPk()) btPick(r); return r; }   /* 단추로 시각·처리를 바꾼 뒤 처음 보여 줄 때만 그 결과로 (다른 기간 결과는 그 기간을 볼 때 계산) */
+  function btPick(r) {   /* 주문 넣는 때(P.btFill) · 증권사 주문 거부 처리(P.btRej) 중 고른 것을 카드 숫자·그래프·크게 보기에 (비교 표 결과는 r.m 에 함께) */
+    btEnsure(r);
+    var x = r && r.m && r.m[btPk()]; if (!x) return; r.pk = btPk();
     r.net = x.net; r.gross = x.gross; r.nN = x.nN; r.nG = x.nG; r.cyc = x.cyc; r.nob = x.nob; r.lack0 = x.lack0; r.open = x.open;
     if (r.ch) { r.ch.net = x.eqN; r.ch.gross = x.eqG; }
   }
   function btRun(s, key) {
-    var r = BT.cache[key], tk = String(s.ticker || '').toUpperCase(), pre = P.btPre && BT.pre, per = btPerNow(), cf = BT.cf, ct = BT.ct, RJ = !!P.btRej, B = window.MBT;
+    var r = BT.cache[key], tk = String(s.ticker || '').toUpperCase(), pre = P.btPre && BT.pre, per = btPerNow(), cf = BT.cf, ct = BT.ct, RJ = !!P.btRej, OP = RJ || !!P.btFill, B = window.MBT;
     Promise.all([B.load(tk), B.fxData().catch(function () { return null; }), pre ? B.preload(tk).catch(function () { return null; }) : null]).then(function (a) {
-      return RJ ? B.withOpen(a[0]).then(function () { return a; }) : a;   /* 주문 거부 계산: 그날 시가(주문 넣는 시점 가격) */
+      return OP ? B.withOpen(a[0]).then(function () { return a; }) : a;   /* 주문 거부 계산: 그날 시가(주문 넣는 시점 가격) · 주문 넣는 때: 갭 상승 시가 */
     }).then(function (a) {
       var D0 = a[0], F = a[1], PR = a[2], alpha = null, DD = D0; if (!D0.h) D0.h = D0.c.slice();
       if (pre) {   /* 상장 전 포함 — 무한매수법 백테스트(상장 전 포함)와 같은 재현 일봉 · 같은 고가 추정 */
         alpha = B.hiAlpha(D0, 1); var J = PR && alpha != null ? B.join(D0, PR, alpha) : null;
         if (J) DD = J; else r.preNote = (PR ? '상장 전 재현을 이어 붙이지 못해' : '상장 전 재현 자료를 받지 못해') + ' 실제 일봉만 썼어요';
       }
-      return (RJ && DD !== D0 ? B.preOpen(DD, tk, DD.L) : Promise.resolve(DD)).then(function () { return [D0, F, PR, alpha, DD]; });   /* 재현 구간 시가 = 같은 지수 ETF(대리)의 시가 변화 × 3 */
+      return (OP && DD !== D0 ? B.preOpen(DD, tk, DD.L) : Promise.resolve(DD)).then(function () { return [D0, F, PR, alpha, DD]; });   /* 재현 구간 시가 = 같은 지수 ETF(대리)의 시가 변화 × 3 */
     }).then(function (a) {
       var D0 = a[0], F = a[1], PR = a[2], alpha = a[3], DD = a[4];
       var n = DD.d.length, to = n - 1, from = 1;
@@ -12967,15 +13024,12 @@ function mhApp(P) {
       var cap = s.totalCapital > 0 ? s.totalCapital : 10000, o = btOpts(s), fx = F && o.tax ? B.fxFor(DD.d, F) : null, cfg = btCfg(s);
       var base = { from: from, to: to, capital: cap, norm: 'auto', rows: false }, Dn = o.divs ? DD : Object.assign({}, DD, { dv: null });   /* 무한매수법 백테스트(run)와 같은 조건 */
       var oN = Object.assign({}, base, { fee: o.fee / 100, sec: 0.0000206, divTax: 0.15, tax: fx ? { fx: function (i) { return fx[i]; }, method: o.method, harvest: o.harvest } : null }), oG = Object.assign({}, base, { fee: 0, sec: 0, divTax: 0, tax: null });
-      r.m = {};
-      (RJ ? RJ_M.map(function (m) { return m[0]; }) : ['none']).forEach(function (m) {   /* P.btRej: 반영 안 함 · 한도로 낮춰 넣기 · 그날 건너뛰기 셋 다 (같은 자료·조건) */
-        var rj = m === 'none' ? null : { mode: m, cap: 1.2 }, Rn = VX.run(cfg, Dn, Object.assign({}, oN, { rej: rj })), Rg = VX.run(cfg, Dn, Object.assign({}, oG, { rej: rj }));
-        r.m[m] = { net: B.stats(Rn, DD, cap), gross: B.stats(Rg, DD, cap), nN: Rn.n, nG: Rg.n, cyc: Rn.cycles.length, nob: Rn.nob, lack0: Rn.lack0,
-                   open: !!(Rn.cycles.length && Rn.cycles[Rn.cycles.length - 1].open), rjN: Rn.rj, rjG: Rg.rj, eqN: Rn.eq.slice(), eqG: Rg.eq.slice() };
-      });
+      r.m = {}; r.cx = { cfg: cfg, Dn: Dn, oN: oN, oG: oG, DD: DD, cap: cap };   /* btCombo 가 같은 자료·조건으로 (P.btRej: 반영 안 함 · 한도로 낮춰 넣기 · 그날 건너뛰기 · P.btFill: 기존 · 정규장 시작 전 · 프리장 시작) */
+      btEnsure(r);
       if (RJ) { var noO = 0; for (var q = from; q <= to; q++) if (!(DD.o && DD.o[q] > 0)) noO++; r.noO = noO; }   /* 시가를 몰라 전날 종가에 주문했다고 본 날 */
       r.from = DD.d[from]; r.to = DD.d[to]; r.tax = !!fx; r.taxOff = !o.tax; r.o = o; r.cap = cap;
-      r.ch = { d: DD.d.slice(from, to + 1), d0: DD.d[from - 1], net: null, gross: null, bh: r.m.none.net.bhEq.slice() };   /* 그래프: 날마다 총자산(포함·미포함) · 그냥 보유 · d0 = 첫날 전날(원금 기준일 — 카드 연평균과 같은 기준) */
+      var x0 = r.m[(P.btFill ? BT.fl : 'none') + '|' + (RJ ? BT.rj : 'none')];
+      r.ch = { d: DD.d.slice(from, to + 1), d0: DD.d[from - 1], net: null, gross: null, bh: x0.net.bhEq.slice() };   /* 그냥 보유는 처리·시각과 무관 */   /* 그래프: 날마다 총자산(포함·미포함) · 그냥 보유 · d0 = 첫날 전날(원금 기준일 — 카드 연평균과 같은 기준) */
       btPick(r); r.st = 'ok';
       if (DD !== D0 && DD.L != null && DD.L > from) {   /* 상장 전 재현 구간: 시작 ~ 상장 전날(기간이 상장 전에 끝나면 끝일까지 = all) · 가격 재현 오차 · 상장 뒤를 재현 가격으로 돌린 연평균 차이(무한매수법 백테스트 오차 카드 ②와 같은 계산) */
         var Lc = Math.min(DD.L, to + 1); r.preL = Lc - from; r.pre = { from: DD.d[from], end: DD.d[Lc - 1], all: DD.L > to, x: PR.rc.x, xc: PR.rc.xc, d: null };
@@ -12993,7 +13047,7 @@ function mhApp(P) {
   /* ── 백테스트 그래프 크게 보기 (P.btZoom) — 기간 단추 · 끌어서 구간 확대 · 전체 · 보는 구간 수익률 · 연도별 수익률(줄을 누르면 그해로) ── */
   var BTZ = { key: null, a: -1, b: -1, per: '0', log: null, ch: null, idx: null, drag: null, W: null, raf: 0, stT: 0 };   /* W: 지금 그린 구간(btzWinData) */
   /* 구간 = 기준 a ~ 끝 b (a = −1 → 첫날 전날의 원금 · 카드 숫자와 같은 기준) · 수익률·연평균 = b ÷ a · 낙폭은 그래프에 보이는 날만(카드와 같게) */
-  function btzR() { var S = MH.sheet; return S && S.kind === 'btz' ? BT.cache[S.key] || null : null; }
+  function btzR() { var S = MH.sheet; return S && S.kind === 'btz' ? btSync(BT.cache[S.key]) || null : null; }
   function btzSer(r) { return BT.view === 'net' ? r.ch.net : r.ch.gross; }
   function btzV(r, arr, i) { return i < 0 ? r.cap : arr[i]; }
   function btzD(r, i) { return i < 0 ? r.ch.d0 || r.ch.d[0] : r.ch.d[i]; }
@@ -13021,7 +13075,7 @@ function mhApp(P) {
   function btzPc(v, dd) { return v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(dd == null ? 1 : dd) + '%'; }
   function btzCl(v) { return v > 0 ? 'mh-ok' : v < 0 ? 'mh-bad' : ''; }
   function viewBtz() {
-    var S = MH.sheet, r = BT.cache[S.key], tk = LK ? LK.ticker : String((active().settings || {}).ticker || '').toUpperCase();
+    var S = MH.sheet, r = btSync(BT.cache[S.key]), tk = LK ? LK.ticker : String((active().settings || {}).ticker || '').toUpperCase();
     if (!r || r.st !== 'ok' || !r.ch) return sheet('📊 백테스트 그래프', '', '<p class="mh-small mh-muted">계산 결과가 아직 없어요. 카드에서 계산이 끝난 뒤 다시 열어 주세요.</p>' + okBtn());
     var n = r.ch.d.length; if (BTZ.key !== S.key || BTZ.b < 0 || BTZ.b > n - 1) { BTZ.key = S.key; BTZ.a = -1; BTZ.b = n - 1; BTZ.per = '0'; }
     var yr = btzYears(r), yAll = (window.MBT.dnum(r.ch.d[n - 1]) - window.MBT.dnum(btzD(r, -1))) / 365.25;
@@ -14733,9 +14787,13 @@ function mhApp(P) {
         if (!okd(f1) || !okd(f2) || f1 >= f2) { var rh = $('mh-bt-rhelp'); if (rh) { rh.className = 'mh-tiny mh-bad'; rh.textContent = !okd(f1) || !okd(f2) ? '시작일과 끝일을 모두 골라 주세요' : '시작일이 끝일보다 앞이어야 해요'; } break; }
         BT.cf = f1; BT.ct = f2; BT.per = 'custom'; try { localStorage.setItem(PX + 'bt-cf', f1); localStorage.setItem(PX + 'bt-ct', f2); localStorage.setItem(PX + 'bt-per', 'custom'); } catch (e2) {} render(); break;
       case 'bt-view': BT.view = v; try { localStorage.setItem(PX + 'bt-view', v); } catch (e2) {} if (MH.sheet && MH.sheet.kind === 'btz') { render(); break; } var be = $('mh-bt'), bk = btKey(s); if (be && BT.cache[bk]) be.innerHTML = btBody(s, BT.cache[bk]); else render(); break;
+      case 'bt-fl':   /* 주문 넣는 때 고르기 (P.btFill) — 계산해 둔 결과에서 바꿔 끼움(없는 조합만 새로 계산) */
+        if (!P.btFill || !FL_M.some(function (m) { return m[0] === v; })) break;
+        BT.fl = v; try { localStorage.setItem(PX + 'bt-fl', v); } catch (e2) {}   /* 보여 줄 때 btSync 가 그 결과로 */
+        var be4 = $('mh-bt'), bk4 = btKey(s); if (be4 && BT.cache[bk4]) be4.innerHTML = btBody(s, BT.cache[bk4]); else render(); break;
       case 'bt-rj':   /* 증권사 주문 거부 처리 고르기 (P.btRej) — 이미 계산해 둔 결과에서 바꿔 끼움 */
         if (!P.btRej || !RJ_M.some(function (m) { return m[0] === v; })) break;
-        BT.rj = v; try { localStorage.setItem(PX + 'bt-rj', v); } catch (e2) {} for (var bck in BT.cache) btPick(BT.cache[bck]);
+        BT.rj = v; try { localStorage.setItem(PX + 'bt-rj', v); } catch (e2) {}   /* 보여 줄 때 btSync 가 그 결과로 */
         var be3 = $('mh-bt'), bk3 = btKey(s); if (be3 && BT.cache[bk3]) be3.innerHTML = btBody(s, BT.cache[bk3]); else render(); break;
       case 'rec-type': var R = recState(), f = E.prefill(v, R.ctx, R.rec); Object.assign(MH.sheet, { step: 'detail', type: v, tManual: false, tVal: '', bp: f.buyPrice, bq: f.buyQty, sp: f.sellPrice, sq: f.sellQty }); render(); recLive(); break;
       case 'rec-back': MH.sheet.step = 'type'; MH.sheet.type = null; render(); break;
@@ -14812,6 +14870,7 @@ function mhApp(P) {
     if (so.length) extra.push('세부 규칙·세금·수수료도 그대로: ' + esc(so.join(' · ')) + ' (아래 \'⚙ 세부 규칙 · 세금·수수료\'에서 확인·변경)');
     if (u.custom) extra.push(esc(u.name) + '는 TQQQ·SOXL 이 아니라 커스텀 종목으로 기록돼요 (자동 시세·차트 없음, 종가 직접 입력)');
     if (p.rej === 'clamp' || p.rej === 'skip') extra.push('백테스트의 증권사 주문 거부(' + (p.rej === 'clamp' ? '한도로 낮춰 넣기' : '그날 건너뛰기') + ')는 계산 가정이라 기록에는 없어요 — 실제로 주문이 거부되면 \'LOC 매수 상한\' 카드의 한도를 참고하세요');
+    if (p.fill === 'open' || p.fill === 'pre') extra.push('백테스트의 주문 넣는 때(' + (p.fill === 'open' ? '정규장 시작 전 주문' : '프리장 시작 주문') + ')는 계산 가정이라 기록에는 없어요 — 실제 주문을 그때 넣으면 같은 효과예요');
     return '<div class="mh-note ok" style="margin-bottom:12px" id="mh-preset"><div class="mh-row"><b class="mh-ok">📊 백테스트 실행 기록에서 불러온 조건</b><button class="mh-ico" data-act="preset-x" aria-label="알림 닫기">✕</button></div>' +
       '<div style="margin-top:4px;line-height:1.55">' + esc(p.tk) + ' · ' + verName(p.ver) + ' · ' + u.splits + '분할 · ' + (p.ver === '2.2' ? 'R ' : '목표 ') + esc(u.target) + '% · 큰수 ' + esc(u.big) + '%' +
       (p.from ? '<br><span class="mh-faint">백테스트 ' + esc(p.from) + ' ~ ' + esc(p.to) + (p.pre ? ' (상장 전 재현 포함)' : '') + ' · CAGR ' + pc(p.ret, 2) + ' · MDD ' + pc(p.mdd, 1) + ' (과거 결과 — 미래를 보장하지 않아요)</span>' : '') +
@@ -14936,14 +14995,18 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
                 '3.0': '쿼터매도 — T > 분할−1 이면 ¼ MOC, 그날 매수 없음 (원문)', '4.0': '리버스모드 — 직전 5일 평균 별지점 (원문)' },
     sellall: '소진 다음 날 전량 매도', recover: '매수 멈추고 평단 −10% 안으로 오면 전량 매도', hold: '매수 멈추고 목표가까지 보유' };
   var FEES = [['0.25', '기본 0.25%'], ['0.1', '0.1%'], ['0.07', '이벤트 0.07%'], ['0', '0%']], FEE_DEF = 0.25, TK_DEF = 'SOXL', SET_VER = 2;
-  var RJ_SEL = [['', '반영 안 함'], ['clamp', '한도로 낮춰 넣기'], ['skip', '그날 건너뛰기']], RJ_NM = { clamp: '한도로 낮춰 넣기', skip: '그날 건너뛰기' };   /* 증권사 주문 거부 처리 (MHV.run o.rej) */   /* 기본: SOXL · 증권사 기본 수수료 0.25% */
+  var RJ_SEL = [['', '반영 안 함'], ['clamp', '한도로 낮춰 넣기'], ['skip', '그날 건너뛰기']], RJ_NM = { clamp: '한도로 낮춰 넣기', skip: '그날 건너뛰기' };   /* 증권사 주문 거부 처리 (MHV.run o.rej) */
+  var FILL_SEL = [['', '기존 계산 (장중 지정가)'], ['open', '정규장 시작 전 주문 (시가 반영)'], ['pre', '프리장 시작 (한국 17~18시) 주문']],
+      FILL_NM = { '': '기존 계산 (장중 지정가)', open: '정규장 시작 전 주문 (시가 반영)', pre: '프리장 시작 (한국 17~18시) 주문' }, FILL_SH = { open: '정규장 시작 전 주문', pre: '프리장 시작 주문' },
+      FILL_ROW = { none: ['기존 계산', '장중 지정가'], open: ['정규장 시작 전', '갭 상승은 시가'], pre: ['프리장 시작', '한국 17~18시'] };   /* 주문 넣는 때 (MHV.run o.fill) */
+  function fillOn(f) { return f === 'open' || f === 'pre'; }   /* 기본: SOXL · 증권사 기본 수수료 0.25% */
 
   /* ── 설정 ── */
   function defaults(ver, tk) {
     var d = V.defaults(ver, tk);
     return { ver: ver, tk: tk, custom: '', from: '', to: '', cap: 10000, splits: d.splits, target: d.target, part: d.part || 5, capP: d.cap || 5, avgOff: d.avgOff || 0,
              big: d.big, first: d.first || 10, lines: d.lines, money: ver === '3.0' ? 'half' : ver === '4.0' ? 'cash' : 'compound', exhaust: 'official', restart: 'next',
-             shares: 1, noBig: false, tround: 'r2', ideal: false, pre: false, fee: FEE_DEF, sec: true, tax: true, method: 'fifo', harvest: false, divs: true, rebase: false, rej: '', sv: SET_VER };
+             shares: 1, noBig: false, tround: 'r2', ideal: false, pre: false, fee: FEE_DEF, sec: true, tax: true, method: 'fifo', harvest: false, divs: true, rebase: false, rej: '', fill: '', sv: SET_VER };
   }
   var S0 = lsGet(LS_SET, {}) || {};
   if (!(S0.sv >= SET_VER) && +S0.fee === 0.07) S0.fee = FEE_DEF;   /* 예전 기본 수수료(0.07%)로 저장된 조건 → 새 기본 0.25% (한 번만) */
@@ -14965,6 +15028,7 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
     num('ao', 'avgOff', -20, 20); if (q.tr === 'c1' && (S.ver === '2.2' || S.ver === '3.0')) S.tround = 'c1';   /* 평단 괴리율 · T 반올림 · 취득가액 · 연말 절세 · 분배금 — 주소만으로 같은 결과가 나오게 */
     if (q.tm === 'avg') S.method = 'avg'; S.harvest = q.hv === '1'; if (q.dv === '0') S.divs = false;
     S.rej = q.rj === 'c' ? 'clamp' : q.rj === 's' ? 'skip' : '';   /* 증권사 주문 거부 처리 (rj=c 한도로 낮춰 넣기 · rj=s 그날 건너뛰기) */
+    S.fill = q.ft === 'o' ? 'open' : q.ft === 'p' ? 'pre' : '';   /* 주문 넣는 때 (ft=o 정규장 시작 전 · ft=p 프리장 시작) */
   })();
   function tkOf() { return (S.custom || S.tk || TK_DEF).toUpperCase(); }
   function hashOf() {
@@ -14980,11 +15044,12 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
     if ((S.ver === '1.0' || S.ver === '2.0' || S.ver === '2.1') && S.avgOff) p.push('ao=' + S.avgOff); if ((S.ver === '2.2' || S.ver === '3.0') && S.tround === 'c1') p.push('tr=c1');
     if (S.tax && S.method === 'avg') p.push('tm=avg'); if (S.tax && S.harvest) p.push('hv=1'); if (!S.divs) p.push('dv=0');
     if (S.rej === 'clamp' || S.rej === 'skip') p.push('rj=' + (S.rej === 'clamp' ? 'c' : 's'));
+    if (S.fill === 'open' || S.fill === 'pre') p.push('ft=' + (S.fill === 'open' ? 'o' : 'p'));
     return '#' + p.join('&');
   }
   function saveS() { lsSet(LS_SET, S); }
   /* 버전·종목을 바꾸면 그 버전의 원문 기본값 */
-  function setVer(v) { var keep = { tk: S.tk, custom: S.custom, from: S.from, to: S.to, cap: S.cap, pre: S.pre, fee: S.fee, sec: S.sec, tax: S.tax, method: S.method, harvest: S.harvest, divs: S.divs, ideal: S.ideal, restart: S.restart, shares: S.shares, rej: S.rej };
+  function setVer(v) { var keep = { tk: S.tk, custom: S.custom, from: S.from, to: S.to, cap: S.cap, pre: S.pre, fee: S.fee, sec: S.sec, tax: S.tax, method: S.method, harvest: S.harvest, divs: S.divs, ideal: S.ideal, restart: S.restart, shares: S.shares, rej: S.rej, fill: S.fill };
     S = Object.assign(defaults(v, tkOf()), keep); }
   function setTk(tk, custom) { S.tk = custom ? S.tk : tk; S.custom = custom ? tk : ''; var d = V.defaults(S.ver, tkOf()); S.target = d.target; }
 
@@ -15035,7 +15100,7 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
     var t = ['수수료 ' + nm(S.fee) + '%', S.tax ? '양도세 22%' + (S.method === 'avg' ? '(이동평균)' : '') + (S.harvest ? ' · 연말 절세' : '') : '양도세 제외', S.divs ? '분배금 받음' : '분배금 끔'];
     put('tax', t.join(' · '), +S.fee !== FEE_DEF || !S.tax || (S.tax && (S.method !== 'fifo' || S.harvest)) || !S.divs);
     var tr = v === '2.2' || v === '3.0';
-    put('adv', (S.ideal && v !== '4.0' ? '정액 체결(소수 주)' : '실제 주문(1주 단위)') + (tr ? ' · T ' + (S.tround === 'c1' ? '둘째 자리 올림' : '셋째 자리 반올림') : '') + (RJ_NM[S.rej] ? ' · 주문 거부 ' + RJ_NM[S.rej] : ''), (S.ideal && v !== '4.0') || (tr && S.tround !== 'r2') || !!RJ_NM[S.rej]);
+    put('adv', (S.ideal && v !== '4.0' ? '정액 체결(소수 주)' : '실제 주문(1주 단위)') + (tr ? ' · T ' + (S.tround === 'c1' ? '둘째 자리 올림' : '셋째 자리 반올림') : '') + (RJ_NM[S.rej] ? ' · 주문 거부 ' + RJ_NM[S.rej] : '') + (fillOn(S.fill) ? ' · ' + FILL_SH[S.fill] : ''), (S.ideal && v !== '4.0') || (tr && S.tround !== 'r2') || !!RJ_NM[S.rej] || fillOn(S.fill));
   }
   function renderSet() {
     var v = S.ver, tk = tkOf(), vi = VERS.filter(function (x) { return x[0] === v; })[0];
@@ -15100,10 +15165,15 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
       '<label class="mh-lbl">체결 수량</label>' + seg('체결 수량', [['0', '실제 주문 (1주 단위)'], ['1', '정액 (소수 주)']], S.ideal ? '1' : '0', 'ideal') +
       '<p class="mh-help">정액 = 주문 금액 ÷ 종가만큼 소수 주로 체결. 라오어 원문 백테스트 숫자는 이 방식과 가장 잘 맞음 (예: TQQQ V2.1 2010~2021 해마다 소진 횟수 일치)</p>') +
       (v === '2.2' || v === '3.0' ? '<label class="mh-lbl" style="margin-top:8px">T값 반올림</label>' + seg('T값', [['r2', '셋째 자리 반올림 (2024-09 수정)'], ['c1', '둘째 자리 올림 (처음 원문)']], S.tround, 'tround') : '') +
+      '<label class="mh-lbl" style="margin-top:8px">주문 넣는 때</label>' + seg('주문 넣는 때', FILL_SEL, S.fill || '', 'fill') +
+      '<p class="mh-help">' + (S.fill === 'open' ? '<b>정규장 시작 전 주문</b>: 정규장이 지정가 매도가보다 높게 시작하면(갭 상승) 그날 시가에 체결 · 주문 거부 한도의 기준도 그날 시가' :
+        S.fill === 'pre' ? '<b>프리장 시작(한국 오후 5~6시) 주문</b>: 전날 종가가 이미 지정가 매도가 이상이면 전날 종가에 체결, 아니면 그날 고가가 닿을 때 지정가에 체결(프리장 고가는 몰라 갭 상승도 지정가로 — 보수적) · 주문 거부 한도의 기준은 전날 종가' :
+        '<b>기존 계산</b>: 그날 고가가 지정가 매도가에 닿으면 지정가에 체결 (몇 시인지는 따지지 않는 일봉 가정 · 지금까지 결과와 같음)') +
+        ' · LOC 매수는 어느 쪽이든 종가에 체결 · 고르면 결과에 세 가지 비교가 함께 나와요</p>' +
       '<label class="mh-lbl" style="margin-top:8px">증권사 주문 거부</label>' + seg('증권사 주문 거부', RJ_SEL, S.rej || '', 'rej') +
-      '<p class="mh-help">매수 지정가가 주문 넣는 때 가격(그날 시가)의 120%를 넘으면 증권사가 받지 않는 경우(예: 유안타증권 \'매수 현재가 대비 +20% 이하\') — ' +
-        (S.rej === 'clamp' ? '<b>한도로 낮춰 넣기</b>: 수량은 그대로 한도 가격(시가 × 1.2)에 넣음 · LOC는 종가에 체결되므로 종가가 한도 아래면 결과가 같음' : S.rej === 'skip' ? '<b>그날 건너뛰기</b>: 거부된 매수 주문 없이 그날을 보냄' : '<b>반영 안 함</b>: 모든 주문이 받아진다고 계산 (지금까지 결과와 같음)') +
-        ' · 고르면 결과에 세 가지 비교가 함께 나와요 · 매도 주문은 그대로 · 시가를 모르는 날(상장 전 재현 일부)은 전날 종가 무렵에 주문했다고 봄</p>');
+      '<p class="mh-help">매수 지정가가 주문 넣는 때 가격(' + (S.fill === 'pre' ? '전날 종가' : '그날 시가') + ')의 120%를 넘으면 증권사가 받지 않는 경우(예: 유안타증권 \'매수 현재가 대비 +20% 이하\') — ' +
+        (S.rej === 'clamp' ? '<b>한도로 낮춰 넣기</b>: 수량은 그대로 한도 가격(' + (S.fill === 'pre' ? '전날 종가' : '시가') + ' × 1.2)에 넣음 · LOC는 종가에 체결되므로 종가가 한도 아래면 결과가 같음' : S.rej === 'skip' ? '<b>그날 건너뛰기</b>: 거부된 매수 주문 없이 그날을 보냄' : '<b>반영 안 함</b>: 모든 주문이 받아진다고 계산 (지금까지 결과와 같음)') +
+        ' · 고르면 결과에 세 가지 비교가 함께 나와요 · 매도 주문은 그대로' + (S.fill === 'pre' ? '' : ' · 시가를 모르는 날(상장 전 재현 일부)은 전날 종가 무렵에 주문했다고 봄') + '</p>');
     h += '<button type="button" class="mh-btn mh-btn-p mb-run" data-act="run"' + (BUSY ? ' disabled' : '') + '>' + (BUSY ? '계산 중…' : '백테스트 실행') + '</button>';
     $('mb-set').innerHTML = h;
     sumSet();
@@ -15171,9 +15241,9 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
     if (S.from && S.to && S.from >= S.to) { msg('시작일이 종료일보다 앞이어야 합니다.', 'bad'); return; }
     BUSY = true; renderSet(); msg('<div class="mb-spin"></div>' + esc(tk) + ' 일봉을 받는 중…' + (S.pre ? ' (상장 전 재현 자료도 받아요 — 처음엔 몇 초 걸릴 수 있어요)' : ''));
     try { history.replaceState(null, '', hashOf()); } catch (e) {}
-    var want = S.tax ? B.fxData().catch(function () { return null; }) : Promise.resolve(null), RJ = RJ_NM[S.rej] ? { mode: S.rej, cap: 1.2 } : null;
+    var want = S.tax ? B.fxData().catch(function () { return null; }) : Promise.resolve(null), RJ = RJ_NM[S.rej] ? { mode: S.rej, cap: 1.2 } : null, FL = fillOn(S.fill) ? S.fill : null;
     Promise.all([B.load(tk), want, S.pre ? B.preload(tk) : Promise.resolve(null)]).then(function (a) {
-      return RJ ? B.withOpen(a[0]).then(function () { return a; }) : a;   /* 증권사 주문 거부: 그날 시가 = 주문 넣는 시점 가격 */
+      return RJ || FL ? B.withOpen(a[0]).then(function () { return a; }) : a;   /* 증권사 주문 거부: 그날 시가 = 주문 넣는 시점 가격 · 주문 넣는 때 비교: 시가로 갭 상승 체결 */
     }).then(function (a) {
       var D0 = a[0], F = a[1], P = a[2], D = D0, note = null, alpha = null;
       if (!D0.h) D0.h = D0.c.slice();
@@ -15182,25 +15252,26 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
         var J = P && alpha != null ? B.join(D0, P, alpha) : null;
         if (J) D = J; else note = P ? '상장 전 재현을 이어 붙이지 못해 실제 자료만 썼어요.' : esc(tk) + '는 상장 전 재현 식이 없어 실제 자료만 썼어요.';
       }
-      return (RJ && D !== D0 ? B.preOpen(D, tk, D.L) : Promise.resolve(D)).then(function () { return [D0, F, P, D, note, alpha]; });   /* 재현 구간 시가 = 같은 지수 ETF(대리)의 시가 변화 × 배수 */
+      return ((RJ || FL) && D !== D0 ? B.preOpen(D, tk, D.L) : Promise.resolve(D)).then(function () { return [D0, F, P, D, note, alpha]; });   /* 재현 구간 시가 = 같은 지수 ETF(대리)의 시가 변화 × 배수 */
     }).then(function (b) {
       var D0 = b[0], F = b[1], P = b[2], D = b[3], note = b[4], alpha = b[5];
       var lo = 1, from = idxFrom(D, S.from, lo), to = idxTo(D, S.to);
       if (from >= D.d.length || to < from + 5) throw { user: '고른 기간에 자료가 부족해요. (자료 ' + D.d[0] + ' ~ ' + D.d[D.d.length - 1] + ')' };
       var cfg = cfgOf(), fx = F ? B.fxFor(D.d, F) : null;
       var base = { from: from, to: to, capital: S.cap, norm: 'auto', rows: true };
-      var oNet = Object.assign({}, base, { fee: S.fee / 100, sec: S.fee > 0 || S.sec ? 0.0000206 : 0, divTax: 0.15, tax: S.tax && fx ? { fx: function (i) { return fx[i]; }, method: S.method, harvest: S.harvest } : null, rej: RJ });
-      var oGross = Object.assign({}, base, { fee: 0, sec: 0, divTax: 0, tax: null, rej: RJ });
+      var oNet = Object.assign({}, base, { fee: S.fee / 100, sec: S.fee > 0 || S.sec ? 0.0000206 : 0, divTax: 0.15, tax: S.tax && fx ? { fx: function (i) { return fx[i]; }, method: S.method, harvest: S.harvest } : null, rej: RJ, fill: FL });
+      var oGross = Object.assign({}, base, { fee: 0, sec: 0, divTax: 0, tax: null, rej: RJ, fill: FL });
       var Dn = S.divs ? D : Object.assign({}, D, { dv: null });
       var Rn = V.run(cfg, Dn, oNet), Rg = V.run(cfg, Dn, oGross);
       R = { D: D, cfg: cfg, S: JSON.parse(JSON.stringify(S)), tk: tk, net: Rn, gross: Rg, sn: B.stats(Rn, D, S.cap), sg: B.stats(Rg, D, S.cap), note: note, fxOk: !!fx, taxOn: !!oNet.tax, pre: D.L != null ? { L: D.L, rc: P.rc, alpha: alpha } : null,
-            rej: RJ, cmp: null, oN: oNet, oG: oGross, Dn: Dn };
+            rej: RJ, cmp: null, fill: FL, fcmp: null, oN: oNet, oG: oGross, Dn: Dn };
       if (S.tax && !fx) R.note = (R.note ? R.note + ' ' : '') + '원/달러 자료를 받지 못해 양도소득세는 빼고 계산했어요.';
       PAGE = 0; CYC = 'all';
       renderRes();   /* 실행 기록은 자동으로 남기지 않음 — 결과 위 [실행 기록에 저장] 단추로 고른 것만 */
       if (window.innerWidth < 780) { var re = $('mb-res'); if (re && re.scrollIntoView) re.scrollIntoView({ behavior: 'smooth', block: 'start' }); }   /* 좁은 화면: 설정 아래 결과로 */
       if (R.pre) preErr(R, P, D0, alpha, tk);
       if (R.rej) rjCompare(R);
+      if (R.fill) fillCompare(R);
     }).catch(function (e) {
       msg(e && e.user ? esc(e.user) : esc(tk) + ' 일봉을 받지 못했어요. 티커를 확인하거나 잠시 뒤 다시 실행해 주세요.', 'bad');
     }).then(function () { BUSY = false; renderSet(); });
@@ -15210,13 +15281,13 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
     var late = B.lateSeries(D0, P, alpha), out = { x: Rr.pre.rc.x, xc: Rr.pre.rc.xc, ec: Rr.pre.rc.ec }, cap = Rr.S.cap;
     var go = function () {
       if (late && D0.d.length > 260) {   /* 주문 거부를 고르면 ② 도 같은 처리로 (재현 쪽 시가 = 대리 ETF 시가 변화 — 시가 모형 오차까지 포함) */
-        var cfg = Rr.cfg, o = { from: 1, capital: cap, norm: 'auto', rows: false, rej: Rr.rej || null };
+        var cfg = Rr.cfg, o = { from: 1, capital: cap, norm: 'auto', rows: false, rej: Rr.rej || null, fill: Rr.fill || null };
         var a = V.run(cfg, D0, o), b = V.run(cfg, late, o), yrs = (B.dnum(D0.d[D0.d.length - 1]) - B.dnum(D0.d[0])) / 365.25;
         out.real = Math.pow(a.final / cap, 1 / yrs) - 1; out.syn = Math.pow(b.final / cap, 1 / yrs) - 1; out.d = out.syn - out.real; out.from = D0.d[0];
       }
       Rr.pre.err = out; if (R === Rr) renderRes();
     };
-    if (Rr.rej && late) B.preOpen(late, tk, late.d.length).then(go, go); else go();
+    if ((Rr.rej || Rr.fill) && late) B.preOpen(late, tk, late.d.length).then(go, go); else go();
   }
   /* 증권사 주문 거부 비교 — 같은 자료·조건으로 반영 안 함 · 한도로 낮춰 넣기 · 그날 건너뛰기 (결과를 먼저 보여 준 뒤 계산) */
   function rjCompare(Rr) {
@@ -15232,7 +15303,7 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
   }
   function rjCard() {
     var cur = R.rej.mode, X = VIEW === 'net' ? R.net : R.gross, Sj = X.rj || { days: 0, rows: 0, miss: 0, noO: 0 }, C = R.cmp;
-    var h = '<div class="card mb-rj"><div class="mb-rj-h"><b>증권사 주문 거부 반영</b><span class="mh-faint">한도 = 그날 시가 × 1.2 · 위 결과 = ' + RJ_NM[cur] + '</span></div>' +
+    var h = '<div class="card mb-rj"><div class="mb-rj-h"><b>증권사 주문 거부 반영</b><span class="mh-faint">한도 = ' + (R.fill === 'pre' ? '전날 종가 × 1.2 (프리장 시작 주문)' : '그날 시가 × 1.2') + ' · 위 결과 = ' + RJ_NM[cur] + '</span></div>' +
       '<p class="mh-help" style="margin:4px 0 6px">매수 지정가가 한도를 넘은 날 <b>' + Sj.days.toLocaleString() + '일</b>(주문 ' + Sj.rows.toLocaleString() + '건) · 그 때문에 그날 체결이 달라진 날 <b>' + Sj.miss.toLocaleString() + '일</b>' +
         (Sj.noO ? ' · 시가를 몰라 전날 종가 무렵 주문으로 본 날 ' + Sj.noO.toLocaleString() + '일' : '') + '</p>';
     if (!C) return h + '<p class="mh-help">세 가지 처리 비교 계산 중…</p></div>';
@@ -15241,6 +15312,32 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
         var x = C[m[0]], st = VIEW === 'net' ? x.sn : x.sg, rj = VIEW === 'net' ? x.rjN : x.rjG;
         return '<tr' + (m[0] === cur ? ' class="on"' : '') + ' data-rj="' + m[0] + '"><td>' + m[1] + '</td><td class="' + cls(st.cagr) + '">' + pct(st.cagr, 2) + '</td><td class="mb-dn">' + pct(st.mdd) + '</td><td>' + usd(st.final) + '</td><td>' + (rj ? rj.days.toLocaleString() + '일 · ' + rj.miss.toLocaleString() + '일' : '—') + '</td></tr>';
       }).join('') + '</tbody></table></div><p class="mh-help">달라진 날 = 그 처리로 그날 체결이 바뀐 날 — 그 뒤 사이클 흐름이 달라져 숫자 차이는 더 커질 수 있어요 · 한도로 낮춰 넣기는 LOC가 종가에 체결되므로 종가가 한도 아래면 결과가 같아요</p></div>';
+  }
+  /* 주문 넣는 때 비교 — 같은 자료·조건(주문 거부 처리 포함)으로 기존 계산 · 정규장 시작 전 · 프리장 시작 (결과를 먼저 보여 준 뒤 계산) */
+  function fillCompare(Rr) {
+    setTimeout(function () {
+      var C = {}; ['', 'open', 'pre'].forEach(function (m) {
+        var k = m || 'none';
+        if (m === Rr.fill) { C[k] = { sn: Rr.sn, sg: Rr.sg, fxN: Rr.net.fx, fxG: Rr.gross.fx, rjN: Rr.net.rj, rjG: Rr.gross.rj }; return; }
+        var a = V.run(Rr.cfg, Rr.Dn, Object.assign({}, Rr.oN, { rows: false, fill: m || null })), b = V.run(Rr.cfg, Rr.Dn, Object.assign({}, Rr.oG, { rows: false, fill: m || null }));
+        C[k] = { sn: B.stats(a, Rr.D, Rr.S.cap), sg: B.stats(b, Rr.D, Rr.S.cap), fxN: a.fx, fxG: b.fx, rjN: a.rj, rjG: b.rj };
+      });
+      Rr.fcmp = C; if (R === Rr) renderRes();
+    }, 40);
+  }
+  function fillCard() {
+    var cur = R.fill, X = VIEW === 'net' ? R.net : R.gross, F = X.fx || { days: 0, noO: 0 }, C = R.fcmp;
+    var h = '<div class="card mb-fl"><div class="mb-rj-h"><b>주문 넣는 때 비교</b><span class="mh-faint">위 결과 = ' + FILL_NM[cur] + (R.rej ? ' · 주문 거부 ' + RJ_NM[R.rej.mode] : '') + '</span></div>' +
+      '<p class="mh-help" style="margin:4px 0 6px">지정가 매도가 지정가보다 비싸게 체결된 날 <b>' + F.days.toLocaleString() + '일</b>' +
+        (cur === 'pre' ? '(전날 종가가 이미 지정가 이상이던 날)' : '(정규장이 지정가보다 높게 시작한 날)') + (F.noO ? ' · 시가를 몰라 지정가로 본 날 ' + F.noO.toLocaleString() + '일' : '') + '</p>';
+    if (!C) return h + '<p class="mh-help">세 가지 주문 시각 비교 계산 중…</p></div>';
+    return h + '<div class="mb-scroll"><table class="mb-t"><thead><tr><th>주문 넣는 때</th><th>연평균</th><th>MDD</th><th>최종 자산</th><th>비싸게 팔린 날</th>' + (R.rej ? '<th>주문 거부</th>' : '') + '</tr></thead><tbody>' +
+      [['none', ''], ['open', 'open'], ['pre', 'pre']].map(function (m) {
+        var x = C[m[0]], st = VIEW === 'net' ? x.sn : x.sg, fx = VIEW === 'net' ? x.fxN : x.fxG, rj = VIEW === 'net' ? x.rjN : x.rjG;
+        return '<tr' + (m[1] === (cur || '') ? ' class="on"' : '') + ' data-fl="' + m[0] + '"><td>' + FILL_ROW[m[0]][0] + '<br><small>' + FILL_ROW[m[0]][1] + '</small></td><td class="' + cls(st.cagr) + '">' + pct(st.cagr, 2) + '</td><td class="mb-dn">' + pct(st.mdd) + '</td><td>' + usd(st.final) + '</td><td>' + (fx ? fx.days.toLocaleString() + '일' : '—') + '</td>' +
+          (R.rej ? '<td>' + (rj ? rj.days.toLocaleString() + '일' : '—') + '</td>' : '') + '</tr>';
+      }).join('') + '</tbody></table></div><p class="mh-help">LOC 매수는 셋 다 종가에 체결 — 달라지는 건 지정가 매도 체결 가격과 주문 거부 한도의 기준(정규장 시작 전 = 그날 시가 · 프리장 시작 = 전날 종가)이에요 · ' +
+        '프리장 시작은 프리장 고가를 몰라 갭 상승도 지정가에 팔았다고 봐서 실제보다 조금 낮게 나올 수 있어요 · 한국 오후 5시(서머타임) / 6시 = 미국 프리마켓 시작(동부 4시)</p></div>';
   }
 
   /* ── 결과 ── */
@@ -15292,6 +15389,7 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
       '<div class="mb-cnt">' + [['익절', n.win], ['손절 마감', n.loss], ['부분 매도일', n.part], [R.S.ver === '3.0' ? '쿼터매도' : '쿼터손절', n.ql], ['소진매도', n.xsell], ['리버스 진입', n.rev], ['소진', n.exh]]
         .filter(function (x, i) { return i < 3 || x[1] > 0; }).map(function (x) { return '<span><b>' + x[1] + '</b>회 ' + x[0] + '</span>'; }).join('') + (open ? '<span class="mh-chip mh-chip-warn">마지막 사이클 진행 중</span>' : '') + '</div>' +
       '<div class="mb-bh">같은 기간 그냥 보유: 총 <b class="' + cls(st.bh.ret) + '">' + pct(st.bh.ret) + '</b> · CAGR <b>' + pct(st.bh.cagr, 2) + '</b> · MDD <b class="mb-dn">' + pct(st.bh.mdd) + '</b> <small>(종가 기준 · 분배금·세금 제외)</small></div></div>';
+    if (R.fill) h += fillCard();   /* 주문 넣는 때 비교 */
     if (R.rej) h += rjCard();   /* 증권사 주문 거부 비교 */
     /* 상장 전 오차 */
     if (R.pre && preN > 0) {
@@ -15311,10 +15409,12 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
     h += '<div class="card mb-tbl"><div class="mb-tabs">' + seg('표', [['year', '연도별'], ['cycle', '사이클별 (' + X.cycles.length + ')'], ['day', '일자별']], TAB, 'tab') +
       '<button type="button" class="mh-btn mb-mini" data-act="csv">CSV 내보내기</button></div><div id="mb-tb">' + table(X, st) + '</div></div>';
     h += '<div class="card mb-assume"><b>계산 가정</b><ul>' +
-      '<li>LOC 주문은 그날 종가로, 지정가 매도는 그날 고가가 지정가에 닿으면 지정가로 체결 · MOC 는 종가 (프리·애프터장, 일부 체결 없음)</li>' +
+      '<li>LOC 주문은 그날 종가로, 지정가 매도는 ' + (R.fill === 'open' ? '<b>정규장 시작 전 주문</b> — 그날 시가가 이미 지정가 이상이면(갭 상승) 시가로, 아니면 그날 고가가 지정가에 닿을 때 지정가로 체결' :
+        R.fill === 'pre' ? '<b>프리장 시작(한국 오후 5~6시) 주문</b> — 전날 종가가 이미 지정가 이상이면 전날 종가로, 아니면 그날 고가가 지정가에 닿을 때 지정가로 체결(프리장 고가는 몰라 갭 상승도 지정가 — 보수적)' :
+        '그날 고가가 지정가에 닿으면 지정가로 체결(몇 시인지 따지지 않는 일봉 가정)') + ' · MOC 는 종가 (' + (R.fill === 'pre' ? '애프터장' : '프리·애프터장') + ' 체결·일부 체결은 없다고 봄)</li>' +
       '<li>주문 수량은 원문대로 1주 단위' + (R.cfg && R.cfg.ideal ? ' — 지금은 고급 설정 <b>정액(소수 주)</b>' : '') + ' · 수정주가가 $10 아래·$2,000 위이거나 상장 전 재현 가격이면 사이클마다 시작가를 $50 단위로, 사이클 안에서 $1 아래로 떨어지면 액면 병합처럼 10배 단위로 바꿔 계산(1센트·1주 반올림 왜곡 방지, 손익은 같음)</li>' +
       '<li>세금·수수료 포함 보기: 매매 수수료 ' + R.S.fee + '% + 매도 SEC 0.00206% · 분배금 미국 원천징수 15%' + (R.taxOn ? ' · 양도소득세 22%(250만 원 공제, ' + (R.S.method === 'avg' ? '이동평균' : '선입선출') + ', 결제일 매매기준율, 다음 해 5월 말 이 계좌 현금에서 납부 — 모자라면 그날 종가에 보유를 팔아 냄)' + (R.S.harvest ? ' · 연말 절세 매도·재매수' : '') : '') + '</li>' +
-      (R.rej ? '<li>증권사 주문 거부(' + RJ_NM[R.rej.mode] + '): 매수 지정가가 주문 넣는 때 가격(그날 시가)의 120%(1센트 버림)를 넘으면 증권사가 받지 않는다고 봄 — ' + (R.rej.mode === 'clamp' ? '수량 그대로 한도 가격에 넣음' : '그날 그 주문은 없음') + ' · 매도 주문은 그대로 · 시가를 모르는 날(상장 전 재현 중 같은 지수 ETF 시가도 없는 때)은 전날 종가 무렵에 주문했다고 봄 · 상장 전 재현 구간의 시가 = 같은 지수 ETF(TQQQ ← QQQ · SOXL ← SOXX·SMH · UPRO ← SPY · TECL ← XLK)의 시가 ÷ 전날 종가 변화 × 3</li>' : '') +
+      (R.rej ? '<li>증권사 주문 거부(' + RJ_NM[R.rej.mode] + '): 매수 지정가가 주문 넣는 때 가격(' + (R.fill === 'pre' ? '전날 종가 — 프리장 시작 주문' : '그날 시가') + ')의 120%(1센트 버림)를 넘으면 증권사가 받지 않는다고 봄 — ' + (R.rej.mode === 'clamp' ? '수량 그대로 한도 가격에 넣음' : '그날 그 주문은 없음') + ' · 매도 주문은 그대로' + (R.fill === 'pre' ? '' : ' · 시가를 모르는 날(상장 전 재현 중 같은 지수 ETF 시가도 없는 때)은 전날 종가 무렵에 주문했다고 봄') + ' · 상장 전 재현 구간의 시가 = 같은 지수 ETF(TQQQ ← QQQ · SOXL ← SOXX·SMH · UPRO ← SPY · TECL ← XLK)의 시가 ÷ 전날 종가 변화 × 3</li>' : '') +
       '<li>환전 수수료·현금 이자·다른 해외주식 손익과의 합산·금융소득종합과세는 빼고 계산 · 과거 기간에도 지금 세법(2026년)을 적용</li></ul></div>';
     $('mb-res').innerHTML = h;
     drawChart(X, st);
@@ -15420,7 +15520,7 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
               avgOff: /^(1\.0|2\.0|2\.1)$/.test(v) ? +s0.avgOff || 0 : 0, money: /^(1\.0|2\.0|2\.1|2\.2)$/.test(v) && s0.money === 'simple' ? 'simple' : 'compound',
               restart: v !== '4.0' && s0.restart === 'rsi' ? 'rsi' : 'next', rebase: v === '3.0' && !!s0.rebase, ideal: v !== '4.0' && !!s0.ideal,
               fee: s0.fee != null && isFinite(+s0.fee) ? +s0.fee : FEE_DEF, tax: s0.tax !== false, method: s0.method === 'avg' ? 'avg' : 'fifo', harvest: !!s0.harvest, divs: s0.divs !== false,
-              from: x.from, to: x.to, ret: x.n && x.n.cagr, mdd: x.n && x.n.mdd, pre: !!x.pre, rej: RJ_NM[s0.rej] ? s0.rej : '' };
+              from: x.from, to: x.to, ret: x.n && x.n.cagr, mdd: x.n && x.n.mdd, pre: !!x.pre, rej: RJ_NM[s0.rej] ? s0.rej : '', fill: fillOn(s0.fill) ? s0.fill : '' };
     lsSet('muhan4-preset', { at: Date.now(), p: p });
     try { location.href = new URL('muhan/', document.baseURI).href; } catch (e) { location.href = 'muhan/'; }
   }
@@ -15429,7 +15529,7 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
     if (!Hs.length) { el.innerHTML = '<div class="mb-h"><b>실행 기록</b></div><p class="mh-help">백테스트 결과 위의 <b>📌 실행 기록에 저장</b>을 누른 것만 이 기기에 남아요 (최근 30개). 남긴 기록은 조건을 다시 불러오거나, 그 조건 그대로 <b>무한매수법 기록을 시작</b>할 수 있어요.</p>'; return; }
     el.innerHTML = '<div class="mb-h"><b>실행 기록 <small>' + Hs.length + '건 · 이 기기</small></b><button type="button" class="mh-btn mb-mini" data-act="hclear">모두 지우기</button></div><div class="mb-hl">' + Hs.map(function (x, i) {
       var vi = VERS.filter(function (v) { return v[0] === x.S.ver; })[0] || ['', '?'];
-      return '<div class="mb-hi"><div class="mb-hh"><b>' + vi[1] + ' · ' + esc(x.tk) + '</b><small>' + x.S.splits + '분할 · ' + x.from + ' ~ ' + x.to + (x.pre ? ' · 상장 전 포함' : '') + '</small></div>' +
+      return '<div class="mb-hi"><div class="mb-hh"><b>' + vi[1] + ' · ' + esc(x.tk) + '</b><small>' + x.S.splits + '분할 · ' + x.from + ' ~ ' + x.to + (x.pre ? ' · 상장 전 포함' : '') + (fillOn(x.S.fill) ? ' · ' + FILL_SH[x.S.fill] : '') + (RJ_NM[x.S.rej] ? ' · 주문 거부 ' + RJ_NM[x.S.rej] : '') + '</small></div>' +
         '<div class="mb-hn"><span>총 <b class="' + cls(x.n.ret) + '">' + pct(x.n.ret) + '</b></span><span>CAGR <b>' + pct(x.n.cagr, 2) + '</b></span><span>MDD <b class="mb-dn">' + pct(x.n.mdd) + '</b></span><span class="mh-faint">세전 ' + pct(x.n.g) + '</span></div>' +
         '<div class="mb-hb"><button type="button" class="mh-btn mb-mini" data-hload="' + i + '">조건 불러오기</button><button type="button" class="mh-btn mb-mini" data-hrun="' + i + '">바로 재실행</button><button type="button" class="mh-ico" data-hdel="' + i + '" aria-label="이 기록 지우기">✕</button>' +
         '<button type="button" class="mh-btn mh-btn-p mb-mini mb-hgo" data-hgo="' + i + '" title="이 조건(버전·종목·분할·목표·큰수 등)을 무한매수법 기록 화면에 채워 새 세션으로 시작">▶ 이 조건으로 무한매수법 시작</button></div></div>';
@@ -15452,6 +15552,7 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
     if (d.ideal != null) { readInputs(); S.ideal = d.ideal === '1'; saveS(); renderSet(); return; }
     if (d.tround) { readInputs(); S.tround = d.tround; saveS(); renderSet(); return; }
     if (d.rej != null) { readInputs(); S.rej = RJ_NM[d.rej] ? d.rej : ''; saveS(); renderSet(); return; }
+    if (d.fill != null) { readInputs(); S.fill = fillOn(d.fill) ? d.fill : ''; saveS(); renderSet(); return; }
     if (d.qf === 'dot') { dotGo(); return; }
     if (d.qf != null) {
       readInputs(); DOT.msg = ''; var q = d.qf, t0 = new Date(Date.now() - 4 * 3600e3);
@@ -17063,6 +17164,7 @@ var VBD = (function () {
          · 공포탐욕·VIX 띠 그라데이션(grad) · 오늘의 주문 강조(ordHl) · RSI 표시 기본 와일더(rsiDef — 새 사이클 'RSI 60 이하' 판단과 같은 방식)
    · ㉝: 오늘의 주문 한도 경고(rejWarn — 'LOC 매수 상한' 카드 기준가 × 1.2 를 넘는 매수 줄 아래 경고 + 입력 가격 · 실시간 시세와 함께)
          · 백테스트 '증권사 주문 거부'(btRej — 반영 안 함 / 한도로 낮춰 넣기 / 그날 건너뛰기를 함께 계산해 표로 · 고른 것이 카드 숫자·그래프 · 'r72-bt-rj')
+   · ㉞: 백테스트 '주문 넣는 때'(btFill — 기존 계산 / 정규장 시작 전(갭 상승은 시가) / 프리장 시작(한국 17~18시 · 주문 거부 기준 전날 종가)을 표로 · 'r72-bt-fl')
    · 화면·설명글에는 무한매수법·라오어 이름을 쓰지 않음 (사용자 지시 2026-10-13) — 큰수 → 상단 매수선 · 평단 LOC 괴리율 → 평단 매수선 · T값 → 회차
 ════════════════════════════════════════════════════════════ */
 (function () {
@@ -17075,7 +17177,7 @@ var VBD = (function () {
             ['원금 소진 대응', '원금을 다 쓰면 매수를 멈추고, 종가가 평단 −10% 안으로 오면 전량 매도'], ['주문 수량', '실제 주문 (1주 단위)']],
     feeDef: 0.25, feeCustom: 0.1, mixDef: 0.5, btPre: true, btZoom: true, btPer: 'all', live: true,
     capDef: 100000, indBottom: true, fold: true, grad: true, ordHl: true, rsiDef: 'wilder', btRange: true,   /* ㉜ 시작 원금 기본 · 시장 지표 카드 맨 아래 · 접기 · 그라데이션 · 오늘의 주문 강조 · RSI 와일더 · 백테스트 기간설정 */
-    rejWarn: true, btRej: true,   /* ㉝ 오늘의 주문: 매수 지정가가 지금 한도(기준가 × 1.2)를 넘으면 경고 + 한도로 낮춘 입력 가격 · 백테스트: 증권사 주문 거부 처리 3가지 비교 */
+    rejWarn: true, btRej: true, btFill: true,   /* ㉞ 백테스트: 주문 넣는 때 3가지 비교 · ㉝ 오늘의 주문: 매수 지정가가 지금 한도(기준가 × 1.2)를 넘으면 경고 + 한도로 낮춘 입력 가격 · 백테스트: 증권사 주문 거부 처리 3가지 비교 */
     legacy: { log: 't72-log', keys: ['t72-set', 't72-log', 't72-tab', 't72-open'] } });   /* 예전 '72매매법' 화면(2026-10-13 저녁 잠깐) 기록 — 옮기지 못함 안내 */
   function go() { if (document.getElementById('t7-root') && window.t72Init) window.t72Init(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
