@@ -14103,9 +14103,9 @@ function mhApp(P) {
     var R = P.recheck, T = closeBefore(Date.now(), R.min);
     return '<div class="mh-rck' + (T.now ? ' now' : '') + '" id="mh-rck"><div class="mh-rck-h"><b>⏰ 주문이 거부됐다면 — 마감 ' + R.min + '분 전에 다시 걸기</b><span class="mh-chip" id="mh-rck-t">' + rckWhen(T) + '</span></div>' +
       '<div id="mh-rck-b"></div>' +
-      '<p class="mh-tiny mh-faint" style="margin:6px 0 0">프리장·정규장에서 매수 주문이 증권사 한도(현재가 +20%)에 걸려 거부됐다면, 정규장 마감 ' + R.min + '분 전(미국 동부 ' + hm(960 - R.min) + ' — 한국시간 서머타임 ' + hm(960 - R.min + 780) + ' · 그 밖 ' + hm(960 - R.min + 840) + ' · 조기 폐장일은 3시간 앞당겨)에 지금 가격을 보고 다시 걸어요 — ' +
+      '<p class="mh-tiny mh-faint" style="margin:6px 0 0">프리장·정규장에서 매수 주문이 증권사 한도(현재가 +15~20% — 증권사마다 다름)에 걸려 거부됐다면, 정규장 마감 ' + R.min + '분 전(미국 동부 ' + hm(960 - R.min) + ' — 한국시간 서머타임 ' + hm(960 - R.min + 780) + ' · 그 밖 ' + hm(960 - R.min + 840) + ' · 조기 폐장일은 3시간 앞당겨)에 지금 가격을 보고 다시 걸어요 — ' +
         '<b>전일 종가 −' + R.lo + '% ~ +' + MH.rck.big + '%</b> → 원래 가격 · <b>+' + MH.rck.big + '% 넘음</b> → 원래 가격(지금 가격보다 낮은 매수라 거부되지 않음) · <b>−' + R.lo + '% 아래</b> → 지금 가격 +' + R.up + '%(1센트 버림 · 그보다 높은 매수 줄도 같은 가격으로). ' +
-        '수량은 그대로 — 세 경우 모두 주문 가격이 지금 가격 × 1.2 아래라 거부되지 않고, 종가가 지금 가격 근처에서 끝나면 원래 주문과 같은 결과예요. LOC 접수 마감(증권사마다 다름 — 예: 정규장 마감 10분 전) 전에 넣으세요. 지금 가격 = 위 \'LOC 매수 상한\' 카드의 기준가(실시간 · 손으로 고친 값).</p></div>';
+        '수량은 그대로 — 세 경우 모두 주문 가격이 지금 가격 × ' + (1 + R.band / 100).toFixed(2) + ' 아래라 한도가 +' + R.band + '%인 증권사에서도 거부되지 않고(넘는 줄이 생기면 지금 가격 +' + R.up + '%로), 종가가 지금 가격 근처에서 끝나면 원래 주문과 같은 결과예요. LOC 접수 마감(증권사마다 다름 — 예: 정규장 마감 10분 전) 전에 넣으세요. 지금 가격 = 위 \'LOC 매수 상한\' 카드의 기준가(실시간 · 손으로 고친 값).</p></div>';
   }
   function hm(m) { m = ((m % 1440) + 1440) % 1440; return ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + m % 60).slice(-2); }   /* 하루 안의 분 → HH:MM */
   function rckWhen(T) { return (T.now ? '⏰ 지금 확인할 때 · ' : '') + '한국시간 ' + T.kst + (T.early ? ' · 조기 폐장일' : ''); }
@@ -14116,14 +14116,14 @@ function mhApp(P) {
     var Pn = Number(MH.capVal), C = R.c;
     if (!(Pn > 0)) { b.innerHTML = '<p class="mh-small mh-muted" style="margin:6px 0 0">지금 가격을 받으면(위 \'LOC 매수 상한\' 카드) 넣을 가격을 보여 드려요.</p>'; return; }
     var g = Pn / C - 1, kase = Pn < C * (1 - lo / 100) - 1e-9 ? 3 : Pn > C * (1 + big / 100) + 1e-9 ? 2 : 1;
-    var np = Math.floor(Pn * (100 + up) + 1e-7) / 100, cap = capOf(Pn), bad = 0, sg = function (v) { return (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(2) + '%'; };
-    var rows = R.rows.map(function (r) { var p2 = kase === 3 ? Math.min(r.p, np) : r.p, ch2 = p2 < r.p - 1e-9; if (p2 > cap + 1e-9) bad++;
+    var bandP = P.recheck.band || 20, np = Math.floor(Pn * (100 + up) + 1e-7) / 100, cap = Math.floor(Pn * (100 + bandP) + 1e-7) / 100, bad = 0, safe = 0, sg = function (v) { return (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(2) + '%'; };
+    var rows = R.rows.map(function (r) { var p2 = kase === 3 ? Math.min(r.p, np) : r.p; if (p2 > cap + 1e-9 && np < p2) { p2 = np; safe++; } var ch2 = p2 < r.p - 1e-9; if (p2 > cap + 1e-9) bad++;   /* 안전장치: 한도를 넘는 줄은 지금 가격 +10% */
       return '<div class="mh-rck-r" data-rck="' + p2 + '"><span>' + esc(r.l) + ' <span class="mh-tag">LOC</span></span><span class="mh-mono">' + (ch2 ? '<s class="mh-faint">' + fmt(r.p, cur, 2) + '</s> → ' : '') + '<b>' + fmt(p2, cur, 2) + '</b> · ' + fmtQ(r.q) + '주</span></div>'; }).join('');
     b.innerHTML = '<p class="mh-small" style="margin:6px 0 6px">지금 가격 <b class="mh-mono">' + fmt(Pn, cur, 2) + '</b> · 전일 종가 <span class="mh-mono">' + fmt(C, cur, 2) + '</span> 대비 <b class="mh-mono" data-rck-g="' + g + '">' + sg(g) + '</b> → ' +
       (kase === 1 ? '<b class="mh-ok" data-rck-k="1">−' + lo + '% ~ +' + big + '% 사이</b> — 원래 가격 그대로 다시 걸기'
         : kase === 2 ? '<b class="mh-ok" data-rck-k="2">+' + big + '% 넘음</b> — 원래 가격 그대로 (지금 가격보다 낮은 매수라 거부되지 않아요 · 종가가 그 가격 이하로 내려와야 체결)'
         : '<b class="mh-warn" data-rck-k="3">−' + lo + '% 아래</b> — 지금 가격 +' + up + '% = <b class="mh-mono">' + fmt(np, cur, 2) + '</b> 로 (그보다 높은 매수 줄도 같은 가격)') + '</p>' + rows +
-      '<p class="mh-tiny ' + (bad ? 'mh-bad' : 'mh-ok') + '" style="margin:6px 0 0" data-rck-cap="' + cap + '">' + (bad ? '⚠ ' + bad + '건이 지금 한도 ' + fmt(cap, cur, 2) + ' 를 넘어요 — 기준가를 확인해 주세요' : '✓ 모두 지금 한도 ' + fmt(cap, cur, 2) + '(지금 가격 × 1.2) 안 — 거부되지 않아요') + '</p>';
+      '<p class="mh-tiny ' + (bad ? 'mh-bad' : 'mh-ok') + '" style="margin:6px 0 0" data-rck-cap="' + cap + '">' + (bad ? '⚠ ' + bad + '건이 지금 한도 ' + fmt(cap, cur, 2) + ' 를 넘어요 — 기준가를 확인해 주세요' : '✓ 모두 지금 한도 ' + fmt(cap, cur, 2) + '(지금 가격 × ' + (1 + bandP / 100).toFixed(2) + ') 안 — 한도가 +' + bandP + '%인 증권사에서도 거부되지 않아요' + (safe ? ' · 한도를 넘던 ' + safe + '줄은 지금 가격 +' + up + '%로 낮췄어요' : '')) + '</p>';
   }
   /* 실시간 시세가 오면 카드의 숫자만 바꿈 */
   function lqPaint() {
@@ -17240,7 +17240,7 @@ var VBD = (function () {
             ['원금 소진 대응', '원금을 다 쓰면 매수를 멈추고, 종가가 평단 −10% 안으로 오면 전량 매도'], ['주문 수량', '실제 주문 (1주 단위)']],
     feeDef: 0.25, feeCustom: 0.1, mixDef: 0.5, btPre: true, btZoom: true, btPer: 'all', live: true,
     capDef: 100000, indBottom: true, fold: true, grad: true, ordHl: true, rsiDef: 'wilder', btRange: true,   /* ㉜ 시작 원금 기본 · 시장 지표 카드 맨 아래 · 접기 · 그라데이션 · 오늘의 주문 강조 · RSI 와일더 · 백테스트 기간설정 */
-    rejWarn: true, btRej: true, btFill: true, recheck: { min: 30, lo: 2, up: 10 },   /* ㉟ 오늘의 주문: 주문이 거부됐다면 마감 30분 전 다시 걸기(전일 종가 −2% ~ +13% · +13% 넘음 → 원래 가격 · −2% 아래 → 지금 가격 +10%) · ㉞ 백테스트: 주문 넣는 때 3가지 비교 · ㉝ 오늘의 주문: 매수 지정가가 지금 한도(기준가 × 1.2)를 넘으면 경고 + 한도로 낮춘 입력 가격 · 백테스트: 증권사 주문 거부 처리 3가지 비교 */
+    rejWarn: true, btRej: true, btFill: true, recheck: { min: 30, lo: 1.7, up: 10, band: 15 },   /* ㉟ 오늘의 주문: 주문이 거부됐다면 마감 30분 전 다시 걸기(전일 종가 −1.7% ~ +13% · +13% 넘음 → 원래 가격 · −1.7% 아래 → 지금 가격 +10%) · ㊱ 경계 −2% → −1.7%: 한도가 +15%인 증권사(토스증권)도 거부되지 않게(1.13 ÷ 1.15 = 0.9826) · 다시 걸 가격이 지금 가격 × 1.15 를 넘으면 지금 가격 +10% · ㉞ 백테스트: 주문 넣는 때 3가지 비교 · ㉝ 오늘의 주문: 매수 지정가가 지금 한도(기준가 × 1.2)를 넘으면 경고 + 한도로 낮춘 입력 가격 · 백테스트: 증권사 주문 거부 처리 3가지 비교 */
     legacy: { log: 't72-log', keys: ['t72-set', 't72-log', 't72-tab', 't72-open'] } });   /* 예전 '72매매법' 화면(2026-10-13 저녁 잠깐) 기록 — 옮기지 못함 안내 */
   function go() { if (document.getElementById('t7-root') && window.t72Init) window.t72Init(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();

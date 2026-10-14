@@ -410,27 +410,33 @@ RCK_JS = """async () => {""" + PRE + r"""
     const R = MH.rck, box = () => $('#mh-rck'), rows = () => $$('#mh-rck .mh-rck-r').map(e => Number(e.getAttribute('data-rck'))), kase = () => { const e = $('#mh-rck [data-rck-k]'); return e ? e.getAttribute('data-rck-k') : ''; };
     const D = T.curD(), C = D && D.close, loc = (D ? D.orders : []).filter(o => o.type === 'buy' && o.method === 'LOC' && o.price > 0 && o.quantity > 0);
     ok('오늘의 주문 아래 \'마감 30분 전 다시 걸기\' 상자 · 매수 LOC 줄마다 · 전일 종가 = 주문표 기준 · 72 프로필만', box() && R && R.c === C && R.big === 13 && R.rows.length === loc.length && loc.length > 0 &&
-       R.rows.every((r, i) => r.p === loc[i].price && r.q === loc[i].quantity) && T.P.recheck && T.P.recheck.min === 30 && T.P.recheck.lo === 2 && T.P.recheck.up === 10 && (!window.MHdebug || !MHdebug.P.recheck), JSON.stringify([R, C, loc.length]));
+       R.rows.every((r, i) => r.p === loc[i].price && r.q === loc[i].quantity) && T.P.recheck && T.P.recheck.min === 30 && T.P.recheck.lo === 1.7 && T.P.recheck.up === 10 && T.P.recheck.band === 15 && (!window.MHdebug || !MHdebug.P.recheck), JSON.stringify([R, C, loc.length]));
     if (!R || !(C > 0)) return R;
     const orig = R.rows.map(r => r.p), top = Math.max(...orig), usd = v => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     ok('가장 높은 매수 줄 = 전일 종가 +13% (사용자 절차의 \'원래 가격\')', Math.abs(top - C * 1.13) <= 0.0051, top + ' vs ' + C * 1.13);
     const setP = async v => { fill('#mh-loc [data-in="cap"]', String(v)); await W(60); };
-    const chk = async (v, k, name) => { await setP(v); const np = Math.floor(v * 110 + 1e-7) / 100, want = orig.map(p => k === '3' ? Math.min(p, np) : p), got = rows(), cap = T.capOf(v);
+    const chk = async (v, k, name) => { await setP(v); const np = Math.floor(v * 110 + 1e-7) / 100, cap = Math.floor(v * 115 + 1e-7) / 100, got = rows();
+      const want = orig.map(p => { const x = k === '3' ? Math.min(p, np) : p; return x > cap + 1e-9 && np < x ? np : x; }), low = want.filter((x, i) => x < orig[i] - 1e-9).length;   /* 한도(지금 × 1.15)를 넘는 줄은 지금 가격 +10% (안전장치) */
       const capEl = $('#mh-rck [data-rck-cap]'), txt = box().innerText;
       ok(name + ' — 지금 ' + v + ' (' + ((v / C - 1) * 100).toFixed(2) + '%) → 경우 ' + k, kase() === k && got.length === want.length && got.every((p, i) => Math.abs(p - want[i]) < 1e-9) && got.every(p => p <= cap + 1e-9) &&
-         capEl && Number(capEl.getAttribute('data-rck-cap')) === cap && /✓ 모두 지금 한도/.test(capEl.innerText) && txt.includes(usd(v)) && txt.includes(usd(C)) &&
-         (k !== '3' || (txt.includes(usd(np)) && got.some((p, i) => p < orig[i]) === orig.some(p => p > np) && $$('#mh-rck .mh-rck-r s').length === orig.filter(p => p > np).length)) && (k === '3' || !$('#mh-rck .mh-rck-r s')),
+         capEl && Number(capEl.getAttribute('data-rck-cap')) === cap && /✓ 모두 지금 한도 .*지금 가격 × 1\.15\) 안 — 한도가 \+15%인 증권사에서도/.test(capEl.innerText) && txt.includes(usd(v)) && txt.includes(usd(C)) &&
+         $$('#mh-rck .mh-rck-r s').length === low && (k !== '3' || (txt.includes(usd(np)) && low === orig.filter(p => p > np).length)),
          JSON.stringify([kase(), got, want, cap]));
     };
-    await chk(Math.round(C * 1.05 * 100) / 100, '1', '−2% ~ +13% 사이 → 원래 가격 그대로');
-    await chk(Math.ceil(C * 0.98 * 100) / 100, '1', '경계 −2% (그 위) → 원래 가격');
-    await chk(Math.floor(C * 0.98 * 100) / 100 - 0.01, '3', '경계 −2% 아래 → 지금 가격 +10%');
+    await chk(Math.round(C * 1.05 * 100) / 100, '1', '−1.7% ~ +13% 사이 → 원래 가격 그대로');
+    await chk(Math.ceil(C * 0.983 * 100) / 100, '1', '경계 −1.7% (그 위) → 원래 가격 · 지금 가격 × 1.15 안');
+    await chk(Math.floor(C * 0.983 * 100) / 100 - 0.01, '3', '경계 −1.7% 아래 → 지금 가격 +10%');
+    await chk(Math.round(C * 0.981 * 100) / 100, '3', '−1.9% (예전 경계 −2% 안 · +15% 한도 밖) → 지금 가격 +10%');
     await chk(Math.floor(C * 1.13 * 100) / 100, '1', '경계 +13% (그 아래) → 원래 가격');
     await chk(Math.ceil(C * 1.13 * 100) / 100 + 0.01, '2', '+13% 넘음 → 원래 가격 (지금 가격보다 낮음)');
     await chk(Math.round(C * 1.4 * 100) / 100, '2', '+40% → 원래 가격');
     await chk(Math.round(C * 0.9 * 100) / 100, '3', '−10% → 지금 가격 +10% · 그보다 높은 줄도 같은 가격 · 수량 그대로');
     let v6 = Math.round(C * 0.6 * 100) / 100; while ((Math.round(v6 * 100) * 110) % 100 < 50) v6 = Math.round(v6 * 100 + 1) / 100;   /* × 1.10 의 1센트 아래가 0.5 넘는 가격 — 버림/반올림이 갈리게 */
     await chk(v6, '3', '−40% (사용자 예: 100 → 60) → 지금 가격 +10% (1센트 버림 · +13% 아님)');
+    { const lo0 = T.P.recheck.lo; try { T.P.recheck.lo = 3; const v = Math.round(C * 0.975 * 100) / 100, np = Math.floor(v * 110 + 1e-7) / 100, cap = Math.floor(v * 115 + 1e-7) / 100; await setP(v);
+        const got = rows(), want = orig.map(p => p > cap + 1e-9 ? np : p), capEl = $('#mh-rck [data-rck-cap]');
+        ok('안전장치: 다시 걸 가격이 지금 가격 × 1.15 를 넘는 줄은 지금 가격 +10% (경계를 −3% 로 넓혀 −2.5% 에서 시험)', kase() === '1' && orig.some(p => p > cap) && got.every((p, i) => Math.abs(p - want[i]) < 1e-9) && got.every(p => p <= cap + 1e-9) && capEl && /낮췄어요/.test(capEl.innerText), JSON.stringify([kase(), got, want, cap]));
+      } finally { T.P.recheck.lo = lo0; } }
     ok('수량은 그대로 (줄마다 원래 수량 표시)', $$('#mh-rck .mh-rck-r').every((e, i) => e.innerText.includes(Number(R.rows[i].q).toLocaleString() + '주')), $$('#mh-rck .mh-rck-r').map(e => e.innerText).join(' | '));
     /* 마감 30분 전 시각 — 미국 동부 15:30 · 한국시간 서머타임 04:30 · 그 밖 05:30 · 휴장일 건너뜀 · 조기 폐장(13:00) 12:30 */
     const cb = (iso) => { const t = T.closeBefore(Date.parse(iso), 30); return [t.ds, t.kst, t.et, t.early, t.now]; };
@@ -450,7 +456,7 @@ RCK_JS = """async () => {""" + PRE + r"""
       ok('그 밖엔 다음 마감 30분 전 시각만', !box().classList.contains('now') && /한국시간 10\/17\(토\) 04:30/.test($('#mh-rck-t').textContent) && !/지금 확인할 때/.test($('#mh-rck-t').textContent), $('#mh-rck-t').textContent);
     } finally { Date.now = real; T.rckPaint(); }
     const tx = box().innerText;
-    ok('설명: 세 경우(−2% 아래 → 지금 가격 +10%) · 15:30 · 04:30 · 05:30 · 수량 그대로 · 접수 마감 · 무한매수법 용어 없음', /−2% ~ \+13%/.test(tx) && /−2% 아래 → 지금 가격 \+10%/.test(tx) && /15:30/.test(tx) && /04:30/.test(tx) && /05:30/.test(tx) && /수량은 그대로/.test(tx) && /접수 마감/.test(tx) && !bad(tx), bad(tx) || tx.slice(0, 160));
+    ok('설명: 세 경우(−1.7% 아래 → 지금 가격 +10%) · 한도 +15% 증권사도 · 15:30 · 04:30 · 05:30 · 수량 그대로 · 접수 마감 · 무한매수법 용어 없음', /−1\.7% ~ \+13%/.test(tx) && /−1\.7% 아래 → 지금 가격 \+10%/.test(tx) && /한도가 \+15%인 증권사에서도/.test(tx) && !/−2%/.test(tx) && /15:30/.test(tx) && /04:30/.test(tx) && /05:30/.test(tx) && /수량은 그대로/.test(tx) && /접수 마감/.test(tx) && !bad(tx), bad(tx) || tx.slice(0, 160));
     await setP(Math.round(C * 0.6 * 100) / 100);
     ok('지금 한도 경고 요약에 \'마감 30분 전 다시 걸기\' 안내', /마감 30분 전 다시 걸기/.test(($('#mh-rjsum') || {}).innerText || ''), ($('#mh-rjsum') || {}).innerText);
   } catch (e) { ok('마감 30분 전 다시 걸기 오류', false, String(e && e.message)); }
