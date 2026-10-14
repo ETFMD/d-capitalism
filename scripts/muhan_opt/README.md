@@ -34,6 +34,11 @@ CAGR 최고 · 안정 최고(이웃 25곳 중앙값) · 균형(이웃 중앙 CAG
 6. **제약 탐색**(선택 · 상장 이후): `node scripts/muhan_opt/cons_starts.js <1단계 결과> <후보.csv> scripts/muhan_opt/regions.json [이전 추천.csv …]` 로 출발점(`startsK`)을 넣고
    `node scripts/muhan_opt/muhan_rob.js <종목> act cons [버전]` — 가운데·이웃 중앙·원금 10만$ MDD ≥ −60% 와 하방 LOC 10줄 이하 안에서 min(이웃 중앙 CAGR, 10만$ CAGR) 최대
    (조건을 넘은 만큼 10배로 깎음). '세후 CAGR ≥ 35% · MDD ≥ −60%' 같은 조건부 추천을 고를 때 후보를 넓히는 용도.
+7. **증권사 주문 거부 점검**(㉝): `node scripts/muhan_opt/modes.js <데이터> src/index.html <이름=final.json> …` — 뽑힌 설정을 반영 안 함·한도로 낮춰 넣기·그날 건너뛰기에 모두 넣어 표로
+   · `node scripts/muhan_opt/rejsens.js <데이터> src/index.html <건너뛰기 final.json>` — 한도 배수(×1.15~×1.5)·기준가(시가/전날 종가)를 바꿔도 버티는지(건너뛰기로 뽑힌 높은 숫자는 ×1.2 에만 맞춰진 경우가 많음)
+   · `node scripts/muhan_opt/robust.js <데이터> src/index.html <출력.json> <두 방식 후보.csv …>` — 6가지 가정(반영 안 함 · 낮춰 넣기 · 건너뛰기 ×1.2·×1.15·×1.25·전날 종가) 중 가장 나쁜 값으로 최고·안정·균형
+8. **화면 확인**: `python3 scripts/muhan_opt/verify.py snap <데이터>`(지금 화면 자료와 비교 · `verify/data_now/` 에 씀 → `node scripts/muhan_opt/prep.js - - scripts/muhan_opt/verify/data_now src/index.html` 로 hyb 를 만든 뒤 보고용 final.js 는 이 자료로) · `verify.py picks <final.json …>` · `verify.py urls <목록.json>`
+   — 저장소 페이지를 127.0.0.1 로 열고 광고·분석 요청은 막음 · 야후 일봉은 `verify/ysnap/` 에 저장해 같은 원문으로(환경 변수 `VERIFY_DIR`·`CHARTJS` 선택)
 
 ## 기준
 
