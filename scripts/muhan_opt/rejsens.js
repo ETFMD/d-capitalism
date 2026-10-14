@@ -29,6 +29,7 @@ function run(tk, D, p, rej) {
 }
 const j = JSON.parse(fs.readFileSync(FJ, 'utf8'));
 console.log('| 종목 · 기간 | 기준 | 설정 | 반영 안 함 | 시가×1.15 | ×1.2 | ×1.25 | ×1.3 | ×1.5 | 전날 종가×1.2 |');
+console.log('|---|---|---|---|---|---|---|---|---|---|');
 for (const [key, r] of Object.entries(j.RES)) {
   const [tk, per] = key.split('_'), D = ds(tk, per), D0 = Object.assign({}, D, { o: null });
   const picks = per === 'act' ? [['최고', r.raw], ['안정', r.rob], ['균형', r.bal]] : [['최고', r.raw], ['믿을 만한 안정', r.credRob], ['믿을 만한 균형', r.credBal]];
