@@ -579,7 +579,7 @@ MID_JS = """async () => {""" + PRE + """
     click('[data-act="su-start"]'); await W(400);
     const D = T.curD(), tx = rt().innerText, tags = D.orders.map(o => o.tag);
     ok('중간 진입 72회 다 씀 → 처음부터 소진 대응 · 매수 주문 없음 · 목표 지정가 + 평단 −10% LOC 전량',
-       D.st.mode === 'xrec' && !D.orders.some(o => o.side === 'B') && tags.indexOf('tp') >= 0 && tags.indexOf('xrec') >= 0, D.st.mode + ' ' + tags.join(','));
+       D.st.mode === 'xrec' && !D.orders.some(o => o.type === 'buy') && tags.indexOf('tp') >= 0 && tags.indexOf('xrec') >= 0, D.st.mode + ' ' + tags.join(','));
     ok('소진 안내: 회복 기다림 · 72루틴 고정 규칙 · 단계 "원금 소진" · 용어 없음', /소진 — 회복 기다림/.test(tx) && /72루틴 고정 규칙/.test(tx) && /원금 소진/.test(tx) && /평단 −10% LOC \\(전량\\)/.test(tx) && !bad(tx), bad(tx) || tx.slice(0, 200));
     ok('두 번째 세션 이름 72루틴 2', ses().name === '72루틴 2', ses().name);
   } catch (e) { ok('중간 진입 흐름 오류', false, String(e && e.message)); }
@@ -609,6 +609,79 @@ CYCLE_JS = """async () => {""" + PRE + """
   return R;
 }"""
 
+
+
+# ㊵ 최소 원금 안내 (자동매매 프로그램 mincap.js 와 같은 기준) — 시작 화면 원금 칸 아래 단계 · 오늘의 주문 안내(함수)
+MC_JS = """async () => {""" + PRE + r"""
+  try {
+    const pxOf = () => { const m = MH.market.SOXL; return m && m.quote && m.quote.price > 0 ? m.quote.price : m && m.prices && m.prices.length ? m.prices[m.prices.length - 1].close : null; };
+    for (let i = 0; i < 150 && !pxOf(); i++) await W(100);
+    const px = pxOf();
+    ok('최소 원금: 지금 시세가 있음', px > 0, px);
+    if (px > 0) {
+      const usd = x => '$' + Number(x).toLocaleString('en-US'), need = k => Math.ceil(72 * k * px - 1e-9);
+      const LOSS = [[1, 33], [2, 25], [3, 16], [4, 12], [5, 9], [6, 8], [8, 6], [10, 5], [15, 4], [20, 3]], loss = n => { let v = null; LOSS.forEach(x => { if (n >= x[0]) v = x[1]; }); return v; };
+      const LV = n => n < 1 ? 'none' : n < 2 ? 'one' : n < 10 ? 'low' : 'ok', res = [];
+      for (const cap of [Math.floor(72 * px * 0.6), need(1) - 1, need(1), need(2) - 1, need(2), need(5) + 3, need(9), need(10) - 1, need(10), need(25)]) {
+        fill('[data-in="su:cap"]', String(cap)); await W(30);
+        const e = document.getElementById('mh-mc'), n = Math.floor(cap / 72 / px + 1e-9), t = e ? e.innerText : '', want = LV(n);
+        const more = want === 'none' ? ['⛔', '1주도 못 사서', '원금 최소 ' + usd(need(1)), '권장 ' + usd(need(10))] : want === 'one' ? ['⚠', '두 줄로 나눠 사지 못해', '두 줄이 되려면 ' + usd(need(2)), '권장 ' + usd(need(10))]
+          : want === 'low' ? ['△', '백테스트에서 연 수익률이 평균 ' + loss(n) + '%p 낮았어요', '권장 ' + usd(need(10))] : ['✓', '권장(1회 10주 · ' + usd(need(10)) + ') 이상'];
+        res.push([cap, n, e && e.getAttribute('data-mc'), e && e.getAttribute('data-mc') === want && t.includes('하루 ' + n + '주') && more.every(w => t.includes(w)) ? 'ok' : 'BAD ' + t.slice(0, 200)]);
+      }
+      ok('시작 화면 최소 원금: 0주 ⛔ · 1주 ⚠ · 2~9주 △(백테스트 손해 %p) · 10주 ✓ — 경계(72·144·720 × 가격 올림)·금액이 따로 한 계산과 같음', res.every(r => r[3] === 'ok') && res.map(r => r[2]).join() === 'none,none,one,one,low,low,low,low,ok,ok', JSON.stringify(res));
+    }
+    fill('[data-in="su:cap"]', ''); await W(40);
+    const D0 = { close: 110, P: { one: 100 }, st: { mode: 'normal' }, cur: 'USD' }, f = x => T.mcOrd(Object.assign({}, D0, x));
+    const o = [f({}), f({ P: { one: 150 }, st: { mode: 'idle' } }), f({ P: { one: 220 } }), f({ st: { mode: 'xrec' } }), f({ P: { one: 100, wait: true } }), f({ close: null })];
+    ok('오늘의 주문 안내: 0주 = 매수 주문 없음 + 최소·권장 원금 · 1주 = 두 줄 원금 · 2주 이상·원금 소진·RSI 대기·종가 없음 = 없음',
+       /data-mc="none"/.test(o[0]) && /1주\(전일 종가 \$110\.00\)도 못 사서 오늘은 매수 주문이 없어요/.test(o[0]) && /원금 최소 \$7,920 · 권장 \$79,200 \(1회 10주\)/.test(o[0]) &&
+       /data-mc="one"/.test(o[1]) && /하루 1주만 살 수 있어/.test(o[1]) && /두 줄이 되려면 원금 \$15,840/.test(o[1]) && o.slice(2).every(x => x === ''), o.map(x => x.slice(0, 140)).join(' | '));
+    ok('최소 원금 문구에 무한매수법 용어 없음', !bad(o[0] + o[1]) && !bad((document.getElementById('mh-su-dyn') || {}).innerText), bad(o[0] + o[1]));
+  } catch (e) { ok('최소 원금 안내 흐름 오류', false, String(e && e.message)); }
+  return R;
+}"""
+
+
+# 시작한 뒤 오늘의 주문 카드 — 1회 매수금으로 0주·1주면 #mh-mcord (원금 = 72 × 가격 × k)
+ORD_JS = """async (want) => {""" + PRE + r"""
+  try {
+    for (let i = 0; i < 100 && !(T.curD() && T.curD().P); i++) await W(100);
+    const D = T.curD(), n = Math.floor(D.P.one / D.close + 1e-9), e = document.getElementById('mh-mcord'), lv = e && e.getAttribute('data-mc');
+    ok('오늘의 주문 최소 원금 안내 ' + want + ' (1회 ' + D.P.one.toFixed(2) + ' ÷ 전일 종가 ' + D.close + ' = ' + n + '주)', (n < 1 ? 'none' : n < 2 ? 'one' : 'x') === want && lv === want &&
+       (want === 'none' ? !D.orders.some(x => x.type === 'buy') : D.orders.filter(x => x.type === 'buy').reduce((a, x) => a + x.quantity, 0) === 1), [n, lv, D.orders.map(x => x.type + x.quantity).join(',')]);
+  } catch (e) { ok('오늘의 주문 안내 흐름 오류', false, String(e && e.message)); }
+  return R;
+}"""
+
+
+# ⋮ 원금 바꾸기 — 중간 진입 세션도 남은 현금·1회 매수금에 (자동매매 프로그램 ledger.addCapital 과 같은 계산) · 잔금보다 많이 못 줄임
+CAP_JS = """async () => {""" + PRE + r"""
+  const c0 = window.confirm, a0 = window.alert, al = [];
+  try {
+    window.confirm = () => true; window.alert = m => al.push(String(m));
+    const st = T.store, mk = (id, mid, txs) => { st.sessions.push({ id, name: id, settings: { ticker: 'SOXL', splits: 72, targetProfit: 52.5, bigNumPercent: 13, lowerLocShares: 1, lowerLocLines: 0, version: '1.0', exhaust: 'recover', btFee: 0.25, totalCapital: 15000 },
+      transactions: txs || [], isReverseMode: false, reverseStarPrice: null, archivedCycles: [], midEntry: mid }); st.activeSessionId = id; MH.sheet = null; MH.menu = true; T.render(); };
+    const cap = async v => { fill('#mh-m-cap', String(v)); click('[data-act="ap-cap"]'); await W(80); MH.menu = true; T.render(); await W(30); };
+    const C = () => T.vCompute(ses().settings, ses().transactions, ses().midEntry);
+    mk('cap-mid', { tValue: 20, avgPrice: 100, totalQuantity: 40, remainingCapital: 11000, one: 15000 / 72, xc: 1 });
+    const a = C(); await cap(75000); const b = C(), m = ses().midEntry;
+    ok('중간 진입 세션 원금 15,000 → 75,000: 잔금 11,000 → 71,000 · 1회 208.33 → 1,041.67 · 회차 20 그대로',
+       ses().settings.totalCapital === 75000 && Math.abs(a.remainingCapital - 11000) < 1e-9 && Math.abs(b.remainingCapital - 71000) < 1e-9 && Math.abs(a.buyAmount - 208.33) < 0.006 && Math.abs(b.buyAmount - 1041.67) < 0.006 &&
+       b.tValue === 20 && m.remainingCapital === 71000 && Math.abs(m.one - (15000 + 60000) / 72) < 1e-9, JSON.stringify([a.remainingCapital, b.remainingCapital, a.buyAmount, b.buyAmount, b.tValue, m]));
+    al.length = 0; await cap(1000);
+    ok('잔금(71,000)보다 많이 줄이면 막음 · 그대로', al.length === 1 && /많이 줄일 수 없어요/.test(al[0]) && ses().settings.totalCapital === 75000 && ses().midEntry.remainingCapital === 71000, al.join(' | '));
+    await cap(70000); const c = C();
+    ok('줄이기(−5,000)도 같은 계산: 잔금 66,000 · 1회 = 1,041.67 − 5,000 ÷ 72', Math.abs(c.remainingCapital - 66000) < 1e-9 && Math.abs(ses().midEntry.one - 70000 / 72) < 1e-9, JSON.stringify([c.remainingCapital, ses().midEntry.one]));
+    mk('cap-new', null, [{ id: 'n1', date: '2026-09-01T12:00:00', close: 100, fills: [{ side: 'B', p: 100, q: 2, tag: 'first', m: 'LOC' }] }]);
+    const d = C(); await cap(75000); const e2 = C();
+    ok('새로 시작 세션도 같은 결과: 잔금 +60,000 · 1회 = 지금 1회 + 60,000 ÷ 72', Math.abs(e2.remainingCapital - d.remainingCapital - 60000) < 1e-9 && Math.abs(e2.buyAmount - (d.buyAmount + 60000 / 72)) < 0.011 && ses().midEntry === null, JSON.stringify([d.remainingCapital, e2.remainingCapital, d.buyAmount, e2.buyAmount]));
+    st.sessions = st.sessions.filter(x => x.id !== 'cap-mid' && x.id !== 'cap-new'); st.activeSessionId = st.sessions[0].id; MH.menu = false; T.render();
+    localStorage.setItem(T.P.key, JSON.stringify(st));   /* 검사용 세션을 지운 상태로 저장 (뒤 '새로고침 뒤 세션 3개' 검사) */
+  } catch (e) { ok('원금 바꾸기 흐름 오류', false, String(e && e.message)); }
+  finally { window.confirm = c0; window.alert = a0; }
+  return R;
+}"""
 
 # 원금 넣고 시작 — 한 번의 실행 안에서(입력 → 시작) 끝내야 함: 따로 하면 그 사이 비동기 다시 그리기(로그인 준비·테마)가
 # 입력칸을 새로 만들어 입력이 사라짐 (CI 에서 시작하기가 꺼진 채 30초 기다림)
@@ -717,6 +790,7 @@ def check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS):
     page.evaluate("() => { const T = T72debug; T.MH.setup.more = true; T.render(); }")
     overflow('시작 화면(세부옵션 펼침)')
     page.evaluate("() => { const T = T72debug; T.MH.setup.more = false; T.render(); }")
+    report('72 최소 원금', page.evaluate(MC_JS))
     report('72 시작', page.evaluate(SETUP_JS))
     report('72 현재', page.evaluate(NOW_JS))
     overflow('현재 화면(기록 3일)')
@@ -753,6 +827,7 @@ def check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS):
     page.evaluate("() => { T72debug.MH.sheet = null; T72debug.render(); }")
     report('72 중간 진입', page.evaluate(MID_JS))
     report('72 사이클 끝', page.evaluate(CYCLE_JS))
+    report('72 원금 바꾸기', page.evaluate(CAP_JS))
     # 새로고침 뒤 그대로 (세션 3개 · 첫 세션 기록 3일 · 접은 카드)
     page.evaluate("() => localStorage.setItem('r72-fold', JSON.stringify({ vix: true }))")
     page.reload(wait_until='load')
@@ -793,6 +868,18 @@ def check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS):
                 print('    72 카드 = 시뮬레이터 (기본 설정 · 수수료 0.25%%): CAGR %.2f%% · MDD %.2f%%' % (c['cagr'] * 100, c['mdd'] * 100), flush=True)
     except Exception as e:
         fail('72', '기본 설정 카드·시뮬레이터 비교 오류: %s' % str(e)[:160])
+    # ㊵ 시작한 뒤 오늘의 주문 — 1회 매수금으로 0주(원금 = 72 × 가격 × 0.5)·1주(× 1.5)면 이유와 필요한 원금
+    PX_JS = "() => { const m = T72debug.MH.market.SOXL; return m && m.prices && m.prices.length ? m.prices[m.prices.length - 1].close : null; }"
+    for k, want in ((0.5, 'none'), (1.5, 'one')):
+        _fresh(page, base)
+        try:
+            page.wait_for_function("() => { const m = T72debug.MH.market.SOXL; return m && m.prices && m.prices.length; }", timeout=30000)
+            if not page.evaluate(START_JS, str(int(72 * page.evaluate(PX_JS) * k))):
+                raise RuntimeError('작은 원금으로 시작하지 못함')
+            page.wait_for_timeout(300)
+            report('72 최소 원금 주문', page.evaluate(ORD_JS, want))
+        except Exception as e:
+            n[0] += 1; n[1] += 1; fail('72 최소 원금 주문', '오류: %s' % str(e)[:160])
     # 로그인 자동 저장
     _sync(page, base, fail)
     page.goto('about:blank'); page.goto(base + '72/', wait_until='load')

@@ -12660,7 +12660,7 @@ function mhApp(P) {
     if (st.phase !== '종료') {
       if (D.orders.length > 0) { if (D.close != null) h += safe(viewLocCap, D); h += safe(viewOrdersOld, D); }
       else if (D.close == null) h += '<div class="mh-note warn" style="margin-bottom:10px">최근 종가가 없어 오늘의 주문표를 계산할 수 없어요.' + (D.isCustom ? ' 위에서 종가를 입력해 주세요.' : ' 잠시 후 새로고침해 주세요.') + '</div>';
-      else if (!(D.P && D.P.wait)) h += '<div class="mh-note" style="margin-bottom:10px">오늘은 걸 주문이 없어요 (1회 매수금으로 1주도 살 수 없거나 매도할 수량이 없음).</div>';
+      else if (!(D.P && D.P.wait)) h += '<div class="mh-note" style="margin-bottom:10px">오늘은 걸 주문이 없어요 (1회 매수금으로 1주도 살 수 없거나 매도할 수량이 없음).</div>' + mcOrd(D);
     }
     if (st.phase === '종료' && D.txs.length > 0) h += safe(viewCycleEnd, D);
     h += safe(viewBt, D);
@@ -12680,6 +12680,7 @@ function mhApp(P) {
     if (buys.length) h += '<div class="mh-small mh-ok" style="font-weight:600;margin:10px 0 6px">● 매수</div>' + buys.map(function (o) {   /* P.rejWarn: 줄 아래 한도 경고 칸(rjPaint 가 채움) */
       return orderRow(o, cur, false) + (P.rejWarn && o.method !== 'MOC' && o.price > 0 ? '<div class="mh-rjw" data-rjp="' + o.price + '" hidden></div>' : ''); }).join('') +
       (P.rejWarn ? '<div class="mh-rjsum" id="mh-rjsum" hidden></div>' : '') + (P.recheck ? rckBox(D, buys) : '');
+    h += mcOrd(D);   /* 72루틴: 1회 매수금으로 0주·1주인 날 이유 */
     h += '<p class="mh-help">' + (PL.sp != null && PL.star ? '별% ' + sign(PL.sp) + (+PL.sp).toFixed(2) + '% · 별지점 ' + fmt(PL.star, cur, 2) + ' · ' : '') + '1회 ' + fmt(PL.one || 0, cur, 2) + ' · 기준 = 전일 종가 ' + fmt(D.close, cur, 2) +
       (D.cfg.ideal ? ' · 정액 주문(소수 주) — 매수 수량 = 주문 금액 ÷ 가격 (소수점 주문이 되는 증권사에서 그대로 따라 할 수 있어요)' : ' · 수량은 1주 단위 내림') + ' · LOC는 종가로, 지정가는 장중에 그 값에 닿으면 체결</p>';
     if (MH.todo) h += '<button class="mh-done' + (D.orderDone ? ' on' : '') + '" data-act="order-done">' + (D.orderDone ? '<span class="ic">✓</span> 오늘 주문 완료 · 내일 자동 초기화' : '<span class="ic"></span> 오늘 주문 다 넣었어요') + '</button>';
@@ -13631,14 +13632,40 @@ function mhApp(P) {
     return o;
   }
   function lastPx() { var m = MH.market[LK.ticker], q = m && m.quote && m.quote.price > 0 ? m.quote.price : null, l = m && m.prices && m.prices.length ? m.prices[m.prices.length - 1].close : null; return q || l || null; }
-  /* 시작 원금 안내 — 1회 매수금으로 하루 몇 주 · 평단 매수선 + 상단 매수선 두 줄로 나눠 사려면 원금 ≥ 분할 × 2 × 지금 가격 */
+  /* 최소 원금 안내 (72루틴 — 자동매매 프로그램 routine72-auto 의 src/ui/public/mincap.js 와 같은 기준)
+     하루에 사는 주식 수 = 1회 매수금 ÷ 가격, 1주 단위 버림(엔진 plan 과 같은 버림) → 0주 매수 주문 없음 · 1주 평단 매수선만(상단 매수선 없음) · 2~9주 버림으로 노는 돈이 많음 · 10주 이상 권장
+     MC_LOSS = 실제 SOXL 일봉 백테스트에서 원금이 아주 큰 경우보다 연평균 수익률이 낮았던 정도(%p · 평균) — 2010-04 ~ 2023-10 매달 시작 163곳 × 3년 · 수수료 0.25% · 세금 없음 · 복리 (routine72-auto scripts/mincap-bt.js) */
+  var MC_REC = 10, MC_LOSS = [[1, 33], [2, 25], [3, 16], [4, 12], [5, 9], [6, 8], [8, 6], [10, 5], [15, 4], [20, 3]];
+  function mcCheck(one, px) {
+    var a = LK ? LK.splits : 72, n = one > 0 && px > 0 ? Math.floor(one / px + 1e-9) : 0, loss = null;
+    MC_LOSS.forEach(function (x) { if (n >= x[0]) loss = x[1]; });
+    return { n: n, level: n < 1 ? 'none' : n < 2 ? 'one' : n < MC_REC ? 'low' : 'ok', loss: loss, buy: Math.ceil(a * px - 1e-9), two: Math.ceil(a * 2 * px - 1e-9), rec: Math.ceil(a * MC_REC * px - 1e-9) };
+  }
+  function mcUsd(x) { return '$' + Number(x).toLocaleString('en-US'); }
+  function mcMsg(k) {
+    return k.level === 'none' ? '<span class="mh-bad">⛔ 1주도 못 사서 매수 주문이 나가지 않아요</span> — 원금 최소 ' + mcUsd(k.buy) + ' · 권장 ' + mcUsd(k.rec) + ' (1회 ' + MC_REC + '주)'
+      : k.level === 'one' ? '<span class="mh-warn">⚠ 평단·상단 두 줄로 나눠 사지 못해 규칙대로 돌지 않아요</span> — 두 줄이 되려면 ' + mcUsd(k.two) + ' · 권장 ' + mcUsd(k.rec) + ' (1회 ' + MC_REC + '주)'
+      : k.level === 'low' ? '<span class="mh-warn">△ 주식 수를 버림하는 만큼 돈이 놀아 백테스트에서 연 수익률이 평균 ' + k.loss + '%p 낮았어요</span> — 권장 ' + mcUsd(k.rec) + ' (1회 ' + MC_REC + '주)'
+      : '<span class="mh-ok">✓ 권장(1회 ' + MC_REC + '주 · ' + mcUsd(k.rec) + ') 이상이에요</span>';
+  }
+  /* 오늘의 주문 — 1회 매수금으로 0주·1주인 날 이유와 필요한 원금 (72루틴 · 자동매매 프로그램 텔레그램 주문 알림과 같은 문구) · 원금 소진·RSI 대기엔 원래 매수가 없어 빼고 */
+  function mcOrd(D) {
+    if (!LK || !(D.close > 0) || !D.P || !(D.P.one > 0) || D.P.wait || D.st.mode === 'xrec') return '';
+    var k = mcCheck(D.P.one, D.close), cur = D.cur, one = fmt(D.P.one, cur, 2);
+    if (k.level !== 'none' && k.level !== 'one') return '';
+    return '<div class="mh-note warn" id="mh-mcord" data-mc="' + k.level + '" style="margin:10px 0 0">ℹ ' + (k.level === 'none'
+      ? '1회 매수금 ' + one + '로는 ' + esc(LK.ticker) + ' 1주(전일 종가 ' + fmt(D.close, cur, 2) + ')도 못 사서 오늘은 매수 주문이 없어요. 전일 종가가 ' + one + ' 이하로 내려오면 그날부터 사요(회차·현금 그대로). 원금 최소 ' + mcUsd(k.buy)
+      : '1회 매수금 ' + one + '로는 하루 1주만 살 수 있어 평단·상단 두 줄로 나눠 사지 못해요. 두 줄이 되려면 원금 ' + mcUsd(k.two)) +
+      ' · 권장 ' + mcUsd(k.rec) + ' (1회 ' + MC_REC + '주) — 지금 사이클에 더하려면 ⋮ 메뉴 \'원금 바꾸기\'</div>';
+  }
+  /* 시작 원금 안내 — 1회 매수금으로 하루 몇 주 · 최소 원금 단계(mcCheck) */
   function setupHintLock(u, c) {
     if (u.mid && c.one > 0 && c.T > 0 && (c.T >= LK.splits || (Number(u.cash) || 0) < c.one * 0.5))   /* 이미 소진된 중간 진입 — 엔진(xcheck)과 같은 조건 */
       return '<p class="mh-help" style="margin:0 0 10px"><span class="mh-warn">' + (c.T >= LK.splits ? LK.splits + '회를 다 써서' : '남은 현금이 1회 매수금의 절반보다 적어서') + '</span> 더 사지 않고 원금 소진 대응으로 시작해요 — 평단 +' + LK.targetProfit + '%에 닿으면 지정가로, 종가가 평단 −10% 안으로 오면 LOC로 전량 매도</p>';
-    var px = lastPx(); if (!px || !(c.one > 0)) return px && !u.mid ? '<p class="mh-help" style="margin:0 0 10px">지금 ' + esc(LK.ticker) + ' 약 $' + px.toFixed(2) + ' — 평단 매수선 · 상단 매수선 두 줄로 나눠 사려면 원금 $' + Math.ceil(LK.splits * 2 * px).toLocaleString() + ' 이상 (' + LK.splits + ' × 2 × 가격)</p>' : '';
-    var n = Math.floor(c.one / px), need = Math.ceil(LK.splits * 2 * px);
-    return '<p class="mh-help" style="margin:0 0 10px">지금 ' + esc(LK.ticker) + ' 약 $' + px.toFixed(2) + ' 기준 1회 매수금으로 하루 <b>' + n + '주</b>' +
-      (n < 1 ? ' — <span class="mh-bad">1주도 못 사요. 원금을 늘려 주세요</span>' : n < 2 ? ' — <span class="mh-warn">두 줄로 나눠 사려면 원금 $' + need.toLocaleString() + ' 이상이 좋아요</span>' : '') + '</p>';
+    var px = lastPx(); if (!px) return '';
+    var k = mcCheck(c.one, px);
+    if (!(c.one > 0)) return u.mid ? '' : '<p class="mh-help" style="margin:0 0 10px">지금 ' + esc(LK.ticker) + ' 약 $' + px.toFixed(2) + ' — 평단·상단 두 줄로 사려면 원금 ' + mcUsd(k.two) + ' 이상 · 권장 ' + mcUsd(k.rec) + ' (1회 ' + MC_REC + '주 = ' + LK.splits + ' × ' + MC_REC + ' × 가격)</p>';
+    return '<p class="mh-help" id="mh-mc" data-mc="' + k.level + '" style="margin:0 0 10px">지금 ' + esc(LK.ticker) + ' 약 $' + px.toFixed(2) + ' 기준 1회 매수금으로 하루 <b>' + k.n + '주</b> — ' + mcMsg(k) + '</p>';
   }
   function viewSetupLock() {
     var u = MH.setup;
@@ -14789,7 +14816,21 @@ function mhApp(P) {
       case 'ap-splits': var xs = numIn('mh-m-splits'); if (!E.validSplits(xs)) { alert(E.SPLITS_MIN + ' ~ ' + E.SPLITS_MAX + ' 사이 정수를 입력하세요'); return; } if (xs === s.splits) return; if (confirmSplits(xs, ses.transactions.length)) upd({ splits: xs }); break;
       case 'ap-shares': var x4 = numIn('mh-m-shares'); if (!isFinite(x4) || x4 < 1 || x4 > 20 || !Number.isInteger(x4)) { alert('1 ~ 20 사이 정수를 입력하세요'); return; } upd({ lowerLocShares: x4 }); break;
       case 'ap-tick': var tv = ($('mh-m-tick').value || '').trim(); if (tv === '') { upd({ tickSize: undefined }); return; } var x5 = Number(tv); if (!isFinite(x5) || x5 < 0) { alert('0 이상 숫자를 입력하세요 (비우면 스냅 해제)'); return; } upd({ tickSize: x5 > 0 ? x5 : undefined }); break;
-      case 'ap-cap': var x6 = numIn('mh-m-cap'); if (!isFinite(x6) || x6 <= 0) { alert('1 이상의 값을 입력하세요'); return; } x6 = r2(x6); if (x6 !== s.totalCapital && confirm('원금을 ' + fmtL(x6, s.currency || 'USD') + '로 변경할까요?\n잔금 = 원금 - 총투자 + 총회수')) { var nb6 = s.base > 0 ? r2(s.base + x6 - s.totalCapital) : 0; upd(s.base > 0 ? { totalCapital: x6, base: nb6 > 0 ? nb6 : x6 } : { totalCapital: x6 }); } break;   /* 추가 입금 → 처음 원금(단리 1회 · V3 반복리 원금)도 같은 만큼 */
+      case 'ap-cap': var x6 = numIn('mh-m-cap'); if (!isFinite(x6) || x6 <= 0) { alert('1 이상의 값을 입력하세요'); return; } x6 = r2(x6);
+        if (x6 !== s.totalCapital) {
+          var d6 = r2(x6 - s.totalCapital), m6 = ses.midEntry, c6 = (isOld(s) ? vCompute(s, ses.transactions, m6) : E.compute(s, ses.transactions, m6)).remainingCapital;
+          if (c6 + d6 < -0.005) { alert('지금 잔금(' + fmtL(c6, s.currency || 'USD') + ')보다 많이 줄일 수 없어요'); return; }   /* 잔금이 음수가 되지 않게 */
+          if (confirm('원금을 ' + fmtL(x6, s.currency || 'USD') + '로 변경할까요?\n잔금 = 원금 - 총투자 + 총회수')) {
+            var nb6 = s.base > 0 ? r2(s.base + d6) : 0;
+            mut(function () {   /* 추가 입금 → 처음 원금(단리 1회 · V3 반복리 · 일부분 복리 기준)도 같은 만큼 */
+              var a6 = active(); a6.settings = Object.assign({}, a6.settings, s.base > 0 ? { totalCapital: x6, base: nb6 > 0 ? nb6 : x6 } : { totalCapital: x6 });
+              /* 중간 진입 세션(V1~V3 · 72루틴): 엔진(MHV.replay)이 원금이 아니라 넣어 둔 '남은 현금·1회 매수금'(midEntry)으로 시작 → 바꾼 만큼 거기에도 (1회 = 지금 1회 + 바꾼 금액 ÷ 분할)
+                 2026-10-15 고침 — 예전엔 원금 숫자만 바뀌어 잔금·1회 매수금이 그대로였음(그 돈이 이번 사이클에 안 쓰이고 사이클 손익이 입금만큼 손실로 보임) · 자동매매 프로그램 ledger.addCapital 과 같은 계산
+                 V4.0(E.compute)은 잔금 = 원금 − 총투자 + 총회수라 원래 반영됨 */
+              if (m6 && m6.totalQuantity > 0 && isOld(a6.settings)) a6.midEntry = Object.assign({}, m6, { remainingCapital: r2(m6.remainingCapital + d6) }, m6.one > 0 ? { one: m6.one + d6 / vcfg(a6.settings).splits } : {});
+            });
+          }
+        } break;
       case 'm-splits': var ns = Number(v); if (ns === s.splits) return; if (confirmSplits(ns, ses.transactions.length)) upd({ splits: ns }); break;
       /* 리버스 */
       case 'rev-on': mut(function () { ses.isReverseMode = true; ses.reverseStarPrice = null; }); break;
@@ -15021,7 +15062,7 @@ function mhApp(P) {
   }
   /* 탭 진입 시 호출 ([NAV] switchSubTab 의 훅) */
   window[P.init] = function () { bind(); MH.now = new Date(); takePreset(); if (!SY.inited) { SY.inited = true; SY.uid = authUid(); if (SY.uid) SY.st = 'pull'; if (window.dcAuth && window.dcAuth.ready) window.dcAuth.ready().then(function (ok) { if (SY.can !== ok) { SY.can = ok; render(); } }).catch(function () {}); } render(); if (SY.uid && SY.st === 'pull') pull(); };
-  window[P.debug] = { get store() { return store; }, derive: derive, deriveOld: deriveOld, curD: curD, vCompute: vCompute, render: render, bt: BT, restart: startNewCycle, vcfg: vcfg, btOpts: btOpts,
+  window[P.debug] = { get store() { return store; }, derive: derive, deriveOld: deriveOld, curD: curD, vCompute: vCompute, render: render, bt: BT, restart: startNewCycle, vcfg: vcfg, btOpts: btOpts, mcCheck: mcCheck, mcOrd: mcOrd,
                       MH: MH, P: P, btKey: btKey, btz: BTZ, mixOf: mixOf, liveTick: liveTick, lq: LQ, lqKick: lqKick, rjPaint: rjPaint, capOf: capOf, rckPaint: rckPaint, closeBefore: closeBefore, nyHoliday: nyHoliday, nyEarly: nyEarly };
 }
 mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan', key: 'muhan4-store', oldKey: 'muhan4_data', ls: 'muhan4-', sync: '/udata/muhan',
