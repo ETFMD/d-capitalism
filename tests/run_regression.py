@@ -332,15 +332,16 @@ ETF_JS = """async (local) => {
       || m[6] + '-' + m[7] + '-' + m[8] !== X.ymdOf(st.endDay) || Math.abs(num2(m[10]) - P2(st.pE)) > 1e-9; }).map(o => { const tr = [...document.querySelectorAll('#ecx-stats tr')][o.i]; return tr && tr.cells[6] ? tr.cells[6].textContent.slice(0, 90) : o.i; });
   const isK = o => S.sel[o.i].k === 'K';
   await done();
-  // 1. 처음 화면: 기본 4개 · 1Y · 시장가
+  // 1. 처음 화면: 기본 4개 · MAX · 시장가
   const rows = () => [...document.querySelectorAll('#ecx-stats tr')];
-  ok('처음: 기본 4개 · 1Y · 시장가(버튼 2개 중 시장가) · 주소', JSON.stringify(keys()) === '["K069500","K360750","USPY","UQQQ"]' && S.per === '1Y' && S.mode === 'px' && location.hash === '#e=K069500,K360750,USPY,UQQQ&p=1Y' && document.querySelectorAll('#ecx-mode button').length === 2 && document.querySelector('#ecx-mode button.on').dataset.m === 'px', [keys(), S.per, S.mode, location.hash]);
+  ok('처음: 기본 4개 · MAX(기간 단추도 MAX 만 켜짐) · 시장가(버튼 2개 중 시장가) · 주소', JSON.stringify(keys()) === '["K069500","K360750","USPY","UQQQ"]' && S.per === 'MAX' && [...document.querySelectorAll('#ecx-per .chart-tab.active')].map(b => b.dataset.per).join() === 'MAX' && S.mode === 'px' && location.hash === '#e=K069500,K360750,USPY,UQQQ&p=MAX' && document.querySelectorAll('#ecx-mode button').length === 2 && document.querySelector('#ecx-mode button.on').dataset.m === 'px', [keys(), S.per, S.mode, location.hash]);
   ok('처음: 표 4줄 × 7칸(기간 수익률·CAGR·연환산·최대 낙폭·변동성) · 범례 4 · 차트 선 4(굵기 1)', rows().length === 4 && rows().every(r => r.cells.length === 7 && /%/.test(r.cells[1].textContent)) && document.querySelectorAll('#ecx-head th').length === 7 && document.querySelectorAll('#ecx-leg span').length === 4 && S.chart && S.chart.data.datasets.length === 4 && S.chart.data.datasets.every(d => d.borderWidth === 1), rows().map(r => r.textContent.slice(0, 50)));
   ok('기간설정 날짜 칸은 처음에 숨김 · 재투자 수수료 칸은 시장가에서 숨김', getComputedStyle($('ecx-custom')).display === 'none' && $('ecx-fees').hidden && getComputedStyle($('ecx-fees')).display === 'none', '');
   ok('상장 전 백테스트: 처음부터 켜짐(체크) · 주소에 bt 없음', $('ecx-bt').checked && S.bt === true && !/&bt=/.test(location.hash), [$('ecx-bt').checked, S.bt, location.hash]);
   // 아래는 실제 가격 시나리오(상장일·실제 거래 가격 기준) → 백테스트를 끄고 확인 (백테스트는 따로 BT_JS 에서)
   $('ecx-bt').click(); await W(80); await done();
   ok('백테스트 끄기 → 주소 &bt=0', S.bt === false && /&bt=0/.test(location.hash), location.hash);
+  await per('1Y'); await done();   /* 아래 실제 가격 시나리오는 1Y 기준 */
   let r = last(); const E = Math.max(...r.list.map(o => o.s.d[o.s.d.length - 1]));
   ok('1Y: E = 가장 최근 거래일 · S = 그 12개월 전', r.w.E === E && r.w.S === X.addMonths(E, -12), [X.ymdOf(r.w.S), X.ymdOf(r.w.E)]);
   const infos = () => rows().map(tr => (tr.querySelector('.ecx-info') || {}).textContent || '');

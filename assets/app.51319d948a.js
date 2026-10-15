@@ -6433,7 +6433,7 @@ var TAX = (function () {
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var Lx = typeof L === 'function' ? L : function (ko) { return ko; };
   var TABS = { 1: Lx('국내 시장지수', 'Korea market index'), 2: Lx('국내 업종·테마', 'Korea sector/theme'), 3: Lx('국내 파생', 'Korea derivatives'), 4: Lx('해외 주식', 'Overseas equity'), 5: Lx('원자재', 'Commodities'), 6: Lx('채권', 'Bonds'), 7: Lx('기타', 'Other') };
-  var S = { L: null, by: {}, sel: [], per: '1Y', from: null, to: null, fx: false, mode: 'px', feeK: FEE_K, feeU: FEE_U, sort: null,
+  var S = { L: null, by: {}, sel: [], per: 'MAX', from: null, to: null, fx: false, mode: 'px', feeK: FEE_K, feeU: FEE_U, sort: null,
             data: {}, err: {}, pend: {}, dist: {}, distP: {}, distErr: {}, ex: {}, exP: {}, exErr: {}, pgP: {}, pgDone: {}, pgG: {}, pgN: {}, pgQ: [], pgRun: 0, pgT: null, bt: true, btS: {}, btP: {}, btErr: {}, btMemo: {}, dep: {}, depP: {}, depErr: {}, fxd: null, fxp: null, prep: {}, chart: null, mk: 'all', sugs: [], sugIdx: -1,
             ready: false, listErr: false, last: null, hash: null };
   var PRESETS = [
@@ -6793,9 +6793,9 @@ var TAX = (function () {
     if (!o.e) return false;
     var keys = o.e.split(',').map(function (s) { return s.trim().toUpperCase(); }).filter(Boolean).slice(0, MAXN);
     setSel(keys);
-    var p = String(o.p || '1Y').toUpperCase(), m = /^C(\d{8})-(\d{8})$/.exec(p), f = m && dayOf(m[1]), t = m && dayOf(m[2]);
+    var p = String(o.p || 'MAX').toUpperCase(), m = /^C(\d{8})-(\d{8})$/.exec(p), f = m && dayOf(m[1]), t = m && dayOf(m[2]);
     if (m && f != null && t != null && f < t) { S.per = 'C'; S.from = f; S.to = t; }
-    else S.per = ['1M', '3M', '6M', 'YTD', '1Y', 'MAX'].indexOf(p) >= 0 ? p : '1Y';
+    else S.per = ['1M', '3M', '6M', 'YTD', '1Y', 'MAX'].indexOf(p) >= 0 ? p : 'MAX';   /* 기본 = MAX (예전 주소의 p=1Y 는 그대로 1Y) */
     S.fx = o.fx === '1';
     S.bt = o.bt !== '0';                                                     /* 상장 전 백테스트: 기본 켬 · bt=0 이면 끔 */
     S.mode = o.m === 'nav' || o.m === 'tr' ? 'nav' : 'px';
@@ -6805,7 +6805,7 @@ var TAX = (function () {
   }
   function writeHash() {
     if (!$('page-etfcmp').classList.contains('active')) return;
-    var p = S.per === 'C' && S.from != null && S.to != null ? 'C' + ymdOf(S.from).replace(/-/g, '') + '-' + ymdOf(S.to).replace(/-/g, '') : S.per === 'C' ? '1Y' : S.per;
+    var p = S.per === 'C' && S.from != null && S.to != null ? 'C' + ymdOf(S.from).replace(/-/g, '') + '-' + ymdOf(S.to).replace(/-/g, '') : S.per === 'C' ? 'MAX' : S.per;
     var h = S.sel.length ? '#e=' + S.sel.map(function (s) { return s.k + s.c; }).join(',') + '&p=' + p + (S.fx ? '&fx=1' : '') + (S.bt ? '' : '&bt=0') + (S.mode === 'nav' ? '&m=nav' : '')
       + (S.feeK !== FEE_K ? '&fk=' + S.feeK : '') + (S.feeU !== FEE_U ? '&fu=' + S.feeU : '') : '';
     S.hash = h;
