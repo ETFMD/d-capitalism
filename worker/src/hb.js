@@ -1,5 +1,5 @@
 /* 72루틴 자동매매 PC 프로그램 생존 감시 (/hb) — PC 가 꺼지거나 프로그램이 멈춰 주문을 놓치기 전에 사람에게 알림
- * · PC 프로그램(routine72-auto)이 실행될 때마다(30분마다 · 주문 시각) POST /hb { key, next(다음 주문 시각 ms), cut(LOC 접수 마감 ms), ds, st, mid }
+ * · PC 프로그램(routine72-auto)이 실행될 때마다(5분마다 · 주문 시각) POST /hb { key, next(다음 주문 시각 ms), cut(LOC 접수 마감 ms), ds, st, mid }
  *   - key: PC 마다 무작위(그 PC 비밀값 저장소에만) · 이 Worker 는 SHA-256(key) 앞 32자(id)만 저장
  *   - 처음(또는 알림 대상이 바뀌면) cred { tg:{token, chat}, nt: 'https://ntfy.sh/주제' } — HB_KEY(Worker 비밀값 · 배포 때 자동 생성)로 AES-GCM 암호화해 D1 에 보관
  * · 15분마다(cron) 확인
@@ -18,7 +18,7 @@ const SQL = {
   count: 'SELECT COUNT(*) AS n FROM hb',
   trim: 'DELETE FROM hb WHERE last < ?',
   del: 'DELETE FROM hb WHERE id = ?',
-  same: 'SELECT id, mid, last FROM hb WHERE tgh = ? AND id != ?',
+  same: 'SELECT id, mid, last, alarm FROM hb WHERE tgh = ? AND id != ?',
   dropSame: 'DELETE FROM hb WHERE tgh = ? AND id != ?',
   put: 'INSERT INTO hb (id, tgh, mid, cred, last, next, cut, ds, st, alarm, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET tgh = excluded.tgh, mid = excluded.mid, cred = excluded.cred, last = excluded.last, next = excluded.next, cut = excluded.cut, ds = excluded.ds, st = excluded.st, alarm = excluded.alarm',
   all: 'SELECT id, cred, last, next, cut, ds, alarm FROM hb',
@@ -110,7 +110,10 @@ export async function hb(req, env, json) {
   if (b.cred) {   /* 같은 알림 대상의 다른 기록 — 다른 PC(mid 다름)가 3시간 안에 돌았으면 경고 · 옛 기록은 이 등록이 이어받음 */
     const others = ((await env.DB.prepare(SQL.same).bind(tgh, id).all()).results) || [];
     if (others.length) {
-      if (others.some((x) => x.last > now - 3 * HOUR && (!mid || !x.mid || x.mid !== mid)) && !(alarm.dup && now - alarm.dup < 6 * HOUR)) { notes.push(DUP); alarm.dup = now; }
+      /* 경고는 6시간에 한 번 — 두 PC 가 번갈아 등록하며 서로의 기록을 지워도(새 기록) 지운 기록의 마지막 경고 시각을 이어받음 */
+      const dupAt = Math.max(alarm.dup || 0, ...others.map((x) => parse(x.alarm).dup || 0));
+      if (others.some((x) => x.last > now - 3 * HOUR && (!mid || !x.mid || x.mid !== mid)) && !(dupAt && now - dupAt < 6 * HOUR)) { notes.push(DUP); alarm.dup = now; }
+      else if (dupAt) alarm.dup = dupAt;
       await env.DB.prepare(SQL.dropSame).bind(tgh, id).run();
     }
   }

@@ -93,6 +93,7 @@ jobs:
           f=$(curl -s -m 20 "$url/fear" || true); echo "::notice::공포·탐욕 /fear 응답: ${f:0:300}"
           st=$(curl -s -m 20 "$url/status" || true); echo "::notice::/status: $st"
           hbr=$(curl -s -m 20 "$url/hb" | grep -o '"ready":[a-z]*' || true); echo "::notice::/hb $hbr"
+          gpr=$(curl -s -m 20 "$url/grp" | grep -o '"ready":[a-z]*' || true); echo "::notice::/grp $gpr"
           printf '{"endpoint":"%s"}\n' "$url" > ../data/counter.json
       - name: 주소 저장 (바뀐 경우에만 커밋)
         if: steps.chk.outputs.skip != '1'

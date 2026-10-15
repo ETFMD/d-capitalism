@@ -17,3 +17,7 @@ CREATE INDEX IF NOT EXISTS live_t ON live (t);
 CREATE TABLE IF NOT EXISTS udata (uid INTEGER NOT NULL, k TEXT NOT NULL, v TEXT NOT NULL, t INTEGER NOT NULL, PRIMARY KEY (uid, k));
 -- 72루틴 자동매매 PC 생존 감시 (/hb · worker/src/hb.js): PC 별 무작위 열쇠의 해시(id) · 알림 대상(암호화) · 마지막 신호 · 다음 주문 시각 · 보낸 알림 (30일 조용하면 삭제)
 CREATE TABLE IF NOT EXISTS hb (id TEXT PRIMARY KEY, tgh TEXT, mid TEXT, cred TEXT, last INTEGER NOT NULL, next INTEGER, cut INTEGER, ds TEXT, st TEXT, alarm TEXT, created INTEGER NOT NULL);
+-- 72루틴 자동매매 PC 여러 대 (/grp · worker/src/grp.js): 묶음(주문 PC·epoch·암호화한 공유 상태·비밀값) · 묶음의 PC 들 · 공유 접속 토큰(암호화) — 60일 조용하면 삭제
+CREATE TABLE IF NOT EXISTS grp (id TEXT PRIMARY KEY, owner TEXT, epoch INTEGER NOT NULL DEFAULT 0, seen INTEGER, done INTEGER, fz TEXT, want TEXT, req TEXT, ver INTEGER NOT NULL DEFAULT 0, state TEXT, st_at INTEGER, st_by TEXT, sec TEXT, sec_at INTEGER, created INTEGER NOT NULL, upd INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS grp_pc (gid TEXT NOT NULL, mid TEXT NOT NULL, name TEXT, rank INTEGER, seen INTEGER, ver TEXT, rd TEXT, PRIMARY KEY (gid, mid));
+CREATE TABLE IF NOT EXISTS grp_tok (gid TEXT NOT NULL, b TEXT NOT NULL, s TEXT, exp INTEGER, at INTEGER, by_mid TEXT, PRIMARY KEY (gid, b));

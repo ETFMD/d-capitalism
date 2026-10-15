@@ -21,7 +21,7 @@ function exec(sql, a) {
   if (sql === Q.count) return { n: rows.size };
   if (sql === Q.trim) { for (const [k, r] of rows) if (r.last < a[0]) rows.delete(k); return {}; }
   if (sql === Q.del) { rows.delete(a[0]); return {}; }
-  if (sql === Q.same) return [...rows.values()].filter((r) => r.tgh === a[0] && r.id !== a[1]).map((r) => ({ id: r.id, mid: r.mid, last: r.last }));
+  if (sql === Q.same) return [...rows.values()].filter((r) => r.tgh === a[0] && r.id !== a[1]).map((r) => ({ id: r.id, mid: r.mid, last: r.last, alarm: r.alarm }));
   if (sql === Q.dropSame) { for (const [k, r] of rows) if (r.tgh === a[0] && r.id !== a[1]) rows.delete(k); return {}; }
   if (sql === Q.put) { const [id, tgh, mid, cred, last, next, cut, ds, st, alarm, created] = a; const old = rows.get(id); rows.set(id, { id, tgh, mid, cred, last, next, cut, ds, st, alarm, created: old ? old.created : created }); return {}; }
   if (sql === Q.all) return [...rows.values()].map((r) => ({ ...r }));
@@ -86,6 +86,10 @@ ok(r.j.ok && sent.length === 1 && /다른 PC/.test(sent[0].b.text) && rows.size 
 sent = []; const KEY3 = 'C'.repeat(30) + 'pc3';
 r = await post({ key: KEY3, mid: 'cd'.repeat(16), cred: { tg: TG } });
 ok(r.j.ok && !sent.length && rows.size === 1, '같은 PC(mid 같음)가 열쇠만 새로 → 경고 없이 이어받음', [sent, rows.size]);
+// 두 PC 가 번갈아 등록(서로 기록을 지우고 새로) → 경고는 6시간에 한 번만 (지운 기록의 경고 시각 이어받음)
+sent = []; for (let i = 0; i < 6; i++) { clock += 25 * M; await post(i % 2 ? { key: KEY3, mid: 'cd'.repeat(16), cred: { tg: TG } } : { key: KEY, mid: MID, cred: { tg: TG } }); }
+const flip1 = sent.length; clock += 6 * H; sent = []; await post({ key: KEY, mid: MID, cred: { tg: TG } }); await post({ key: KEY3, mid: 'cd'.repeat(16), cred: { tg: TG } });
+ok(flip1 === 0 && sent.length === 1 && /다른 PC/.test(sent[0].b.text), '두 PC 번갈아 등록 → 6시간 안 경고 다시 없음 · 6시간 뒤 한 번', [flip1, sent.length]);
 // HB_KEY 가 바뀌어 알림 대상을 못 풂 → 지움 → 다음 신호에 need:cred → 다시 받음
 rows.clear(); sent = []; clock = Date.UTC(2026, 9, 22, 8, 0);
 await post({ key: KEY, mid: MID, next: clock + 5 * M, cut: clock + 10 * H, cred: { tg: TG } });

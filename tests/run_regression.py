@@ -1193,6 +1193,12 @@ def main():
         print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'worker_hb_test: 출력 없음', flush=True)
         if _r.returncode != 0:
             fail('worker', '생존 감시(/hb) 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:300])
+    # Worker 72루틴 PC 여러 대(/grp · 주문 권한 한 대만 · 이어받기 · 공유 상태 ver · 토큰·비밀값) 단독 확인 — node 가 있으면
+    if not a.etf_audit and shutil.which('node'):
+        _r = subprocess.run(['node', os.path.join(ROOT, 'tests', 'worker_grp_test.mjs')], capture_output=True, text=True, timeout=120)
+        print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'worker_grp_test: 출력 없음', flush=True)
+        if _r.returncode != 0:
+            fail('worker', 'PC 여러 대(/grp) 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:300])
 
     # 외부 광고·방문 분석 서버(일시 오류가 잦고 사이트 기능과 무관) — 실패해도 사이트 오류로 보지 않음
     THIRD = ('clarity.ms', 'bing.com', 'naver.com', 'naver.net', 'pstatic.net', 'googlesyndication', 'doubleclick',
