@@ -11392,11 +11392,14 @@ var MHV = (function () {
              cum: 0, maxCum: 0, k: 1, cycCap: capital };
   }
   /* 새 사이클 시작 (보유 0주일 때): 1회 매수금 = 복리 → 지금 현금 ÷ 분할 · 단리 → 처음 원금 ÷ 분할
-     · 일부분 복리(part · mix 0~1) → (처음 원금 + (지금 현금 − 처음 원금) × mix) ÷ 분할 — mix 1 = 복리 · 0 = 단리 (72루틴 선택) */
+     · 일부분 복리(part · mix 0~1 · 72루틴 선택) → 번 돈은 mix 만큼만: (처음 원금 + (지금 현금 − 처음 원금) × mix) ÷ 분할
+       잃은 돈은 전부: 지금 현금 < 처음 원금이면 처음 원금을 지금 현금으로 낮추고 1회 = 지금 현금 ÷ 분할 (그 뒤 번 돈은 낮춘 원금 기준) — 2026-10-15 사용자 결정 */
   function begin(cfg, st) {
     st.T = 0; st.t4 = 0; st.qk = 0; st.rev = false; st.revFirst = false; st.cycCap = st.cash; st.mode = 'idle';
-    if (cfg.ver === '1.0' || cfg.ver === '2.0' || cfg.ver === '2.1' || cfg.ver === '2.2')
+    if (cfg.ver === '1.0' || cfg.ver === '2.0' || cfg.ver === '2.1' || cfg.ver === '2.2') {
+      if (cfg.money === 'part' && st.cash < st.base) st.base = st.cash;
       st.one = (cfg.money === 'simple' ? st.base : cfg.money === 'part' ? st.base + Math.max(0, Math.min(1, cfg.mix != null ? +cfg.mix : 1)) * (st.cash - st.base) : st.cash) / cfg.splits;
+    }
   }
   /* 1회 매수금 */
   function oneOf(cfg, st) {
@@ -12459,7 +12462,7 @@ function mhApp(P) {
   }
   /* 세션의 백테스트 계산 조건 (세금·수수료) — 기록 화면 '이 설정으로 백테스트' 카드와 '자세히 보기' 주소에만 씀 (기록의 잔금 계산은 적은 체결 그대로) */
   var BT_FEE_DEF = P.feeDef != null ? P.feeDef : 0.25, FEE_CUSTOM = P.feeCustom != null ? P.feeCustom : 0.1;   /* 기본 수수료 · '직접 입력'을 처음 고를 때 넣어 두는 값 */
-  /* 일부분 복리 비율 (0~1) — 번 돈(잃은 돈) 중 다음 사이클 1회 매수금에 넣는 몫 */
+  /* 일부분 복리 비율 (0~1) — 번 돈 중 다음 사이클 1회 매수금에 넣는 몫 (잃은 돈은 전부 반영 — 엔진 begin) */
   function mixOf(s) { var m = s ? +s.mix : NaN; return isFinite(m) ? Math.max(0, Math.min(1, m)) : (P.mixDef != null ? P.mixDef : 0.5); }
   function btOpts(s) {
     var f = s && s.btFee != null && isFinite(+s.btFee) ? Math.min(2, Math.max(0, +s.btFee)) : BT_FEE_DEF, tax = !(s && s.btTax === false);
@@ -13387,6 +13390,7 @@ function mhApp(P) {
           else MH.notice = { sid: ses.id, warn: true, title: '⚠ 반복리 완충이 바닥났어요', text: '현금 ' + fmtL(capital, ses.settings.currency || 'USD') + '이 원금 + 최대 누적 수익 ÷ 2(' + fmtL(r2(need3), ses.settings.currency || 'USD') + ')보다 적어, 원문대로면 1회 매수금(' + fmtL(r2(need3 / ses.settings.splits), ses.settings.currency || 'USD') + ')을 끝까지 채우지 못해요. ⋮ 메뉴의 \'손실이 커지면 1회 매수금 다시 정하기\'를 켜거나 원금을 다시 정해 재시작할 수 있어요.' };
         }
       } else if (ses.settings && isOld(ses.settings) && how === 'custom') ses.settings = Object.assign({}, ses.settings, { base: capital });   /* 원금을 바꿔 재시작 → 단리 1회 매수금의 기준(처음 원금)도 새 원금 */
+      else if (ses.settings && ses.settings.money === 'part' && capital < baseOf(ses.settings) - 1e-6) ses.settings = Object.assign({}, ses.settings, { base: capital });   /* 일부분 복리: 손실로 끝나 이어 가면 처음 원금도 그만큼 낮춤 (엔진 begin 과 같음 · 잃은 돈은 전부 반영) */
       if (ses.settings) { ses.settings = Object.assign({}, ses.settings, { totalCapital: capital, cycleNo: nc }); if (splits) ses.settings.splits = splits; }
       ses.transactions = []; ses.isReverseMode = false; ses.reverseStarPrice = null; ses.midEntry = null;
     });
@@ -13672,7 +13676,7 @@ function mhApp(P) {
     if (!u.more) return h + (!c.okF || !c.okM ? '<p class="mh-tiny mh-bad" style="margin:6px 0 0">세부옵션에 범위를 벗어난 값이 있어요 — 펼쳐서 고쳐 주세요</p>' : '') + '</div>';
     h += '<div style="display:flex;flex-direction:column;gap:14px;margin-top:12px">';
     h += grpBtns('1회 매수금', 'su-money', [['compound', '복리'], ['part', '일부분 복리']], u.money === 'part' ? 'part' : 'compound',
-      u.money === 'part' ? '번 돈(잃은 돈) 중 아래 비율만 다음 사이클 1회 매수금에 넣어요 — 1회 = (처음 원금 + (지금 돈 − 처음 원금) × 비율) ÷ ' + LK.splits : '사이클이 끝날 때마다 그때 가진 돈 전부 ÷ ' + LK.splits);
+      u.money === 'part' ? '번 돈은 아래 비율만 다음 사이클 1회 매수금에 넣고, 잃은 돈은 전부 반영해요 — 1회 = (처음 원금 + (지금 돈 − 처음 원금) × 비율) ÷ ' + LK.splits + ' · 지금 돈이 처음 원금보다 적으면 지금 돈 ÷ ' + LK.splits + '(처음 원금도 지금 돈으로)' : '사이클이 끝날 때마다 그때 가진 돈 전부 ÷ ' + LK.splits);
     if (u.money === 'part') h += '<div style="margin-top:-6px"><label class="mh-lbl">반영 비율 (%)</label><div class="mh-mrow"><input class="mh-in" type="number" min="0" max="100" step="5" value="' + esc(u.mix) + '" data-in="su:mix" aria-label="일부분 복리 반영 비율 (%)"><span class="mh-small mh-faint">%</span></div>' +
       '<p class="mh-help">0% = 처음 원금 고정 · 100% = 복리와 같음' + (c.okM ? '' : ' · <span class="mh-bad">0~100 사이로 입력하세요</span>') + '</p></div>';
     h += grpBtns('새 사이클', 'su-restart', [['next', '다음 날 바로'], ['rsi', 'RSI 60 이하일 때']], u.restart,
@@ -13725,8 +13729,8 @@ function mhApp(P) {
       '<div class="mh-msec"><div class="mh-row"><span style="font-size:13px;font-weight:700">고정 규칙</span><span class="mh-tiny mh-faint">바꿀 수 없어요</span></div><div class="mh-tiny mh-faint" style="margin-top:4px;line-height:1.6">' +
         (P.rules || []).map(function (x) { return '<b style="color:var(--m-t2)">' + x[0] + '</b> ' + x[1]; }).join(' · ') + '</div></div>' +
       segRow('1회 매수금', 'm-money', [['compound', '복리'], ['part', '일부분 복리']], part ? 'part' : 'compound',
-        part ? '1회 = (처음 원금 ' + fmtL(base, cur) + ' + (지금 돈 − 처음 원금) × ' + Math.round(mixOf(s) * 100) + '%) ÷ ' + LK.splits : '사이클마다 그때 가진 돈 전부 ÷ ' + LK.splits) +
-      (part ? applyRow('일부분 복리 반영 비율', '0~100%', 'mh-m-mix', Math.round(mixOf(s) * 100), '%', '5', '0', '100', 'ap-mix', '번 돈(잃은 돈) 중 다음 사이클 1회 매수금에 넣는 몫') : '') +
+        part ? '1회 = (처음 원금 ' + fmtL(base, cur) + ' + (지금 돈 − 처음 원금) × ' + Math.round(mixOf(s) * 100) + '%) ÷ ' + LK.splits + ' · 손실이면 지금 돈 ÷ ' + LK.splits + '(처음 원금도 낮춤)' : '사이클마다 그때 가진 돈 전부 ÷ ' + LK.splits) +
+      (part ? applyRow('일부분 복리 반영 비율', '0~100%', 'mh-m-mix', Math.round(mixOf(s) * 100), '%', '5', '0', '100', 'ap-mix', '번 돈 중 다음 사이클 1회 매수금에 넣는 몫 (잃은 돈은 전부 반영)') : '') +
       segRow('새 사이클', 'm-restart', [['next', '다음 날 바로'], ['rsi', 'RSI 60 이하일 때']], s.restart === 'rsi' ? 'rsi' : 'next', '첫 사이클은 바로 · 다음 사이클부터 와일더 RSI(14)가 60 이하인 날 첫 매수') +
       applyRow('원금 ($)', '현재 ' + fmtL(s.totalCapital, cur), 'mh-m-cap', s.totalCapital, '', '1', '1', '', 'ap-cap', '잔금/매수금 계산 기준. 추가 입금 시 늘리기') +
       menuBtTaxLock(s) +
@@ -14189,7 +14193,7 @@ function mhApp(P) {
       '<button class="mh-btn mh-btn-p" style="width:100%;margin-bottom:6px" data-act="restart" data-v="' + cmp + '">' + (LK ? '🚀 이어서 재시작 · ' + fmtL(cmp, cur) + ' (번 돈까지)' : '🚀 복리 재시작') + '</button>' +
       '<button class="mh-btn" style="width:100%;margin-bottom:6px" data-act="restart" data-v="' + (LK ? baseOf(s) : s.totalCapital) + '">' + (LK ? '처음 원금으로 재시작 · ' + fmtL(baseOf(s), cur) : '단리 재시작') + '</button>' +
       '<button class="mh-btn" style="width:100%" data-act="restart-open"><span>' + (LK ? '⚙ 원금 바꿔서 재시작' : '⚙ 원금 / 분할 변경 후 재시작') + '</span> <span class="mh-faint">' + (MH.restartOpen ? '▴' : '▾') + '</span></button>' +
-      (LK ? '<p class="mh-help">다음 사이클 1회 매수금 — ' + (s.money === 'part' ? '일부분 복리 ' + Math.round(mixOf(s) * 100) + '%: (처음 원금 + (재시작 원금 − 처음 원금) × ' + Math.round(mixOf(s) * 100) + '%) ÷ ' + s.splits : '복리: 재시작 원금 ÷ ' + s.splits) + (s.restart === 'rsi' ? ' · 새 사이클 첫 매수는 와일더 RSI(14) 60 이하인 날' : '') + '</p>' : '') +
+      (LK ? '<p class="mh-help">다음 사이클 1회 매수금 — ' + (s.money === 'part' ? '일부분 복리 ' + Math.round(mixOf(s) * 100) + '%: 재시작 원금 ≥ 처음 원금이면 (처음 원금 + (재시작 원금 − 처음 원금) × ' + Math.round(mixOf(s) * 100) + '%) ÷ ' + s.splits + ' · 적으면(손실) 재시작 원금 ÷ ' + s.splits + ' (처음 원금도 재시작 원금으로)' : '복리: 재시작 원금 ÷ ' + s.splits) + (s.restart === 'rsi' ? ' · 새 사이클 첫 매수는 와일더 RSI(14) 60 이하인 날' : '') + '</p>' : '') +
       (verOf(s) === '3.0' ? '<p class="mh-help">V3.0 반복리 — 복리 재시작이면 이번 손익이 누적 수익에 더해져 다음 1회 매수금 = 원금 ÷ ' + s.splits + ' + 지금까지 가장 컸던 누적 수익 ÷ ' + (s.splits * 2) + (s.rebase === true ? ' · 현금이 원금 + 최대 누적 수익 ÷ 2보다 적으면 그 현금을 새 원금으로 (다시 정하기)' : '') + '</p>' : '') +
       (!LK && isOld(s) && verOf(s) !== '3.0' && s.money === 'simple' ? '<p class="mh-help">1회 매수금 단리 — 어느 재시작이든 다음 1회 = 처음 원금 ' + fmtL(s.base > 0 ? s.base : s.totalCapital, cur) + ' ÷ 분할 (복리 재시작이면 번 돈은 잔금에 남아 모자랄 때만 씀 · 원금을 바꿔 재시작하면 그 원금이 기준)</p>' : '') +
       (!LK && isOld(s) && s.restart === 'rsi' ? '<p class="mh-help">새 사이클 RSI 60 이하 — 재시작한 뒤 와일더 RSI(14)가 60 이하인 날 첫 매수를 걸어요 (그전엔 대기)</p>' : '');
