@@ -15,3 +15,5 @@ CREATE TABLE IF NOT EXISTS live (s TEXT PRIMARY KEY, t INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS live_t ON live (t);
 -- 계정에 담는 도구 자료 (예: 무한매수법 기록) — 키별 한 덩어리 JSON · t 는 버전(밀리초, 충돌 확인용) · 탈퇴하면 즉시 삭제
 CREATE TABLE IF NOT EXISTS udata (uid INTEGER NOT NULL, k TEXT NOT NULL, v TEXT NOT NULL, t INTEGER NOT NULL, PRIMARY KEY (uid, k));
+-- 72루틴 자동매매 PC 생존 감시 (/hb · worker/src/hb.js): PC 별 무작위 열쇠의 해시(id) · 알림 대상(암호화) · 마지막 신호 · 다음 주문 시각 · 보낸 알림 (30일 조용하면 삭제)
+CREATE TABLE IF NOT EXISTS hb (id TEXT PRIMARY KEY, tgh TEXT, mid TEXT, cred TEXT, last INTEGER NOT NULL, next INTEGER, cut INTEGER, ds TEXT, st TEXT, alarm TEXT, created INTEGER NOT NULL);

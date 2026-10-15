@@ -74,6 +74,10 @@ jobs:
           if ! $W secret list 2>/dev/null | grep -q '"AUTH_SECRET"'; then
             openssl rand -hex 32 | $W secret put AUTH_SECRET >/dev/null
           fi
+          # 72루틴 PC 생존 감시(/hb): 알림 대상 암호화 열쇠 — 없을 때 한 번만 자동 생성 (바꾸면 PC 프로그램이 다음 신호 때 알림 대상을 다시 보냄)
+          if ! $W secret list 2>/dev/null | grep -q '"HB_KEY"'; then
+            openssl rand -hex 32 | $W secret put HB_KEY >/dev/null
+          fi
           for k in KAKAO_JS_KEY KAKAO_CLIENT_ID KAKAO_CLIENT_SECRET KAKAO_ADMIN_KEY NAVER_CLIENT_ID NAVER_CLIENT_SECRET GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET; do
             v="${!k:-}"
             if [ -n "$v" ]; then printf '%s' "$v" | $W secret put "$k" >/dev/null && echo "::notice::$k 등록"; fi
@@ -88,6 +92,7 @@ jobs:
           curl -fsS "$url/" && echo
           f=$(curl -s -m 20 "$url/fear" || true); echo "::notice::공포·탐욕 /fear 응답: ${f:0:300}"
           st=$(curl -s -m 20 "$url/status" || true); echo "::notice::/status: $st"
+          hbr=$(curl -s -m 20 "$url/hb" | grep -o '"ready":[a-z]*' || true); echo "::notice::/hb $hbr"
           printf '{"endpoint":"%s"}\n' "$url" > ../data/counter.json
       - name: 주소 저장 (바뀐 경우에만 커밋)
         if: steps.chk.outputs.skip != '1'
