@@ -124,14 +124,29 @@ def kr_universe():
             c, n = s.get('itemCode') or '', (s.get('stockName') or '').strip()
             if s.get('stockEndType') != 'stock' or not c or not n: continue
             if not c.endswith('0') or PREF_RE.search(n) or '스팩' in n: continue     # 우선주·스팩 제외 (보통주 코드는 0 으로 끝남)
-            mv = num(s.get('marketValue'))
-            if not mv: continue
-            out.append({'c': c, 'n': n, 'm': mv * 1e8, 'p': num(s.get('closePrice')), 'ch': num(s.get('fluctuationsRatio')),
-                        'ts': s.get('localTradedAt')})
-            if len(out) >= TOP + 10: break
-        if len(out) >= TOP + 10: break
-    out.sort(key=lambda x: -x['m'])      # 네이버 목록 순서는 받은 시각 차이로 조금 어긋날 수 있어 받은 시가총액으로 다시 줄 세움
-    return out[:TOP]
+            mv, lp = num(s.get('marketValue')), num(s.get('closePrice'))
+            if not mv or not lp: continue
+            # 주식 수 = 네이버 시가총액(같은 줄의 현재가 기준 · 억원) ÷ 현재가 → 상장 보통주 수
+            out.append({'c': c, 'n': n, 'sh': round(mv * 1e8 / lp), 'm': mv * 1e8, 'p': lp, 'ch': num(s.get('fluctuationsRatio')), 'live': 1})
+            if len(out) >= TOP + 20: break
+        if len(out) >= TOP + 20: break
+    return out                            # 시가총액 순위는 build_kr 에서 '확정 종가 × 주식 수'로 다시 매김
+
+
+def kr_close(c):
+    """가장 최근 확정 종가(한국거래소 정규장 일봉 — 네이버 fchart siseJson, 넥스트레이드 시간외 가격이 섞이지 않는 거래소 공식 일봉)
+    → (종가, 등락률, 날짜) · 평일 15:40 KST 전에는 오늘 봉(장중)을 쓰지 않고 전일 종가 · 그 뒤에는 오늘 종가"""
+    t0 = (TODAY - datetime.timedelta(days=14)).strftime('%Y%m%d')
+    txt = fetch('https://fchart.stock.naver.com/siseJson.nhn?symbol=%s&requestType=1&startTime=%s&endTime=%s&timeframe=day'
+                % (c, t0, TODAY.strftime('%Y%m%d'))).decode('utf-8', 'replace')
+    rows = [(m.group(1), float(m.group(2))) for m in re.finditer(r'\["(\d{8})",\s*[-\d.]+,\s*[-\d.]+,\s*[-\d.]+,\s*([\d.]+)', txt)]
+    final_today = NOW_KST.weekday() < 5 and (NOW_KST.hour, NOW_KST.minute) >= (15, 40)
+    td = TODAY.strftime('%Y%m%d')
+    ok = [r for r in rows if r[1] > 0 and (r[0] < td or (r[0] == td and final_today))]
+    if not ok: return None
+    d, cp = ok[-1]
+    prev = ok[-2][1] if len(ok) > 1 else None
+    return cp, (round((cp / prev - 1) * 100, 2) if prev else None), '%s-%s-%s' % (d[:4], d[4:6], d[6:])
 
 
 def kr_info(c):
@@ -225,7 +240,7 @@ def _plabel(s):
 F1 = {'매출액': 'rev', '영업이익(발표기준)': 'op', '영업이익': 'adjop', '당기순이익(지배)': 'ni', 'EPS(원)': 'eps', '영업활동현금흐름': 'ocf',
       'CAPEX': 'capex', 'FCF': 'fcf', '영업이익률': 'opm', '부채비율': 'debt', 'ROE(%)': 'roe', 'PER(배)': 'per', 'PBR(배)': 'pbr',
       '부채총계': 'liab', '자본총계': 'eq', '현금DPS(원)': 'dps'}
-F4 = {1: {'EBITDA': 'ebitda', 'ROIC': 'roic'}, 3: {'유동비율': 'cur', '당좌비율': 'quick', '이자보상배율': 'icr'}, 5: {'EV/EBITDA': 'eveb', 'EV': 'ev'}}
+F4 = {1: {'EBITDA': 'ebitda', 'ROIC': 'roic'}, 3: {'유동비율': 'cur', '당좌비율': 'quick', '이자보상배율': 'icr'}, 5: {'EV/EBITDA': 'eveb', 'EV': 'ev', '보통주.수정주가(기말)': 'evp'}}
 
 
 def wr_cf1001(c, freq):
@@ -335,7 +350,7 @@ US_KO = {'NVDA': '엔비디아', 'AAPL': '애플', 'GOOG': '알파벳(구글)', 
     'SMCI': '슈퍼마이크로', 'TER': '테라다인', 'KEYS': '키사이트', 'FLEX': '플렉스', 'JBL': '자빌', 'CLS': '셀레스티카', 'CSGP': '코스타 그룹', 'ZS': '지스케일러',
     'HPE': 'HPE', 'HPQ': 'HP', 'NTAP': '넷앱', 'PSTG': '퓨어 스토리지', 'CCJ': '카메코', 'OKLO': '오클로', 'IONQ': '아이온큐', 'RKLB': '로켓랩', 'ASTS': 'AST 스페이스모바일',
     'TSCO': '트랙터 서플라이', 'CVNA': '카바나', 'EBAY': '이베이', 'ETSY': '엣시', 'ZM': '줌', 'OKTA': '옥타', 'MDB': '몽고DB', 'HUBS': '허브스팟', 'VEEV': '비바 시스템스',
-    'ARES': '아레스', 'IBKR': '인터랙티브 브로커스', 'NDAQ': '나스닥', 'MSCI': 'MSCI', 'FIS': 'FIS', 'GPN': '글로벌 페이먼츠', 'WTW': '윌리스 타워스 왓슨', 'TRGP': '타르가'}
+    'ENTG': '엔테그리스', 'Q': '큐니티 일렉트로닉스', 'TSEM': '타워 세미컨덕터', 'LSCC': '래티스 세미컨덕터', 'SITM': '사이타임', 'CRDO': '크레도 테크놀로지', 'MTSI': '매콤(MACOM)', 'GFS': '글로벌파운드리스', 'ARES': '아레스', 'IBKR': '인터랙티브 브로커스', 'NDAQ': '나스닥', 'MSCI': 'MSCI', 'FIS': 'FIS', 'GPN': '글로벌 페이먼츠', 'WTW': '윌리스 타워스 왓슨', 'TRGP': '타르가'}
 SECTOR_KO = {'Technology': '기술', 'Health Care': '헬스케어', 'Finance': '금융', 'Consumer Discretionary': '소비재', 'Consumer Staples': '필수소비재', 'Industrials': '산업재',
              'Energy': '에너지', 'Telecommunications': '통신', 'Utilities': '유틸리티', 'Real Estate': '부동산', 'Basic Materials': '소재', 'Miscellaneous': '기타'}
 
@@ -364,7 +379,31 @@ def us_universe():
         rows.append({'s': s, 'n': html.unescape(r['Name']).strip(), 'm': m, 'p': p, 'cty': (r.get('country') or cty or '').strip(),
                      'sec': SECTOR_KO.get(sec, sec or '')})
     rows.sort(key=lambda x: -x['m'])
-    return rows[:TOP]
+    return rows, listed                   # 전체(시가총액 순) — 순위는 build_us 에서 '확정 종가 × 주식 수'로 다시 매김
+
+
+def sox_members(prev):
+    """필라델피아 반도체 지수(PHLX Semiconductor · SOX) 구성 종목 — 나스닥 지수 사이트 Weighting(가장 최근 평일 장 마감)
+    못 받으면 직전 목록"""
+    d0 = datetime.datetime.now(NY).date()
+    for i in range(0, 10):
+        d = d0 - datetime.timedelta(days=i)
+        if d.weekday() >= 5: continue
+        try:
+            body = urllib.parse.urlencode({'id': 'SOX', 'tradeDate': d.isoformat() + 'T00:00:00.000', 'timeOfDay': 'EOD'}).encode()
+            req = urllib.request.Request('https://indexes.nasdaqomx.com/Index/WeightingData', data=body,
+                                         headers={'User-Agent': UA, 'X-Requested-With': 'XMLHttpRequest', 'Referer': 'https://indexes.nasdaqomx.com/Index/Weighting/SOX',
+                                                  'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                a = (json.loads(r.read().decode('utf-8', 'replace')) or {}).get('aaData') or []
+            syms = sorted({(x.get('Symbol') or '').strip().replace('/', '-').replace('.', '-') for x in a if x.get('Symbol')})
+            if 20 <= len(syms) <= 40:
+                return {'d': d.isoformat(), 's': syms}
+        except Exception as e:
+            log('SOX 구성 종목 실패', d, e)
+        time.sleep(0.3)
+    log('SOX 구성 종목 — 직전 목록 유지')
+    return prev
 
 
 class Yahoo:
@@ -390,6 +429,21 @@ class Yahoo:
         for i in range(0, len(syms), 50):
             d = self.get('https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + urllib.parse.quote(','.join(syms[i:i + 50]), safe=','))
             for q in (d.get('quoteResponse') or {}).get('result') or []: out[q.get('symbol')] = q
+        return out
+
+    def spark(self, syms):
+        """최근 5거래일 일봉 종가 {기호: [(날짜(미국 동부), 종가), ...]}"""
+        out = {}
+        for i in range(0, len(syms), 20):
+            try:
+                d = self.get('https://query1.finance.yahoo.com/v8/finance/spark?symbols=' + urllib.parse.quote(','.join(syms[i:i + 20]), safe=',') + '&range=5d&interval=1d')
+            except Exception as e:
+                log('Yahoo 일봉 실패', syms[i:i + 3], e); continue
+            for k, v in (d or {}).items():
+                ts, cl = (v or {}).get('timestamp') or [], (v or {}).get('close') or []
+                out[k] = [(datetime.datetime.fromtimestamp(t, NY).date().isoformat(), c) for t, c in zip(ts, cl) if c]
+                out[k + '|pc'] = (v or {}).get('chartPreviousClose')
+            time.sleep(0.2)
         return out
 
     def summary(self, s):
@@ -613,6 +667,18 @@ def build_kr(prev_sum, prev_det):
         uni = kr_universe()
     except Exception as e:
         log('국내 목록 실패:', e); uni = []
+    # 시가총액 = 확정 종가 × 주식 수 (종가를 못 받은 종목만 현재가 기준 그대로)
+    def close_of(u):
+        try: return u, kr_close(u['c'])
+        except Exception as e: log('KR 종가 실패', u['c'], e); return u, None
+    with ThreadPoolExecutor(8) as ex:
+        for u, cl in ex.map(close_of, uni):
+            if cl:
+                u['p'], u['ch'], u['pd'] = cl; u['m'] = u['sh'] * u['p']; u.pop('live', None)
+    miss = [u['c'] for u in uni if u.get('live')]
+    if miss: log('KR 종가 못 받음 → 현재가 기준', miss)
+    uni.sort(key=lambda x: -x['m'])
+    uni = uni[:TOP]
     if len(uni) < 90:
         log('국내 목록 %d개 — 직전 목록 유지' % len(uni))
         return (prev_sum or {}).get('kr') or [], prev_det or {'co': {}}
@@ -699,7 +765,7 @@ def build_kr(prev_sum, prev_det):
         q = fin.get('q') if fin else None
         y = fin.get('y') if fin else None
         info = info or {}
-        p = u['p']
+        p = u['p']                          # 확정 종가
         # PER 3종: 후행(최근 4분기 EPS) · 혼합(올해 EPS = 발표된 분기 실제 + 남은 분기 예상) · 선행(내년 예상 EPS)
         eps_t = info.get('eps')
         eps_b = info.get('ceps')
@@ -737,6 +803,12 @@ def build_kr(prev_sum, prev_det):
             if y and y['v'].get('ev'):
                 for lab, e, v in zip(y['p'], y['e'], y['v']['ev']):
                     if e and v and lab.startswith(str(NOW_KST.year)): evn = v
+            evp = None
+            if y and y['v'].get('evp'):
+                for lab, e, v in zip(y['p'], y['e'], y['v']['evp']):
+                    if e and v and lab.startswith(str(NOW_KST.year)): evp = v
+            if evn and evp and p and u.get('sh'):   # 와이즈리포트 EV 의 주가(evp) → 확정 종가로 맞춤 (보통주 시가총액 차이만큼, 억원)
+                evn = evn + (p - evp) * u['sh'] / 1e8
             if evn and eb and eb > 0: k['eveb'] = r2(evn / eb)
             elif y and eb is not None and eb > 0: k['eveb'] = last_actual(y, 'eveb')
             if ls and ls.get('pd') in q['p'] and q['e'][q['p'].index(ls['pd'])]:
@@ -745,7 +817,9 @@ def build_kr(prev_sum, prev_det):
                 qp = {'p': q['p'][:i + 1], 'e': q['e'][:i] + [0], 'v': {kk: (q['v'].get(kk) or [None] * len(q['p']))[:i] + [ls.get(kk)] for kk in ('rev', 'op')}}
                 k['op'], k['rev'] = ttm(qp, 'op'), ttm(qp, 'rev')
                 if ls.get('op') is not None and ls.get('rev'): k['opm'] = r2(ls['op'] / ls['rev'] * 100)
-        rows.append({'c': c, 'n': u['n'], 'r': rank, 'm': u['m'], 'p': p, 'ch': u['ch'], 'per': per, 'eps': epsd, 'pbr': info.get('pbr'),
+        bps = info.get('bps')
+        pbr = r2(p / bps) if p and bps and bps > 0 else info.get('pbr')
+        rows.append({'c': c, 'n': u['n'], 'r': rank, 'm': u['m'], 'sh': u.get('sh'), 'p': p, 'pd': u.get('pd'), 'ch': u['ch'], 'per': per, 'eps': epsd, 'pbr': pbr,
                      'nx': nx, 'ls': ls, 'k': sane(k),
                      'pa': uniq([[x['d'], 'ann' if x.get('ann') else 'fix' if x['fix'] else 'pre'] for x in discs])[:12]})
     # 목록에서 빠진 회사의 상세는 지움
@@ -756,18 +830,55 @@ def build_kr(prev_sum, prev_det):
 
 def build_us(prev_sum, prev_det):
     det = prev_det if prev_det and isinstance(prev_det.get('co'), dict) else {'co': {}}
+    sox = sox_members((prev_sum or {}).get('sox')) or {'d': None, 's': []}
+    soxset = set(sox.get('s') or [])
+    listed = {}
     try:
-        uni = us_universe()
+        allrows, listed = us_universe()
     except Exception as e:
-        log('미국 목록 실패:', e); uni = []
-    if len(uni) < 90:
-        log('미국 목록 %d개 — 직전 목록 유지' % len(uni))
-        old = (prev_sum or {}).get('us') or []
-        uni = [{'s': r['s'], 'n': r['n'], 'm': r['m'], 'p': r['p'], 'cty': r.get('cty'), 'sec': r.get('sec')} for r in old]
-        if not uni: return [], det
+        log('미국 목록 실패:', e); allrows = []
+    if len(allrows) < 90:
+        log('미국 목록 %d개 — 직전 목록 유지' % len(allrows))
+        allrows = [{'s': r['s'], 'n': r['n'], 'm': r['m'], 'p': r['p'], 'cty': r.get('cty'), 'sec': r.get('sec')} for r in (prev_sum or {}).get('us') or []]
+        if not allrows: return [], det, sox
+    # 후보 = 시가총액 상위 130 + SOX 구성 종목 (확정 종가로 순위가 바뀌어도 100위 경계를 놓치지 않게)
+    cands = allrows[:TOP + 30]
+    have = {u['s'] for u in cands}
+    for u in allrows:
+        if u['s'] in soxset and u['s'] not in have: cands.append(u); have.add(u['s'])
+    for sym in soxset - have:   # companiesmarketcap 에 없는 SOX 종목(새 상장 등)
+        nm, sec, cty = listed.get(sym, (sym, '', ''))
+        cands.append({'s': sym, 'n': nm or sym, 'm': 0, 'p': None, 'cty': cty, 'sec': SECTOR_KO.get(sec, sec or '')}); have.add(sym)
     y = Yahoo()
-    q = y.quotes([u['s'] for u in uni])
-    log('Yahoo 시세 %d/%d' % (len(q), len(uni)))
+    q = y.quotes([u['s'] for u in cands])
+    sp = y.spark([u['s'] for u in cands])
+    log('Yahoo 시세 %d/%d · 일봉 %d' % (len(q), len(cands), len([1 for u in cands if sp.get(u['s'])])))
+    # 확정 종가: 미국 동부 평일 16:10 전에는 오늘 봉(장중)을 쓰지 않음 → 전일 종가 · 그 뒤에는 오늘 종가
+    nyn = datetime.datetime.now(NY)
+    today_ny, final_today = nyn.date().isoformat(), nyn.weekday() < 5 and (nyn.hour, nyn.minute) >= (16, 10)
+    for u in cands:
+        qq = q.get(u['s']) or {}
+        bars = [b for b in sp.get(u['s']) or [] if b[0] < today_ny or (b[0] == today_ny and final_today)]
+        lp, mc = qq.get('regularMarketPrice'), qq.get('marketCap')
+        if bars:
+            u['p'], u['pd'] = bars[-1][1], bars[-1][0]
+            allb = sp.get(u['s']) or []
+            i = allb.index(bars[-1])
+            prevc = allb[i - 1][1] if i > 0 else sp.get(u['s'] + '|pc')
+            u['ch'] = r2((u['p'] / prevc - 1) * 100) if prevc else None
+        else:
+            u['p'], u['ch'] = lp or u.get('p'), qq.get('regularMarketChangePercent'); u['live'] = 1
+        # 주식 수 = 야후 시가총액 ÷ 현재가 (여러 종류 주식·예탁증서 비율까지 들어간 회사 전체 주식 수) → 시가총액 = 확정 종가 × 주식 수
+        if mc and lp and u['p']:
+            u['sh'] = mc / lp; u['m'] = u['sh'] * u['p']; u['f'] = u['p'] / lp
+        else:
+            u['f'] = 1.0
+    miss = [u['s'] for u in cands if u.get('live')]
+    if miss: log('US 확정 종가 못 받음 → 현재가 기준', miss[:10])
+    cands.sort(key=lambda x: -(x['m'] or 0))
+    top = cands[:TOP]
+    topset = {u['s'] for u in top}
+    uni = top + [u for u in cands[TOP:] if u['s'] in soxset]
     try: times = nasdaq_times()
     except Exception as e: times = {}; log('나스닥 달력 실패', e)
 
@@ -802,6 +913,7 @@ def build_us(prev_sum, prev_det):
                                 'epsE': raw(ern, 'earningsAverage'), 'revE': raw(ern, 'revenueAverage')}
                     ks = (sm or {}).get('defaultKeyStatistics') or {}
                     o['ev'] = raw(ks, 'enterpriseValue'); o['eveb'] = raw(ks, 'enterpriseToEbitda')
+                    o['evm'] = (q.get(s) or {}).get('marketCap')     # EV 를 계산할 때의 시가총액 → 나중에 확정 종가 기준으로 맞춤
                     done += 1
         time.sleep(0.2)
     log('미국 재무표 %d개 새로 받음' % done)
@@ -811,8 +923,10 @@ def build_us(prev_sum, prev_det):
         s = u['s']; qq = q.get(s) or {}; o = det['co'].setdefault(s, {})
         fin = o.get('fin') or {}
         o['n'] = u['n']
-        price = qq.get('regularMarketPrice') or u['p']
-        per = {'t': r2(qq.get('trailingPE')), 'b': r2(qq.get('priceEpsCurrentYear')), 'f': r2(qq.get('forwardPE'))}
+        price = u['p']                      # 확정 종가
+        fx = u.get('f') or 1.0              # 야후 비율(현재가 기준)을 확정 종가 기준으로 바꾸는 배수
+        per = {k_: r2(qq.get(f_) * fx) if isinstance(qq.get(f_), (int, float)) else None
+               for k_, f_ in (('t', 'trailingPE'), ('b', 'priceEpsCurrentYear'), ('f', 'forwardPE'))}
         epsd = {'t': qq.get('epsTrailingTwelveMonths'), 'b': qq.get('epsCurrentYear'), 'f': qq.get('epsForward')}
         for k_ in ('t', 'b', 'f'):
             if per[k_] is not None and (per[k_] <= 0 or per[k_] > 5000): per[k_] = None
@@ -867,15 +981,22 @@ def build_us(prev_sum, prev_det):
             k['roic'] = nz(avg4(tq, 'roic'), last_actual(ty, 'roic'))
             k['roe'] = nz(avg4(tq, 'roe'), last_actual(ty, 'roe'))
             k['icr'] = nz(avg4(tq, 'icr'), last_actual(ty, 'icr'))
+            if k['eveb'] is not None and o.get('ev') and o.get('evm') and u.get('m'):   # EV = 그때 EV − 그때 시가총액 + 확정 종가 시가총액
+                k['eveb'] = r2(k['eveb'] * (o['ev'] - o['evm'] + u['m']) / o['ev'])
             if k['eveb'] is not None and (k['eveb'] <= 0 or k['eveb'] > 2000): k['eveb'] = None
             if adr: k['eveb'] = None    # 예탁증서: 야후 EV(달러)와 EBITDA(본국 통화) 단위가 달라 계산 불가
-        rows.append({'s': s, 'n': u['n'], 'ko': US_KO.get(s), 'r': rank, 'm': u['m'], 'p': r2(price), 'ch': r2(qq.get('regularMarketChangePercent')),
+        row = {'s': s, 'n': u['n'], 'ko': US_KO.get(s), 'r': rank if s in topset else None, 'm': u['m'], 'sh': round(u['sh']) if u.get('sh') else None,
+               'p': r2(price), 'pd': u.get('pd'), 'ch': r2(u.get('ch')),
                      'cur': qq.get('currency') or 'USD', 'fc': fin.get('cur') or qq.get('financialCurrency') or 'USD', 'cty': u.get('cty'), 'sec': u.get('sec'),
-                     'per': per, 'eps': epsd, 'pbr': r2(qq.get('priceToBook')), 'nx': nx, 'ls': ls, 'k': sane(k),
-                     'pa': [[x['d'], 'rep'] for x in reversed(h)][:12]})
+                     'per': per, 'eps': epsd, 'pbr': r2(qq.get('priceToBook') * fx) if isinstance(qq.get('priceToBook'), (int, float)) else None,
+                     'nx': nx, 'ls': ls, 'k': sane(k),
+                     'pa': [[x['d'], 'rep'] for x in reversed(h)][:12]}
+        if s in soxset: row['sox'] = 1
+        if s not in topset: row['x'] = 1            # 미국 TOP 100 밖(필라델피아 반도체 지수 종목이라 함께 받음)
+        rows.append(row)
     keep = {r['s'] for r in rows}
     det['co'] = {s: v for s, v in det['co'].items() if s in keep}
-    return rows, det
+    return rows, det, sox
 
 
 def main():
@@ -885,14 +1006,15 @@ def main():
     only = (sys.argv[1] if len(sys.argv) > 1 else '').lower()
     kr, dkr = (build_kr(prev, pkr) if only in ('', 'kr') else (prev.get('kr') or [], pkr))
     try:
-        us, dus = (build_us(prev, pus) if only in ('', 'us') else (prev.get('us') or [], pus))
+        us, dus, sox = (build_us(prev, pus) if only in ('', 'us') else (prev.get('us') or [], pus, prev.get('sox')))
     except Exception as e:
-        log('미국 전체 실패 — 직전 값 유지:', e); us, dus = prev.get('us') or [], pus
+        log('미국 전체 실패 — 직전 값 유지:', e); us, dus, sox = prev.get('us') or [], pus, prev.get('sox')
     if not kr and not us: sys.exit('국내·미국 모두 비어 있음 — 저장하지 않음')
     now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
     summ = {'updated': now, 'today': TODAY.isoformat(),
             'source': '국내: 네이버 증권·와이즈리포트(컨센서스·재무)·거래소 공시 / 미국: Yahoo Finance·나스닥·companiesmarketcap',
-            'kr': kr, 'us': us}
+            'basis': '확정 종가(국내 = 한국거래소 정규장 종가 · 15:40 KST 전에는 전일 종가 / 미국 = 정규장 종가 · 16:10 ET 전에는 전일 종가) × 주식 수',
+            'sox': sox, 'kr': kr, 'us': us}
     # 내용(갱신 시각·받은 시각 제외)이 직전과 같으면 저장하지 않음 → 주말·휴장일에 빈 커밋을 만들지 않음
     def strip(o):
         if isinstance(o, dict): return {k: strip(v) for k, v in o.items() if k not in ('updated', 'dt', 'ft')}

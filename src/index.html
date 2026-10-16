@@ -1852,6 +1852,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .er-chip:hover { border-color:rgba(49,130,246,0.35); color:var(--text); }
   .er-chip.active { background:var(--accent-dim); border-color:rgba(49,130,246,0.45); color:var(--accent); font-weight:600; }
   .er-star { font-style:normal; color:#f5a524; font-weight:700; }
+  .er-sox { font-family:var(--mono); font-size:9.5px; font-weight:700; color:#14b8a6; background:rgba(20,184,166,0.12); border-radius:4px; padding:0 4px; }
   .er-tbl-wrap { overflow-x:auto; }
   .er-tbl { width:100%; border-collapse:collapse; font-size:13px; }
   .er-tbl th { font-size:11px; font-weight:500; color:var(--text3); text-align:right; padding:8px 8px; border-bottom:1px solid var(--card-border); white-space:nowrap; }
@@ -12651,6 +12652,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
           <button class="chart-tab active" data-mk="all">전체</button>
           <button class="chart-tab" data-mk="kr">국내 KOSPI 100</button>
           <button class="chart-tab" data-mk="us">미국 100</button>
+          <button class="chart-tab" data-mk="sox" title="필라델피아 반도체 지수(PHLX Semiconductor · SOX) 구성 종목 — 미국 TOP 100 밖 종목도 함께">필라델피아 반도체(SOX)</button>
         </div>
         <div class="er-tools-r">
           <button type="button" class="er-favbtn" id="er-favonly" aria-pressed="false" title="♥ 표시한 관심 기업만 보기"><span aria-hidden="true">♥</span> 관심 기업만</button>
@@ -12679,6 +12681,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
           <button class="chart-tab active" data-mk="all">전체</button>
           <button class="chart-tab" data-mk="kr">국내</button>
           <button class="chart-tab" data-mk="us">미국</button>
+          <button class="chart-tab" data-mk="sox" title="필라델피아 반도체 지수(SOX) 구성 종목">SOX 반도체</button>
         </div>
         <div class="er-search-wrap">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
@@ -12779,13 +12782,13 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
             <div><b>혼합 PER</b><small>Blended</small><p>주가 ÷ <b>올해(이번 회계연도) EPS</b> = 이미 발표된 분기의 실제 EPS + 남은 분기의 증권사 예상 EPS. 실제와 예상이 섞여 있어 '혼합'이라 부르며, 연말로 갈수록 실제 비중이 커집니다.</p></div>
             <div class="er-key"><b><em class="er-star">★</em> 선행 PER</b><small>Forward</small><p>주가 ÷ <b>다음 회계연도 예상 EPS</b>. 주식은 미래 이익을 사는 것이므로 투자 판단에 가장 많이 씁니다. 다만 예상치는 틀릴 수 있습니다.</p></div>
           </div>
-          <p><b>읽는 법</b> — <b>후행 &gt; 혼합 &gt; 선행</b> 순으로 작아지면 이익이 늘어날 것으로 예상된다는 뜻이고, 반대면 이익이 줄어들 것으로 예상된다는 뜻입니다. 같은 업종·같은 회사의 과거 평균과 비교하세요(반도체 경기 바닥에서는 PER이 오히려 높아 보이는 등 업황에 따라 해석이 달라집니다). 이익이 적자(EPS 0 이하)이면 PER을 계산하지 않습니다.</p><p><b>이 사이트의 기준</b> — 국내: 주가 ÷ 네이버 증권 EPS(최근 4분기) · 와이즈리포트 컨센서스(올해·내년 예상 EPS). 미국: Yahoo Finance(최근 12개월 EPS · 이번·다음 회계연도 예상 EPS). 미국 기업은 회계연도가 1월·9월 등에 끝나기도 하므로 '올해'는 그 회사의 회계연도입니다.</p></div></details>
+          <p><b>읽는 법</b> — <b>후행 &gt; 혼합 &gt; 선행</b> 순으로 작아지면 이익이 늘어날 것으로 예상된다는 뜻이고, 반대면 이익이 줄어들 것으로 예상된다는 뜻입니다. 같은 업종·같은 회사의 과거 평균과 비교하세요(반도체 경기 바닥에서는 PER이 오히려 높아 보이는 등 업황에 따라 해석이 달라집니다). 이익이 적자(EPS 0 이하)이면 PER을 계산하지 않습니다.</p><p><b>이 사이트의 기준</b> — 주가는 <b>가장 최근 확정 종가</b>(장중에는 전일 종가)입니다. 국내: 종가 ÷ 네이버 증권 EPS(최근 4분기) · 와이즈리포트 컨센서스(올해·내년 예상 EPS). 미국: Yahoo Finance(최근 12개월 EPS · 이번·다음 회계연도 예상 EPS — 야후 비율을 확정 종가 기준으로 환산). 미국 기업은 회계연도가 1월·9월 등에 끝나기도 하므로 '올해'는 그 회사의 회계연도입니다.</p></div></details>
       <details class="er-term" id="er-t-pbr"><summary><b>PBR</b><small>주가순자산비율 · Price/Book</small><span class="er-t-one">주가가 1주당 순자산(장부상 회사를 청산하면 남는 돈)의 몇 배인가</span></summary>
         <div class="er-t-b"><p><b>계산식</b> — PBR = 주가 ÷ BPS(주당순자산) = 시가총액 ÷ 자본총계</p><p><b>보는 법</b> — 1배 미만이면 장부상 가치보다 싸게 거래된다는 뜻입니다. 은행·보험·철강처럼 자산이 중요한 업종에서 많이 씁니다. 다만 'PBR = ROE × PER'(대략)이므로, ROE가 낮은 회사는 PBR이 낮은 게 당연할 수 있습니다(가치 함정). 코리아 디스카운트·밸류업 정책에서 자주 나오는 지표입니다.</p></div></details>
       <details class="er-term er-key" id="er-t-eveb"><summary><b><em class="er-star">★</em> EV/EBITDA</b><small>기업가치 배수</small><span class="er-t-one">회사를 통째로(빚까지 떠안고) 사는 값이 1년 현금 창출력의 몇 배인가. 빚을 반영한 PER</span></summary>
-        <div class="er-t-b"><p><b>계산식</b> — EV(기업가치) = 시가총액 + 순차입금(이자 붙는 빚 − 현금) · EV/EBITDA = EV ÷ EBITDA(최근 4분기)</p><p><b>쉽게 말하면</b> — 가게를 인수할 때 가게 값(시가총액)만 내는 게 아니라 가게 빚도 떠안아야 하고, 가게 금고의 현금은 내 것이 됩니다. 그 실제 인수 비용이 1년 현금 창출력의 몇 배인지 보는 것입니다.</p><p><b>왜 ★인가</b> — PER은 빚이 많은 회사와 현금이 많은 회사를 같은 기준으로 비교하지 못하고, 감가상각·세금 차이에도 흔들립니다. EV/EBITDA는 이를 보정해 <b>나라·업종이 다른 회사끼리 비교</b>하기 좋아 인수합병(M&amp;A)에서 기업값을 매길 때 가장 많이 씁니다.</p><p><b>참고 기준</b> — 업종마다 다르지만 대략 8배 이하 저평가 쪽 · 8~15배 보통 · 15배 이상 고평가 쪽(높은 성장 기대). 은행·보험사에는 쓰지 않습니다.</p><p><b>이 사이트의 기준</b> — 국내: 와이즈리포트 EV(현재 주가 기준) ÷ 최근 4분기 EBITDA · 미국: Yahoo Finance enterpriseToEbitda.</p></div></details>
+        <div class="er-t-b"><p><b>계산식</b> — EV(기업가치) = 시가총액 + 순차입금(이자 붙는 빚 − 현금) · EV/EBITDA = EV ÷ EBITDA(최근 4분기)</p><p><b>쉽게 말하면</b> — 가게를 인수할 때 가게 값(시가총액)만 내는 게 아니라 가게 빚도 떠안아야 하고, 가게 금고의 현금은 내 것이 됩니다. 그 실제 인수 비용이 1년 현금 창출력의 몇 배인지 보는 것입니다.</p><p><b>왜 ★인가</b> — PER은 빚이 많은 회사와 현금이 많은 회사를 같은 기준으로 비교하지 못하고, 감가상각·세금 차이에도 흔들립니다. EV/EBITDA는 이를 보정해 <b>나라·업종이 다른 회사끼리 비교</b>하기 좋아 인수합병(M&amp;A)에서 기업값을 매길 때 가장 많이 씁니다.</p><p><b>참고 기준</b> — 업종마다 다르지만 대략 8배 이하 저평가 쪽 · 8~15배 보통 · 15배 이상 고평가 쪽(높은 성장 기대). 은행·보험사에는 쓰지 않습니다.</p><p><b>이 사이트의 기준</b> — EV 의 시가총액 부분을 <b>확정 종가 × 주식 수</b>로 맞춰 매일 다시 계산합니다. 국내: 와이즈리포트 EV(순차입금 포함) ÷ 최근 4분기 EBITDA · 미국: Yahoo Finance 기업가치·EBITDA(최근 12개월).</p></div></details>
       <details class="er-term" id="er-t-mcap"><summary><b>시가총액 · EV</b><small>Market Cap · Enterprise Value</small><span class="er-t-one">시가총액 = 주가 × 주식 수(시장이 매긴 회사 지분 전체의 값). EV = 시가총액 + 빚 − 현금</span></summary>
-        <div class="er-t-b"><p><b>보는 법</b> — 이 캘린더는 코스피 보통주 시가총액 상위 100개(우선주·ETF 제외)와 미국 거래소에 상장된 시가총액 상위 100개 기업(같은 회사의 여러 주식은 하나로, 해외 기업의 미국 예탁증서 포함)을 고릅니다. 순위는 매일 바뀌므로 경계에 있는 기업은 들어오고 나갈 수 있습니다.</p></div></details>
+        <div class="er-t-b"><p><b>이 사이트의 계산</b> — 시가총액 = <b>가장 최근 확정 종가 × 주식 수</b>. 장중(국내 15:40 전 · 미국 동부 16:10 전)에는 전일 종가, 장이 끝나면 그날 종가로 바뀌어 매일 새로 계산됩니다. PER·PBR·EV/EBITDA 도 같은 종가로 계산합니다. 주식 수는 국내 = 상장 보통주 수(네이버 증권), 미국 = 회사 전체 주식 수(여러 종류 주식·예탁증서 비율 포함, Yahoo Finance)입니다.</p><p><b>보는 법</b> — 이 캘린더는 코스피 보통주 시가총액 상위 100개(우선주·ETF 제외)와 미국 거래소에 상장된 시가총액 상위 100개 기업(같은 회사의 여러 주식은 하나로, 해외 기업의 미국 예탁증서 포함)을 고릅니다. 순위는 매일 종가로 다시 매기므로 경계에 있는 기업은 들어오고 나갈 수 있습니다. '필라델피아 반도체(SOX)' 보기를 고르면 필라델피아 반도체 지수 구성 종목 30개(나스닥 지수 사이트의 최신 구성)를 미국 TOP 100 밖 종목까지 모두 보여 줍니다.</p></div></details>
 
       <h3 class="er-gl-h">⑥ 실적 발표 용어</h3>
       <details class="er-term" id="er-t-pre"><summary><b>잠정실적 · 확정실적</b><small>Preliminary · Final</small><span class="er-t-one">국내 기업이 감사가 끝나기 전에 거래소에 먼저 알리는 매출·영업이익 숫자(잠정)와, 나중에 정식 보고서로 확정하는 숫자</span></summary>
@@ -12806,7 +12809,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <h2 id="g-earn-h">실적발표 캘린더는 이렇게 만듭니다</h2>
       <p class="g-lead">주가는 길게 보면 기업의 이익을 따라갑니다. 실적발표는 그 이익이 석 달마다 공개되는 날이라 주가가 가장 크게 움직이는 날이기도 합니다. 이 캘린더는 코스피 대형주 100곳과 미국 대형주 100곳의 다음 발표일, 지난 발표의 실제 숫자와 예상치, 그리고 가치 판단에 필요한 지표를 한곳에 모았습니다.</p>
       <div class="g-grid">
-        <article class="g-card"><h3>자료와 갱신</h3><ul class="g-list"><li><b>국내</b> — 종목·시가총액·주가: 네이버 증권 · 확정 발표 일정(IR): 네이버 증권 · 잠정실적: 거래소 공시(네이버 증권 공시) · 분기·연간 재무와 컨센서스: 와이즈리포트(네이버 기업정보)</li><li><b>미국</b> — 상장 종목: 나스닥 · 시가총액 순위: companiesmarketcap.com · 발표일·예상치·실적·재무: Yahoo Finance · 장 전/장 후: 나스닥 실적 달력</li><li>GitHub Actions가 <b>2시간마다</b> 자동으로 새로 받습니다. 재무표는 하루 한 번, 실적을 막 발표한 기업은 발표 직후 몇 시간 안에 다시 받습니다.</li></ul></article>
+        <article class="g-card"><h3>자료와 갱신</h3><ul class="g-list"><li><b>국내</b> — 종목·시가총액·주가: 네이버 증권 · 확정 발표 일정(IR): 네이버 증권 · 잠정실적: 거래소 공시(네이버 증권 공시) · 분기·연간 재무와 컨센서스: 와이즈리포트(네이버 기업정보)</li><li><b>미국</b> — 상장 종목: 나스닥 · 시가총액 순위: companiesmarketcap.com · 발표일·예상치·실적·재무: Yahoo Finance · 장 전/장 후: 나스닥 실적 달력</li><li>GitHub Actions가 <b>2시간마다, 그리고 한국·미국 장 마감 직후</b> 자동으로 새로 받습니다. 주가·시가총액·PER 은 <b>가장 최근 확정 종가 × 주식 수</b>로 매일 바뀝니다. 재무표는 하루 한 번, 실적을 막 발표한 기업은 발표 직후 몇 시간 안에 다시 받습니다.</li></ul></article>
         <article class="g-card"><h3>숫자 읽는 법</h3><ul class="g-list"><li><b>억원 / 억 달러</b> — 국내 기업은 억원, 미국 기업은 그 회사 보고 통화(대부분 달러)의 1억 단위입니다.</li><li><b>분기 이름</b> — 분기 말 날짜(2026.06 = 2026년 4~6월)로 적습니다. 회계연도가 다른 미국 기업도 헷갈리지 않게 하기 위해서입니다.</li><li><b>(E)·연한 칸</b> — 증권사 예상치. 국내는 와이즈리포트 컨센서스, 미국은 Yahoo Finance 애널리스트 평균입니다.</li><li>재무 숫자는 연결재무제표 기준이며, 자료 제공처의 계산 방식에 따라 다른 사이트와 조금 다를 수 있습니다.</li></ul></article>
       </div>
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>예상 발표일은 얼마나 정확한가요?</summary><div class="g-ans"><p>대형 기업은 해마다 비슷한 시기에 발표해서 대부분 며칠 안쪽으로 맞지만, 회사가 날짜를 옮기면 틀릴 수 있습니다. 회사가 날짜를 공시하면 다음 갱신(2시간 안)에 '확정'으로 바뀌니, 확정 표시를 확인하세요.</p></div></details><details class="g-faq"><summary>왜 실적 발표 후 바로 표에 숫자가 안 들어오나요?</summary><div class="g-ans"><p>국내 잠정실적(매출·영업이익)은 공시 본문에서 바로 읽어 '지난 실적'에 보여 주지만, 분기 재무표 전체(현금흐름·부채 등)는 회사가 분기보고서를 내고 자료 제공처가 정리한 뒤에 채워집니다. 그 전까지 그 분기는 예상치(E)로 남아 있습니다. 미국은 보통 발표 다음 날 안에 채워집니다.</p></div></details><details class="g-faq"><summary>PER이 '—' 또는 '적자'로 나오는 이유는?</summary><div class="g-ans"><p>이익(EPS)이 0 이하이면 PER은 의미가 없어 계산하지 않고 '적자'로 표시합니다. 증권사 예상치가 없는 기업은 혼합·선행 PER이 '—'로 나옵니다.</p></div></details><details class="g-faq"><summary>은행·보험사의 부채비율이 왜 이렇게 높나요?</summary><div class="g-ans"><p>은행의 예금, 보험사의 보험금 준비금은 장부상 부채이기 때문입니다. 금융회사는 부채비율·이자보상배율·EV/EBITDA 대신 ROE·PBR과 자본적정성(BIS 비율 등)으로 보는 것이 일반적입니다.</p></div></details><details class="g-faq"><summary>이 정보로 투자해도 되나요?</summary><div class="g-ans"><p>이 페이지는 공개된 자료를 모아 보기 쉽게 정리한 참고 자료이며 투자 권유가 아닙니다. 자료 제공처의 오류·지연이 있을 수 있으니 중요한 결정 전에는 회사 공시(전자공시시스템 DART, 미국 SEC EDGAR)를 직접 확인하세요.</p></div></details></div>
@@ -18795,6 +18798,8 @@ var TAX = (function () {
     if (kind === 'e') return comma(v, Math.abs(v) >= 1000 ? 0 : 2);
     return comma(v, 2);
   }
+  function rankTxt(r) { return r.r ? (r.mk === 'kr' ? '코스피 ' : '미국 ') + r.r + '위' : '미국 TOP 100 밖'; }
+  function pdTxt(r) { return r.pd ? md(r.pd) + ' 종가' : '현재가'; }
   function capTxt(r) {
     if (r.mk === 'kr') { var j = r.m / 1e12; return (j >= 100 ? comma(Math.round(j)) : comma(j, 1)) + '조원'; }
     return r.m >= 1e12 ? comma(r.m / 1e12, 2) + '조 달러' : comma(Math.round(r.m / 1e8)) + '억 달러';
@@ -18835,7 +18840,9 @@ var TAX = (function () {
   function rows() {
     var q = S.q.trim().toLowerCase(), fv = favs();
     return all().filter(function (r) {
-      if (S.mk !== 'all' && r.mk !== S.mk) return false;
+      if (S.mk === 'sox') { if (!r.sox) return false; }   /* 필라델피아 반도체 지수 구성 종목 (TOP 100 밖도) */
+      else if (r.x) return false;                         /* 그 밖 화면에서는 미국 TOP 100 밖 SOX 종목은 숨김 */
+      else if (S.mk !== 'all' && r.mk !== S.mk) return false;
       if (S.favOnly && fv.indexOf(r.key) < 0) return false;
       if (q && (r.name + ' ' + r.n + ' ' + r.code + ' ' + (r.sub || '')).toLowerCase().indexOf(q) < 0) return false;
       return true;
@@ -18868,12 +18875,12 @@ var TAX = (function () {
     var past = list.filter(function (r) { return (r.pa || []).some(function (p) { return p[0] >= wkSt && p[0] <= wkEnd; }); });
     $('er-k-week').textContent = (wk.length + past.length) + '곳';
     $('er-k-week-sub').textContent = md(wkSt) + '~' + md(wkEnd) + ' · 예정 ' + wk.length + ' · 발표 끝 ' + past.length;
-    var up = nexts.filter(function (r) { return r.nx.d > (r.mk === 'us' ? tu : tk); }).sort(function (a, b) { return a.nx.d < b.nx.d ? -1 : a.nx.d > b.nx.d ? 1 : a.r - b.r; });
+    var up = nexts.filter(function (r) { return r.nx.d > (r.mk === 'us' ? tu : tk); }).sort(function (a, b) { return a.nx.d < b.nx.d ? -1 : a.nx.d > b.nx.d ? 1 : usd(b) - usd(a); });
     var n = up[0];
     $('er-k-next').textContent = n ? n.name : '—';
     $('er-k-next').className = 'er-kpi-v' + (n ? ' er-link' : ''); $('er-k-next').setAttribute('data-key', n ? n.key : '');
     $('er-k-next-sub').textContent = n ? md(n.nx.d) + ' · D-' + dayDiff(n.nx.d, n.mk === 'us' ? tu : tk) + (confOf(n.nx) ? ' · 확정' : ' · 예상') : '—';
-    var last = list.filter(function (r) { return r.ls && r.ls.d; }).sort(function (a, b) { return a.ls.d > b.ls.d ? -1 : a.ls.d < b.ls.d ? 1 : a.r - b.r; })[0];
+    var last = list.filter(function (r) { return r.ls && r.ls.d; }).sort(function (a, b) { return a.ls.d > b.ls.d ? -1 : a.ls.d < b.ls.d ? 1 : usd(b) - usd(a); })[0];
     $('er-k-last').textContent = last ? last.name : '—';
     $('er-k-last').className = 'er-kpi-v' + (last ? ' er-link' : ''); $('er-k-last').setAttribute('data-key', last ? last.key : '');
     $('er-k-last-sub').innerHTML = last ? esc(md(last.ls.d)) + (isNum(last.ls.sp) ? ' · 예상 대비 ' + spTxt(last.ls.sp) : '') : '—';
@@ -18945,7 +18952,7 @@ var TAX = (function () {
         if (S.mode === 'past' && !S.sel) { var t = x; x = y; y = t; }
         return x < y ? -1 : x > y ? 1 : usd(b.r) - usd(a.r);
       }
-      return sortVal(a.r) - sortVal(b.r) || a.r.r - b.r.r;
+      return sortVal(a.r) - sortVal(b.r) || usd(b.r) - usd(a.r);
     });
     return out;
   }
@@ -18968,7 +18975,7 @@ var TAX = (function () {
   function table() {
     var list = listRows(), fv = favs();
     var title = S.sel ? md(S.sel) + ' 실적발표' : S.mode === 'up' ? '다가오는 실적발표' : S.mode === 'past' ? '최근 실적발표 (45일)' : '전체 기업 (' + list.length + '곳)';
-    $('er-list-t').textContent = title + (S.mk === 'kr' ? ' · 국내' : S.mk === 'us' ? ' · 미국' : '') + (S.q.trim() ? ' · "' + S.q.trim() + '" 검색' : '');
+    $('er-list-t').textContent = title + (S.mk === 'kr' ? ' · 국내' : S.mk === 'us' ? ' · 미국' : S.mk === 'sox' ? ' · 필라델피아 반도체(SOX)' : '') + (S.q.trim() ? ' · "' + S.q.trim() + '" 검색' : '');
     var f = $('er-filter');
     if (S.sel) { f.hidden = false; f.innerHTML = '<span>달력에서 <b>' + esc(md(S.sel)) + '</b>을 골랐습니다</span><button type="button" id="er-unsel">× 날짜 선택 해제</button>'; }
     else { f.hidden = true; f.innerHTML = ''; }
@@ -18980,7 +18987,7 @@ var TAX = (function () {
       var r = x.r, k = r.k || {};
       return '<tr data-key="' + esc(r.key) + '" tabindex="0"><td class="er-c-d">' + dateCell(x) + '</td>' +
         '<td class="er-c-n"><span class="er-nm"><button type="button" class="er-fav' + (fv.indexOf(r.key) >= 0 ? ' on' : '') + '" data-fav="' + esc(r.key) + '" aria-label="관심 기업 ' + (fv.indexOf(r.key) >= 0 ? '해제' : '추가') + '">' + (fv.indexOf(r.key) >= 0 ? '♥' : '♡') + '</button><i class="er-flag ' + r.mk + '">' + r.mk.toUpperCase() + '</i>' + esc(r.name) + '</span>' +
-        '<span class="er-sub"><span class="er-tk">' + esc(r.sub) + '</span> · ' + (r.mk === 'kr' ? '코스피' : '미국') + ' ' + r.r + '위 · ' + capTxt(r) + '</span></td>' +
+        '<span class="er-sub"><span class="er-tk">' + esc(r.sub) + '</span> · ' + rankTxt(r) + ' · ' + capTxt(r) + (r.sox ? ' · <b class="er-sox">SOX</b>' : '') + '</span></td>' +
         '<td class="er-c-tm">' + (x.t === 'past' ? '<span class="er-na">—</span>' : esc(timeTxt(r, true)) || '<span class="er-na">—</span>') + '</td>' +
         '<td class="er-c-per"><span class="er-per"><i>' + perTxt(r, 't') + '</i><i>' + perTxt(r, 'b') + '</i><i class="f">' + perTxt(r, 'f') + '</i></span></td>' +
         '<td class="er-c-k ' + grade('roe', k.roe) + '">' + pct(k.roe) + '</td><td class="er-c-k ' + grade('roic', k.roic) + '">' + pct(k.roic) + '</td><td class="er-c-k ' + grade('debt', k.debt) + '">' + pct(k.debt, 0) + '</td>' +
@@ -19018,7 +19025,10 @@ var TAX = (function () {
   function note() {
     var d = S.d, up = d.updated ? new Date(d.updated) : null;
     var t = up ? up.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
-    $('er-note').innerHTML = '마지막 갱신 ' + esc(t) + ' (2시간마다 자동) · 국내 코스피 시가총액 상위 ' + (d.kr || []).length + '곳(우선주·ETF 제외) · 미국 상장 시가총액 상위 ' + (d.us || []).length + '곳 · 날짜는 그 나라 날짜(미국 = 동부) · ' +
+    var pk = (d.kr || []).map(function (r) { return r.pd; }).filter(Boolean).sort().pop(), pu = (d.us || []).map(function (r) { return r.pd; }).filter(Boolean).sort().pop();
+    var nus = (d.us || []).filter(function (r) { return !r.x; }).length, nsox = (d.us || []).filter(function (r) { return r.sox; }).length;
+    $('er-note').innerHTML = '마지막 갱신 ' + esc(t) + ' (2시간마다 + 한국·미국 장 마감 직후 자동) · <b>주가·시가총액·PER·PBR·EV/EBITDA = 최근 확정 종가' + (pk ? '(국내 ' + esc(md(pk)) : '(') + (pu ? ' · 미국 ' + esc(md(pu)) : '') + ') × 주식 수</b> — 장중에는 전일 종가, 장 마감 뒤에는 그날 종가로 매일 바뀝니다 · ' +
+      '국내 코스피 시가총액 상위 ' + (d.kr || []).length + '곳(우선주·ETF 제외) · 미국 상장 시가총액 상위 ' + nus + '곳' + (nsox ? ' · 필라델피아 반도체 지수(SOX) ' + nsox + '종목' + (d.sox && d.sox.d ? '(' + esc(md(d.sox.d)) + ' 구성)' : '') : '') + ' · 날짜는 그 나라 날짜(미국 = 동부) · ' +
       'PER = 후행(최근 4분기 실제 EPS) · 혼합(올해 실제+예상 EPS) · <b>선행(내년 예상 EPS)</b> · ROE·ROIC = 최근 4분기 · 부채비율 = 부채총계 ÷ 자본총계(금융사는 높게 나오는 게 정상)<br>자료: ' + esc(d.source || '') + ' — 참고용이며 투자 권유가 아닙니다.';
   }
   function render() {
@@ -19187,12 +19197,13 @@ var TAX = (function () {
     var fv = isFav(r.key), fin = det && det.fin;
     var h = '<div class="er-m-h"><div><h2 id="er-m-name"><i class="er-flag ' + r.mk + '">' + r.mk.toUpperCase() + '</i>' + esc(r.name) + ' <small>' + esc(r.code) + '</small>' +
       '<button type="button" class="er-fav' + (fv ? ' on' : '') + '" data-fav="' + esc(r.key) + '" style="font-size:18px" aria-label="관심 기업 ' + (fv ? '해제' : '추가') + '">' + (fv ? '♥' : '♡') + '</button></h2>' +
-      '<div class="er-m-meta">' + (r.mk === 'us' && r.n !== r.name ? esc(r.n) + ' · ' : '') + (r.mk === 'kr' ? '코스피 시가총액 ' : '미국 상장 시가총액 ') + '<b>' + r.r + '위</b> · ' + capTxt(r) + ' · 주가 <b>' + priceTxt(r) + '</b>' +
+      '<div class="er-m-meta">' + (r.mk === 'us' && r.n !== r.name ? esc(r.n) + ' · ' : '') + (r.r ? (r.mk === 'kr' ? '코스피 시가총액 ' : '미국 상장 시가총액 ') + '<b>' + r.r + '위</b>' : '미국 상장 시가총액 TOP 100 밖') + (r.sox ? ' · <b class="er-sox">필라델피아 반도체 지수(SOX) 종목</b>' : '') +
+      ' · ' + capTxt(r) + ' · ' + esc(pdTxt(r)) + ' <b>' + priceTxt(r) + '</b>' +
       (isNum(r.ch) ? ' (' + spTxt(r.ch) + ')' : '') + (r.sec ? ' · ' + esc(r.sec) : '') + (r.mk === 'us' && r.cty && r.cty !== 'United States' ? ' · 본사 ' + esc(r.cty) + '(미국 예탁증서)' : '') +
       (isNum(r.pbr) ? ' · PBR <b>' + comma(r.pbr, 2) + '</b>' : '') + '</div></div></div>';
     h += nextBox(r);
     h += '<div class="er-m-sec"><h3><em class="er-star">★</em> 기업 가치 핵심 지표 <small>최근 4분기 기준 · 색은 일반적인 참고 기준(업종마다 다름) · 카드를 누르면 설명</small></h3>' + keyCards(r) + '</div>';
-    h += '<div class="er-m-sec"><h3>PER 3종 — 후행 · 혼합 · 선행 <small>현재 주가 기준</small></h3>' + perCards(r) + '</div>';
+    h += '<div class="er-m-sec"><h3>PER 3종 — 후행 · 혼합 · 선행 <small>확정 종가 기준</small></h3>' + perCards(r) + '</div>';
     h += '<div class="er-m-sec"><h3>지난 실적 발표 <small>' + (r.mk === 'kr' ? '거래소 잠정실적 공시 본문' : 'Yahoo Finance') + '</small></h3>' + lastBox(r) + '</div>';
     var tb = withPrelim(fin ? fin[S.ftab] : null, r);
     h += '<div class="er-m-sec"><h3>과거 실적 한눈에 <small>연결재무제표 · 최근 실적 + 증권사 예상(E)</small></h3>' +

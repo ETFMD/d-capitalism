@@ -5772,6 +5772,8 @@ var TAX = (function () {
     if (kind === 'e') return comma(v, Math.abs(v) >= 1000 ? 0 : 2);
     return comma(v, 2);
   }
+  function rankTxt(r) { return r.r ? (r.mk === 'kr' ? '코스피 ' : '미국 ') + r.r + '위' : '미국 TOP 100 밖'; }
+  function pdTxt(r) { return r.pd ? md(r.pd) + ' 종가' : '현재가'; }
   function capTxt(r) {
     if (r.mk === 'kr') { var j = r.m / 1e12; return (j >= 100 ? comma(Math.round(j)) : comma(j, 1)) + '조원'; }
     return r.m >= 1e12 ? comma(r.m / 1e12, 2) + '조 달러' : comma(Math.round(r.m / 1e8)) + '억 달러';
@@ -5812,7 +5814,9 @@ var TAX = (function () {
   function rows() {
     var q = S.q.trim().toLowerCase(), fv = favs();
     return all().filter(function (r) {
-      if (S.mk !== 'all' && r.mk !== S.mk) return false;
+      if (S.mk === 'sox') { if (!r.sox) return false; }   /* 필라델피아 반도체 지수 구성 종목 (TOP 100 밖도) */
+      else if (r.x) return false;                         /* 그 밖 화면에서는 미국 TOP 100 밖 SOX 종목은 숨김 */
+      else if (S.mk !== 'all' && r.mk !== S.mk) return false;
       if (S.favOnly && fv.indexOf(r.key) < 0) return false;
       if (q && (r.name + ' ' + r.n + ' ' + r.code + ' ' + (r.sub || '')).toLowerCase().indexOf(q) < 0) return false;
       return true;
@@ -5845,12 +5849,12 @@ var TAX = (function () {
     var past = list.filter(function (r) { return (r.pa || []).some(function (p) { return p[0] >= wkSt && p[0] <= wkEnd; }); });
     $('er-k-week').textContent = (wk.length + past.length) + '곳';
     $('er-k-week-sub').textContent = md(wkSt) + '~' + md(wkEnd) + ' · 예정 ' + wk.length + ' · 발표 끝 ' + past.length;
-    var up = nexts.filter(function (r) { return r.nx.d > (r.mk === 'us' ? tu : tk); }).sort(function (a, b) { return a.nx.d < b.nx.d ? -1 : a.nx.d > b.nx.d ? 1 : a.r - b.r; });
+    var up = nexts.filter(function (r) { return r.nx.d > (r.mk === 'us' ? tu : tk); }).sort(function (a, b) { return a.nx.d < b.nx.d ? -1 : a.nx.d > b.nx.d ? 1 : usd(b) - usd(a); });
     var n = up[0];
     $('er-k-next').textContent = n ? n.name : '—';
     $('er-k-next').className = 'er-kpi-v' + (n ? ' er-link' : ''); $('er-k-next').setAttribute('data-key', n ? n.key : '');
     $('er-k-next-sub').textContent = n ? md(n.nx.d) + ' · D-' + dayDiff(n.nx.d, n.mk === 'us' ? tu : tk) + (confOf(n.nx) ? ' · 확정' : ' · 예상') : '—';
-    var last = list.filter(function (r) { return r.ls && r.ls.d; }).sort(function (a, b) { return a.ls.d > b.ls.d ? -1 : a.ls.d < b.ls.d ? 1 : a.r - b.r; })[0];
+    var last = list.filter(function (r) { return r.ls && r.ls.d; }).sort(function (a, b) { return a.ls.d > b.ls.d ? -1 : a.ls.d < b.ls.d ? 1 : usd(b) - usd(a); })[0];
     $('er-k-last').textContent = last ? last.name : '—';
     $('er-k-last').className = 'er-kpi-v' + (last ? ' er-link' : ''); $('er-k-last').setAttribute('data-key', last ? last.key : '');
     $('er-k-last-sub').innerHTML = last ? esc(md(last.ls.d)) + (isNum(last.ls.sp) ? ' · 예상 대비 ' + spTxt(last.ls.sp) : '') : '—';
@@ -5922,7 +5926,7 @@ var TAX = (function () {
         if (S.mode === 'past' && !S.sel) { var t = x; x = y; y = t; }
         return x < y ? -1 : x > y ? 1 : usd(b.r) - usd(a.r);
       }
-      return sortVal(a.r) - sortVal(b.r) || a.r.r - b.r.r;
+      return sortVal(a.r) - sortVal(b.r) || usd(b.r) - usd(a.r);
     });
     return out;
   }
@@ -5945,7 +5949,7 @@ var TAX = (function () {
   function table() {
     var list = listRows(), fv = favs();
     var title = S.sel ? md(S.sel) + ' 실적발표' : S.mode === 'up' ? '다가오는 실적발표' : S.mode === 'past' ? '최근 실적발표 (45일)' : '전체 기업 (' + list.length + '곳)';
-    $('er-list-t').textContent = title + (S.mk === 'kr' ? ' · 국내' : S.mk === 'us' ? ' · 미국' : '') + (S.q.trim() ? ' · "' + S.q.trim() + '" 검색' : '');
+    $('er-list-t').textContent = title + (S.mk === 'kr' ? ' · 국내' : S.mk === 'us' ? ' · 미국' : S.mk === 'sox' ? ' · 필라델피아 반도체(SOX)' : '') + (S.q.trim() ? ' · "' + S.q.trim() + '" 검색' : '');
     var f = $('er-filter');
     if (S.sel) { f.hidden = false; f.innerHTML = '<span>달력에서 <b>' + esc(md(S.sel)) + '</b>을 골랐습니다</span><button type="button" id="er-unsel">× 날짜 선택 해제</button>'; }
     else { f.hidden = true; f.innerHTML = ''; }
@@ -5957,7 +5961,7 @@ var TAX = (function () {
       var r = x.r, k = r.k || {};
       return '<tr data-key="' + esc(r.key) + '" tabindex="0"><td class="er-c-d">' + dateCell(x) + '</td>' +
         '<td class="er-c-n"><span class="er-nm"><button type="button" class="er-fav' + (fv.indexOf(r.key) >= 0 ? ' on' : '') + '" data-fav="' + esc(r.key) + '" aria-label="관심 기업 ' + (fv.indexOf(r.key) >= 0 ? '해제' : '추가') + '">' + (fv.indexOf(r.key) >= 0 ? '♥' : '♡') + '</button><i class="er-flag ' + r.mk + '">' + r.mk.toUpperCase() + '</i>' + esc(r.name) + '</span>' +
-        '<span class="er-sub"><span class="er-tk">' + esc(r.sub) + '</span> · ' + (r.mk === 'kr' ? '코스피' : '미국') + ' ' + r.r + '위 · ' + capTxt(r) + '</span></td>' +
+        '<span class="er-sub"><span class="er-tk">' + esc(r.sub) + '</span> · ' + rankTxt(r) + ' · ' + capTxt(r) + (r.sox ? ' · <b class="er-sox">SOX</b>' : '') + '</span></td>' +
         '<td class="er-c-tm">' + (x.t === 'past' ? '<span class="er-na">—</span>' : esc(timeTxt(r, true)) || '<span class="er-na">—</span>') + '</td>' +
         '<td class="er-c-per"><span class="er-per"><i>' + perTxt(r, 't') + '</i><i>' + perTxt(r, 'b') + '</i><i class="f">' + perTxt(r, 'f') + '</i></span></td>' +
         '<td class="er-c-k ' + grade('roe', k.roe) + '">' + pct(k.roe) + '</td><td class="er-c-k ' + grade('roic', k.roic) + '">' + pct(k.roic) + '</td><td class="er-c-k ' + grade('debt', k.debt) + '">' + pct(k.debt, 0) + '</td>' +
@@ -5995,7 +5999,10 @@ var TAX = (function () {
   function note() {
     var d = S.d, up = d.updated ? new Date(d.updated) : null;
     var t = up ? up.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
-    $('er-note').innerHTML = '마지막 갱신 ' + esc(t) + ' (2시간마다 자동) · 국내 코스피 시가총액 상위 ' + (d.kr || []).length + '곳(우선주·ETF 제외) · 미국 상장 시가총액 상위 ' + (d.us || []).length + '곳 · 날짜는 그 나라 날짜(미국 = 동부) · ' +
+    var pk = (d.kr || []).map(function (r) { return r.pd; }).filter(Boolean).sort().pop(), pu = (d.us || []).map(function (r) { return r.pd; }).filter(Boolean).sort().pop();
+    var nus = (d.us || []).filter(function (r) { return !r.x; }).length, nsox = (d.us || []).filter(function (r) { return r.sox; }).length;
+    $('er-note').innerHTML = '마지막 갱신 ' + esc(t) + ' (2시간마다 + 한국·미국 장 마감 직후 자동) · <b>주가·시가총액·PER·PBR·EV/EBITDA = 최근 확정 종가' + (pk ? '(국내 ' + esc(md(pk)) : '(') + (pu ? ' · 미국 ' + esc(md(pu)) : '') + ') × 주식 수</b> — 장중에는 전일 종가, 장 마감 뒤에는 그날 종가로 매일 바뀝니다 · ' +
+      '국내 코스피 시가총액 상위 ' + (d.kr || []).length + '곳(우선주·ETF 제외) · 미국 상장 시가총액 상위 ' + nus + '곳' + (nsox ? ' · 필라델피아 반도체 지수(SOX) ' + nsox + '종목' + (d.sox && d.sox.d ? '(' + esc(md(d.sox.d)) + ' 구성)' : '') : '') + ' · 날짜는 그 나라 날짜(미국 = 동부) · ' +
       'PER = 후행(최근 4분기 실제 EPS) · 혼합(올해 실제+예상 EPS) · <b>선행(내년 예상 EPS)</b> · ROE·ROIC = 최근 4분기 · 부채비율 = 부채총계 ÷ 자본총계(금융사는 높게 나오는 게 정상)<br>자료: ' + esc(d.source || '') + ' — 참고용이며 투자 권유가 아닙니다.';
   }
   function render() {
@@ -6164,12 +6171,13 @@ var TAX = (function () {
     var fv = isFav(r.key), fin = det && det.fin;
     var h = '<div class="er-m-h"><div><h2 id="er-m-name"><i class="er-flag ' + r.mk + '">' + r.mk.toUpperCase() + '</i>' + esc(r.name) + ' <small>' + esc(r.code) + '</small>' +
       '<button type="button" class="er-fav' + (fv ? ' on' : '') + '" data-fav="' + esc(r.key) + '" style="font-size:18px" aria-label="관심 기업 ' + (fv ? '해제' : '추가') + '">' + (fv ? '♥' : '♡') + '</button></h2>' +
-      '<div class="er-m-meta">' + (r.mk === 'us' && r.n !== r.name ? esc(r.n) + ' · ' : '') + (r.mk === 'kr' ? '코스피 시가총액 ' : '미국 상장 시가총액 ') + '<b>' + r.r + '위</b> · ' + capTxt(r) + ' · 주가 <b>' + priceTxt(r) + '</b>' +
+      '<div class="er-m-meta">' + (r.mk === 'us' && r.n !== r.name ? esc(r.n) + ' · ' : '') + (r.r ? (r.mk === 'kr' ? '코스피 시가총액 ' : '미국 상장 시가총액 ') + '<b>' + r.r + '위</b>' : '미국 상장 시가총액 TOP 100 밖') + (r.sox ? ' · <b class="er-sox">필라델피아 반도체 지수(SOX) 종목</b>' : '') +
+      ' · ' + capTxt(r) + ' · ' + esc(pdTxt(r)) + ' <b>' + priceTxt(r) + '</b>' +
       (isNum(r.ch) ? ' (' + spTxt(r.ch) + ')' : '') + (r.sec ? ' · ' + esc(r.sec) : '') + (r.mk === 'us' && r.cty && r.cty !== 'United States' ? ' · 본사 ' + esc(r.cty) + '(미국 예탁증서)' : '') +
       (isNum(r.pbr) ? ' · PBR <b>' + comma(r.pbr, 2) + '</b>' : '') + '</div></div></div>';
     h += nextBox(r);
     h += '<div class="er-m-sec"><h3><em class="er-star">★</em> 기업 가치 핵심 지표 <small>최근 4분기 기준 · 색은 일반적인 참고 기준(업종마다 다름) · 카드를 누르면 설명</small></h3>' + keyCards(r) + '</div>';
-    h += '<div class="er-m-sec"><h3>PER 3종 — 후행 · 혼합 · 선행 <small>현재 주가 기준</small></h3>' + perCards(r) + '</div>';
+    h += '<div class="er-m-sec"><h3>PER 3종 — 후행 · 혼합 · 선행 <small>확정 종가 기준</small></h3>' + perCards(r) + '</div>';
     h += '<div class="er-m-sec"><h3>지난 실적 발표 <small>' + (r.mk === 'kr' ? '거래소 잠정실적 공시 본문' : 'Yahoo Finance') + '</small></h3>' + lastBox(r) + '</div>';
     var tb = withPrelim(fin ? fin[S.ftab] : null, r);
     h += '<div class="er-m-sec"><h3>과거 실적 한눈에 <small>연결재무제표 · 최근 실적 + 증권사 예상(E)</small></h3>' +

@@ -1128,7 +1128,24 @@ def serve(root):
 def earn_data_check(fail, d, where='earn'):
     """data/earnings.json 형식·내용 (로컬은 저장소 파일, 배포는 사이트가 받은 자료)"""
     import datetime as _dt
-    kr, us = d.get('kr') or [], d.get('us') or []
+    kr, usall = d.get('kr') or [], d.get('us') or []
+    us = [r for r in usall if not r.get('x')]          # 미국 TOP 100 (x = TOP 100 밖 SOX 종목)
+    sox = (d.get('sox') or {}).get('s') or []
+    if not 20 <= len(sox) <= 40: fail(where, '필라델피아 반도체(SOX) 구성 종목 수 이상: %d' % len(sox))
+    flagged = sorted(r['s'] for r in usall if r.get('sox'))
+    if flagged != sorted(sox): fail(where, 'SOX 표시 종목이 구성 목록과 다름: 빠짐 %s · 더 있음 %s' % (sorted(set(sox) - set(flagged))[:8], sorted(set(flagged) - set(sox))[:8]))
+    if any(r.get('x') and not r.get('sox') for r in usall): fail(where, 'TOP 100 밖인데 SOX 도 아닌 미국 종목이 섞임')
+    if any(r.get('x') and r.get('r') is not None for r in usall): fail(where, 'TOP 100 밖 종목에 순위가 붙음')
+    # 시가총액 = 확정 종가 × 주식 수 · 종가 날짜가 있고 최근
+    try: upd = _dt.datetime.fromisoformat(d['updated'].replace('Z', '+00:00')).date()
+    except Exception: upd = None
+    for mk, rows_, key, tol in (('kr', kr, 'c', 1.0), ('us', usall, 's', None)):
+        bad = [r[key] for r in rows_ if r.get('sh') and r.get('p') and abs(r['m'] - r['sh'] * r['p']) > (tol if tol else r['m'] * 0.002)]
+        if bad: fail(where, '%s 시가총액 ≠ 종가 × 주식 수: %s' % (mk, bad[:6]))
+        nosh = [r[key] for r in rows_ if not r.get('sh')]
+        if len(nosh) > 3: fail(where, '%s 주식 수 없는 종목 %d개: %s' % (mk, len(nosh), nosh[:6]))
+        old = [r[key] for r in rows_ if not r.get('pd') or (upd and (upd - _dt.date.fromisoformat(r['pd'])).days > 6)]
+        if len(old) > 3: fail(where, '%s 종가 날짜 없음·오래됨 %d개: %s' % (mk, len(old), old[:6]))
     if len(kr) < 90 or len(us) < 90: fail(where, '기업 수 부족: 국내 %d · 미국 %d (각 90 이상)' % (len(kr), len(us)))
     try:
         age = (_dt.datetime.now(_dt.timezone.utc) - _dt.datetime.fromisoformat(d['updated'].replace('Z', '+00:00'))).total_seconds() / 3600
@@ -1178,7 +1195,7 @@ def earn_check(page, base, fail, errs, ignorable):
       for (let i = 0; i < 60 && !(window.ERdebug && ERdebug.S.d); i++) await new Promise(r => setTimeout(r, 200));
       if (!window.ERdebug || !ERdebug.S.d) return { none: true };
       const D = ERdebug.S.d, $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
-      const out = { kr0: D.kr[0].c, kr0n: D.kr[0].n, kr: D.kr.length, us: D.us.length, cells: $$('#er-cal .er-day').length, rows: $$('#er-body tr[data-key]').length,
+      const out = { kr0: D.kr[0].c, kr0n: D.kr[0].n, kr: D.kr.length, us: D.us.filter(x => !x.x).length, soxN: D.us.filter(x => x.sox).length, cells: $$('#er-cal .er-day').length, rows: $$('#er-body tr[data-key]').length,
         kpi: ['er-k-today', 'er-k-week', 'er-k-next', 'er-k-last'].map(id => document.getElementById(id).textContent),
         tips: [...new Set([...document.documentElement.innerHTML.matchAll(/data-tip="([a-z]+)"/g)].map(m => m[1]))],
         terms: $$('#er-gloss details.er-term').map(x => x.id), keyterms: $$('#er-gloss details.er-term.er-key').length,
@@ -1206,7 +1223,12 @@ def earn_check(page, base, fail, errs, ignorable):
                   calSync: ($('#page-earn .card .er-mk .chart-tab.active') || {}).dataset.mk };
       lmk('us'); await new Promise(r => setTimeout(r, 50));
       out.lus = $$('#er-body tr[data-key]').length > 0 && $$('#er-body tr[data-key]').every(t => t.dataset.key.startsWith('us-'));
-      lmk('all');
+      /* 필라델피아 반도체(SOX)만: 전체 기업 보기에서 구성 종목 수 그대로 · 미국 100 보기에는 TOP 100 밖 종목 없음 */
+      $('#page-earn .er-mode [data-mode="all"]').click(); lmk('sox'); await new Promise(r => setTimeout(r, 50));
+      out.lsox = { keys: $$('#er-body tr[data-key]').map(t => t.dataset.key), title: $('#er-list-t').textContent, info: $('#er-pager .er-pg-info').textContent,
+                   flags: $$('#er-body tr[data-key]').every(t => !!t.querySelector('.er-sox')), cal: $$('#er-cal .er-ev').length };
+      lmk('us'); out.usNoX = $$('#er-body tr[data-key]').every(t => !(D.us.find(x => 'us-' + x.s === t.dataset.key) || {}).x);
+      lmk('all'); $('#page-earn .er-mode [data-mode="up"]').click();
       /* 목록 검색칸 */
       const ls = $('#er-lsearch'); ls.value = D.kr[0].n; ls.dispatchEvent(new Event('input', { bubbles: true })); await new Promise(r => setTimeout(r, 50));
       out.lsearch = { keys: $$('#er-body tr[data-key]').map(t => t.dataset.key), sync: $('#er-search').value, title: $('#er-list-t').textContent };
@@ -1262,6 +1284,10 @@ def earn_check(page, base, fail, errs, ignorable):
     if r['pFirst'] != 1: fail('earn', '첫 쪽 단추 이상: %s' % r['pFirst'])
     if not r['lkr']['allKr'] or r['lkr']['rows'] != 50 or ('전체 %d곳' % r['kr']) not in r['lkr']['info'] or r['lkr']['calSync'] != 'kr': fail('earn', '목록 국내만 보기 이상: %s' % r['lkr'])
     if not r['lus']: fail('earn', '목록 미국만 보기 이상')
+    ls_ = r['lsox']
+    if len(ls_['keys']) != r['soxN'] or not all(k.startswith('us-') for k in ls_['keys']) or not ls_['flags'] or 'SOX' not in ls_['title'] or ('전체 %d곳' % r['soxN']) not in ls_['info']:
+        fail('earn', '필라델피아 반도체(SOX)만 보기 이상: %d곳(기대 %d) · %s · %s' % (len(ls_['keys']), r['soxN'], ls_['title'], ls_['info']))
+    if not r['usNoX']: fail('earn', '미국 100 보기에 TOP 100 밖 종목이 섞임')
     ls = r['lsearch']
     if not ls['keys'] or not all(k == 'kr-' + d_kr0 for k in ls['keys'][:1]) or ls['sync'] != ls_name or '검색' not in ls['title']: fail('earn', '목록 검색칸 이상: %s' % ls)
     if 'us-AAPL' not in r['lsearch2']: fail('earn', '목록 검색 AAPL 결과에 애플 없음: %s' % r['lsearch2'][:5])
