@@ -76,7 +76,8 @@ SETUP_JS = """async () => {""" + PRE + """
     const sm = $('.mh-sumore').innerText;
     ok('요약: 일부분 복리 30% · RSI 60 이하 · 수수료 0.1% · 연말 절세 · 분배금 재투자 안 함', /일부분 복리 30%/.test(sm) && /RSI 60 이하/.test(sm) && /수수료 0\\.1%/.test(sm) && /연말 절세/.test(sm) && /재투자 안 함/.test(sm), sm);
     const hint = document.getElementById('mh-su-dyn').innerText;
-    ok('시작 원금 안내: 지금 SOXL 가격 기준 하루 몇 주', !MH.market.SOXL || /SOXL 약 \\$[\\d.]+ 기준 1회 매수금으로 하루 \\d+주/.test(hint), hint);
+    const mk0 = MH.market.SOXL, lc0 = mk0 && mk0.prices && mk0.prices.length ? mk0.prices[mk0.prices.length - 1] : null;
+    ok('시작 원금 안내: SOXL 전일 종가(마지막 확정 종가 · 날짜) 기준 하루 몇 주', !mk0 || (lc0 ? hint.includes('SOXL 전일 종가 $' + lc0.close.toFixed(2) + ' (' + Number(lc0.date.slice(5, 7)) + '/' + Number(lc0.date.slice(8, 10)) + ') 기준 1회 매수금으로 하루 ') : /SOXL 약 \\$[\\d.]+ 기준 1회 매수금으로 하루 \\d+주/.test(hint)), hint);
     click('[data-act="su-start"]'); await W(300);
     const s = ses().settings, c = T.vcfg(s), o = T.btOpts(s);
     ok('시작 → 고정 규칙으로 저장 (V1.0 · SOXL · 72 · 52.5 · 13 · 하방 0줄 · 1주 · recover) · 세션 이름 72루틴',
@@ -403,6 +404,63 @@ BT_JS = """async (live) => {""" + PRE + """
   return R;
 }"""
 
+# ㊿ 백테스트 카드 '총자산·그냥 보유' 그래프 바로 아래 시작일별 연평균 수익률·최대 낙폭 분포([T72-DIST] R72D)
+#   표본(매월 첫 거래일) 먼저 → 모든 시작일 · 값 = 카드와 같은 설정으로 엔진 직접(MHV.run → MBT.stats) · 요약 숫자 · 탭 4개 · 최소 보유 · 미납세 토글 · 손가락 값 · 미포함 보기 · 접으면 쉼
+DIST_JS = """async () => {""" + PRE + r"""
+  try {
+    MH.sheet = null; MH.menu = false; MH.view = 'now'; if (MH.fold) MH.fold.bt = false; T.bt.per = 'all'; T.bt.pre = false; T.bt.view = 'net'; T.bt.rj = 'none'; T.bt.fl = 'none'; T.render();
+    const r = await waitCard(), box = () => document.getElementById('r7d-box');
+    for (let i = 0; i < 100 && !box(); i++) await W(100);
+    const ch = $('#mh-bt .mh-bt-ch');
+    ok('분포 상자가 카드의 총자산·그냥 보유 그래프 바로 아래', r && r.st === 'ok' && box() && ch && ch.nextElementSibling === box(), r && r.st);
+    if (!box()) return R;
+    const st = T.dist.st, s = ses().settings, o = T.btOpts(s), c = T.vcfg(s), cap = s.totalCapital, D = await MBT.load('SOXL'), F = await MBT.fxData().catch(() => null);
+    const fx = F && o.tax ? MBT.fxFor(D.d, F) : null, Dn = o.divs ? D : Object.assign({}, D, { dv: null }), to = D.d.length - 1, P0 = R72D.plan(D.d, to);
+    for (let i = 0; i < 600 && !st.first; i++) await W(100);
+    ok('표본(매월 첫 거래일 시작 ' + P0.first.length + '곳) 먼저 보여 주고 정밀 계산 진행 막대', st.first && st.first.length === P0.first.length && (st.stage === 'done' || /정밀 계산 중/.test(box().innerText)), st.stage);
+    for (let i = 0; i < 2400 && st.stage !== 'done'; i++) await W(100);
+    ok('모든 시작일 계산 끝 · 시작일 수 = 끝 20거래일 전까지 (' + P0.n + '곳)', st.stage === 'done' && st.rows.length === P0.n && st.rows.every((x, i) => x.s === i + 1) && !box().querySelector('.r7d-pg'), st.stage + ' ' + st.rows.length);
+    const opt = { norm: 'auto', rows: false, fee: o.fee / 100, sec: 0.0000206, divTax: 0.15, tax: fx ? { fx: i => fx[i], method: o.method, harvest: o.harvest } : null }, bad1 = [];
+    for (const i of [1, 37, 900, 2600, P0.n]) { const x = MBT.stats(MHV.run(c, Dn, Object.assign({ from: i, to, capital: cap }, opt)), D, cap), y = st.rows[i - 1];
+      if (!(y && y.s === i && Math.abs(y.cagr - x.cagr) < 1e-12 && Math.abs(y.mdd - x.mdd) < 1e-12 && y.days === x.days && Math.abs(y.bh - x.bh.cagr) < 1e-12)) bad1.push(i + ':' + (y && y.cagr) + '/' + x.cagr); }
+    ok('분포 값 = 카드와 같은 설정(일부분 복리·RSI·절세·분배금 끔·수수료 0.1%)으로 엔진 직접 — 시작일 5곳', !bad1.length, bad1.join(' '));
+    const S = R72D.summ(R72D.hold(st.rows, 1), 'cagr'), M = R72D.summ(R72D.hold(st.rows, 1), 'mdd'), tx = () => box().innerText;
+    ok('요약: 보유 1년 이상 시작일 수 · 평균·중앙 CAGR · MDD 평균 · 끝 날짜 · 한계 문구 · 무한매수법 용어 없음', tx().includes(S.n.toLocaleString('en-US') + '곳') && tx().includes(pc(S.mean, 2)) && tx().includes(pc(S.med, 2)) && tx().includes('평균 ' + pc(M.mean)) &&
+       tx().includes(D.d[to]) && /수익을 약속하지 않아요/.test(tx()) && !bad(tx()), bad(tx()) || tx().slice(0, 200));
+    const tabs = {};
+    for (const t of ['mdd', 'line', 'year', 'cagr']) { click('#r7d-box [data-r7d="tab"][data-v="' + t + '"]'); await W(60); tabs[t] = !!$('#r7d-box ' + ({ cagr: '.r7d-hist.up', mdd: '.r7d-hist.dn', line: '.r7d-ln svg polyline.c', year: '.r7d-t tbody tr' })[t]) && $('#r7d-box [data-r7d="tab"][data-v="' + t + '"]').getAttribute('aria-pressed') === 'true'; }
+    const hs = $$('#r7d-box .r7d-bin').length, H5 = R72D.hist(R72D.hold(st.rows, 1).map(x => x.cagr), 5).length;
+    ok('탭 4개(CAGR 분포·MDD 분포·시작일별·시작 연도별) · 막대 수 = 5%p 구간 수(' + H5 + ')', Object.values(tabs).every(Boolean) && hs === H5 && localStorage.getItem('r72-d-tab') === 'cagr', JSON.stringify(tabs) + ' ' + hs);
+    click('#r7d-box [data-r7d="hold"][data-v="5"]'); await W(60);
+    const S5 = R72D.summ(R72D.hold(st.rows, 5), 'cagr');
+    ok('최소 보유 5년 → 시작일 수·평균이 바뀜 · 이 기기에 기억', S5 && tx().includes(S5.n.toLocaleString('en-US') + '곳') && tx().includes(pc(S5.mean, 2)) && localStorage.getItem('r72-d-hold') === '5', S5 && S5.n);
+    click('#r7d-box [data-r7d="hold"][data-v="1"]'); await W(40);
+    if (o.tax && fx) { click('#r7d-box [data-r7d="due"][data-v="1"]'); await W(60); const Sd = R72D.summ(R72D.hold(st.rows, 1), 'due');
+      ok('올해 미납 양도세 뺀 값 → 평균이 그 값', tx().includes(pc(Sd.mean, 2)) && Sd.mean <= S.mean, pc(Sd.mean, 2)); click('#r7d-box [data-r7d="due"][data-v="0"]'); await W(40); }
+    click('#r7d-box [data-r7d="tab"][data-v="line"]'); await W(60);
+    const L1 = R72D.hold(st.rows, 1), pl = $('#r7d-box .r7d-plot').getBoundingClientRect(), mid = Math.round((L1.length - 1) / 2), ln = $('#r7d-box .r7d-ln');
+    ln.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: pl.left + pl.width * mid / (L1.length - 1), clientY: pl.top + 20 }));
+    const rd = $('#r7d-box .r7d-rd').innerText, rdd = (rd.match(/(\d{4}-\d{2}-\d{2}) 시작/) || [])[1], ri = L1.findIndex(x => x.d === rdd);
+    ok('시작일별 선(보유 1년 이상 ' + L1.length + '곳): 손가락·마우스를 대면 그 자리 시작일 값(날짜·CAGR·MDD)', ri >= 0 && Math.abs(ri - mid) <= Math.ceil(2 * L1.length / pl.width) + 1 && rd.includes(pc(L1[ri].cagr)) && rd.includes(pc(L1[ri].mdd)) && !$('#r7d-box .r7d-cur').hidden, [rd, ri, mid]);
+    ln.dispatchEvent(new PointerEvent('pointerleave', { bubbles: false })); await W(20);
+    ok('손을 떼면 세로선 숨김', $('#r7d-box .r7d-cur').hidden);
+    click('#r7d-box [data-r7d="tab"][data-v="cagr"]'); await W(40);
+    /* 미포함 보기 → 새로 계산(세금·수수료 없음) · 접으면 쉼 · 다시 펴면 이어서 · 포함으로 돌아오면 계산해 둔 값 */
+    click('[data-act="bt-view"][data-v="gross"]'); await W(200);
+    const g = T.dist.st;
+    ok('미포함 보기 → 다른 계산(세금·수수료 없음 · 미납세 토글 숨김)', g !== st && !$('#r7d-box [data-r7d="due"]'), g === st);
+    for (let i = 0; i < 400 && !g.first; i++) await W(100);
+    const fb = $('[data-fold="bt"] .mh-fold-b'); if (fb) { fb.click(); await W(400); const i0 = g.i; await W(1500); ok('카드를 접으면 분포 계산도 쉼', !box() && g.i === i0 && g.stage !== 'done', g.i - i0); const fs = $('.mh-fold-shut[data-fold="bt"] .mh-fold-h') || $('[data-fold="bt"] .mh-fold-h'); if (fs) fs.click(); await W(300); }
+    for (let i = 0; i < 2400 && g.stage !== 'done'; i++) await W(100);
+    const xg = MBT.stats(MHV.run(c, Dn, { from: 500, to, capital: cap, norm: 'auto', rows: false, fee: 0, sec: 0, divTax: 0, tax: null }), D, cap);
+    ok('미포함 분포 = 엔진 직접(시작일 500 · 세금·수수료 없음)', g.stage === 'done' && Math.abs(g.rows[499].cagr - xg.cagr) < 1e-12, g.stage + ' ' + (g.rows[499] && g.rows[499].cagr) + ' ' + xg.cagr);
+    click('[data-act="bt-view"][data-v="net"]'); await W(200);
+    ok('포함 보기로 돌아오면 계산해 둔 값 그대로(다시 계산 안 함)', T.dist.st === st && st.stage === 'done' && !box().querySelector('.r7d-pg'));
+  } catch (e) { ok('분포 흐름 오류', false, String(e && e.stack || e).slice(0, 300)); }
+  return R;
+}"""
+
+
 # ㉟ 오늘의 주문 '마감 30분 전 다시 걸기' — 지금 가격(LOC 카드 기준가 · 손으로 넣어 정함)으로 세 경우 · 넣을 가격 · 한도 안 · 마감 시각(휴장일·조기 폐장·서머타임)
 RCK_JS = """async () => {""" + PRE + r"""
   try {
@@ -614,10 +672,10 @@ CYCLE_JS = """async () => {""" + PRE + """
 # ㊵ 최소 원금 안내 (자동매매 프로그램 mincap.js 와 같은 기준) — 시작 화면 원금 칸 아래 단계 · 오늘의 주문 안내(함수)
 MC_JS = """async () => {""" + PRE + r"""
   try {
-    const pxOf = () => { const m = MH.market.SOXL; return m && m.quote && m.quote.price > 0 ? m.quote.price : m && m.prices && m.prices.length ? m.prices[m.prices.length - 1].close : null; };
+    const pxOf = () => { const m = MH.market.SOXL; return m && m.prices && m.prices.length ? m.prices[m.prices.length - 1].close : m && m.quote && m.quote.price > 0 ? m.quote.price : null; };   /* ㊿ 기준가 = 전일 종가 */
     for (let i = 0; i < 150 && !pxOf(); i++) await W(100);
     const px = pxOf();
-    ok('최소 원금: 지금 시세가 있음', px > 0, px);
+    ok('최소 원금: 전일 종가가 있음', px > 0, px);
     if (px > 0) {
       const usd = x => '$' + Number(x).toLocaleString('en-US'), need = k => Math.ceil(72 * k * px - 1e-9);
       const LOSS = [[1, 33], [2, 25], [3, 16], [4, 12], [5, 9], [6, 8], [8, 6], [10, 5], [15, 4], [20, 3]], loss = n => { let v = null; LOSS.forEach(x => { if (n >= x[0]) v = x[1]; }); return v; };
@@ -802,6 +860,11 @@ def check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS):
     if not local:
         report('72 실시간 시세', page.evaluate(LQ_REAL_JS))
     report('72 백테스트', page.evaluate(BT_JS, not local))
+    report('72 백테스트 시작일별 분포', page.evaluate(DIST_JS))
+    for t in ('cagr', 'line', 'year'):
+        page.evaluate("(t) => { const e = document.querySelector('#r7d-box [data-r7d=\"tab\"][data-v=\"' + t + '\"]'); if (e) e.click(); }", t); page.wait_for_timeout(80)
+        overflow('백테스트 시작일별 분포(%s)' % t)
+    page.evaluate("() => { const e = document.querySelector('#r7d-box [data-r7d=\"tab\"][data-v=\"cagr\"]'); if (e) e.click(); }")
     report('72 백테스트 주문 거부', page.evaluate(RJ_JS, not local))
     overflow('현재 화면(백테스트 주문 거부 비교)')
     report('72 백테스트 주문 넣는 때', page.evaluate(FL_JS, not local))

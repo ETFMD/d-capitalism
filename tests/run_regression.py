@@ -10,6 +10,7 @@
   4. 무한매수법 — 라오어 카페 원문 예시 숫자로 계산 엔진 검사, 기록 화면 그리기, 가이드북(23장 · 용어 31개 · 자동 숫자 · 장 열기 · 3-6 실제 일봉 백테스트 표)
      · 버전 V1.0~V3.0 엔진(tests/muhan_ver_test.js — 원문 주문표·LABU 2021·TQQQ 소진 횟수·V4 동등성·양도세) · 백테스트 화면(실행·보기 전환·표·상장 전)
      · 기록 화면 버전별 시작·기록·직접 입력 분할·화면 안 백테스트
+     · 72루틴 시작일별 연평균 수익률·최대 낙폭 분포(tests/r72dist_test.js — [T72-DIST] R72D 순수 함수 · 카드 계산과 같음 · 문서 숫자 대조 · 나눠 실행)
   6. ETF 차트 비교 — 보기 2가지(시장가·기준가) · 기간(1M·3M·6M·YTD·1Y·MAX·기간설정) 기준일 · MAX = 가장 늦게 상장한 ETF 첫 거래일 ·
      기준 가격(1M~1Y·YTD = 기준일 종가 · MAX·기간설정 = 시작일 시가 · 끝 = 끝날 종가) · 국내 ETF 는 실제 거래 가격(수정주가 역산 아님) ·
      수익률·세금·재투자 수수료·CAGR·연환산·최대 낙폭·변동성 계산 · 표의 기준·끝 가격 · 표 정렬 · 수수료 입력 · 검색 · 최대 10개 · 국내·미국 지수 ·
@@ -1181,6 +1182,12 @@ def main():
         print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'muhan_ver_test: 출력 없음', flush=True)
         if _r.returncode != 0:
             fail('muhan', '버전 엔진 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:400])
+    # 72루틴 시작일별 연평균 수익률·최대 낙폭 분포([T72-DIST] R72D — 순수 함수·카드 계산과 같음·문서 숫자 대조·나눠 실행·화면 문자열) — node 가 있으면
+    if not a.etf_audit and shutil.which('node'):
+        _r = subprocess.run(['node', os.path.join(ROOT, 'tests', 'r72dist_test.js')], capture_output=True, text=True, timeout=300)
+        print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'r72dist_test: 출력 없음', flush=True)
+        if _r.returncode != 0:
+            fail('72', '시작일별 분포 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:400])
     # Worker ETF 실제 가격 경로(야후 줄 변환·네이버 일별 시세 쪽 찾기) 단독 확인 — node 가 있으면
     if not a.etf_audit and shutil.which('node'):
         _r = subprocess.run(['node', os.path.join(ROOT, 'tests', 'worker_etf_test.mjs')], capture_output=True, text=True, timeout=120)

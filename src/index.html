@@ -1496,6 +1496,8 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
 .mh-bt-lg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--m-t2);margin:0 2px 4px}
 .mh-bt-lg i{display:inline-block;width:14px;height:0;border-top:2px solid;vertical-align:middle;margin-right:4px}
 .mh-bt-ax{display:flex;flex-wrap:wrap;justify-content:space-between;font-size:10.5px;color:var(--m-t3);font-family:var(--mono);margin:2px 2px 0}.mh-bt-ax .mh-bt-hv{order:3;flex:1 0 100%;text-align:center;color:var(--m-t2)}
+/* [T72-DIST] 72루틴 시작일별 분포 상자 — 모양은 R72D.CSS(자동매매 프로그램과 같은 모양 · inject) · 여기는 색 변수만 */
+#page-t72 .r7d{--r-tx:var(--m-tx);--r-t2:var(--m-t2);--r-t3:var(--m-t3);--r-bd:var(--m-bd);--r-s1:var(--m-s1);--r-s2:var(--m-s2);--r-up:var(--m-ok);--r-dn:var(--m-bad);--r-ac:var(--m-ac);--r-acs:var(--m-ac-s);--r-acb:var(--m-ac-b);--r-mono:var(--mono)}
   /* ═══ [THEME] 라이트 테마 — html[data-theme="light"] 일 때 색 변수만 교체 ═══ */
   html[data-theme="light"] {
     /* 토스증권 라이트 팔레트 */
@@ -25455,7 +25457,7 @@ function mhApp(P) {
     var cl = function (v) { return v > 0 ? 'mh-ok' : v < 0 ? 'mh-bad' : ''; }, k = function (a, b, c, d) { return '<div class="mb-k"><span>' + a + '</span><b class="' + (d || '') + '">' + b + '</b>' + (c ? '<small>' + c + '</small>' : '') + '</div>'; };
     return h + '<div class="mb-kg">' + k('총수익률', pc(X.ret), '최종 $' + Math.round(X.final).toLocaleString(), cl(X.ret)) + k('연평균 (CAGR)', pc(X.cagr, 2), '그냥 보유 ' + pc(X.bh.cagr, 2), cl(X.cagr)) +
       k('최대 낙폭 (MDD)', pc(X.mdd), '그냥 보유 ' + pc(X.bh.mdd), 'mh-bad') + k('사이클', n.win + '익절 · ' + (n.exh || 0) + '소진', r.cyc + '회 시작' + (r.open ? ' · 마지막 진행 중' : '')) + '</div>' +
-      btChart(r) + btFlView(r) + btRjView(r) +
+      btChart(r) + distView(s, r) + btFlView(r) + btRjView(r) +
       (r.nob > 0 ? '<p class="mh-small mh-warn" style="margin:6px 0 0">⚠ 1회 매수금이 1주 가격보다 작은 날이 ' + r.nob.toLocaleString() + '일 — 원금을 늘리거나 분할 수를 줄여 보세요</p>' : '') +
       (r.lack0 > 0 ? '<p class="mh-small mh-warn" style="margin:6px 0 0">⚠ 손실로 남은 현금이 1회 매수금보다 적어 전반전에 벌써 잔금 소진이 된 날 ' + r.lack0.toLocaleString() + '일 (원문 반복리가 다루지 않는 상황) — 자세히 보기에서 \'1회 매수금 다시 정하기\'와 비교해 보세요</p>' : '') +
       '<p class="mh-help">' + r.from + ' ~ ' + r.to + ' · 원금 $' + Math.round(r.cap).toLocaleString() + ' · LOC는 종가, ' +
@@ -25596,6 +25598,13 @@ function mhApp(P) {
       btEnsure(r);
       if (RJ) { var noO = 0; for (var q = from; q <= to; q++) if (!(DD.o && DD.o[q] > 0)) noO++; r.noO = noO; }   /* 시가를 몰라 전날 종가에 주문했다고 본 날 */
       r.from = DD.d[from]; r.to = DD.d[to]; r.tax = !!fx; r.taxOff = !o.tax; r.o = o; r.cap = cap;
+      if (P.btDist && window.R72D) {   /* 시작일별 분포(P.btDist) — 상장 뒤 실제 일봉만(상장 전 재현 제외 — 문서 정의) · 카드와 같은 설정·세금·수수료 · 끝 = 카드 끝 날짜 */
+        var to0 = -1; for (var j3 = D0.d.length - 1; j3 >= 1; j3--) if (D0.d[j3] <= DD.d[to]) { to0 = j3; break; }
+        var fx0 = DD === D0 ? fx : F && o.tax ? B.fxFor(D0.d, F) : null;
+        r.dx = { cfg: cfg, D: o.divs ? D0 : Object.assign({}, D0, { dv: null }), cap: cap, to: to0, tax: !!fx0, o: o, sig: JSON.stringify([cfg, o, cap]),
+                 oN: { fee: o.fee / 100, sec: 0.0000206, divTax: 0.15, norm: 'auto', tax: fx0 ? { fx: function (i) { return fx0[i]; }, method: o.method, harvest: o.harvest } : null },
+                 oG: { fee: 0, sec: 0, divTax: 0, norm: 'auto', tax: null } };
+      }
       var x0 = r.m[(P.btFill ? BT.fl : 'none') + '|' + (RJ ? BT.rj : 'none')];
       r.ch = { d: DD.d.slice(from, to + 1), d0: DD.d[from - 1], net: null, gross: null, bh: x0.net.bhEq.slice() };   /* 그냥 보유는 처리·시각과 무관 */   /* 그래프: 날마다 총자산(포함·미포함) · 그냥 보유 · d0 = 첫날 전날(원금 기준일 — 카드 연평균과 같은 기준) */
       btPick(r); r.st = 'ok';
@@ -25611,6 +25620,42 @@ function mhApp(P) {
     });
   }
 
+
+  /* ── 시작일별 연평균 수익률·최대 낙폭 분포 (P.btDist — 72루틴) : [T72-DIST] R72D 가 계산·화면 문자열 · 여기는 카드와 잇기만
+     같은 설정(btCfg)·세금·수수료(btOpts — 보기: 포함/미포함)·주문 넣는 때·주문 거부 처리 · 상장 뒤 실제 일봉 · 끝 = 카드 끝 날짜
+     매월 첫 거래일 시작(표본)을 먼저 보여 주고 모든 거래일로 이어서 계산 · 상자가 안 보이면 쉼 · 결과는 설정·끝 날짜·자료 끝이 같으면 다시 씀 ── */
+  var DIST = { c: null, st: null, m: null, u: { hold: Number(LS(PX + 'd-hold', '1')) || 1, tab: LS(PX + 'd-tab', 'cagr'), due: LS(PX + 'd-due', '0') === '1' } };
+  if ([1, 3, 5, 10].indexOf(DIST.u.hold) < 0) DIST.u.hold = 1;
+  function distPaused() { var b = document.getElementById('r7d-box'); return !!document.hidden || !b || !b.offsetParent; }
+  function distUpd(st, full) { if (st !== DIST.st) return; var b = document.getElementById('r7d-box'); if (!b) return; if (full) b.outerHTML = R72D.html(st, DIST.m, DIST.u); else R72D.prog(b, st); }
+  function distSet(s, x, net, fl, rj) {
+    var o = x.o, ol = optList(s);
+    return '원금 $' + Math.round(x.cap).toLocaleString() + ' · ' + (net ? '수수료 ' + o.fee + '% + SEC' + (o.divs ? ' · 분배금 원천징수 15%' : ' · 분배금 끔') +
+      (x.tax ? ' · 양도소득세 22%(250만 원 공제 · ' + (o.method === 'avg' ? '이동평균' : '선입선출') + (o.harvest ? ' · 연말 절세' : '') + ')' : o.tax ? ' · 원/달러 자료가 없어 양도세 빼고' : ' · 양도세 제외') : '세금·수수료 빼고' + (o.divs ? '' : ' · 분배금 끔')) +
+      (fl !== 'none' ? ' · 주문 넣는 때 ' + FL_M.filter(function (m) { return m[0] === fl; })[0][1] : '') + (rj !== 'none' ? ' · 증권사 주문 거부 ' + RJ_M.filter(function (m) { return m[0] === rj; })[0][1] : '') + (ol.length ? ' · ' + ol.join(' · ') : '');
+  }
+  function distView(s, r) {
+    if (!P.btDist || !window.R72D || !r || r.st !== 'ok' || !r.dx || !(r.dx.to > 0)) return '';
+    var x = r.dx, net = BT.view === 'net', fl = P.btFill ? BT.fl : 'none', rj = P.btRej ? BT.rj : 'none', key = JSON.stringify([x.sig, x.D.d[x.to], x.D.d[x.D.d.length - 1], net, fl, rj]);
+    if (!DIST.c) DIST.c = R72D.cache(4);
+    var st = DIST.c.get(key);
+    if (!st) {
+      var o = Object.assign({}, net ? x.oN : x.oG, { rej: rj === 'none' ? null : { mode: rj, cap: 1.2 }, fill: fl === 'none' ? null : fl });
+      st = DIST.c.put(key, R72D.job({ plan: R72D.plan(x.D.d, x.to), run: function (i) { return R72D.one(VX, x.cfg, x.D, o, i, x.to, x.cap); }, paused: distPaused, update: distUpd }));
+    }
+    DIST.st = st; DIST.key = key; R72D.inject();
+    DIST.m = { id: 'r7d-box', act: 'r7d', end: x.D.d[x.to], first: x.D.d[1], net: net, tax: x.tax, set: distSet(s, x, net, fl, rj) };
+    return R72D.html(st, DIST.m, DIST.u);
+  }
+  function distAct(k, v) {   /* 상자 안 단추 — 최소 보유 · 보기 · 올해 미납 양도세 (이 기기에 기억) */
+    if (k === 'hold' && [1, 3, 5, 10].indexOf(Number(v)) >= 0) DIST.u.hold = Number(v); else if (k === 'tab') DIST.u.tab = v; else if (k === 'due') DIST.u.due = v === '1'; else return;
+    try { localStorage.setItem(PX + 'd-hold', String(DIST.u.hold)); localStorage.setItem(PX + 'd-tab', DIST.u.tab); localStorage.setItem(PX + 'd-due', DIST.u.due ? '1' : '0'); } catch (e) {}
+    var b = document.getElementById('r7d-box'); if (b && DIST.st && DIST.m) b.outerHTML = R72D.html(DIST.st, DIST.m, DIST.u);
+  }
+  if (P.btDist && window.R72D) {   /* 시작일별 선 — 손가락·마우스를 대면 그 시작일 값 */
+    document.addEventListener('pointermove', function (e) { if ((e.target && e.target.closest && e.target.closest('.r7d-ln')) || document.querySelector('.r7d-cur:not([hidden])')) R72D.hover(e); }, { passive: true });
+    document.addEventListener('pointerleave', function (e) { if (e.target && e.target.classList && e.target.classList.contains('r7d-ln')) R72D.hover(e); }, true);
+  }
 
   /* ── 백테스트 그래프 크게 보기 (P.btZoom) — 기간 단추 · 끌어서 구간 확대 · 전체 · 보는 구간 수익률 · 연도별 수익률(줄을 누르면 그해로) ── */
   var BTZ = { key: null, a: -1, b: -1, per: '0', log: null, ch: null, idx: null, drag: null, W: null, raf: 0, stT: 0 };   /* W: 지금 그린 구간(btzWinData) */
@@ -26194,7 +26239,10 @@ function mhApp(P) {
     if (!u.divs) o.push('분배금 재투자 안 함');
     return o;
   }
-  function lastPx() { var m = MH.market[LK.ticker], q = m && m.quote && m.quote.price > 0 ? m.quote.price : null, l = m && m.prices && m.prices.length ? m.prices[m.prices.length - 1].close : null; return q || l || null; }
+  /* 최소 원금 기준가 = 전일 종가(마지막 확정 종가 — 주문표가 1회에 몇 주 살지 정하는 가격과 같음 · 장 마감 뒤 시세가 갱신되면 저절로 새 종가) · 일봉이 없을 때만 지금 가격 */
+  function lastPx() { var m = MH.market[LK.ticker], l = m && m.prices && m.prices.length ? m.prices[m.prices.length - 1] : null, q = m && m.quote && m.quote.price > 0 ? m.quote.price : null;
+    return l && l.close > 0 ? { c: l.close, d: l.date } : q ? { c: q, d: null } : null; }
+  function pxTxt(px) { return px.d ? esc(LK.ticker) + ' 전일 종가 $' + px.c.toFixed(2) + ' (' + Number(px.d.slice(5, 7)) + '/' + Number(px.d.slice(8, 10)) + ')' : '지금 ' + esc(LK.ticker) + ' 약 $' + px.c.toFixed(2); }
   /* 최소 원금 안내 (72루틴 — 자동매매 프로그램 routine72-auto 의 src/ui/public/mincap.js 와 같은 기준)
      하루에 사는 주식 수 = 1회 매수금 ÷ 가격, 1주 단위 버림(엔진 plan 과 같은 버림) → 0주 매수 주문 없음 · 1주 평단 매수선만(상단 매수선 없음) · 2~9주 버림으로 노는 돈이 많음 · 10주 이상 권장
      MC_LOSS = 실제 SOXL 일봉 백테스트에서 원금이 아주 큰 경우보다 연평균 수익률이 낮았던 정도(%p · 평균) — 2010-04 ~ 2023-10 매달 시작 163곳 × 3년 · 수수료 0.25% · 세금 없음 · 복리 (routine72-auto scripts/mincap-bt.js) */
@@ -26226,9 +26274,9 @@ function mhApp(P) {
     if (u.mid && c.one > 0 && c.T > 0 && (c.T >= LK.splits || (Number(u.cash) || 0) < c.one * 0.5))   /* 이미 소진된 중간 진입 — 엔진(xcheck)과 같은 조건 */
       return '<p class="mh-help" style="margin:0 0 10px"><span class="mh-warn">' + (c.T >= LK.splits ? LK.splits + '회를 다 써서' : '남은 현금이 1회 매수금의 절반보다 적어서') + '</span> 더 사지 않고 원금 소진 대응으로 시작해요 — 평단 +' + LK.targetProfit + '%에 닿으면 지정가로, 종가가 평단 −10% 안으로 오면 LOC로 전량 매도</p>';
     var px = lastPx(); if (!px) return '';
-    var k = mcCheck(c.one, px);
-    if (!(c.one > 0)) return u.mid ? '' : '<p class="mh-help" style="margin:0 0 10px">지금 ' + esc(LK.ticker) + ' 약 $' + px.toFixed(2) + ' — 평단·상단 두 줄로 사려면 원금 ' + mcUsd(k.two) + ' 이상 · 권장 ' + mcUsd(k.rec) + ' (1회 ' + MC_REC + '주 = ' + LK.splits + ' × ' + MC_REC + ' × 가격)</p>';
-    return '<p class="mh-help" id="mh-mc" data-mc="' + k.level + '" style="margin:0 0 10px">지금 ' + esc(LK.ticker) + ' 약 $' + px.toFixed(2) + ' 기준 1회 매수금으로 하루 <b>' + k.n + '주</b> — ' + mcMsg(k) + '</p>';
+    var k = mcCheck(c.one, px.c);
+    if (!(c.one > 0)) return u.mid ? '' : '<p class="mh-help" style="margin:0 0 10px">' + pxTxt(px) + ' — 평단·상단 두 줄로 사려면 원금 ' + mcUsd(k.two) + ' 이상 · 권장 ' + mcUsd(k.rec) + ' (1회 ' + MC_REC + '주 = ' + LK.splits + ' × ' + MC_REC + ' × 가격)</p>';
+    return '<p class="mh-help" id="mh-mc" data-mc="' + k.level + '" style="margin:0 0 10px">' + pxTxt(px) + ' 기준 1회 매수금으로 하루 <b>' + k.n + '주</b> — ' + mcMsg(k) + '</p>';
   }
   function viewSetupLock() {
     var u = MH.setup;
@@ -27486,6 +27534,7 @@ function mhApp(P) {
       case 'guide': MH.menu = false; render(); if (P.guide) { var gd = document.getElementById(P.guide); if (gd && gd.scrollIntoView) gd.scrollIntoView({ behavior: 'smooth', block: 'start' }); } else if (window.mhGuide) window.mhGuide(); break;
       /* 백테스트 그래프 크게 보기 */
       case 'legacy-x': if (P.legacy) (P.legacy.keys || []).forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} }); render(); break;
+      case 'r7d': distAct(el.getAttribute('data-r7d'), v); break;   /* 시작일별 분포 상자 (P.btDist) */
       case 'btz-open': MH.menu = false; MH.sheet = { kind: 'btz', key: btKey(s) }; BTZ.key = null; BTZ.log = null; render(); break;
       case 'btz-per': var rz = btzR(); if (rz) { var wz = btzWin(rz, Number(v)); BTZ.a = wz[0]; BTZ.b = wz[1]; BTZ.per = String(v); btzApply(true); } break;
       case 'btz-log': BTZ.log = !!el.checked; btzRedraw(); break;
@@ -27626,7 +27675,7 @@ function mhApp(P) {
   /* 탭 진입 시 호출 ([NAV] switchSubTab 의 훅) */
   window[P.init] = function () { bind(); MH.now = new Date(); takePreset(); if (!SY.inited) { SY.inited = true; SY.uid = authUid(); if (SY.uid) SY.st = 'pull'; if (window.dcAuth && window.dcAuth.ready) window.dcAuth.ready().then(function (ok) { if (SY.can !== ok) { SY.can = ok; render(); } }).catch(function () {}); } render(); if (SY.uid && SY.st === 'pull') pull(); };
   window[P.debug] = { get store() { return store; }, derive: derive, deriveOld: deriveOld, curD: curD, vCompute: vCompute, render: render, bt: BT, restart: startNewCycle, vcfg: vcfg, btOpts: btOpts, mcCheck: mcCheck, mcOrd: mcOrd,
-                      MH: MH, P: P, btKey: btKey, btz: BTZ, mixOf: mixOf, liveTick: liveTick, lq: LQ, lqKick: lqKick, rjPaint: rjPaint, capOf: capOf, rckPaint: rckPaint, closeBefore: closeBefore, nyHoliday: nyHoliday, nyEarly: nyEarly };
+                      MH: MH, P: P, btKey: btKey, btz: BTZ, mixOf: mixOf, liveTick: liveTick, lq: LQ, lqKick: lqKick, rjPaint: rjPaint, capOf: capOf, rckPaint: rckPaint, closeBefore: closeBefore, nyHoliday: nyHoliday, nyEarly: nyEarly, dist: DIST, distView: distView };
 }
 mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan', key: 'muhan4-store', oldKey: 'muhan4_data', ls: 'muhan4-', sync: '/udata/muhan',
         init: 'muhanInit', debug: 'MHdebug', globalMH: true, preset: true });   /* 무한매수법 기록 (/muhan/) — 72루틴 프로필은 [T72] 에서 */
@@ -29822,6 +29871,254 @@ var VBD = (function () {
 /* [/VR-BT] */
 
 /* ════════════════════════════════════════════════════════════
+   [T72-DIST] 72루틴 시작일별 연평균 수익률(CAGR)·최대 낙폭(MDD) 분포 — 순수 계산 + 화면 문자열(HTML) · DOM 은 hover·prog 만
+   · 사이트 72루틴 백테스트 카드([T72] P.btDist — '총자산·그냥 보유' 그래프 바로 아래)와 자동매매 프로그램(routine72-auto 백테스트 탭)이 같은 코드를 씀
+     → 프로그램은 scripts/sync-engine.js 가 이 블록을 글자 그대로 src/ui/public/r72dist.js 로 복사(npm test 가 같은지 확인) · 여기를 고치면 다시 가져올 것
+   · 정의(프로젝트 문서 'claude/72루틴-평균CAGR-분포-자료.md' §2 · 화면 백테스트 카드 MBT.stats 와 같음)
+     · 시작일 s = 첫 매수일(s ≥ 1) · 원금 기준일 = 그 전 거래일 D.d[s−1] · 끝 = 정한 끝 날짜 to · 시작일은 끝 20거래일 전까지(s ≤ to − 20)
+     · 일수 = 기준일 → 끝 날(달력 일수) · CAGR = (끝 날 평가금 ÷ 원금)^(365.25 ÷ 일수) − 1 · '미납세 차감' = 끝 날 평가금 − 올해 미납 양도세(R.taxDue)
+     · MDD = 날마다 평가금(엔진 eq) 최고점 대비 · SOXL 그냥 보유 = 기준일 종가 → 끝 날 종가(세전·수수료 없음 · 카드의 '그냥 보유'와 같음)
+     · 보유 기간 필터 = 일수 ≥ 365.25 × N (표시 단계) · 백분위 = 선형 보간(엑셀 PERCENTILE) · 구간 = 5%p, 아래 포함·위 미포함 · 평균 = 시작일 단순 평균
+   · 계산 순서: 매월 첫 거래일 시작(표본 — 빨리 보여 줌) → 나머지 모든 거래일(정밀) · 조금씩 나눠 실행(화면이 멈추지 않게) · 안 보이면 쉼(paused)
+   · 확인(2026-10-16): 끝 2026-10-14 · 수수료 0.1% · 양도세 선입선출 → 보유 ≥ 1년 3,923곳 평균 45.27% · 중앙 44.30% · p10 33.62% · p90 58.49% · MDD 평균 −51.7%(문서 §3·§5-2 와 같음)
+════════════════════════════════════════════════════════════ */
+var R72D = (function () {
+  'use strict';
+  var Y = 365.25, GAP = 20, LN = {};
+  function dnum(s) { return Math.round(Date.parse(s + 'T00:00:00Z') / 864e5); }
+  function cg(v0, v1, days) { return days > 0 && v0 > 0 && v1 > 0 ? Math.pow(v1 / v0, Y / days) - 1 : null; }
+  function dd(a, i0, i1) { var pk = -Infinity, m = 0; for (var i = i0; i <= i1; i++) { if (a[i] > pk) pk = a[i]; var x = a[i] / pk - 1; if (x < m) m = x; } return m; }
+  function fin(v) { return typeof v === 'number' && isFinite(v); }
+
+  /* ── 계산 ── */
+  /* 시작일 목록 (끝 to 까지 20거래일 넘게 남는 날) — first: 매월 첫 거래일(표본) · rest: 나머지 */
+  function plan(d, to) {
+    var a = [], b = [], m = '', hi = to - GAP;
+    for (var s = 1; s <= hi; s++) { var k = d[s].slice(0, 7); if (k !== m) { a.push(s); m = k; } else b.push(s); }
+    return { first: a, rest: b, n: a.length + b.length };
+  }
+  /* 시작일 하나 — MHV.run(cfg, D, o + from·to·capital) → 카드(MBT.stats)와 같은 정의의 값 */
+  function one(MHV, cfg, D, o, s, to, cap) {
+    var x = {}, k; for (k in o) x[k] = o[k]; x.from = s; x.to = to; x.capital = cap; x.rows = false;
+    var R = MHV.run(cfg, D, x), days = dnum(D.d[to]) - dnum(D.d[s - 1]), f = R.final;
+    return { s: s, d: D.d[s], days: days, cagr: cg(cap, f, days), due: cg(cap, f - (R.taxDue || 0), days), mdd: dd(R.eq, 0, R.eq.length - 1),
+             bh: cg(D.c[s - 1], D.c[to], days), bhMdd: dd(D.c, s, to) };
+  }
+  /* 선형 보간 백분위 (s = 오름차순) */
+  function q(s, p) { if (!s.length) return null; var i = (s.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i); return s[lo] + (s[hi] - s[lo]) * (i - lo); }
+  /* 요약 — key 값이 있는 시작일만 · lo/hi = 최저·최고 시작일(같으면 먼저 것) */
+  function summ(rows, key) {
+    var v = [], lo = null, hi = null, sum = 0, pos = 0;
+    rows.forEach(function (r) { var x = r[key]; if (!fin(x)) return; v.push(x); sum += x; if (x > 0) pos++; if (!lo || x < lo[key]) lo = r; if (!hi || x > hi[key]) hi = r; });
+    if (!v.length) return null;
+    var s = v.slice().sort(function (a, b) { return a - b; }), n = s.length, mean = sum / n, sq = 0;
+    for (var i = 0; i < n; i++) sq += (s[i] - mean) * (s[i] - mean);
+    return { n: n, mean: mean, med: q(s, 0.5), p10: q(s, 0.1), p25: q(s, 0.25), p75: q(s, 0.75), p90: q(s, 0.9), min: s[0], max: s[n - 1], lo: lo, hi: hi, pos: pos / n, sd: Math.sqrt(sq / n) };
+  }
+  /* 보유 기간 필터 — 일수 ≥ 365.25 × yrs */
+  function hold(rows, yrs) { var m = Y * (yrs || 0); return rows.filter(function (r) { return r.days >= m; }); }
+  /* 구간별 개수 — w %p 폭 · 아래 포함 · 위 미포함 · 빈 구간도 이어서 (lo·hi 는 %) */
+  function hist(v, w) {
+    w = w || 5; var k = [], a = Infinity, b = -Infinity;
+    v.forEach(function (x) { if (!fin(x)) return; var j = Math.floor(x * 100 / w + 1e-9); k.push(j); if (j < a) a = j; if (j > b) b = j; });
+    if (!k.length) return [];
+    var out = []; for (var j = a; j <= b; j++) out.push({ lo: j * w, hi: (j + 1) * w, n: 0, p: 0 });
+    k.forEach(function (j) { out[j - a].n++; }); out.forEach(function (o) { o.p = o.n / k.length; });
+    return out;
+  }
+  /* 시작 연도별 */
+  function years(rows, key) {
+    var m = {}, ks = [];
+    rows.forEach(function (r) { var y = r.d.slice(0, 4); if (!m[y]) { m[y] = []; ks.push(y); } m[y].push(r); });
+    return ks.map(function (y) { var a = m[y]; return { y: y, n: a.length, s: summ(a, key), mdd: summ(a, 'mdd'), bh: summ(a, 'bh') }; });
+  }
+
+  /* ── 나눠 실행 — o = { plan, run(s) → 행, paused() → 쉴지, update(st, full) — full: 단계가 바뀜(다시 그리기) · 아니면 진행만 }, budget(ms) ── */
+  function job(o) {
+    var all = o.plan.first.concat(o.plan.rest), nf = o.plan.first.length, st = { rows: [], first: null, n: all.length, nf: nf, i: 0, stage: all.length ? 'run' : 'empty', err: null, dead: false, ms: 0 };
+    var now = typeof performance !== 'undefined' && performance.now ? function () { return performance.now(); } : function () { return Date.now(); }, t0 = now(), last = 0, bud = o.budget || 12;
+    st.cancel = function () { st.dead = true; };
+    function fin2() { st.rows.sort(function (a, b) { return a.s - b.s; }); st.stage = 'done'; st.ms = now() - t0; o.update(st, true); }
+    function step() {
+      if (st.dead || st.stage === 'done' || st.stage === 'err') return;
+      if (o.paused && o.paused()) { setTimeout(step, 700); return; }
+      var t = now(), flip = false;
+      try {
+        do {   /* 한 번에 적어도 한 곳 (느린 기기에서도 앞으로 감) */
+          st.rows.push(o.run(all[st.i])); st.i++;
+          if (st.i === nf) { st.first = st.rows.slice(); if (st.i < all.length) { st.stage = 'more'; flip = true; } break; }
+        } while (st.i < all.length && now() - t < bud);
+      } catch (e) { st.stage = 'err'; st.err = (e && e.message) || String(e); o.update(st, true); return; }
+      if (st.i >= all.length) { fin2(); return; }
+      if (flip) o.update(st, true); else if (now() - last > 250) { last = now(); o.update(st, false); }
+      setTimeout(step, 0);
+    }
+    if (st.stage === 'empty') setTimeout(function () { if (!st.dead) o.update(st, true); }, 0); else setTimeout(step, 0);
+    return st;
+  }
+  /* 결과 보관 (최근 max 개) — 새 계산을 넣으면 끝나지 않은 다른 계산은 멈추고 버림(설정을 바꾸면 이전 계산이 CPU 를 쓰지 않게) */
+  function cache(max) {
+    var m = {}, ks = [];
+    return {
+      get: function (k) { return m[k] || null; },
+      put: function (k, st) {
+        ks.slice().forEach(function (x) { if (x !== k && m[x] && m[x].stage !== 'done' && m[x].stage !== 'empty') { m[x].cancel(); delete m[x]; ks.splice(ks.indexOf(x), 1); } });
+        if (!m[k]) ks.push(k); m[k] = st;
+        while (ks.length > (max || 4)) delete m[ks.shift()];
+        return st;
+      }
+    };
+  }
+
+  /* ── 화면 문자열 ── */
+  var TABS = [['cagr', 'CAGR 분포'], ['mdd', 'MDD 분포'], ['line', '시작일별'], ['year', '시작 연도별']], HOLDS = [1, 3, 5, 10];
+  function pc(v, d) { return v == null || !isFinite(v) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(d == null ? 1 : d) + '%'; }
+  function n0(v) { return Number(v).toLocaleString('en-US'); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function btn(m, k, v, on, txt) { return '<button type="button" class="r7d-b' + (on ? ' on' : '') + '" data-r7d="' + k + '" data-v="' + v + '"' + (m.act ? ' data-act="' + m.act + '"' : '') + ' aria-pressed="' + !!on + '">' + txt + '</button>'; }
+  function pgBar(st) {
+    var f = st.stage === 'run' ? st.i / Math.max(1, st.nf) : (st.i - st.nf) / Math.max(1, st.n - st.nf);
+    var t = st.stage === 'run' ? '계산 중 — 매월 첫 거래일 시작 ' + n0(st.i) + ' / ' + n0(st.nf) + '곳 (먼저 보여 드리고 모든 시작일로 이어서 계산해요)'
+      : '지금 보이는 값 = 매월 첫 거래일 시작 ' + n0(st.nf) + '곳 표본 · 모든 시작일 ' + n0(st.n) + '곳으로 정밀 계산 중 ' + Math.floor(f * 100) + '%';
+    return '<div class="r7d-pg"><i><b style="width:' + Math.max(2, Math.min(100, f * 100)).toFixed(1) + '%"></b></i><span>' + t + '</span></div>';
+  }
+  /* 진행 막대만 바꿈 (다시 그리지 않음 — 보던 그래프·단추가 그대로) */
+  function prog(box, st) { var e = box && box.querySelector('.r7d-pg'); if (!e) return; var x = document.createElement('div'); x.innerHTML = pgBar(st); e.parentNode.replaceChild(x.firstChild, e); }
+  function tile(lab, val, sub, c) { return '<div class="r7d-k"><span>' + lab + '</span><b' + (c ? ' class="' + c + '"' : '') + '>' + val + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</div>'; }
+  function cl(v) { return v > 0 ? 'r7d-up' : v < 0 ? 'r7d-dn' : ''; }
+  /* 막대(구간별 비율) — kind: up(CAGR) · dn(MDD) · S = 요약(평균 표시) */
+  function histH(bins, kind, S, unit) {
+    if (!bins.length) return '';
+    var mx = 0, w = bins[0].hi - bins[0].lo, a = bins[0].lo, span = bins.length * w, every = bins.length > 16 ? 3 : bins.length > 10 ? 2 : 1;
+    bins.forEach(function (b) { if (b.p > mx) mx = b.p; });
+    var sg = function (v) { return v < 0 ? '−' + Math.abs(v) : String(v); }, L = bins.length;
+    var bars = bins.map(function (b) {
+      var h = mx > 0 ? b.p / mx * 86 : 0, lab = b.n ? (b.p >= 0.0095 ? Math.round(b.p * 100) + '%' : '·') : '';
+      return '<div class="r7d-bin' + (kind === 'up' && b.lo < 0 ? ' neg' : '') + '" title="' + esc(sg(b.lo) + ' ~ ' + sg(b.hi) + '% · ' + n0(b.n) + '곳 (' + (b.p * 100).toFixed(1) + '%)') + '"><em>' + lab + '</em><i style="height:' + h.toFixed(1) + '%"></i></div>';
+    }).join('');
+    var xl = bins.map(function (b, i) { return i % every ? '' : '<span style="left:' + (i / L * 100).toFixed(2) + '%"' + (i ? '' : ' class="l"') + '>' + sg(b.lo) + '</span>'; }).join('') + (L % every ? '' : '<span class="r" style="left:100%">' + sg(bins[L - 1].hi) + '</span>');
+    var mk = function (v, t, c) { var p = (v * 100 - a) / span * 100; return p < 0 || p > 100 ? '' : '<div class="r7d-mk ' + c + '" style="left:' + p.toFixed(2) + '%"><span' + (p > 70 ? ' class="r"' : '') + '>' + t + '</span></div>'; };
+    return '<div class="r7d-hist ' + kind + '"><div class="r7d-bars">' + bars + mk(S.mean, '평균 ' + pc(S.mean), 'm') + mk(S.med, '중앙 ' + pc(S.med), 'd') + '</div><div class="r7d-xl">' + xl + '</div>' +
+      '<div class="r7d-ax">' + unit + ' · 막대 = 그 구간에 든 시작일 비율 · 위 숫자 = 비율(%) · 막대에 마우스를 대면 개수</div></div>';
+  }
+  /* 시작일별 선 — CAGR(파랑) · MDD(빨강) · 0% 선 · 손가락·마우스를 대면 그 시작일 값 (hover) */
+  function nice(lo, hi) { var r = hi - lo, st = [0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5].filter(function (x) { return r / x <= 8; })[0] || 10; return { st: st, a: Math.floor(lo / st) * st, b: Math.ceil(hi / st) * st }; }
+  function lineH(id, rows, key) {
+    var n = rows.length; if (n < 2) return '<p class="r7d-ax">시작일이 2곳 이상이어야 선으로 보여요.</p>';
+    var lo = 0, hi = 0; rows.forEach(function (r) { if (fin(r[key])) { lo = Math.min(lo, r[key]); hi = Math.max(hi, r[key]); } lo = Math.min(lo, r.mdd); });
+    var N = nice(lo, hi), W = 1000, H = 200, y = function (v) { return (H - (v - N.a) / (N.b - N.a) * H).toFixed(1); }, x = function (i) { return (i / (n - 1) * W).toFixed(1); };
+    var pts = function (k) {   /* 500칸으로 줄이되 칸마다 최저·최고 점은 남김(극값 보존) */
+      var p = [], b = Math.max(1, Math.ceil(n / 500));
+      for (var i = 0; i < n; i += b) {
+        var e = Math.min(n, i + b), j0 = -1, j1 = -1;
+        for (var j = i; j < e; j++) { var v = rows[j][k]; if (!fin(v)) continue; if (j0 < 0 || v < rows[j0][k]) j0 = j; if (j1 < 0 || v > rows[j1][k]) j1 = j; }
+        if (j0 < 0) continue;
+        var u = Math.min(j0, j1), w = Math.max(j0, j1); p.push(x(u) + ',' + y(rows[u][k])); if (w !== u) p.push(x(w) + ',' + y(rows[w][k]));
+      }
+      return p.join(' ');
+    };
+    var g = '', yl = '';
+    for (var v = N.a; v <= N.b + 1e-9; v += N.st) { var yy = y(v); g += '<line x1="0" x2="' + W + '" y1="' + yy + '" y2="' + yy + '" class="' + (Math.abs(v) < 1e-9 ? 'z' : 'g') + '" vector-effect="non-scaling-stroke"/>'; yl += '<span style="top:' + (yy / H * 100).toFixed(2) + '%">' + pc(Math.round(v * 1000) / 1000, 0) + '</span>'; }
+    var ys = [], yr = ''; rows.forEach(function (r, i) { var k = r.d.slice(0, 4); if (k !== yr) { ys.push([i, k]); yr = k; } });
+    var ev = Math.max(1, Math.ceil(ys.length / 8)), xl = ys.filter(function (t, i) { return i % ev === 0; }).map(function (t) { var p = t[0] / (n - 1) * 100; return '<span style="left:' + p.toFixed(2) + '%"' + (p > 92 ? ' class="r"' : '') + '>' + t[1] + '</span>'; }).join('');
+    LN[id] = { rows: rows, key: key };
+    return '<div class="r7d-ln" data-ln="' + esc(id) + '"><div class="r7d-lg"><span><i class="c"></i>연평균(CAGR)</span><span><i class="m"></i>최대 낙폭(MDD)</span></div>' +
+      '<div class="r7d-plot"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="시작일별 연평균 수익률과 최대 낙폭">' + g +
+      '<polyline class="m" points="' + pts('mdd') + '" vector-effect="non-scaling-stroke"/><polyline class="c" points="' + pts(key) + '" vector-effect="non-scaling-stroke"/></svg>' +
+      '<div class="r7d-yl">' + yl + '</div><div class="r7d-cur" hidden></div></div><div class="r7d-xt">' + xl + '</div>' +
+      '<div class="r7d-rd" aria-live="polite">손가락·마우스를 대면 그 시작일의 값을 보여요</div></div>';
+  }
+  /* 손가락·마우스 — 바깥(pointermove 위임 · pointerleave)에서 부름 */
+  function hover(ev) {
+    var t = ev && ev.target && ev.target.closest ? ev.target.closest('.r7d-ln') : null;
+    if (typeof document !== 'undefined') Array.prototype.forEach.call(document.querySelectorAll('.r7d-ln'), function (e) { if (e !== t || ev.type === 'pointerleave') { var c = e.querySelector('.r7d-cur'); if (c && !c.hidden) c.hidden = true; } });
+    if (!t || ev.type === 'pointerleave') return;
+    var L = LN[t.getAttribute('data-ln')], pl = t.querySelector('.r7d-plot'); if (!L || !pl) return;
+    var rc = pl.getBoundingClientRect(), f = (ev.clientX - rc.left) / rc.width, n = L.rows.length; if (!(f >= 0 && f <= 1)) return;
+    var i = Math.round(f * (n - 1)), r = L.rows[i], c = t.querySelector('.r7d-cur'), rd = t.querySelector('.r7d-rd');
+    c.style.left = (i / (n - 1) * 100).toFixed(2) + '%'; c.hidden = false;
+    rd.innerHTML = '<b>' + r.d + ' 시작</b> · ' + (r.days / Y).toFixed(1) + '년 · CAGR <b class="' + cl(r[L.key]) + '">' + pc(r[L.key]) + '</b> · MDD <b class="r7d-mdd">' + pc(r.mdd) + '</b> · SOXL 그냥 보유 ' + pc(r.bh) + '(MDD ' + pc(r.bhMdd) + ')';
+  }
+  function yearH(Ys) {
+    var mx = 0; Ys.forEach(function (o) { if (o.s) mx = Math.max(mx, Math.abs(o.s.mean)); });
+    return '<div class="r7d-tw"><table class="r7d-t"><thead><tr><th>시작 연도<small>시작일</small></th><th>평균 CAGR<small>최저 ~ 최고</small></th><th>MDD 평균</th><th>SOXL 그냥 보유<small>평균 · 세전</small></th></tr></thead><tbody>' +
+      Ys.map(function (o) {
+        var S = o.s; if (!S) return '';
+        return '<tr><td>' + o.y + '<small>' + n0(o.n) + '곳</small></td><td class="r7d-bc"><i class="' + (S.mean < 0 ? 'neg' : '') + '" style="width:' + (mx > 0 ? Math.abs(S.mean) / mx * 100 : 0).toFixed(1) + '%"></i><b class="' + cl(S.mean) + '">' + pc(S.mean) + '</b><small>' + pc(S.min) + ' ~ ' + pc(S.max) + '</small></td>' +
+          '<td class="r7d-mdd">' + pc(o.mdd && o.mdd.mean) + '</td><td>' + pc(o.bh && o.bh.mean) + '</td></tr>';
+      }).join('') + '</tbody></table></div><p class="r7d-ax">시작일 수가 해마다 달라 연도 평균의 평균은 위 전체 평균과 조금 달라요 · 마지막 해는 끝 날짜까지 보유 기간을 채운 시작일만</p>';
+  }
+  /* 상자 전체 — st: job 상태 · m: { id, end 끝 날짜, first 첫 시작일, set 설정 문구, net 세금·수수료 포함, tax 양도세 포함, act } · u: { hold, tab, due } */
+  function html(st, m, u) {
+    var h = '<div class="r7d" id="' + esc(m.id) + '"><div class="r7d-hd"><b>시작일에 따라 달라지는 연평균 수익률(CAGR) · 최대 낙폭(MDD)</b><span>시작일 ' + esc(m.first) + '~ · 끝 ' + esc(m.end) + '</span></div>' +
+      '<p class="r7d-sub">SOXL 상장 다음 날부터 끝 날짜 20거래일 전까지 <b>모든 거래일을 시작일</b>로 잡고, 위 백테스트와 같은 설정으로 <b>' + esc(m.end) + '</b>까지 돌린 결과예요. 시작일 한 곳의 값이 아니라 분포로 보세요.</p>';
+    if (!st || st.stage === 'empty') return h + '<p class="r7d-ax">끝 날짜까지 20거래일 넘게 남는 시작일이 없어요 — 끝 날짜를 늦춰 보세요.</p></div>';
+    if (st.stage === 'err') return h + '<p class="r7d-ax r7d-dn">계산하지 못했어요: ' + esc(st.err) + '</p></div>';
+    var rows = st.stage === 'done' ? st.rows : st.first;
+    if (st.stage !== 'done') h += pgBar(st);
+    if (!rows) return h + '</div>';
+    var due = !!(u.due && m.net && m.tax), key = due ? 'due' : 'cagr', R = hold(rows, u.hold), S = summ(R, key), M = summ(R, 'mdd'), B = summ(R, 'bh'), BM = summ(R, 'bhMdd'), tab = TABS.some(function (t) { return t[0] === u.tab; }) ? u.tab : 'cagr';
+    h += '<div class="r7d-ctl"><span class="r7d-g"><span class="r7d-lb">최소 보유</span>' + HOLDS.map(function (y) { return btn(m, 'hold', y, u.hold === y, y + '년'); }).join('') + '</span>' +
+      '<span class="r7d-g">' + TABS.map(function (t) { return btn(m, 'tab', t[0], tab === t[0], t[1]); }).join('') + '</span>' +
+      (m.net && m.tax ? '<span class="r7d-g"><span class="r7d-lb">올해 미납 양도세</span>' + btn(m, 'due', 0, !due, '빼지 않음') + btn(m, 'due', 1, due, '뺀 값') + '</span>' : '') + '</div>';
+    if (!S) return h + '<p class="r7d-ax">보유 ' + u.hold + '년 이상인 시작일이 없어요 — 최소 보유를 줄이거나 끝 날짜를 늦춰 보세요.</p>' + capH(m, due) + '</div>';
+    var neg = R.filter(function (r) { return fin(r[key]) && r[key] < 0; }).length;
+    h += '<div class="r7d-kv">' + tile('시작일', n0(S.n) + '곳', '보유 ' + u.hold + '년 이상 · 전체 ' + n0(rows.length) + '곳 중' + (st.stage === 'done' ? '' : ' (표본)') + (neg ? ' · 연평균 손실 ' + n0(neg) + '곳' : '')) +
+      tile('평균 CAGR', pc(S.mean, 2), '중앙값 ' + pc(S.med, 2), cl(S.mean)) +
+      tile('가운데 80%', pc(S.p10) + ' ~ ' + pc(S.p90), '하위 10% ~ 상위 10% 경계') +
+      tile('최저 ~ 최고', pc(S.min) + ' ~ ' + pc(S.max), S.lo.d + ' · ' + S.hi.d + ' 시작') +
+      tile('최대 낙폭(MDD)', '평균 ' + pc(M.mean), '중앙값 ' + pc(M.med) + ' · 최악 ' + pc(M.min) + '(' + M.lo.d + ' 시작)', 'r7d-mdd') +
+      tile('SOXL 그냥 보유', '평균 ' + pc(B && B.mean), '세전·수수료 없음 · MDD 평균 ' + pc(BM && BM.mean)) + '</div>';
+    h += '<div class="r7d-ch">' + (tab === 'cagr' ? histH(hist(R.map(function (r) { return r[key]; }), 5), 'up', S, '가로 = 연평균 수익률(CAGR) 5%p 구간' + (due ? '(올해 미납 양도세 뺀 값)' : ''))
+      : tab === 'mdd' ? histH(hist(R.map(function (r) { return r.mdd; }), 5), 'dn', M, '가로 = 최대 낙폭(MDD) 5%p 구간 — 왼쪽일수록 깊음')
+      : tab === 'line' ? lineH(m.id, R, key) : yearH(years(R, key))) + '</div>';
+    return h + capH(m, due) + '</div>';
+  }
+  function capH(m, due) {
+    return '<p class="r7d-cap">시작일 = 첫 매수일 · 원금 기준일 = 그 전 거래일 · 연평균 = (끝 날 평가금 ÷ 원금)^(365.25 ÷ 일수) − 1 · 최대 낙폭 = 날마다 평가금(현금 + 보유 주식)의 최고점 대비 · 끝 날에 진행 중인 사이클은 그날 종가로 평가 · ' + esc(m.set) +
+      (due ? ' · 올해 미납 양도세 뺀 값 = 끝 날 평가금에서 이듬해 5월에 낼 올해 양도세를 뺀 것' : m.net && m.tax ? ' · 끝 날 평가금은 위 카드처럼 올해 미납 양도세를 빼지 않은 값' : '') + '</p>' +
+      '<p class="r7d-cap r7d-w">⚠ 72분할 · 목표 +52.5% · 상단 매수선 13%는 같은 기간 자료를 보고 고른 설정이라 앞으로는 이보다 낮을 수 있어요 · 이웃한 시작일은 같은 흐름을 나눠 써서 서로 독립된 시험이 아니에요(실제로 다른 경우는 시작 연도 수 정도) · 끝 날짜 하루의 종가에 따라 모든 시작일의 값이 함께 움직여요 · SOXL 상장(2010년) 뒤 한 시기의 자료로 한 과거 계산이며 수익을 약속하지 않아요</p>';
+  }
+  /* 화면 모양 — 두 곳이 같은 모양이 되게 여기서 넣음(inject) · 색 변수(--r-tx · t2 · t3 · bd · s1 · s2 · up · dn · ac · acs · acb · mono)는 쓰는 쪽 CSS 가 .r7d 에 정함 */
+  var CSS = '.r7d{margin-top:12px;border:1px solid var(--r-bd);border-radius:12px;background:var(--r-s2);padding:12px 12px 10px;font-size:12.5px;color:var(--r-tx);min-width:0}\n' +
+    '.r7d-hd{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:2px 10px}.r7d-hd b{font-size:13.5px;line-height:1.45}.r7d-hd span{font-size:11px;color:var(--r-t3);font-family:var(--r-mono);white-space:nowrap}\n' +
+    '.r7d-sub{margin:4px 0 8px;font-size:11.5px;line-height:1.6;color:var(--r-t2)}.r7d-sub b{color:var(--r-tx)}\n' +
+    '.r7d-pg{margin:6px 0 10px}.r7d-pg i{display:block;height:4px;border-radius:2px;background:var(--r-bd);overflow:hidden}.r7d-pg i b{display:block;height:100%;background:#3182f6;transition:width .25s}.r7d-pg span{display:block;margin-top:4px;font-size:11px;line-height:1.5;color:var(--r-t2)}\n' +
+    '.r7d-ctl{display:flex;flex-wrap:wrap;gap:6px 12px;margin:4px 0 8px}.r7d-g{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px}.r7d-lb{font-size:11px;color:var(--r-t3);margin-right:2px}\n' +
+    '.r7d-b{font:inherit;font-size:11.5px;line-height:1.3;padding:4px 9px;border-radius:8px;border:1px solid var(--r-bd);background:transparent;color:var(--r-t2);cursor:pointer;white-space:nowrap}.r7d-b:hover{color:var(--r-tx)}.r7d-b.on{background:var(--r-acs);border-color:var(--r-acb);color:var(--r-ac);font-weight:700}\n' +
+    '.r7d-kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px;margin-bottom:8px}\n' +
+    '.r7d-k{background:var(--r-s1);border:1px solid var(--r-bd);border-radius:10px;padding:7px 9px;min-width:0}.r7d-k span{display:block;font-size:10.5px;color:var(--r-t2)}\n' +
+    '.r7d-k b{display:block;font-family:var(--r-mono);font-size:14.5px;font-weight:700;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.r7d-k small{display:block;font-size:10px;line-height:1.45;color:var(--r-t3);margin-top:1px}\n' +
+    '.r7d-ch{margin:4px 0 6px;min-width:0}\n' +
+    '.r7d-bars{position:relative;display:flex;align-items:flex-end;gap:2px;height:170px;padding-top:30px;border-bottom:1px solid var(--r-bd);box-sizing:border-box}\n' +
+    '.r7d-bin{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center}\n' +
+    '.r7d-bin em{font-style:normal;font-size:9.5px;line-height:1;color:var(--r-t2);font-family:var(--r-mono);margin-bottom:2px;white-space:nowrap}\n' +
+    '.r7d-bin i{display:block;width:100%;background:#3182f6;border-radius:3px 3px 0 0}.r7d-bin.neg i,.r7d-hist.dn .r7d-bin i{background:#f04452}\n' +
+    '.r7d-mk{position:absolute;top:0;bottom:0;width:0;border-left:1.5px dashed var(--r-tx);pointer-events:none}.r7d-mk.d{border-left-style:dotted;opacity:.75}\n' +
+    '.r7d-mk span{position:absolute;top:0;left:3px;font-size:10px;line-height:1.3;font-family:var(--r-mono);white-space:nowrap;background:var(--r-s2);padding:0 3px;border-radius:3px}.r7d-mk.d span{top:14px}.r7d-mk span.r{left:auto;right:3px}\n' +
+    '.r7d-xl{position:relative;height:15px;margin-top:3px;font-size:10px;color:var(--r-t3);font-family:var(--r-mono)}.r7d-xl span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}.r7d-xl span.l{transform:none}.r7d-xl span.r{transform:translateX(-100%)}\n' +
+    '.r7d-ax{font-size:10.5px;color:var(--r-t3);margin:4px 0 0;line-height:1.55}\n' +
+    '.r7d-ln{touch-action:pan-y}.r7d-lg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--r-t2);margin:0 0 6px}.r7d-lg i{display:inline-block;width:14px;height:0;border-top:2px solid;vertical-align:middle;margin-right:4px}.r7d-lg i.c{border-color:#3182f6}.r7d-lg i.m{border-color:#f04452}\n' +
+    '.r7d-plot{position:relative;height:180px;margin-left:36px}.r7d-plot svg{display:block;width:100%;height:100%;overflow:visible}\n' +
+    '.r7d-plot line.g{stroke:var(--r-bd);stroke-width:1}.r7d-plot line.z{stroke:var(--r-t3);stroke-width:1}.r7d-plot polyline{fill:none;stroke-width:1.5;stroke-linejoin:round}.r7d-plot polyline.c{stroke:#3182f6}.r7d-plot polyline.m{stroke:#f04452;opacity:.85}\n' +
+    '.r7d-yl span{position:absolute;left:-36px;width:32px;text-align:right;transform:translateY(-50%);font-size:9.5px;color:var(--r-t3);font-family:var(--r-mono);white-space:nowrap}\n' +
+    '.r7d-cur{position:absolute;top:0;bottom:0;width:0;border-left:1px solid var(--r-tx);opacity:.65;pointer-events:none}\n' +
+    '.r7d-xt{position:relative;height:15px;margin:3px 0 0 36px;font-size:10px;color:var(--r-t3);font-family:var(--r-mono)}.r7d-xt span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}.r7d-xt span.r{transform:translateX(-100%)}\n' +
+    '.r7d-rd{margin-top:6px;font-size:11.5px;line-height:1.55;color:var(--r-t2);min-height:1.55em}.r7d-rd b{font-family:var(--r-mono)}\n' +
+    '.r7d-tw{overflow-x:auto}.r7d-t{width:100%;border-collapse:collapse;font-size:11.5px}.r7d-t th,.r7d-t td{padding:5px 6px;border-bottom:1px solid var(--r-bd);text-align:right;white-space:nowrap}.r7d-t td{font-family:var(--r-mono)}\n' +
+    '.r7d-t th{font-weight:600;color:var(--r-t2);font-size:10.5px;white-space:normal;vertical-align:bottom}.r7d-t th small{display:block;font-weight:400;color:var(--r-t3)}.r7d-t th:first-child,.r7d-t td:first-child{text-align:left}\n' +
+    '.r7d-t td small{display:block;font-size:10px;color:var(--r-t3);font-weight:400}.r7d-t td b{font-weight:700}\n' +
+    '.r7d-bc{position:relative;min-width:110px}.r7d-bc i{position:absolute;left:0;top:4px;bottom:4px;background:rgba(49,130,246,.2);border-radius:3px}.r7d-bc i.neg{background:rgba(240,68,82,.2)}.r7d-bc b,.r7d-bc small{position:relative}\n' +
+    '.r7d-cap{margin:6px 0 0;font-size:10.5px;line-height:1.6;color:var(--r-t3)}.r7d-cap.r7d-w{color:var(--r-t2)}\n' +
+    '.r7d-up{color:var(--r-up)}.r7d-dn{color:var(--r-dn)}.r7d-mdd{color:#f04452}\n';
+  function inject() { if (typeof document === 'undefined' || document.getElementById('r7d-css')) return; var e = document.createElement('style'); e.id = 'r7d-css'; e.textContent = CSS; (document.head || document.documentElement).appendChild(e); }
+  return { Y: Y, GAP: GAP, dnum: dnum, cagr: cg, dd: dd, plan: plan, one: one, q: q, summ: summ, hold: hold, hist: hist, years: years, job: job, cache: cache,
+           html: html, prog: prog, hover: hover, pc: pc, CSS: CSS, inject: inject };
+})();
+if (typeof module !== 'undefined') module.exports = R72D;
+/* [/T72-DIST] */
+
+/* ════════════════════════════════════════════════════════════
    [T72] 72루틴 (/72/ · #t7-root) — 무한매수법 기록 화면([MUHAN] mhApp)을 고정 규칙 프로필로 씀 → 화면·기록·로그인 자동 저장이 같음
    · 고정 규칙(lock) = 계산 엔진 MHV V1.0 규칙 · SOXL · 72분할 · 목표 52.5% · 상단 매수선(엔진 big) 13% · 평단 매수선(엔진 avgOff) 0%
                       · 소진 대응 recover(매수 멈추고 평단 −10% 안이면 전량 매도) · 1주 단위 — 저장된 설정과 상관없이 이 값으로 계산(vcfg)
@@ -29834,6 +30131,8 @@ var VBD = (function () {
          · 공포탐욕·VIX 띠 그라데이션(grad) · 오늘의 주문 강조(ordHl) · RSI 표시 기본 와일더(rsiDef — 새 사이클 'RSI 60 이하' 판단과 같은 방식)
    · ㉝: 오늘의 주문 한도 경고(rejWarn — 'LOC 매수 상한' 카드 기준가 × 1.2 를 넘는 매수 줄 아래 경고 + 입력 가격 · 실시간 시세와 함께)
          · 백테스트 '증권사 주문 거부'(btRej — 반영 안 함 / 한도로 낮춰 넣기 / 그날 건너뛰기를 함께 계산해 표로 · 고른 것이 카드 숫자·그래프 · 'r72-bt-rj')
+   · ㊿: 백테스트 카드 '총자산·그냥 보유' 그래프 아래 시작일별 연평균 수익률(CAGR)·최대 낙폭(MDD) 분포(btDist — [T72-DIST] R72D · 자동매매 프로그램 백테스트 탭과 같은 코드)
+         · 시작 원금 안내(최소 원금)의 기준가 = 전일 종가(마지막 확정 종가 — 날마다 장 마감 뒤 저절로 바뀜 · 예전엔 지금 가격)
    · ㉟: 오늘의 주문 '마감 30분 전 다시 걸기'(recheck — 사용자 절차: 프리장·정규장에서 거부되면 마감 30분 전 지금 가격으로 판정 · 'LOC 매수 상한' 기준가 · 뉴욕증권거래소 휴장일·조기 폐장 달력)
    · ㉞: 백테스트 '주문 넣는 때'(btFill — 기존 계산 / 정규장 시작 전(갭 상승은 시가) / 프리장 시작(한국 17~18시 · 주문 거부 기준 전날 종가)을 표로 · 'r72-bt-fl')
    · 화면·설명글에는 무한매수법·라오어 이름을 쓰지 않음 (사용자 지시 2026-10-13) — 큰수 → 상단 매수선 · 평단 LOC 괴리율 → 평단 매수선 · T값 → 회차
@@ -29848,6 +30147,7 @@ var VBD = (function () {
             ['원금 소진 대응', '원금을 다 쓰면 매수를 멈추고, 종가가 평단 −10% 안으로 오면 전량 매도'], ['주문 수량', '실제 주문 (1주 단위)']],
     feeDef: 0.25, feeCustom: 0.1, mixDef: 0.5, btPre: true, btZoom: true, btPer: 'all', live: true,
     capDef: 100000, indBottom: true, fold: true, grad: true, ordHl: true, rsiDef: 'wilder', btRange: true,   /* ㉜ 시작 원금 기본 · 시장 지표 카드 맨 아래 · 접기 · 그라데이션 · 오늘의 주문 강조 · RSI 와일더 · 백테스트 기간설정 */
+    btDist: true,   /* ㊿ 백테스트 카드 '총자산·그냥 보유' 그래프 아래 시작일별 연평균 수익률·최대 낙폭 분포([T72-DIST]) */
     rejWarn: true, btRej: true, btFill: true, recheck: { min: 30, lo: 1.7, up: 10, band: 15 },   /* ㉟ 오늘의 주문: 주문이 거부됐다면 마감 30분 전 다시 걸기(전일 종가 −1.7% ~ +13% · +13% 넘음 → 원래 가격 · −1.7% 아래 → 지금 가격 +10%) · ㊱ 경계 −2% → −1.7%: 한도가 +15%인 증권사(토스증권)도 거부되지 않게(1.13 ÷ 1.15 = 0.9826) · 다시 걸 가격이 지금 가격 × 1.15 를 넘으면 지금 가격 +10% · ㉞ 백테스트: 주문 넣는 때 3가지 비교 · ㉝ 오늘의 주문: 매수 지정가가 지금 한도(기준가 × 1.2)를 넘으면 경고 + 한도로 낮춘 입력 가격 · 백테스트: 증권사 주문 거부 처리 3가지 비교 */
     legacy: { log: 't72-log', keys: ['t72-set', 't72-log', 't72-tab', 't72-open'] } });   /* 예전 '72매매법' 화면(2026-10-13 저녁 잠깐) 기록 — 옮기지 못함 안내 */
   function go() { if (document.getElementById('t7-root') && window.t72Init) window.t72Init(); }

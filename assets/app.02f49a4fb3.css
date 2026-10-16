@@ -1244,6 +1244,8 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
 .mh-bt-lg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--m-t2);margin:0 2px 4px}
 .mh-bt-lg i{display:inline-block;width:14px;height:0;border-top:2px solid;vertical-align:middle;margin-right:4px}
 .mh-bt-ax{display:flex;flex-wrap:wrap;justify-content:space-between;font-size:10.5px;color:var(--m-t3);font-family:var(--mono);margin:2px 2px 0}.mh-bt-ax .mh-bt-hv{order:3;flex:1 0 100%;text-align:center;color:var(--m-t2)}
+/* [T72-DIST] 72루틴 시작일별 분포 상자 — 모양은 R72D.CSS(자동매매 프로그램과 같은 모양 · inject) · 여기는 색 변수만 */
+#page-t72 .r7d{--r-tx:var(--m-tx);--r-t2:var(--m-t2);--r-t3:var(--m-t3);--r-bd:var(--m-bd);--r-s1:var(--m-s1);--r-s2:var(--m-s2);--r-up:var(--m-ok);--r-dn:var(--m-bad);--r-ac:var(--m-ac);--r-acs:var(--m-ac-s);--r-acb:var(--m-ac-b);--r-mono:var(--mono)}
   /* ═══ [THEME] 라이트 테마 — html[data-theme="light"] 일 때 색 변수만 교체 ═══ */
   html[data-theme="light"] {
     /* 토스증권 라이트 팔레트 */
