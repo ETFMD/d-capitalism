@@ -67,7 +67,7 @@ function fzOf(g, now) {
 const fzStr = (o) => (Object.keys(o).length ? JSON.stringify(o) : null);
 function cleanRd(rd) {
   rd = rd && typeof rd === 'object' ? rd : {};
-  return JSON.stringify({ k: rd.k ? 1 : 0, ip: rd.ip ? 1 : 0, f: Math.min(99, int(rd.f) || 0), b: /^(toss|kis)$/.test(String(rd.b || '')) ? rd.b : null });
+  return JSON.stringify({ k: rd.k ? 1 : 0, ip: rd.ip ? 1 : 0, f: Math.min(99, int(rd.f) || 0), b: /^(toss|kis)$/.test(String(rd.b || '')) ? rd.b : null, sp: rd.sp ? 1 : 0 });   /* sp = 예비 PC(가끔만 켬) */
 }
 function view(g, pcs, toks, now) {
   return { ok: true, now, owner: g.owner || null, epoch: g.epoch, seen: g.seen || null, done: g.done || null, fz: g.fzo && Object.keys(g.fzo).length ? g.fzo : null, want: g.want || null, req: parse(g.req), ver: g.ver, st_at: g.st_at || null, st_by: g.st_by || null, sec_at: g.sec_at || null,

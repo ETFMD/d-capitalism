@@ -103,8 +103,8 @@ clock += M;
 r = await call({ t: T1, m: A, op: 'hello', e: 1, n: 'PC1', r: 1, v: '0.3.0', rd: { k: 1, ip: 1, f: 1 } });
 ok(r.j.ok && r.j.owner === A && r.j.epoch === 1 && r.j.seen === clock - M && r.j.ver === 1 && r.j.pcs.length === 1 && r.j.fz === null, '주문 PC hello → seen 은 그대로(일한 신호 touch·done·put 만 · 시작만 하고 매번 죽는 주문 PC 가 이어받기를 막지 않게)', r.j);
 clock += M;
-r = await call({ t: T1, m: B, op: 'hello', n: 'PC2', r: 2, v: '0.3.0', rd: { k: 1, ip: 1, f: 1 } });
-ok(r.j.ok && r.j.owner === A && r.j.seen === clock - 2 * M && r.j.pcs.length === 2 && r.j.pcs.find((p) => p.m === B).r === 2 && r.j.pcs.find((p) => p.m === B).rd.k === 1, '대기 PC 가입 · 주문 PC seen 은 그대로', r.j);
+r = await call({ t: T1, m: B, op: 'hello', n: 'PC2', r: 2, v: '0.3.0', rd: { k: 1, ip: 1, f: 1, sp: 1, evil: 'x' } });
+ok(r.j.ok && r.j.owner === A && r.j.seen === clock - 2 * M && r.j.pcs.length === 2 && r.j.pcs.find((p) => p.m === B).r === 2 && r.j.pcs.find((p) => p.m === B).rd.k === 1 && r.j.pcs.find((p) => p.m === B).rd.sp === 1 && !('evil' in r.j.pcs.find((p) => p.m === B).rd), '대기 PC 가입(예비 표시 · 모르는 값은 버림) · 주문 PC seen 은 그대로', r.j);
 r = await call({ t: T1, m: B, op: 'state' }); ok(r.j.ok && r.j.state === blob('s1') && r.j.ver === 1 && r.j.st_by === A, '가입 뒤 공유 상태 읽기(암호문 그대로)', r.j);
 r = await call({ t: T1, m: B, op: 'secget' }); ok(r.j.ok && r.j.sec === blob('k1'), '비밀값 묶음 읽기', r.j);
 // put — 주문 PC 만 · ver 조건
