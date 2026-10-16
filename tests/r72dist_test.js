@@ -39,7 +39,8 @@ function cfg72() {   /* [T72] lock 과 같은 설정 (vcfg) */
     JSON.stringify(H.map(b => [b.lo, b.n])) === JSON.stringify([[-5, 2], [0, 2], [5, 1], [10, 0], [15, 1], [20, 2], [25, 1]]) && Math.abs(H.reduce((a, b) => a + b.p, 0) - 1) < 1e-12, H.map(b => [b.lo, b.n]));
   check('구간: 값 없음 · NaN·null 은 뺌', R72D.hist([], 5).length === 0 && R72D.hist([null, NaN, 0.31], 5).length === 1 && R72D.hist([null, NaN, 0.31], 5)[0].lo === 30);
   const hr = [365, 366, 1095, 1096, 3652, 3653].map(d => ({ days: d }));
-  check('보유 기간 필터: 일수 ≥ 365.25 × N (1년 = 366일부터 · 3년 = 1,096일 · 10년 = 3,653일)', R72D.hold(hr, 1).length === 5 && R72D.hold(hr, 3).length === 3 && R72D.hold(hr, 10).length === 1 && R72D.hold(hr, 0).length === 6);
+  check('보유 기간 필터: 일수 ≥ 365.25 × N (1년 = 366일부터 · 3년 = 1,096일 · 10년 = 3,653일 · 4년 = 정확히 1,461일 포함)', R72D.hold(hr, 1).length === 5 && R72D.hold(hr, 3).length === 3 && R72D.hold(hr, 10).length === 1 && R72D.hold(hr, 0).length === 6 &&
+    R72D.hold([{ days: 1460 }, { days: 1461 }], 4).length === 1);
   const S0 = R72D.summ([{ d: 'a', x: 0.1 }, { d: 'b', x: -0.2 }, { d: 'c', x: 0.3 }, { d: 'd', x: null }, { d: 'e', x: 0.3 }], 'x');
   check('요약: 값 있는 것만 · 평균·중앙·최저·최고(같으면 먼저 것) · 양(+) 비율', S0.n === 4 && near(S0.mean, 0.125, 1e-15) && near(S0.med, 0.2, 1e-15) && S0.min === -0.2 && S0.max === 0.3 && S0.lo.d === 'b' && S0.hi.d === 'c' && S0.pos === 0.75 && R72D.summ([], 'x') === null, S0);
 
@@ -66,7 +67,10 @@ function cfg72() {   /* [T72] lock 과 같은 설정 (vcfg) */
     if (!(r.days === st.days && near(r.cagr, st.cagr, 1e-12) && near(r.mdd, st.mdd, 1e-12) && near(r.bh, st.bh.cagr, 1e-12) && near(r.bhMdd, st.bh.mdd, 1e-12) && near(r.due, due, 1e-12) && r.d === D.d[s]))
       bad2.push(nm + ' s=' + s + (DD === Dnd ? ' 분배금 끔' : '') + ' ' + JSON.stringify([r.cagr, st.cagr, r.mdd, st.mdd]));
   }
-  check('시작일 하나 = 화면 백테스트 카드 계산(MHV.run → MBT.stats) — ' + cases.length + '가지 조건 × 시작일 6곳 × 분배금 켬/끔' + (hasO ? '' : ' (시가 없어 주문 거부·넣는 때 빼고)'), !bad2.length, bad2.slice(0, 3).join(' | '));
+  /* 짧은 기간(시작 + 25거래일) 50곳 — 첫날 움직임이 MDD·그냥 보유 MDD 에 그대로 들어가는지(기준일 종가는 낙폭 최고점에 넣지 않음 = 카드와 같음) */
+  for (let k = 0; k < 50; k++) { const s = 30 + k * 81, t = s + 25, o = cases[0][1], r = R72D.one(MHV, cfg, D, o, s, t, 100000), st = MBT.stats(MHV.run(cfg, D, Object.assign({}, o, { from: s, to: t, capital: 100000, rows: false })), D, 100000);
+    if (!(near(r.mdd, st.mdd, 1e-12) && near(r.bhMdd, st.bh.mdd, 1e-12) && near(r.bh, st.bh.cagr, 1e-12) && r.days === st.days)) bad2.push('짧은 기간 s=' + s + ' ' + JSON.stringify([r.bhMdd, st.bh.mdd, r.mdd, st.mdd])); }
+  check('시작일 하나 = 화면 백테스트 카드 계산(MHV.run → MBT.stats) — 짧은 기간 50곳 + ' + cases.length + '가지 조건 × 시작일 6곳 × 분배금 켬/끔' + (hasO ? '' : ' (시가 없어 주문 거부·넣는 때 빼고)'), !bad2.length, bad2.slice(0, 3).join(' | '));
 
   /* ③ 문서 숫자 대조 — 끝 2026-10-14 · 수수료 0.1% · 양도세 선입선출 · $100,000 */
   const to = D.d.indexOf('2026-10-14');
