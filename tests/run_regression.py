@@ -1178,7 +1178,7 @@ def earn_check(page, base, fail, errs, ignorable):
       for (let i = 0; i < 60 && !(window.ERdebug && ERdebug.S.d); i++) await new Promise(r => setTimeout(r, 200));
       if (!window.ERdebug || !ERdebug.S.d) return { none: true };
       const D = ERdebug.S.d, $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
-      const out = { kr: D.kr.length, us: D.us.length, cells: $$('#er-cal .er-day').length, rows: $$('#er-body tr[data-key]').length,
+      const out = { kr0: D.kr[0].c, kr0n: D.kr[0].n, kr: D.kr.length, us: D.us.length, cells: $$('#er-cal .er-day').length, rows: $$('#er-body tr[data-key]').length,
         kpi: ['er-k-today', 'er-k-week', 'er-k-next', 'er-k-last'].map(id => document.getElementById(id).textContent),
         tips: [...new Set([...document.documentElement.innerHTML.matchAll(/data-tip="([a-z]+)"/g)].map(m => m[1]))],
         terms: $$('#er-gloss details.er-term').map(x => x.id), keyterms: $$('#er-gloss details.er-term.er-key').length,
@@ -1189,7 +1189,30 @@ def earn_check(page, base, fail, errs, ignorable):
       $('#page-earn .er-mk [data-mk="all"]').click();
       $('#page-earn .er-mode [data-mode="all"]').click(); await new Promise(r => setTimeout(r, 50));
       out.allTitle = $('#er-list-t').textContent;
-      out.allRows = $$('#er-body tr[data-key]').length; out.moreBtn = !$('#er-more').hidden;
+      out.allRows = $$('#er-body tr[data-key]').length;
+      const keys1 = $$('#er-body tr[data-key]').map(t => t.dataset.key);
+      out.pgBtns = $$('#er-pager .er-pg').map(b => b.textContent); out.pgInfo = ($('#er-pager .er-pg-info') || {}).textContent || '';
+      /* 쪽 번호 입력으로 이동 · 다음 쪽 단추 · 마지막 쪽 */
+      $('#er-pg-in').value = '3'; $('#er-pg-btn').click(); await new Promise(r => setTimeout(r, 50));
+      out.p3 = { page: ERdebug.S.page, rows: $$('#er-body tr[data-key]').length, cur: ($('#er-pager .er-pg.on') || {}).textContent, info: $('#er-pager .er-pg-info').textContent,
+                 overlap: $$('#er-body tr[data-key]').some(t => keys1.indexOf(t.dataset.key) >= 0) };
+      $('#er-pg-in').value = '999'; $('#er-pg-in').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await new Promise(r => setTimeout(r, 50));
+      out.pLast = { page: ERdebug.S.page, rows: $$('#er-body tr[data-key]').length };
+      $('#er-pager [aria-label="첫 쪽"]').click(); await new Promise(r => setTimeout(r, 50)); out.pFirst = ERdebug.S.page;
+      /* 목록 안 국내/미국 나눠 보기 */
+      const lmk = mk => { [...document.querySelectorAll('#er-list-card .er-mk .chart-tab')].find(b => b.dataset.mk === mk).click(); };
+      lmk('kr'); await new Promise(r => setTimeout(r, 50));
+      out.lkr = { rows: $$('#er-body tr[data-key]').length, allKr: $$('#er-body tr[data-key]').every(t => t.dataset.key.startsWith('kr-')), info: $('#er-pager .er-pg-info').textContent,
+                  calSync: ($('#page-earn .card .er-mk .chart-tab.active') || {}).dataset.mk };
+      lmk('us'); await new Promise(r => setTimeout(r, 50));
+      out.lus = $$('#er-body tr[data-key]').length > 0 && $$('#er-body tr[data-key]').every(t => t.dataset.key.startsWith('us-'));
+      lmk('all');
+      /* 목록 검색칸 */
+      const ls = $('#er-lsearch'); ls.value = D.kr[0].n; ls.dispatchEvent(new Event('input', { bubbles: true })); await new Promise(r => setTimeout(r, 50));
+      out.lsearch = { keys: $$('#er-body tr[data-key]').map(t => t.dataset.key), sync: $('#er-search').value, title: $('#er-list-t').textContent };
+      ls.value = 'AAPL'; ls.dispatchEvent(new Event('input', { bubbles: true })); await new Promise(r => setTimeout(r, 50));
+      out.lsearch2 = $$('#er-body tr[data-key]').map(t => t.dataset.key);
+      ls.value = ''; ls.dispatchEvent(new Event('input', { bubbles: true }));
       $('#page-earn .er-mode [data-mode="up"]').click();
       const day = $$('#er-cal .er-day').find(b => b.querySelector('.er-ev'));
       if (day) { day.click(); await new Promise(r => setTimeout(r, 50));
@@ -1230,7 +1253,18 @@ def earn_check(page, base, fail, errs, ignorable):
     if r['kst1'] != '10/30(금) 05:05' or r['kst2'] != '11/3(화) 06:05' or r['kst3'] != '3/15(월) 20:00':
         fail('earn', '미국 → 한국 시간 변환(서머타임) 오류: %s · %s · %s' % (r['kst1'], r['kst2'], r['kst3']))
     if not r['usOnly']: fail('earn', '미국만 보기에 국내 기업이 섞임')
-    if '전체 기업' not in r['allTitle'] or r['allRows'] != 40 or not r['moreBtn']: fail('earn', '전체 기업 보기 이상: %s · %d줄 · 더 보기 %s' % (r['allTitle'], r['allRows'], r['moreBtn']))
+    tot = r['kr'] + r['us']; pages = -(-tot // 50); d_kr0, ls_name = r['kr0'], r['kr0n']
+    if '전체 기업' not in r['allTitle'] or r['allRows'] != 50: fail('earn', '전체 기업 보기 이상: %s · %d줄 (한 쪽 50곳)' % (r['allTitle'], r['allRows']))
+    if not r['pgBtns'] or r['pgBtns'][-1] != '»' or ('전체 %d곳 중 1~50번째' % tot) not in r['pgInfo']: fail('earn', '쪽 넘김 단추 이상: %s / %s' % (r['pgBtns'], r['pgInfo']))
+    p3 = r['p3']
+    if p3['page'] != 3 or p3['rows'] != min(50, tot - 100) or p3['cur'] != '3' or p3['overlap'] or ('101~' not in p3['info']): fail('earn', '쪽 번호 입력(3쪽) 이동 이상: %s' % p3)
+    if r['pLast']['page'] != pages or r['pLast']['rows'] != tot - 50 * (pages - 1): fail('earn', '없는 쪽(999) 입력 → 마지막 쪽(%d)으로 가지 않음: %s' % (pages, r['pLast']))
+    if r['pFirst'] != 1: fail('earn', '첫 쪽 단추 이상: %s' % r['pFirst'])
+    if not r['lkr']['allKr'] or r['lkr']['rows'] != 50 or ('전체 %d곳' % r['kr']) not in r['lkr']['info'] or r['lkr']['calSync'] != 'kr': fail('earn', '목록 국내만 보기 이상: %s' % r['lkr'])
+    if not r['lus']: fail('earn', '목록 미국만 보기 이상')
+    ls = r['lsearch']
+    if not ls['keys'] or not all(k == 'kr-' + d_kr0 for k in ls['keys'][:1]) or ls['sync'] != ls_name or '검색' not in ls['title']: fail('earn', '목록 검색칸 이상: %s' % ls)
+    if 'us-AAPL' not in r['lsearch2']: fail('earn', '목록 검색 AAPL 결과에 애플 없음: %s' % r['lsearch2'][:5])
     if not r.get('dayOk'): fail('earn', '달력 날짜 선택 → 목록 이상 (%s)' % r.get('dayRows'))
     if not r['favKey'] or r['fav'] != [r['favKey']] or r['favRows'] != [r['favKey']]: fail('earn', '관심 기업 저장·보기 이상: %s / %s' % (r['fav'], r['favRows']))
     for m in r['modal']:

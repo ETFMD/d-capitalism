@@ -5704,8 +5704,8 @@ var TAX = (function () {
    · 관심 기업: localStorage 'er-fav' (이 브라우저에만) · 주소 #co=kr-005930 / #co=us-AAPL 로 기업 상세 바로 열기
 ════════════════════════════════════════ */
 (function () {
-  var S = { d: null, det: {}, mk: 'all', q: '', favOnly: false, ym: null, sel: null, mode: 'up', sort: 'date', shown: 40, open: null, ftab: 'q', loading: null, timer: null, tip: null };
-  var FAVK = 'er-fav';
+  var S = { d: null, det: {}, mk: 'all', q: '', favOnly: false, ym: null, sel: null, mode: 'up', sort: 'date', page: 1, open: null, ftab: 'q', loading: null, timer: null, tip: null };
+  var FAVK = 'er-fav', PER = 50;   /* 목록 한 쪽에 50곳 */
   var KEY_ROWS = { op: 1, fcf: 1, debt: 1, icr: 1, roe: 1, roic: 1, eveb: 1 };
   /* 표의 행: [키, 이름, 용어 id, 단위 종류(a=금액 · p=% · x=배 · e=EPS)] */
   var FROWS = [
@@ -5945,11 +5945,14 @@ var TAX = (function () {
   function table() {
     var list = listRows(), fv = favs();
     var title = S.sel ? md(S.sel) + ' 실적발표' : S.mode === 'up' ? '다가오는 실적발표' : S.mode === 'past' ? '최근 실적발표 (45일)' : '전체 기업 (' + list.length + '곳)';
-    $('er-list-t').textContent = title;
+    $('er-list-t').textContent = title + (S.mk === 'kr' ? ' · 국내' : S.mk === 'us' ? ' · 미국' : '') + (S.q.trim() ? ' · "' + S.q.trim() + '" 검색' : '');
     var f = $('er-filter');
     if (S.sel) { f.hidden = false; f.innerHTML = '<span>달력에서 <b>' + esc(md(S.sel)) + '</b>을 골랐습니다</span><button type="button" id="er-unsel">× 날짜 선택 해제</button>'; }
     else { f.hidden = true; f.innerHTML = ''; }
-    var show = list.slice(0, S.shown);
+    var pages = Math.max(1, Math.ceil(list.length / PER));
+    if (S.page > pages) S.page = pages;
+    if (S.page < 1) S.page = 1;
+    var from = (S.page - 1) * PER, show = list.slice(from, from + PER);
     $('er-body').innerHTML = show.length ? show.map(function (x) {
       var r = x.r, k = r.k || {};
       return '<tr data-key="' + esc(r.key) + '" tabindex="0"><td class="er-c-d">' + dateCell(x) + '</td>' +
@@ -5960,11 +5963,34 @@ var TAX = (function () {
         '<td class="er-c-k ' + grade('roe', k.roe) + '">' + pct(k.roe) + '</td><td class="er-c-k ' + grade('roic', k.roic) + '">' + pct(k.roic) + '</td><td class="er-c-k ' + grade('debt', k.debt) + '">' + pct(k.debt, 0) + '</td>' +
         '<td class="er-c-ls">' + lastCell(r) + '</td></tr>';
     }).join('') : '<tr><td colspan="8" class="er-empty">' + (S.favOnly && !favs().length ? '아직 관심 기업이 없습니다. 기업 이름 앞의 ♡ 를 눌러 추가하세요.' : '조건에 맞는 기업이 없습니다') + '</td></tr>';
-    var mb = $('er-more');
-    mb.hidden = list.length <= S.shown;
-    mb.textContent = '더 보기 (' + (list.length - S.shown) + '곳 남음)';
+    pager(list.length, pages, from, show.length);
     document.querySelectorAll('#page-earn .er-mode .chart-tab').forEach(function (b) { b.classList.toggle('active', !S.sel && b.getAttribute('data-mode') === S.mode); });
     document.querySelectorAll('#page-earn .er-sort .er-chip').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-sort') === S.sort); });
+  }
+  /* 50곳씩 쪽 넘김: « ‹ 1 … 4 5 6 … 9 › » + 쪽 번호 입력 */
+  function pager(total, pages, from, n) {
+    var nav = $('er-pager');
+    if (!total) { nav.hidden = true; nav.innerHTML = ''; return; }
+    nav.hidden = false;
+    var p = S.page, nums = [], h = '';
+    for (var i = 1; i <= pages; i++) if (i === 1 || i === pages || Math.abs(i - p) <= 2) nums.push(i);
+    function btn(go, label, aria, dis, on) { return '<button type="button" class="er-pg' + (on ? ' on' : '') + '" data-pg="' + go + '"' + (dis ? ' disabled' : '') + (on ? ' aria-current="page"' : '') + ' aria-label="' + aria + '">' + label + '</button>'; }
+    if (pages > 1) {
+      h += btn(1, '«', '첫 쪽', p === 1) + btn(p - 1, '‹', '이전 쪽', p === 1);
+      nums.forEach(function (x, j) { if (j && x - nums[j - 1] > 1) h += '<span class="er-pg-gap">…</span>'; h += btn(x, x, x + '쪽', false, x === p); });
+      h += btn(p + 1, '›', '다음 쪽', p === pages) + btn(pages, '»', '마지막 쪽', p === pages);
+      h += '<span class="er-pg-go"><input type="number" id="er-pg-in" min="1" max="' + pages + '" value="' + p + '" inputmode="numeric" aria-label="이동할 쪽 번호"> / ' + pages + '쪽 <button type="button" id="er-pg-btn">이동</button></span>';
+    }
+    h += '<span class="er-pg-info">전체 ' + total + '곳 중 ' + (from + 1) + '~' + (from + n) + '번째 · 한 쪽에 ' + PER + '곳</span>';
+    nav.innerHTML = h;
+  }
+  function goPage(n) {
+    var pages = Math.max(1, Math.ceil(listRows().length / PER));
+    n = Math.round(+n);
+    if (!isFinite(n)) return;
+    S.page = Math.min(pages, Math.max(1, n));
+    table();
+    var c = $('er-list-card'); if (c && c.getBoundingClientRect().top < 0) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   function note() {
     var d = S.d, up = d.updated ? new Date(d.updated) : null;
@@ -6237,22 +6263,30 @@ var TAX = (function () {
       tr.parentNode.insertBefore(tip, tr.nextSibling); return;
     }
     if ((b = t.closest('[data-term]'))) { e.preventDefault(); gotoTerm(b.getAttribute('data-term')); return; }
-    if ((b = t.closest('.er-day'))) { var d = b.getAttribute('data-d'); S.sel = S.sel === d ? null : d; S.shown = 40; render(); if (S.sel) { var c = $('er-list-card'); if (c && window.innerWidth < 760) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); } return; }
+    if ((b = t.closest('.er-day'))) { var d = b.getAttribute('data-d'); S.sel = S.sel === d ? null : d; S.page = 1; render(); if (S.sel) { var c = $('er-list-card'); if (c && window.innerWidth < 760) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); } return; }
     if (t.closest('#er-unsel')) { S.sel = null; render(); return; }
-    if ((b = t.closest('.er-mk .chart-tab'))) { S.mk = b.getAttribute('data-mk'); S.shown = 40; render(); return; }
-    if ((b = t.closest('.er-mode .chart-tab'))) { S.mode = b.getAttribute('data-mode'); S.sel = null; S.shown = 40; render(); return; }
-    if ((b = t.closest('.er-sort .er-chip'))) { S.sort = b.getAttribute('data-sort'); S.shown = 40; table(); return; }
-    if (t.closest('#er-favonly')) { S.favOnly = !S.favOnly; S.shown = 40; render(); return; }
-    if (t.closest('#er-more')) { S.shown += 40; table(); return; }
+    if ((b = t.closest('.er-mk .chart-tab'))) { S.mk = b.getAttribute('data-mk'); S.page = 1; render(); return; }
+    if ((b = t.closest('.er-mode .chart-tab'))) { S.mode = b.getAttribute('data-mode'); S.sel = null; S.page = 1; render(); return; }
+    if ((b = t.closest('.er-sort .er-chip'))) { S.sort = b.getAttribute('data-sort'); S.page = 1; table(); return; }
+    if (t.closest('#er-favonly')) { S.favOnly = !S.favOnly; S.page = 1; render(); return; }
+    if ((b = t.closest('#er-pager .er-pg'))) { if (!b.disabled) goPage(b.getAttribute('data-pg')); return; }
+    if (t.closest('#er-pg-btn')) { goPage(($('er-pg-in') || {}).value); return; }
     if (t.closest('#er-prev') || t.closest('#er-next')) { var dm = t.closest('#er-prev') ? -1 : 1, m = S.ym[1] + dm; S.ym = [S.ym[0] + Math.floor(m / 12), (m % 12 + 12) % 12]; cal(); return; }
     if (t.closest('#er-today')) { var tt = today('kr').split('-'); S.ym = [+tt[0], +tt[1] - 1]; cal(); return; }
     if ((b = t.closest('#er-body tr[data-key]')) || (b = t.closest('.er-kpi-v.er-link'))) { var kk = b.getAttribute('data-key'); if (kk) openCo(kk); return; }
   });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && S.open) { closeCo(); return; }
+    if (e.key === 'Enter' && e.target && e.target.id === 'er-pg-in') { e.preventDefault(); goPage(e.target.value); return; }
     if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.matches && e.target.matches('#er-body tr[data-key]')) { e.preventDefault(); openCo(e.target.getAttribute('data-key')); }
   });
-  document.addEventListener('input', function (e) { if (e.target && e.target.id === 'er-search') { S.q = e.target.value; S.shown = 40; if (S.d) { kpis(); cal(); table(); } } });
+  document.addEventListener('input', function (e) {   /* 달력 위 검색칸 · 목록 검색칸은 같은 검색어 (서로 맞춰 줌) */
+    var id = e.target && e.target.id;
+    if (id !== 'er-search' && id !== 'er-lsearch') return;
+    S.q = e.target.value; S.page = 1;
+    var other = $(id === 'er-search' ? 'er-lsearch' : 'er-search'); if (other && other.value !== S.q) other.value = S.q;
+    if (S.d) { kpis(); cal(); table(); }
+  });
   window.addEventListener('hashchange', function () { if ($('page-earn') && $('page-earn').classList.contains('active')) { if (/#co=/.test(location.hash)) hashOpen(); else closeCo(); } });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.erRender); else window.erRender();
 })();
