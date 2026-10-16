@@ -128,8 +128,10 @@ def kr_universe():
             if not mv: continue
             out.append({'c': c, 'n': n, 'm': mv * 1e8, 'p': num(s.get('closePrice')), 'ch': num(s.get('fluctuationsRatio')),
                         'ts': s.get('localTradedAt')})
-            if len(out) >= TOP: return out
-    return out
+            if len(out) >= TOP + 10: break
+        if len(out) >= TOP + 10: break
+    out.sort(key=lambda x: -x['m'])      # 네이버 목록 순서는 받은 시각 차이로 조금 어긋날 수 있어 받은 시가총액으로 다시 줄 세움
+    return out[:TOP]
 
 
 def kr_info(c):
@@ -431,13 +433,16 @@ def nasdaq_times(days=45):
     """앞으로 days 일의 나스닥 실적 달력 → {(기호, 날짜): 'bmo'|'amc'|None}"""
     out = {}
     d0 = datetime.datetime.now(NY).date()
+    bad = 0
     for i in range(-3, days):
+        if bad >= 3: log('나스닥 달력 연속 실패 — 나머지 날짜는 건너뜀 (야후 시각으로 대신)'); break
         d = d0 + datetime.timedelta(days=i)
         if d.weekday() >= 5: continue
         try:
             j = jget('https://api.nasdaq.com/api/calendar/earnings?date=%s' % d.isoformat(), headers={'Accept': 'application/json'}, tries=2, timeout=20)
         except Exception as e:
-            log('나스닥 달력 실패', d, e); continue
+            log('나스닥 달력 실패', d, e); bad += 1; continue
+        bad = 0
         for r in ((j.get('data') or {}).get('rows') or []):
             t = r.get('time') or ''
             out[((r.get('symbol') or '').replace('/', '-'), d.isoformat())] = 'bmo' if 'pre' in t else 'amc' if 'after' in t else None
