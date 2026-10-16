@@ -5,6 +5,7 @@
    · 가격 단위(상장 전 재현·액면 병합) · 양도세 현금 부족 · V3 반복리 완충 바닥 · 작은 원금(1회 < 1주) · 세금 포함 불변식
    · ⑱ 증권사 주문 거부(o.rej — 한도 = 시가 × 1.2 · 한도로 낮춰 넣기 / 그날 건너뛰기)
    · ⑲ 주문 넣는 때(o.fill — 'open' 정규장 시작 전: 갭 상승이면 시가 · 'pre' 프리장 시작: 전날 종가가 이미 넘으면 전날 종가, 주문 거부 기준 전날 종가)
+   · ⑳ 다시 계산(replay)의 기록별 수수료율(r.feeRate — 자동매매 프로그램)
    실패가 있으면 'FAIL …' 줄과 종료 코드 1 */
 'use strict';
 const fs = require('fs'), path = require('path');
@@ -396,6 +397,15 @@ function bdays(from, n, skip) { const out = []; let t = Date.parse(from + 'T12:0
     check('V' + v + (x.ideal ? ' 정액' : '') + ': open 처음 달라진 날 = 더 비싸게 판 날 · 현금 ≥ 0 · fx 통계 (' + B.fx.days + '일 · pre ' + C.fx.days + '일)', B.fx.days > 0 && i >= 0 && B.rows[i].sa > A.rows[i].sa && B.rows.every(r => r.cash > -1e-6) && C.rows.every(r => r.cash > -1e-6) && C.rj.noO === 0, 'i ' + i);
   });
 }
+
+/* ⑳ 기록마다 수수료율(r.feeRate) — 자동매매 프로그램이 사이클 도중 증권사 수수료율이 바뀐 날부터 새 율을 적음 · 없으면 x.fee (사이트 기록 화면은 그대로) */
+{ const cfg = Object.assign(MHV.defaults('1.0', 'SOXL'), { splits: 72, target: 52.5, big: 13, avgOff: 0, exhaust: 'recover' });
+  const recs = [{ date: '2025-03-03', close: 20, fills: [{ side: 'B', q: 10, p: 20, tag: 'first', m: 'LOC' }] }, { date: '2025-03-04', close: 19, fills: [{ side: 'B', q: 10, p: 19, tag: 'avg', m: 'LOC' }] }];
+  const base = MHV.replay(cfg, { capital: 10000, fee: 0.0007 }, recs).st.cash;
+  const mixed = MHV.replay(cfg, { capital: 10000, fee: 0.0007 }, [recs[0], Object.assign({ feeRate: 0.0025 }, recs[1])]).st.cash;
+  check('replay: 기록 율(feeRate)이 있으면 그 날만 그 율 · 없으면 x.fee', Math.abs(base - (10000 - 390 * 1.0007)) < 1e-9 && Math.abs(mixed - (10000 - 200 * 1.0007 - 190 * 1.0025)) < 1e-9, base + ' / ' + mixed);
+  const zero = MHV.replay(cfg, { capital: 10000, fee: 0.0025 }, [Object.assign({ feeRate: 0 }, recs[0])]).st.cash;
+  check('replay: 기록 율 0(수수료 없음)도 그대로 씀', Math.abs(zero - 9800) < 1e-9, zero); }
 
 console.log((bad ? 'FAIL ' : 'OK ') + '무한매수법 버전 엔진 검사 ' + ok + ' / ' + (ok + bad));
 process.exit(bad ? 1 : 0);

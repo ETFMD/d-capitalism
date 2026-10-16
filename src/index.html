@@ -25530,7 +25530,7 @@ var MHV = (function () {
   }
 
   /* ════ 기록 화면 (V1.0 ~ V3.0) ════
-     recs = [{ date: 'YYYY-MM-DD…', close: 그날 종가, fills: [{ side: 'B'|'S', p: 체결가, q: 수량, tag: 주문표 줄 이름 }] }] (날짜 순)
+     recs = [{ date: 'YYYY-MM-DD…', close: 그날 종가, fills: [{ side: 'B'|'S', p: 체결가, q: 수량, tag: 주문표 줄 이름 }], feeRate?: 그날 수수료율 }] (날짜 순 · feeRate 가 없으면 x.fee — 자동매매 프로그램이 사이클 도중 증권사 수수료율이 바뀐 날부터 새 율을 적음)
      x = { capital: 이번 사이클 원금, base: 처음 원금(V3 반복리), cum0: 지난 사이클까지 누적 실현손익, max0: 그 최댓값,
            mid: 중간 진입 { avg, qty, cash, one, T(V1 회차) } }
      → 처음부터 다시 계산한 상태 st 와 거래(날)마다 누적 상태 hist (차트·실현손익 상세) */
@@ -25552,7 +25552,7 @@ var MHV = (function () {
       var last = 0; fl0.forEach(function (f) { if (f.m !== 'LMT') last = f.p; });
       var c = r.close > 0 ? r.close : last || (fl0[0] && fl0[0].p) || 0, avg0 = st.avg, mode0 = st.mode, T0 = tOf(cfg, st);
       var ev = apply(cfg, st, { rows: [] }, fl0.map(function (f) { return { side: f.side, q: f.q, p: f.p, tag: f.tag || 'man', m: f.m || (f.side === 'S' && (f.tag === 'tp' || f.tag === 'p5') ? 'LMT' : f.tag === 'ql' || f.tag === 'qmoc' || f.tag === 'xall' ? 'MOC' : 'LOC') }; }),
-                     { c: c, h: null }, { rec: true, date: String(r.date).slice(0, 10), fee: x.fee || 0 });
+                     { c: c, h: null }, { rec: true, date: String(r.date).slice(0, 10), fee: r.feeRate >= 0 ? r.feeRate : x.fee || 0 });
       out.invested += ev.buyAmt; out.returned += ev.sellAmt; out.realized += ev.realized; out.realizedCost += avg0 * ev.sellQ; out.fees += ev.fee;
       if (ev.exhaust) out.exhaust = String(r.date).slice(0, 10);
       out.hist.push({ date: r.date, tValue: tOf(cfg, st), T0: T0, avgPrice: st.avg, remainingCapital: st.cash, totalQuantity: st.qty, realizedPnL: out.realized,
