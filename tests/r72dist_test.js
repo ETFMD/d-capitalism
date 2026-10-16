@@ -70,7 +70,13 @@ function cfg72() {   /* [T72] lock 과 같은 설정 (vcfg) */
   /* 짧은 기간(시작 + 25거래일) 50곳 — 첫날 움직임이 MDD·그냥 보유 MDD 에 그대로 들어가는지(기준일 종가는 낙폭 최고점에 넣지 않음 = 카드와 같음) */
   for (let k = 0; k < 50; k++) { const s = 30 + k * 81, t = s + 25, o = cases[0][1], r = R72D.one(MHV, cfg, D, o, s, t, 100000), st = MBT.stats(MHV.run(cfg, D, Object.assign({}, o, { from: s, to: t, capital: 100000, rows: false })), D, 100000);
     if (!(near(r.mdd, st.mdd, 1e-12) && near(r.bhMdd, st.bh.mdd, 1e-12) && near(r.bh, st.bh.cagr, 1e-12) && r.days === st.days)) bad2.push('짧은 기간 s=' + s + ' ' + JSON.stringify([r.bhMdd, st.bh.mdd, r.mdd, st.mdd])); }
-  check('시작일 하나 = 화면 백테스트 카드 계산(MHV.run → MBT.stats) — 짧은 기간 50곳 + ' + cases.length + '가지 조건 × 시작일 6곳 × 분배금 켬/끔' + (hasO ? '' : ' (시가 없어 주문 거부·넣는 때 빼고)'), !bad2.length, bad2.slice(0, 3).join(' | '));
+  /* SOXL 그냥 보유 세후 = 문서 부록 E(build_dataset.js) 계산 그대로 — 수수료 사고팔 때 · SEC · 양도세 22% × (원화 차익 − 250만 원) · 세금·수수료 없는 보기는 세전과 같음 */
+  const bhDoc = (o, s, t) => { const P = 100000, c0 = D.c[s - 1], c1 = D.c[t], days = MBT.dnum(D.d[t]) - MBT.dnum(D.d[s - 1]), sh = P / (1 + (o.fee || 0)) / c0, pr = sh * c1 * (1 - (o.fee || 0) - (o.sec || 0));
+    const tax = o.tax ? 0.22 * Math.max(0, pr * fx[t] - P * fx[s - 1] - 2500000) / fx[t] : 0; return Math.pow((pr - tax) / P, 365.25 / days) - 1; };
+  for (const [nm, o] of cases) for (const s of [1, 77, 1500, 3000, pl.n - 300, pl.n]) { const r = R72D.one(MHV, cfg, D, o, s, last, 100000);
+    if (!near(r.bhN, bhDoc(o, s, last), 1e-12) || (!o.fee && !o.tax && !near(r.bhN, r.bh, 1e-12))) bad2.push('세후 보유 ' + nm + ' s=' + s + ' ' + JSON.stringify([r.bhN, bhDoc(o, s, last), r.bh])); }
+  check('MHV.RATE·DED = 양도세 22% · 공제 250만 원 (세후 보유 계산에 씀)', MHV.RATE === 0.22 && MHV.DED === 2500000, [MHV.RATE, MHV.DED]);
+  check('시작일 하나 = 화면 백테스트 카드 계산(MHV.run → MBT.stats) · SOXL 그냥 보유 세후 = 문서 부록 E — 짧은 기간 50곳 + ' + cases.length + '가지 조건 × 시작일 6곳 × 분배금 켬/끔' + (hasO ? '' : ' (시가 없어 주문 거부·넣는 때 빼고)'), !bad2.length, bad2.slice(0, 3).join(' | '));
 
   /* ③ 문서 숫자 대조 — 끝 2026-10-14 · 수수료 0.1% · 양도세 선입선출 · $100,000 */
   const to = D.d.indexOf('2026-10-14');
@@ -91,12 +97,16 @@ function cfg72() {   /* [T72] lock 과 같은 설정 (vcfg) */
       const Ys = R72D.years(y1, 'cagr');
       check('--full 문서 §6 시작 연도별: 2010 205곳 33.25% · 2021 252곳 45.27% · 2025 196곳 64.85% · MDD 2023 −36.2%', Ys.length === 16 && Ys[0].y === '2010' && Ys[0].n === 205 && pp(Ys[0].s.mean) === '33.25' &&
         Ys[11].n === 252 && pp(Ys[11].s.mean) === '45.27' && Ys[15].n === 196 && pp(Ys[15].s.mean) === '64.85' && (Ys[13].mdd.mean * 100).toFixed(1) === '-36.2', Ys.map(y => y.y + ':' + y.n + ':' + pp(y.s.mean)).join(' '));
+      const N9 = y => { const a = R72D.hold(all, y), b = R72D.summ(a, 'bhN'), w = a.filter(r => r.due > r.bhN).length / a.length; return [a.length, pp(b.mean), (b.med * 100).toFixed(1), Math.round(w * 100)]; };
+      const n1 = N9(1), n3 = N9(3), n10 = N9(10);
+      check('--full 문서 §9 SOXL 그냥 보유 세후: ≥1년 평균 46.37%(중앙 38.7%) · 72루틴(미납세 차감)이 더 높은 시작일 48% · ≥3년 37.83% · 53% · ≥10년 40.25% · 23%',
+        n1.join() === '3923,46.37,38.7,48' && n3[1] === '37.83' && n3[3] === 53 && n10[1] === '40.25' && n10[3] === 23, [n1, n3, n10]);
       console.log('  --full 모든 시작일 ' + all.length + '곳 ' + ((Date.now() - t0) / 1000).toFixed(1) + '초');
     }
   }
 
   /* ④ 나눠 실행 · 보관 */
-  const fake = { first: [1, 5, 9], rest: [2, 3, 4, 6, 7, 8], n: 9 }, mk = s => ({ s, d: '2020-01-' + String(s).padStart(2, '0'), days: 400 + s, cagr: s / 100, due: s / 200, mdd: -s / 50, bh: s / 80, bhMdd: -0.5 });
+  const fake = { first: [1, 5, 9], rest: [2, 3, 4, 6, 7, 8], n: 9 }, mk = s => ({ s, d: '2020-01-' + String(s).padStart(2, '0'), days: 400 + s, cagr: s / 100, due: s / 200, mdd: -s / 50, bh: s / 80, bhN: s / 150, bhMdd: -0.5 });   /* bhN: cagr(s/100) 보다는 낮고 due(s/200) 보다는 높게 — 비교 기준이 due 인지 확인 */
   const ev = [], st1 = await new Promise(res => { const st = R72D.job({ plan: fake, run: s => mk(s), budget: 1e9, update: (s, full) => { if (full) { ev.push(s.stage + ':' + (s.first ? s.first.length : 0)); if (s.stage === 'done') res(s); } } }); });
   check('나눠 실행: 표본(매월 첫 거래일 3곳) → 모든 시작일 9곳 · 끝나면 시작일 순서 · 단계마다 다시 그리기', ev.join() === 'more:3,done:3' && st1.rows.map(r => r.s).join() === '1,2,3,4,5,6,7,8,9' && st1.first.map(r => r.s).join() === '1,5,9' && st1.n === 9, ev);
   let pz = 3, runs = 0; const st2 = await new Promise(res => { const st = R72D.job({ plan: fake, run: s => { runs++; return mk(s); }, paused: () => pz-- > 0, budget: 1e9, update: (s, f) => { if (s.stage === 'done') res(s); } }); });
@@ -119,7 +129,10 @@ function cfg72() {   /* [T72] lock 과 같은 설정 (vcfg) */
   const m = { id: 'r7d-box', end: '2026-10-14', first: '2010-03-12', set: '원금 $100,000 · 수수료 0.1% <x>', net: true, tax: true, act: 'r7d' }, BADW = /라오어|무한매수|T값|별지점|큰수|NaN|undefined|Infinity/;
   const full = { stage: 'done', rows: st1.rows, first: st1.first, n: 9, nf: 3, i: 9 };
   const tabs = ['cagr', 'mdd', 'line', 'year'].map(t => R72D.html(full, m, { hold: 1, tab: t, due: false }));
-  check('화면: 탭 4개 모두 그림 · 숫자 칸 6개 · 설정 문구 이스케이프 · NaN/undefined/무한매수법 용어 없음', tabs.every(h => /class="r7d-kv"/.test(h) && (h.match(/class="r7d-k"/g) || []).length === 6 && h.includes('&lt;x&gt;') && !BADW.test(h)) &&
+  const winTile = (h => { const i = h.indexOf('72루틴이 더 높았던 시작일'); return i < 0 ? '' : h.slice(i, i + 160); })(tabs[0]);
+  check('화면: SOXL 그냥 보유 세후(평균) · 세전 함께 · 72루틴(미납세 뺀 값)이 더 높았던 시작일 비율 칸 (가짜 9곳: due s/200 < bhN s/150 < cagr s/100 → 미납세 뺀 값 기준이면 0%)', /SOXL 그냥 보유 \(세후\)/.test(tabs[0]) && /세전 평균/.test(tabs[0]) && /<b>0%<\/b>/.test(winTile) && /0 \/ 9곳/.test(winTile) &&
+    /세후\(세전\)/.test(tabs[3]) && !/SOXL 그냥 보유 \(세후\)/.test(R72D.html(full, Object.assign({}, m, { net: false }), { hold: 1, tab: 'cagr' })), winTile);
+  check('화면: 탭 4개 모두 그림 · 숫자 칸 7개 · 설정 문구 이스케이프 · NaN/undefined/무한매수법 용어 없음', tabs.every(h => /class="r7d-kv"/.test(h) && (h.match(/class="r7d-k"/g) || []).length === 7 && h.includes('&lt;x&gt;') && !BADW.test(h)) &&
     /r7d-hist up/.test(tabs[0]) && /r7d-hist dn/.test(tabs[1]) && /r7d-ln/.test(tabs[2]) && /r7d-t/.test(tabs[3]), tabs.map(h => (h.match(BADW) || [''])[0]));
   check('화면: 선택된 단추 aria-pressed · 미납세 토글은 세금 포함 보기에서만', /data-r7d="hold" data-v="1" data-act="r7d" aria-pressed="true"/.test(tabs[0]) && /data-r7d="due"/.test(tabs[0]) && !/data-r7d="due"/.test(R72D.html(full, Object.assign({}, m, { net: false }), { hold: 1, tab: 'cagr' })));
   check('화면: 보유 기간 조건에 맞는 시작일 없음 → 안내', /보유 10년 이상인 시작일이 없어요/.test(R72D.html(full, m, { hold: 10, tab: 'cagr' })));

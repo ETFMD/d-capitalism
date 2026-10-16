@@ -427,6 +427,11 @@ DIST_JS = """async () => {""" + PRE + r"""
     const S = R72D.summ(R72D.hold(st.rows, 1), 'cagr'), M = R72D.summ(R72D.hold(st.rows, 1), 'mdd'), tx = () => box().innerText;
     ok('요약: 보유 1년 이상 시작일 수 · 평균·중앙 CAGR · MDD 평균 · 끝 날짜 · 한계 문구 · 무한매수법 용어 없음', tx().includes(S.n.toLocaleString('en-US') + '곳') && tx().includes(pc(S.mean, 2)) && tx().includes(pc(S.med, 2)) && tx().includes('평균 ' + pc(M.mean)) &&
        tx().includes(D.d[to]) && /수익을 약속하지 않아요/.test(tx()) && !bad(tx()), bad(tx()) || tx().slice(0, 200));
+    /* SOXL 그냥 보유 세후(사고팔 때 수수료·SEC · 끝 날 한 번 팔고 양도세 22% − 250만 원) — 분포 칸 · 72루틴(미납세 뺀 값)이 더 높았던 비율 · 카드 연평균 칸 '(세후 …)' */
+    const bhD = i => { const P0 = cap, pr = P0 / (1 + o.fee / 100) / D.c[i - 1] * D.c[to] * (1 - o.fee / 100 - 0.0000206), tax = fx ? 0.22 * Math.max(0, pr * fx[to] - P0 * fx[i - 1] - 2500000) / fx[to] : 0; return Math.pow((pr - tax) / P0, 365.25 / (MBT.dnum(D.d[to]) - MBT.dnum(D.d[i - 1]))) - 1; };
+    const Y1 = R72D.hold(st.rows, 1), kc = fx ? 'due' : 'cagr', wr = Math.round(Y1.filter(x => x[kc] > x.bhN).length / Y1.length * 100), BNs = R72D.summ(Y1, 'bhN');
+    ok('SOXL 그냥 보유 세후: 분포 행 = 따로 계산(시작일 3곳) · 세후 평균 칸 · 72루틴이 더 높았던 시작일 ' + wr + '% · 카드 연평균 칸 (세후 …)', [1, 1500, P0.n].every(i => Math.abs(st.rows[i - 1].bhN - bhD(i)) < 1e-12) && tx().includes('SOXL 그냥 보유 (세후)') && tx().includes('평균 ' + pc(BNs.mean)) &&
+       new RegExp('72루틴이 더 높았던 시작일\\s*' + wr + '%').test(tx()) && $('#mh-bt .mb-kg').innerText.includes('(세후 ' + pc(bhD(1), 1) + ')') && Math.abs(r.bhN - bhD(1)) < 1e-12, [r.bhN, bhD(1), wr, $('#mh-bt .mb-kg').innerText.slice(0, 160)]);
     const tabs = {};
     for (const t of ['mdd', 'line', 'year', 'cagr']) { click('#r7d-box [data-r7d="tab"][data-v="' + t + '"]'); await W(60); tabs[t] = !!$('#r7d-box ' + ({ cagr: '.r7d-hist.up', mdd: '.r7d-hist.dn', line: '.r7d-ln svg polyline.c', year: '.r7d-t tbody tr' })[t]) && $('#r7d-box [data-r7d="tab"][data-v="' + t + '"]').getAttribute('aria-pressed') === 'true'; }
     const hs = $$('#r7d-box .r7d-bin').length, H5 = R72D.hist(R72D.hold(st.rows, 1).map(x => x.cagr), 5).length;
