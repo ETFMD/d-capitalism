@@ -268,6 +268,14 @@
       "desc": "엔비디아·애플·삼성전자 등 전 세계 상장 기업 시가총액 상위 100개를 매일 종가 기준 달러·원화로 비교합니다."
     },
     {
+      "path": "earnings-calendar",
+      "tab": "earn",
+      "group": "invest",
+      "title": "실적발표 캘린더 — 코스피 TOP 100·미국 TOP 100 실적발표일과 과거 실적",
+      "short": "실적발표 캘린더",
+      "desc": "코스피·미국 시가총액 TOP 100 기업의 실적발표일, 잠정실적·EPS 서프라이즈, PER 3종과 ROE·FCF 등 핵심 지표를 봅니다."
+    },
+    {
       "path": "muhan",
       "tab": "muhan",
       "group": "invest",

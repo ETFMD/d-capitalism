@@ -1125,6 +1125,138 @@ def serve(root):
     return httpd, 'http://127.0.0.1:%d/' % httpd.server_address[1]
 
 
+def earn_data_check(fail, d, where='earn'):
+    """data/earnings.json 형식·내용 (로컬은 저장소 파일, 배포는 사이트가 받은 자료)"""
+    import datetime as _dt
+    kr, us = d.get('kr') or [], d.get('us') or []
+    if len(kr) < 90 or len(us) < 90: fail(where, '기업 수 부족: 국내 %d · 미국 %d (각 90 이상)' % (len(kr), len(us)))
+    try:
+        age = (_dt.datetime.now(_dt.timezone.utc) - _dt.datetime.fromisoformat(d['updated'].replace('Z', '+00:00'))).total_seconds() / 3600
+        if age > 80: fail(where, '자료가 %.0f시간 묵음 (updated %s) — Actions 갱신 확인' % (age, d['updated']))
+    except Exception as ex: fail(where, 'updated 형식 오류: %r' % ex)
+    for mk, rows, key in (('kr', kr, 'c'), ('us', us, 's')):
+        ks = [r.get(key) for r in rows]
+        if len(set(ks)) != len(ks): fail(where, '%s 중복 종목' % mk)
+        if [r.get('r') for r in rows] != list(range(1, len(rows) + 1)): fail(where, '%s 순위가 1부터 차례가 아님' % mk)
+        if any(not (r.get('m') or 0) > 0 for r in rows): fail(where, '%s 시가총액 없는 종목' % mk)
+        caps = [r['m'] for r in rows]
+        if caps != sorted(caps, reverse=True): fail(where, '%s 시가총액 순서가 아님' % mk)
+        bad_d = [r[key] for r in rows if r.get('nx') and not re.match(r'^\d{4}-\d\d-\d\d$', r['nx'].get('d') or '')]
+        if bad_d: fail(where, '%s 다음 발표일 형식 오류: %s' % (mk, bad_d[:5]))
+        no_nx = [r[key] for r in rows if not r.get('nx')]
+        if len(no_nx) > len(rows) * 0.15: fail(where, '%s 다음 발표일 없는 종목이 너무 많음 %d개: %s' % (mk, len(no_nx), no_nx[:8]))
+        no_k = [r[key] for r in rows if not (r.get('k') or {})]
+        if len(no_k) > len(rows) * 0.1: fail(where, '%s 핵심 지표 없는 종목 %d개: %s' % (mk, len(no_k), no_k[:8]))
+        no_per = [r[key] for r in rows if not any((r.get('per') or {}).get(x) for x in 'tbf')]
+        if len(no_per) > len(rows) * 0.15: fail(where, '%s PER 이 하나도 없는 종목 %d개: %s' % (mk, len(no_per), no_per[:8]))
+        for r in rows:
+            for x in 'tbf':
+                v = (r.get('per') or {}).get(x)
+                if v is not None and not (0 < v < 5000): fail(where, '%s %s PER(%s) 범위 밖 %s' % (mk, r[key], x, v))
+    for r in kr:
+        if re.search(r'(\d?우[A-C]?)$', r['n']) or not r['c'].endswith('0'): fail(where, '국내 목록에 우선주: %s %s' % (r['c'], r['n']))
+        e, p_, v = (r.get('eps') or {}), r.get('p'), (r.get('per') or {})
+        for x in 'tbf':   # 국내 PER = 주가 ÷ EPS (화면 숫자와 자료가 같은 식인지)
+            if e.get(x) and e[x] > 0 and p_ and v.get(x) is not None and abs(v[x] - round(p_ / e[x], 2)) > 0.011:
+                fail(where, '국내 %s PER(%s) %s ≠ 주가 %s ÷ EPS %s' % (r['c'], x, v[x], p_, e[x]))
+    return len(kr), len(us)
+
+
+def earn_check(page, base, fail, errs, ignorable):
+    errs.clear()
+    if base.startswith('http://127.0.0.1') or base.startswith('http://localhost'):
+        d = json.load(open(os.path.join(ROOT, 'data', 'earnings.json'), encoding='utf-8'))
+        dk = json.load(open(os.path.join(ROOT, 'data', 'earnings_kr.json'), encoding='utf-8'))
+        du = json.load(open(os.path.join(ROOT, 'data', 'earnings_us.json'), encoding='utf-8'))
+        earn_data_check(fail, d)
+        miss = [r['c'] for r in d['kr'] if not (dk['co'].get(r['c']) or {}).get('fin')] + [r['s'] for r in d['us'] if not (du['co'].get(r['s']) or {}).get('fin')]
+        if len(miss) > 20: fail('earn', '재무표 없는 기업 %d개: %s' % (len(miss), miss[:10]))
+    page.set_viewport_size({'width': 1440, 'height': 900})
+    page.goto(base + 'earnings-calendar/', wait_until='load'); page.wait_for_timeout(600)
+    page.evaluate("() => { try { localStorage.removeItem('er-fav'); } catch (e) {} }")
+    r = page.evaluate("""async () => {
+      for (let i = 0; i < 60 && !(window.ERdebug && ERdebug.S.d); i++) await new Promise(r => setTimeout(r, 200));
+      if (!window.ERdebug || !ERdebug.S.d) return { none: true };
+      const D = ERdebug.S.d, $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+      const out = { kr: D.kr.length, us: D.us.length, cells: $$('#er-cal .er-day').length, rows: $$('#er-body tr[data-key]').length,
+        kpi: ['er-k-today', 'er-k-week', 'er-k-next', 'er-k-last'].map(id => document.getElementById(id).textContent),
+        tips: [...new Set([...document.documentElement.innerHTML.matchAll(/data-tip="([a-z]+)"/g)].map(m => m[1]))],
+        terms: $$('#er-gloss details.er-term').map(x => x.id), keyterms: $$('#er-gloss details.er-term.er-key').length,
+        kst1: ERdebug.nyToKst('2026-10-29', 16, 5), kst2: ERdebug.nyToKst('2026-11-02', 16, 5), kst3: ERdebug.nyToKst('2027-03-15', 7, 0) };
+      /* 시장 선택 · 날짜 선택 */
+      $('#page-earn .er-mk [data-mk="us"]').click(); await new Promise(r => setTimeout(r, 50));
+      out.usOnly = $$('#er-body tr[data-key]').every(tr => tr.dataset.key.startsWith('us-')) && $$('#er-body tr[data-key]').length > 0;
+      $('#page-earn .er-mk [data-mk="all"]').click();
+      $('#page-earn .er-mode [data-mode="all"]').click(); await new Promise(r => setTimeout(r, 50));
+      out.allTitle = $('#er-list-t').textContent;
+      out.allRows = $$('#er-body tr[data-key]').length; out.moreBtn = !$('#er-more').hidden;
+      $('#page-earn .er-mode [data-mode="up"]').click();
+      const day = $$('#er-cal .er-day').find(b => b.querySelector('.er-ev'));
+      if (day) { day.click(); await new Promise(r => setTimeout(r, 50));
+        const ds = day.dataset.d; out.dayOk = $$('#er-body tr[data-key]').length > 0 && $('#er-list-t').textContent.indexOf('실적발표') >= 0 && !$('#er-filter').hidden;
+        out.dayRows = $$('#er-body tr[data-key]').map(tr => tr.querySelector('.er-c-d b').textContent);
+        $('#er-unsel').click(); }
+      /* 관심 기업 */
+      const fb = $('#er-body .er-fav'); const fk = fb && fb.dataset.fav; fb && fb.click();
+      out.fav = JSON.parse(localStorage.getItem('er-fav') || '[]'); $('#er-favonly').click(); await new Promise(r => setTimeout(r, 50));
+      out.favRows = $$('#er-body tr[data-key]').map(t => t.dataset.key); $('#er-favonly').click(); out.favKey = fk;
+      /* 기업 상세: 국내 1위 · 미국 1위 */
+      out.modal = [];
+      for (const key of ['kr-' + D.kr[0].c, 'us-' + D.us[0].s]) {
+        ERdebug.openCo(key);
+        for (let i = 0; i < 60 && !$('#er-m-body .er-ft, #er-m-body .er-unit:not(:empty)'); i++) await new Promise(r => setTimeout(r, 200));
+        for (let i = 0; i < 40 && /불러오는 중/.test($('#er-m-body').textContent); i++) await new Promise(r => setTimeout(r, 200));
+        const m = { key, open: !$('#er-modal').hidden, hash: location.hash, kc: $$('#er-m-body .er-kc').length, pc: $$('#er-m-body .er-pc').length,
+          ftRows: $$('#er-m-body .er-ft tbody tr:not(.grp)').length, keyRows: $$('#er-m-body .er-ft tr.key').length, cols: $$('#er-m-body .er-ft thead th').length - 1,
+          eCols: $$('#er-m-body .er-ft thead th.e').length, next: ($('#er-m-body .er-m-next') || {}).textContent || '' };
+        $('#er-m-body [data-ftab="y"]').click(); await new Promise(r => setTimeout(r, 50));
+        m.yRows = $$('#er-m-body .er-ft tbody tr:not(.grp)').length;
+        const tip = $('#er-m-body [data-tip="fcf"]'); if (tip) { tip.click(); m.tip = (($('#er-m-body tr.tip') || {}).textContent || '').slice(0, 30); }
+        $('#er-m-body [data-ftab="q"]').click();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); await new Promise(r => setTimeout(r, 50));
+        m.closed = $('#er-modal').hidden && !/co=/.test(location.hash);
+        out.modal.push(m);
+      }
+      return out; }""")
+    if r.get('none'):
+        fail('earn', '자료를 불러오지 못함(ERdebug.S.d 없음)'); return
+    if r['kr'] < 90 or r['us'] < 90: fail('earn', '화면 기업 수 국내 %d · 미국 %d' % (r['kr'], r['us']))
+    if r['cells'] not in (35, 42): fail('earn', '달력 칸 %d개' % r['cells'])
+    if r['rows'] < 1: fail('earn', '다가오는 발표 목록이 비어 있음')
+    if any(k in ('—', '') for k in r['kpi'][:2]): fail('earn', 'KPI 비어 있음: %s' % r['kpi'])
+    miss = [t for t in r['tips'] if 'er-t-' + t not in r['terms']]
+    if miss: fail('earn', '표의 용어 설명(data-tip)에 맞는 용어 사전 항목 없음: %s' % miss)
+    if r['keyterms'] != 8: fail('earn', '★ 핵심 용어 %d개 (기대 8: 영업이익·FCF·부채비율·이자보상배율·ROE·ROIC·PER·EV/EBITDA)' % r['keyterms'])
+    if r['kst1'] != '10/30(금) 05:05' or r['kst2'] != '11/3(화) 06:05' or r['kst3'] != '3/15(월) 20:00':
+        fail('earn', '미국 → 한국 시간 변환(서머타임) 오류: %s · %s · %s' % (r['kst1'], r['kst2'], r['kst3']))
+    if not r['usOnly']: fail('earn', '미국만 보기에 국내 기업이 섞임')
+    if '전체 기업' not in r['allTitle'] or r['allRows'] != 40 or not r['moreBtn']: fail('earn', '전체 기업 보기 이상: %s · %d줄 · 더 보기 %s' % (r['allTitle'], r['allRows'], r['moreBtn']))
+    if not r.get('dayOk'): fail('earn', '달력 날짜 선택 → 목록 이상 (%s)' % r.get('dayRows'))
+    if not r['favKey'] or r['fav'] != [r['favKey']] or r['favRows'] != [r['favKey']]: fail('earn', '관심 기업 저장·보기 이상: %s / %s' % (r['fav'], r['favRows']))
+    for m in r['modal']:
+        w = 'earn ' + m['key']
+        if not m['open'] or m['hash'] != '#co=' + m['key']: fail(w, '상세가 안 열리거나 주소(#co=) 이상: %s' % m['hash'])
+        if m['kc'] != 8 or m['pc'] != 3: fail(w, '★ 핵심 카드 %d(기대 8) · PER 카드 %d(기대 3)' % (m['kc'], m['pc']))
+        if m['ftRows'] < 15 or m['keyRows'] < 6 or m['cols'] < 5: fail(w, '분기 표 이상: 행 %d · ★행 %d · 열 %d' % (m['ftRows'], m['keyRows'], m['cols']))
+        if m['eCols'] < 1: fail(w, '분기 표에 예상(E) 열이 없음')
+        if m['yRows'] < 12: fail(w, '연간 표 행 %d' % m['yRows'])
+        if '잉여현금흐름' not in (m.get('tip') or '') and '설비투자' not in (m.get('tip') or ''): fail(w, '표 행 설명(?)이 안 나옴: %r' % m.get('tip'))
+        if '다음 실적발표' not in m['next']: fail(w, '다음 발표 상자 이상: %s' % m['next'][:60])
+        if not m['closed']: fail(w, 'Esc 로 닫히지 않음')
+    # 주소로 바로 열기 + 휴대폰 폭 상세 화면 넘침
+    page.set_viewport_size({'width': 360, 'height': 780})
+    page.goto(base + 'earnings-calendar/#co=us-AAPL', wait_until='load'); page.wait_for_timeout(2500)
+    q = page.evaluate("""() => ({ open: !document.getElementById('er-modal').hidden, name: (document.getElementById('er-m-name') || {}).textContent || '',
+        sw: document.documentElement.scrollWidth, vw: innerWidth,
+        box: (b => b ? Math.round(b.getBoundingClientRect().right) : 0)(document.querySelector('.er-modal-box')) })""")
+    if not q['open'] or 'AAPL' not in q['name']: fail('earn', '#co=us-AAPL 주소로 상세가 안 열림 (%s)' % q['name'][:40])
+    if q['sw'] > q['vw'] + 1 or q['box'] > q['vw'] + 1: fail('earn', '360px 상세 화면 가로 넘침 (문서 %d · 상자 %d · 화면 %d)' % (q['sw'], q['box'], q['vw']))
+    page.set_viewport_size({'width': 1440, 'height': 900})
+    page.evaluate("() => { try { localStorage.removeItem('er-fav'); } catch (e) {} }")
+    for t in [t for t, u in errs if not ignorable(t, u)][:3]:
+        fail('earn', '콘솔 오류: ' + t[:200])
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--base', help='검사할 사이트 주소 (기본: 저장소 루트를 임시 서버로)')
@@ -2069,6 +2201,10 @@ def main():
                 fail('etf-backtest', '자료 오류 정리 검사 실행: %s' % str(ex)[:200])
             for t in [t for t, u in errs if not ignorable(t, u)][:3]:
                 fail('etf-backtest', '콘솔 오류: ' + t[:200])
+        # [EARN] 실적발표 캘린더 — 자료 형식·PER 3종 계산·달력·목록·기업 상세·관심 기업·휴대폰 상세 화면 넘침
+        if 'earnings-calendar/' in paths:
+            print('[5] 실적발표 캘린더', flush=True)
+            earn_check(page, base, fail, errs, ignorable)
         # 영어판 무한매수법 — 가이드북·3-6·자동 숫자가 영어로, 일부러 남긴 원어(translate=no) 밖에는 한글 없음
         if os.path.isdir(os.path.join(ROOT, 'en', 'muhan')):
             errs.clear()

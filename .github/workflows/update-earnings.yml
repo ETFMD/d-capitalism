@@ -1,0 +1,44 @@
+name: 실적발표 캘린더 갱신
+
+# 코스피 TOP 100 · 미국 상장 TOP 100 실적발표일·실적·PER (data/earnings.json · earnings_kr.json · earnings_us.json)
+#  · 2시간마다(매시 23분 기준) — 국내 잠정실적 공시·IR 일정, 미국 발표일·EPS 가 2시간 안에 반영
+#  · 재무표는 회사마다 20시간에 한 번 + 최근 4일 안에 발표한 회사는 매번 다시 받음 (스크립트가 시간 예산 안에서 나눠 받음)
+#  · 내용이 바뀐 경우에만 커밋
+on:
+  schedule:
+    - cron: '23 */2 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['scripts/update_earnings.py', '.github/workflows/update-earnings.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: market-data          # 다른 데이터 갱신과 같은 그룹 → data/ 커밋이 겹치지 않음
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - name: 실적발표 자료 수집
+        env:
+          EARN_BUDGET: '420'
+        run: python3 scripts/update_earnings.py
+      - name: 변경된 경우에만 커밋
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898099+github-actions[bot]@users.noreply.github.com'
+          git add data/earnings.json data/earnings_kr.json data/earnings_us.json
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git commit -m "chore: 실적발표 캘린더 갱신"
+          for i in 1 2 3; do
+            git pull --rebase --autostash && git push && exit 0
+            git rebase --abort 2>/dev/null || true
+            sleep 5
+          done
+          exit 1

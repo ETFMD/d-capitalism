@@ -35,8 +35,8 @@ var SITE_EN = (document.documentElement.getAttribute('lang') || '').indexOf('en'
     return Promise.race([p, new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, ms); })]);
   }
   /* 파일별 갱신 주기(신선도)와 다운로드 제한 시간 — 큰 파일을 불필요하게 두 번 받지 않도록 */
-  var FRESH_MS = { 'apt_rank.json': 4 * 3600e3, 'salary_rank.json': 7 * 86400e3, 'asset_rank.json': 7 * 86400e3, 'mcap.json': 26 * 3600e3, 'etfcagr.json': 7 * 3600e3, 'history.json': 22 * 3600e3, 'dxy.json': 7 * 3600e3, 'home.json': 7 * 3600e3, 'whatif.json': 20 * 3600e3, 'muhan_bt.json': 26 * 3600e3, 'apt_area.json': 26 * 3600e3, 'realty.json': 7 * 86400e3, 'etf_list.json': 7 * 86400e3, 'usdkrw.json': 7 * 86400e3 };   /* 기본 40분 */
-  var BIG = { 'apt_rank.json': 1, 'dxy.json': 1, 'etfcagr.json': 1, 'history.json': 1, 'compare.json': 1, 'muhan.json': 1, 'whatif.json': 1, 'etf_list.json': 1, 'usdkrw.json': 1 };
+  var FRESH_MS = { 'apt_rank.json': 4 * 3600e3, 'salary_rank.json': 7 * 86400e3, 'asset_rank.json': 7 * 86400e3, 'mcap.json': 26 * 3600e3, 'etfcagr.json': 7 * 3600e3, 'history.json': 22 * 3600e3, 'dxy.json': 7 * 3600e3, 'home.json': 7 * 3600e3, 'whatif.json': 20 * 3600e3, 'muhan_bt.json': 26 * 3600e3, 'apt_area.json': 26 * 3600e3, 'realty.json': 7 * 86400e3, 'etf_list.json': 7 * 86400e3, 'usdkrw.json': 7 * 86400e3, 'earnings.json': 150 * 60e3, 'earnings_kr.json': 150 * 60e3, 'earnings_us.json': 150 * 60e3 };   /* 기본 40분 */
+  var BIG = { 'apt_rank.json': 1, 'dxy.json': 1, 'etfcagr.json': 1, 'history.json': 1, 'compare.json': 1, 'muhan.json': 1, 'whatif.json': 1, 'etf_list.json': 1, 'usdkrw.json': 1, 'earnings_kr.json': 1, 'earnings_us.json': 1 };
   function getJSON(url, ms) {
     return timeout(nativeFetch(url, { cache: 'no-cache' }), ms || 6000)
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
@@ -5698,6 +5698,566 @@ var TAX = (function () {
 })();
 
 /* ════════════════════════════════════════
+   [EARN] 실적발표 캘린더 — data/earnings.json(달력·목록 요약) · earnings_kr.json / earnings_us.json(기업별 분기·연간 표 — 기업을 열 때만 받음)
+   · 자료: scripts/update_earnings.py (Actions '실적발표 캘린더 갱신' 2시간마다)
+   · 날짜는 그 시장의 날짜(국내 = 한국, 미국 = 미국 동부) · 미국 장 전/장 후 발표는 한국 시간도 함께 표시
+   · 관심 기업: localStorage 'er-fav' (이 브라우저에만) · 주소 #co=kr-005930 / #co=us-AAPL 로 기업 상세 바로 열기
+════════════════════════════════════════ */
+(function () {
+  var S = { d: null, det: {}, mk: 'all', q: '', favOnly: false, ym: null, sel: null, mode: 'up', sort: 'date', shown: 40, open: null, ftab: 'q', loading: null, timer: null, tip: null };
+  var FAVK = 'er-fav';
+  var KEY_ROWS = { op: 1, fcf: 1, debt: 1, icr: 1, roe: 1, roic: 1, eveb: 1 };
+  /* 표의 행: [키, 이름, 용어 id, 단위 종류(a=금액 · p=% · x=배 · e=EPS)] */
+  var FROWS = [
+    ['g', '손익'],
+    ['rev', '매출액', 'rev', 'a'], ['op', '영업이익', 'op', 'a'], ['adjop', '조정영업이익', 'adjop', 'a'], ['opm', '영업이익률', 'opm', 'p'],
+    ['ebitda', 'EBITDA', 'ebitda', 'a'], ['ni', '순이익(지배)', 'ni', 'a'], ['eps', 'EPS', 'eps', 'e'],
+    ['g', '현금흐름'],
+    ['ocf', '영업활동현금흐름', 'ocf', 'a'], ['capex', 'CAPEX(설비투자)', 'capex', 'a'], ['fcf', '잉여현금흐름(FCF)', 'fcf', 'a'],
+    ['g', '안정성'],
+    ['debt', '부채비율', 'debt', 'p'], ['icr', '이자보상배율', 'icr', 'x'], ['cur', '유동비율', 'cur', 'p'], ['quick', '당좌비율', 'quick', 'p'],
+    ['g', '수익성'],
+    ['roe', 'ROE', 'roe', 'p'], ['roic', 'ROIC', 'roic', 'p'],
+    ['g', '가치평가 (그 시점 주가 기준)'],
+    ['per', 'PER', 'per', 'x'], ['pbr', 'PBR', 'pbr', 'x'], ['eveb', 'EV/EBITDA', 'eveb', 'x']
+  ];
+  var WD = ['일', '월', '화', '수', '목', '금', '토'];
+
+  function $(id) { return document.getElementById(id); }
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function comma(n, d) { return Number(n).toLocaleString('ko-KR', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 }); }
+  function isNum(v) { return typeof v === 'number' && isFinite(v); }
+  function ymd(dt, tz) { return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(dt); }
+  function today(mk) { return ymd(new Date(), mk === 'us' ? 'America/New_York' : 'Asia/Seoul'); }
+  function pd(s) { var a = s.split('-'); return new Date(Date.UTC(+a[0], +a[1] - 1, +a[2])); }
+  function dayDiff(a, b) { return Math.round((pd(a) - pd(b)) / 864e5); }
+  function addDays(s, n) { var d = pd(s); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+  function md(s) { var d = pd(s); return (d.getUTCMonth() + 1) + '/' + d.getUTCDate() + '(' + WD[d.getUTCDay()] + ')'; }
+  function favs() { try { return JSON.parse(localStorage.getItem(FAVK) || '[]') || []; } catch (e) { return []; } }
+  function setFavs(a) { try { localStorage.setItem(FAVK, JSON.stringify(a)); } catch (e) {} }
+  function isFav(k) { return favs().indexOf(k) >= 0; }
+
+  /* 미국 동부 날짜·시각 → 한국 시간 문자열 (서머타임 자동) */
+  function nyToKst(dstr, h, m) {
+    var a = dstr.split('-'), guess = Date.UTC(+a[0], +a[1] - 1, +a[2], h + 5, m || 0);
+    var hh = +new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false }).format(new Date(guess)) % 24;
+    var t = new Date(guess + (h - hh) * 3600e3);
+    var p = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(t);
+    var o = {}; p.forEach(function (x) { o[x.type] = x.value; });
+    return o.month + '/' + o.day + '(' + o.weekday + ') ' + o.hour + ':' + o.minute;
+  }
+  function timeTxt(r, short) {
+    var n = r.nx; if (!n) return '';
+    if (r.mk === 'us') {
+      if (n.tm === 'bmo') return short ? '장 시작 전' : '장 시작 전 · 한국 ' + nyToKst(n.d, 7, 0) + '~' + nyToKst(n.d, 9, 0).slice(-5) + '경';
+      if (n.tm === 'amc') return short ? '장 마감 후' : '장 마감 후 · 한국 ' + nyToKst(n.d, 16, 5) + '경';
+      return short ? '시각 미정' : '발표 시각 미정';
+    }
+    return n.k === 'ir' ? (short ? 'IR 일정' : '회사 공시 IR 일정') : '';
+  }
+
+  /* ── 숫자 표시 ── */
+  function curSuf(r) { return r.mk === 'kr' ? '원' : r.fc === 'USD' ? ' 달러' : ' ' + (r.fc || ''); }
+  function amt(v, r) {   /* 1억 단위 값 */
+    if (!isNum(v)) return '—';
+    var a = Math.abs(v), s = curSuf(r);
+    if (a >= 1e4) return comma(v / 1e4, a >= 1e6 ? 0 : a >= 1e5 ? 1 : 2) + '조' + s;
+    return comma(v, a < 10 ? 2 : a < 100 ? 1 : 0) + '억' + s;
+  }
+  function cell(v, kind) {
+    if (!isNum(v)) return '<span class="er-na">—</span>';
+    if (kind === 'a') { var a = Math.abs(v); return comma(v, a < 10 ? 2 : a < 100 ? 1 : 0); }
+    if (kind === 'p') return comma(v, Math.abs(v) >= 1000 ? 0 : 1);
+    if (kind === 'x') return comma(v, Math.abs(v) >= 100 ? 0 : 1);
+    if (kind === 'e') return comma(v, Math.abs(v) >= 1000 ? 0 : 2);
+    return comma(v, 2);
+  }
+  function capTxt(r) {
+    if (r.mk === 'kr') { var j = r.m / 1e12; return (j >= 100 ? comma(Math.round(j)) : comma(j, 1)) + '조원'; }
+    return r.m >= 1e12 ? comma(r.m / 1e12, 2) + '조 달러' : comma(Math.round(r.m / 1e8)) + '억 달러';
+  }
+  function priceTxt(r) {
+    if (!isNum(r.p)) return '—';
+    if (r.mk === 'kr') return comma(Math.round(r.p)) + '원';
+    var sym = { USD: '$' }[r.cur] || ((r.cur || '') + ' ');
+    return sym + comma(r.p, 2);
+  }
+  function perTxt(r, k) {
+    var v = r.per && r.per[k], e = r.eps && r.eps[k];
+    if (isNum(v)) return comma(v, v >= 100 ? 0 : 1);
+    if (isNum(e) && e <= 0) return '<span class="er-loss">적자</span>';
+    return '<span class="er-na">—</span>';
+  }
+  function grade(key, v) {   /* 참고 기준 색 (업종마다 다름 — 용어 사전에 설명) */
+    if (!isNum(v)) return '';
+    if (key === 'debt') return v <= 100 ? 'er-good' : v <= 200 ? '' : 'er-warn';
+    if (key === 'icr') return v >= 5 ? 'er-good' : v >= 1.5 ? '' : v >= 1 ? 'er-warn' : 'er-bad';
+    if (key === 'roe' || key === 'roic') return v >= 15 ? 'er-good' : v >= 8 ? '' : v >= 0 ? 'er-warn' : 'er-bad';
+    if (key === 'cur') return v >= 150 ? 'er-good' : v >= 100 ? '' : 'er-warn';
+    return '';
+  }
+  function pct(v, d) { return isNum(v) ? comma(v, d == null ? 1 : d) + '%' : '—'; }
+  function spTxt(v) { return isNum(v) ? '<span class="' + (v > 0 ? 'er-up' : v < 0 ? 'er-dn2' : '') + '">' + (v > 0 ? '+' : '') + comma(v, 1) + '%</span>' : '<span class="er-na">—</span>'; }
+
+  /* ── 자료 → 공통 행 ── */
+  function all() {
+    if (!S.d) return [];
+    if (S._all && S._allD === S.d) return S._all;
+    var out = [];
+    (S.d.kr || []).forEach(function (r) { out.push(Object.assign({ mk: 'kr', key: 'kr-' + r.c, code: r.c, name: r.n, sub: r.c, fc: 'KRW', cur: 'KRW' }, r)); });
+    (S.d.us || []).forEach(function (r) { out.push(Object.assign({ mk: 'us', key: 'us-' + r.s, code: r.s, name: r.ko || r.n, sub: (r.ko ? r.n + ' · ' : '') + r.s }, r)); });
+    S._all = out; S._allD = S.d;
+    return out;
+  }
+  function rows() {
+    var q = S.q.trim().toLowerCase(), fv = favs();
+    return all().filter(function (r) {
+      if (S.mk !== 'all' && r.mk !== S.mk) return false;
+      if (S.favOnly && fv.indexOf(r.key) < 0) return false;
+      if (q && (r.name + ' ' + r.n + ' ' + r.code + ' ' + (r.sub || '')).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    });
+  }
+  function usd(r) { return r.mk === 'kr' ? r.m / 1400 : r.m; }   /* 국내·미국을 섞어 시가총액 순으로 줄 세울 때만 쓰는 대략 환산 */
+  function confOf(n) { return n && (n.k === 'ir' || n.k === 'conf'); }
+  function events(list) {   /* {d, r, t:'next'|'past', k} */
+    var ev = [];
+    list.forEach(function (r) {
+      if (r.nx && r.nx.d) ev.push({ d: r.nx.d, r: r, t: 'next', k: r.nx.k });
+      var seen = {};
+      (r.pa || []).forEach(function (p) {
+        if (seen[p[0]] || (r.nx && r.nx.d === p[0])) return; seen[p[0]] = 1;
+        ev.push({ d: p[0], r: r, t: 'past', k: p[1] });
+      });
+    });
+    return ev;
+  }
+
+  /* ── KPI ── */
+  function kpis() {
+    var list = rows(), tk = today('kr'), tu = today('us');
+    var nexts = list.filter(function (r) { return r.nx && r.nx.d; });
+    var tdy = nexts.filter(function (r) { return r.nx.d === (r.mk === 'us' ? tu : tk); });
+    $('er-k-today').textContent = tdy.length + '곳';
+    $('er-k-today-sub').textContent = tdy.length ? tdy.slice(0, 4).map(function (r) { return r.name; }).join(' · ') + (tdy.length > 4 ? ' 외 ' + (tdy.length - 4) : '') : '오늘 발표 예정 기업 없음';
+    var dow = pd(tk).getUTCDay(), wkEnd = addDays(tk, 6 - dow), wkSt = addDays(tk, -dow);
+    var wk = nexts.filter(function (r) { return r.nx.d >= wkSt && r.nx.d <= wkEnd; });
+    var past = list.filter(function (r) { return (r.pa || []).some(function (p) { return p[0] >= wkSt && p[0] <= wkEnd; }); });
+    $('er-k-week').textContent = (wk.length + past.length) + '곳';
+    $('er-k-week-sub').textContent = md(wkSt) + '~' + md(wkEnd) + ' · 예정 ' + wk.length + ' · 발표 끝 ' + past.length;
+    var up = nexts.filter(function (r) { return r.nx.d > (r.mk === 'us' ? tu : tk); }).sort(function (a, b) { return a.nx.d < b.nx.d ? -1 : a.nx.d > b.nx.d ? 1 : a.r - b.r; });
+    var n = up[0];
+    $('er-k-next').textContent = n ? n.name : '—';
+    $('er-k-next').className = 'er-kpi-v' + (n ? ' er-link' : ''); $('er-k-next').setAttribute('data-key', n ? n.key : '');
+    $('er-k-next-sub').textContent = n ? md(n.nx.d) + ' · D-' + dayDiff(n.nx.d, n.mk === 'us' ? tu : tk) + (confOf(n.nx) ? ' · 확정' : ' · 예상') : '—';
+    var last = list.filter(function (r) { return r.ls && r.ls.d; }).sort(function (a, b) { return a.ls.d > b.ls.d ? -1 : a.ls.d < b.ls.d ? 1 : a.r - b.r; })[0];
+    $('er-k-last').textContent = last ? last.name : '—';
+    $('er-k-last').className = 'er-kpi-v' + (last ? ' er-link' : ''); $('er-k-last').setAttribute('data-key', last ? last.key : '');
+    $('er-k-last-sub').innerHTML = last ? esc(md(last.ls.d)) + (isNum(last.ls.sp) ? ' · 예상 대비 ' + spTxt(last.ls.sp) : '') : '—';
+  }
+
+  /* ── 달력 ── */
+  function cal() {
+    var y = S.ym[0], m = S.ym[1], first = new Date(Date.UTC(y, m, 1)), start = new Date(first); start.setUTCDate(1 - first.getUTCDay());
+    $('er-month').textContent = y + '년 ' + (m + 1) + '월';
+    var by = {}, fv = favs();
+    events(rows()).forEach(function (e) { (by[e.d] = by[e.d] || []).push(e); });
+    var tk = today('kr'), html = '';
+    for (var i = 0; i < 42; i++) {
+      var d = new Date(start); d.setUTCDate(start.getUTCDate() + i);
+      if (i >= 35 && d.getUTCMonth() !== m) break;
+      var ds = d.toISOString().slice(0, 10), list = (by[ds] || []).slice();
+      list.sort(function (a, b) { return (a.t === 'next' ? 0 : 1) - (b.t === 'next' ? 0 : 1) || (fv.indexOf(b.r.key) >= 0) - (fv.indexOf(a.r.key) >= 0) || usd(b.r) - usd(a.r); });
+      var cls = 'er-day' + (d.getUTCMonth() !== m ? ' out' : '') + (ds === tk ? ' today' : '') + (S.sel === ds ? ' sel' : '') + (d.getUTCDay() === 0 ? ' sun' : '');
+      var nk = list.filter(function (e) { return e.r.mk === 'kr'; }), nu = list.filter(function (e) { return e.r.mk === 'us'; });
+      var allPast = list.length && list.every(function (e) { return e.t === 'past' || e.d < today(e.r.mk); });
+      html += '<button type="button" class="' + cls + '" data-d="' + ds + '" role="gridcell" aria-label="' + esc(md(ds) + ' 발표 ' + list.length + '곳') + '">' +
+        '<span class="er-dn">' + d.getUTCDate() + (list.length ? '<small>' + list.length + '</small>' : '') + '</span>';
+      list.slice(0, 4).forEach(function (e) {
+        var gone = e.t === 'past' || e.d < today(e.r.mk);   /* 발표일이 지났으면(결과 반영 전이라도) 지난 발표 색 */
+        var dot = gone ? 'er-d-past' : confOf(e.r.nx) ? 'er-d-conf' : 'er-d-est';
+        html += '<span class="er-ev ' + e.r.mk + (gone ? ' past' : '') + (fv.indexOf(e.r.key) >= 0 ? ' fav' : '') + '"><i class="er-dot ' + dot + '"></i><b>' + esc(e.r.name) + '</b></span>';
+      });
+      if (list.length > 4) html += '<span class="er-evmore">+' + (list.length - 4) + '곳</span>';
+      if (list.length) html += '<span class="er-cnt">' + (nk.length ? '<i class="kr' + (allPast ? ' past' : '') + '">' + nk.length + '</i>' : '') + (nu.length ? '<i class="us' + (allPast ? ' past' : '') + '">' + nu.length + '</i>' : '') + '</span>';
+      html += '</button>';
+    }
+    $('er-cal').innerHTML = html;
+  }
+
+  /* ── 목록 ── */
+  function sortVal(r) {
+    switch (S.sort) {
+      case 'cap': return -usd(r);
+      case 'fper': return isNum(r.per && r.per.f) ? r.per.f : 1e9;
+      case 'roe': return isNum(r.k && r.k.roe) ? -r.k.roe : 1e9;
+      case 'roic': return isNum(r.k && r.k.roic) ? -r.k.roic : 1e9;
+      case 'debt': return isNum(r.k && r.k.debt) ? r.k.debt : 1e9;
+      case 'sp': return isNum(r.ls && r.ls.sp) ? -r.ls.sp : 1e9;
+    }
+    return 0;
+  }
+  function listRows() {
+    var list = rows(), tk = today('kr'), tu = today('us'), out;
+    if (S.sel) {
+      out = [];
+      list.forEach(function (r) {
+        if (r.nx && r.nx.d === S.sel) out.push({ r: r, d: S.sel, t: 'next' });
+        else if ((r.pa || []).some(function (p) { return p[0] === S.sel; })) out.push({ r: r, d: S.sel, t: 'past' });
+      });
+    } else if (S.mode === 'up') {
+      out = list.filter(function (r) { return r.nx && r.nx.d && r.nx.d >= (r.mk === 'us' ? tu : tk); }).map(function (r) { return { r: r, d: r.nx.d, t: 'next' }; });
+    } else if (S.mode === 'past') {
+      out = list.map(function (r) {   /* 가장 최근 발표: 지난 발표 기록 · 또는 발표일이 지났는데 아직 기록에 안 들어온 것 */
+        var d = r.pa && r.pa.length ? r.pa[0][0] : null;
+        if (r.nx && r.nx.d && r.nx.d < (r.mk === 'us' ? tu : tk) && (!d || r.nx.d > d)) d = r.nx.d;
+        return d ? { r: r, d: d, t: 'past' } : null;
+      }).filter(function (x) { return x && x.d >= addDays(tk, -45); });
+    } else {
+      out = list.map(function (r) { return { r: r, d: r.nx && r.nx.d, t: 'next' }; });
+    }
+    out.sort(function (a, b) {
+      if (S.sort === 'date') {
+        var x = a.d || '9999', y = b.d || '9999';
+        if (S.mode === 'past' && !S.sel) { var t = x; x = y; y = t; }
+        return x < y ? -1 : x > y ? 1 : usd(b.r) - usd(a.r);
+      }
+      return sortVal(a.r) - sortVal(b.r) || a.r.r - b.r.r;
+    });
+    return out;
+  }
+  function dateCell(x) {
+    var r = x.r, d = x.d;
+    if (!d) return '<span class="er-na">미정</span>';
+    var t = today(r.mk), dd = dayDiff(d, t), badge;
+    if (x.t === 'past' || dd < 0) badge = '<span class="er-dd dp">' + (dd === 0 ? '오늘' : -dd + '일 전') + '</span>';
+    else badge = '<span class="er-dd ' + (dd === 0 ? 'd0' : 'dn') + '">' + (dd === 0 ? '오늘' : 'D-' + dd) + '</span>';
+    var st = x.t === 'past' ? '<span class="er-badge er-b-past">발표 끝</span>' : confOf(r.nx) ? '<span class="er-badge er-b-conf">확정</span>' : '<span class="er-badge er-b-est">' + (r.nx && r.nx.k === 'due' ? '기한' : '예상') + '</span>';
+    return '<b>' + md(d) + badge + '</b><small>' + st + (r.nx && r.nx.d2 && x.t !== 'past' ? ' ~' + md(r.nx.d2) : '') + '</small>';
+  }
+  function lastCell(r) {
+    var l = r.ls; if (!l) return '<span class="er-na">—</span>';
+    var main;
+    if (r.mk === 'kr') main = '영업이익 ' + (isNum(l.op) ? amt(l.op, r) : '—');
+    else main = 'EPS ' + (isNum(l.eps) ? comma(l.eps, 2) : '—') + (isNum(l.epsE) ? ' <small style="display:inline">(예상 ' + comma(l.epsE, 2) + ')</small>' : '');
+    return main + '<small>' + esc((l.pd ? l.pd + ' · ' : '') + md(l.d)) + (isNum(l.sp) ? ' · 예상 대비 ' + spTxt(l.sp) : '') + '</small>';
+  }
+  function table() {
+    var list = listRows(), fv = favs();
+    var title = S.sel ? md(S.sel) + ' 실적발표' : S.mode === 'up' ? '다가오는 실적발표' : S.mode === 'past' ? '최근 실적발표 (45일)' : '전체 기업 (' + list.length + '곳)';
+    $('er-list-t').textContent = title;
+    var f = $('er-filter');
+    if (S.sel) { f.hidden = false; f.innerHTML = '<span>달력에서 <b>' + esc(md(S.sel)) + '</b>을 골랐습니다</span><button type="button" id="er-unsel">× 날짜 선택 해제</button>'; }
+    else { f.hidden = true; f.innerHTML = ''; }
+    var show = list.slice(0, S.shown);
+    $('er-body').innerHTML = show.length ? show.map(function (x) {
+      var r = x.r, k = r.k || {};
+      return '<tr data-key="' + esc(r.key) + '" tabindex="0"><td class="er-c-d">' + dateCell(x) + '</td>' +
+        '<td class="er-c-n"><span class="er-nm"><button type="button" class="er-fav' + (fv.indexOf(r.key) >= 0 ? ' on' : '') + '" data-fav="' + esc(r.key) + '" aria-label="관심 기업 ' + (fv.indexOf(r.key) >= 0 ? '해제' : '추가') + '">' + (fv.indexOf(r.key) >= 0 ? '♥' : '♡') + '</button><i class="er-flag ' + r.mk + '">' + r.mk.toUpperCase() + '</i>' + esc(r.name) + '</span>' +
+        '<span class="er-sub"><span class="er-tk">' + esc(r.sub) + '</span> · ' + (r.mk === 'kr' ? '코스피' : '미국') + ' ' + r.r + '위 · ' + capTxt(r) + '</span></td>' +
+        '<td class="er-c-tm">' + (x.t === 'past' ? '<span class="er-na">—</span>' : esc(timeTxt(r, true)) || '<span class="er-na">—</span>') + '</td>' +
+        '<td class="er-c-per"><span class="er-per"><i>' + perTxt(r, 't') + '</i><i>' + perTxt(r, 'b') + '</i><i class="f">' + perTxt(r, 'f') + '</i></span></td>' +
+        '<td class="er-c-k ' + grade('roe', k.roe) + '">' + pct(k.roe) + '</td><td class="er-c-k ' + grade('roic', k.roic) + '">' + pct(k.roic) + '</td><td class="er-c-k ' + grade('debt', k.debt) + '">' + pct(k.debt, 0) + '</td>' +
+        '<td class="er-c-ls">' + lastCell(r) + '</td></tr>';
+    }).join('') : '<tr><td colspan="8" class="er-empty">' + (S.favOnly && !favs().length ? '아직 관심 기업이 없습니다. 기업 이름 앞의 ♡ 를 눌러 추가하세요.' : '조건에 맞는 기업이 없습니다') + '</td></tr>';
+    var mb = $('er-more');
+    mb.hidden = list.length <= S.shown;
+    mb.textContent = '더 보기 (' + (list.length - S.shown) + '곳 남음)';
+    document.querySelectorAll('#page-earn .er-mode .chart-tab').forEach(function (b) { b.classList.toggle('active', !S.sel && b.getAttribute('data-mode') === S.mode); });
+    document.querySelectorAll('#page-earn .er-sort .er-chip').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-sort') === S.sort); });
+  }
+  function note() {
+    var d = S.d, up = d.updated ? new Date(d.updated) : null;
+    var t = up ? up.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
+    $('er-note').innerHTML = '마지막 갱신 ' + esc(t) + ' (2시간마다 자동) · 국내 코스피 시가총액 상위 ' + (d.kr || []).length + '곳(우선주·ETF 제외) · 미국 상장 시가총액 상위 ' + (d.us || []).length + '곳 · 날짜는 그 나라 날짜(미국 = 동부) · ' +
+      'PER = 후행(최근 4분기 실제 EPS) · 혼합(올해 실제+예상 EPS) · <b>선행(내년 예상 EPS)</b> · ROE·ROIC = 최근 4분기 · 부채비율 = 부채총계 ÷ 자본총계(금융사는 높게 나오는 게 정상)<br>자료: ' + esc(d.source || '') + ' — 참고용이며 투자 권유가 아닙니다.';
+  }
+  function render() {
+    if (!S.d) return;
+    if (!S.ym) { var t = today('kr').split('-'); S.ym = [+t[0], +t[1] - 1]; }
+    document.querySelectorAll('#page-earn .er-mk .chart-tab').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-mk') === S.mk); });
+    $('er-favonly').setAttribute('aria-pressed', S.favOnly ? 'true' : 'false');
+    kpis(); cal(); table(); note();
+  }
+
+  /* ── 기업 상세 ── */
+  function find(key) { return all().filter(function (r) { return r.key === key; })[0]; }
+  function loadDet(mk) {
+    if (S.det[mk]) return Promise.resolve(S.det[mk]);
+    return window.mdLoad('earnings_' + mk + '.json').then(function (d) { if (d && d.co) S.det[mk] = d; return d; }).catch(function () { return null; });
+  }
+  function termOne(id) { var e = document.querySelector('#er-t-' + id + ' .er-t-one'); return e ? e.textContent : ''; }
+  function nextBox(r) {
+    var n = r.nx;
+    if (!n || !n.d) return '<div class="er-m-next est">다음 실적발표일을 아직 알 수 없습니다. 회사가 일정을 알리면 자동으로 표시됩니다.</div>';
+    var t = today(r.mk), dd = dayDiff(n.d, t), conf = confOf(n);
+    var lab = conf ? '<span class="er-badge er-b-conf">확정</span>' : '<span class="er-badge er-b-est">' + (n.k === 'due' ? '법정 기한' : '예상') + '</span>';
+    var why = n.k === 'ir' ? '회사가 알린 일정' + (n.tt ? ' — ' + esc(n.tt) : '') :
+      n.k === 'conf' ? '회사가 발표한 날짜' :
+      n.k === 'est' && r.mk === 'kr' ? '작년 같은 분기 발표일(' + esc(n.b || '') + ')에서 1년 뒤 같은 요일로 예상' + (n.pd ? ' · ' + esc(n.pd) + ' 분기' : '') :
+      n.k === 'est' ? 'Yahoo Finance 예상일' + (n.d2 ? ' (' + md(n.d) + '~' + md(n.d2) + ' 사이)' : '') :
+      n.k === 'due' ? '아직 날짜를 알리지 않아 분기보고서 법정 제출 기한(이 날까지 발표)을 표시' + (n.pd ? ' · ' + esc(n.pd) + ' 분기' : '') :
+      '지난 발표일 + 약 3개월로 추정';
+    var cons = '';
+    if (r.mk === 'us' && (isNum(n.epsE) || isNum(n.revE))) cons = '<br>시장 예상: EPS <b>' + (isNum(n.epsE) ? comma(n.epsE, 2) : '—') + '</b> · 매출 <b>' + (isNum(n.revE) ? amt(n.revE, r) : '—') + '</b>';
+    return '<div class="er-m-next' + (conf ? '' : ' est') + '">다음 실적발표 ' + lab + ' <b>' + n.d.replace(/-/g, '.') + ' (' + WD[pd(n.d).getUTCDay()] + ')</b> ' +
+      (dd > 0 ? '· D-' + dd : dd === 0 ? '· <b>오늘</b>' : '') + (timeTxt(r) ? ' · ' + esc(timeTxt(r)) : '') + '<br><small>' + why + '</small>' + cons + '</div>';
+  }
+  function keyCards(r) {
+    var k = r.k || {};
+    var cards = [
+      ['op', '영업이익 (최근 4분기)', isNum(k.op) ? amt(k.op, r) : '—', isNum(k.opm) ? '영업이익률 ' + pct(k.opm) : ''],
+      ['fcf', '잉여현금흐름 FCF (4분기)', isNum(k.fcf) ? amt(k.fcf, r) : '—', isNum(k.fcf) && isNum(k.op) && k.op > 0 ? '영업이익의 ' + comma(k.fcf / k.op * 100, 0) + '%' : ''],
+      ['roe', 'ROE', pct(k.roe), '15% 이상 우수 · 8% 미만 낮음'],
+      ['roic', 'ROIC', pct(k.roic), '자본비용(약 8~10%)보다 높아야 좋음'],
+      ['debt', '부채비율', pct(k.debt, 0), '100% 이하 양호 · 200%↑ 주의'],
+      ['icr', '이자보상배율', isNum(k.icr) ? comma(k.icr, k.icr >= 100 ? 0 : 1) + '배' : '—', '5배↑ 여유 · 1배 미만 위험'],
+      ['eveb', 'EV/EBITDA', isNum(k.eveb) ? comma(k.eveb, 1) + '배' : '—', '빚까지 반영한 가격 배수'],
+      ['per', '선행 PER', isNum(r.per && r.per.f) ? comma(r.per.f, 1) + '배' : (isNum(r.eps && r.eps.f) && r.eps.f <= 0 ? '적자' : '—'), '내년 예상 이익 기준']
+    ];
+    return '<div class="er-kgrid">' + cards.map(function (c) {
+      return '<div class="er-kc" data-term="' + c[0] + '" title="' + esc(termOne(c[0])) + '"><span><em class="er-star">★</em> ' + c[1] + '</span><b class="' + grade(c[0], c[0] === 'per' ? null : (r.k || {})[c[0]]) + '">' + c[2] + '</b><small>' + esc(c[3]) + '</small></div>';
+    }).join('') + '</div>';
+  }
+  function perCards(r) {
+    var e = r.eps || {}, P = r.per || {};
+    function one(k, nm, en, desc, key) {
+      var ev = e[k];
+      return '<div class="er-pc' + (key ? ' er-key' : '') + '"><span>' + (key ? '<em class="er-star">★</em> ' : '') + nm + ' <small>' + en + '</small></span><b>' + (isNum(P[k]) ? comma(P[k], 1) + '배' : perTxt(r, k)) + '</b>' +
+        '<p>' + desc + (isNum(ev) ? ' · EPS ' + (r.mk === 'kr' ? comma(Math.round(ev)) + '원' : comma(ev, 2)) : '') + '</p></div>';
+    }
+    var t = P.t, b = P.b, f = P.f, msg = '';
+    if (isNum(t) && isNum(f)) msg = f < t * 0.9 ? '선행 PER이 후행보다 낮습니다 → 증권사들은 <b>앞으로 이익이 늘 것</b>으로 예상합니다.' : f > t * 1.1 ? '선행 PER이 후행보다 높습니다 → 증권사들은 <b>앞으로 이익이 줄 것</b>으로 예상합니다.' : '후행과 선행 PER이 비슷합니다 → 이익이 지금 수준을 유지할 것으로 예상됩니다.';
+    return '<div class="er-per-cards">' + one('t', '후행 PER', 'Trailing', '최근 4분기 실제 EPS') + one('b', '혼합 PER', 'Blended', '올해 실제+예상 EPS') + one('f', '선행 PER', 'Forward', '내년 예상 EPS', 1) + '</div>' +
+      (msg ? '<p class="er-pc-note">' + msg + ' <a href="#er-t-per" data-term="per">PER 3종 읽는 법</a></p>' : '');
+  }
+  function lastBox(r) {
+    var l = r.ls;
+    if (!l) return '<p class="er-unit">지난 발표 자료가 없습니다.</p>';
+    var c = [];
+    if (r.mk === 'kr') {
+      c.push(['발표일', l.d.replace(/-/g, '.') + (l.tm ? ' ' + l.tm : ''), (l.pd || '') + ' 분기 잠정실적']);
+      c.push(['매출액', amt(l.rev, r), isNum(l.revY) && l.revY ? '작년 같은 분기 대비 ' + (l.rev >= l.revY ? '+' : '') + comma((l.rev / l.revY - 1) * 100, 1) + '%' : '']);
+      c.push(['영업이익 ★', amt(l.op, r), isNum(l.opY) && l.opY > 0 ? '작년 같은 분기 대비 ' + (l.op >= l.opY ? '+' : '') + comma((l.op / l.opY - 1) * 100, 1) + '%' : isNum(l.opY) ? '작년 같은 분기 ' + amt(l.opY, r) : '']);
+      c.push(['예상 대비(서프라이즈)', isNum(l.sp) ? spTxt(l.sp) : '—', isNum(l.opE) ? '예상 영업이익 ' + amt(l.opE, r) : '발표 전 예상치 없음']);
+    } else {
+      c.push(['발표일', l.d.replace(/-/g, '.'), (l.pd || '') + ' 분기']);
+      c.push(['EPS 실제', isNum(l.eps) ? comma(l.eps, 2) : '—', '주당순이익 (보고 통화)']);
+      c.push(['EPS 예상', isNum(l.epsE) ? comma(l.epsE, 2) : '—', '발표 직전 애널리스트 평균']);
+      c.push(['예상 대비(서프라이즈)', isNum(l.sp) ? spTxt(l.sp) : '—', isNum(l.sp) ? (l.sp >= 0 ? '예상보다 좋음(beat)' : '예상보다 나쁨(miss)') : '']);
+    }
+    return '<div class="er-last">' + c.map(function (x) { return '<div class="er-lc"><span>' + x[0] + '</span><b>' + x[1] + '</b><small>' + esc(x[2]) + '</small></div>'; }).join('') + '</div>';
+  }
+  function qLabel(p, freq, r) {
+    if (freq === 'y') return p.slice(0, 4) + (p.slice(5) !== '12' ? '<small> (' + (+p.slice(5)) + '월 결산)</small>' : '');
+    var m = +p.slice(5), q = Math.ceil(m / 3);
+    return "'" + p.slice(2, 4) + '.' + q + 'Q';
+  }
+  /* 국내: 잠정실적이 나온 분기(분기보고서 전)는 매출·영업이익·영업이익률만 잠정치로 바꿔 보여 줌 (나머지는 예상치 그대로) */
+  var PRE_K = { rev: 1, op: 1, opm: 1 };
+  function withPrelim(tb, r) {
+    var l = r.ls;
+    if (!tb || r.mk !== 'kr' || S.ftab !== 'q' || !l || !l.pd) return tb;
+    var i = tb.p.indexOf(l.pd);
+    if (i < 0 || !tb.e[i]) return tb;
+    var c = JSON.parse(JSON.stringify(tb));
+    if (c.v.rev) c.v.rev[i] = isNum(l.rev) ? l.rev : null;
+    if (c.v.op) c.v.op[i] = isNum(l.op) ? l.op : null;
+    if (c.v.opm) c.v.opm[i] = isNum(l.op) && l.rev ? l.op / l.rev * 100 : null;
+    c.pre = i;
+    return c;
+  }
+  function isE(tb, i, k) { return tb.e[i] && !(tb.pre === i && (!k || PRE_K[k])); }
+  function bars(tb, r) {
+    if (!tb || !tb.p || !tb.p.length) return '';
+    var rev = tb.v.rev || [], op = tb.v.op || [], mx = 0;
+    tb.p.forEach(function (_, i) { if (isNum(rev[i])) mx = Math.max(mx, Math.abs(rev[i])); if (isNum(op[i])) mx = Math.max(mx, Math.abs(op[i])); });
+    if (!mx) return '';
+    var h = '<div class="er-bars" aria-hidden="true">';
+    tb.p.forEach(function (p, i) {
+      var rv = rev[i], ov = op[i];
+      h += '<div class="er-bar' + (isE(tb, i) ? ' e' : '') + '" title="' + esc(p + (tb.pre === i ? ' (잠정)' : tb.e[i] ? ' (예상)' : '') + ' 매출 ' + amt(rv, r) + ' · 영업이익 ' + amt(ov, r)) + '">' +
+        (isNum(rv) ? '<i style="height:' + Math.max(1, Math.abs(rv) / mx * 100).toFixed(1) + '%"></i>' : '') +
+        (isNum(ov) ? '<i class="op' + (ov < 0 ? ' neg' : '') + '" style="height:' + Math.max(1, Math.abs(ov) / mx * 100).toFixed(1) + '%"></i>' : '') + '</div>';
+    });
+    h += '</div><div class="er-bar-l">' + tb.p.map(function (p, i) { return '<span>' + qLabel(p, S.ftab, r).replace(/<small>.*<\/small>/, '') + (tb.pre === i ? '잠정' : tb.e[i] ? 'E' : '') + '</span>'; }).join('') + '</div>';
+    h += '<div class="er-bar-leg"><span><i style="background:rgba(49,130,246,0.75)"></i>매출액</span><span><i style="background:#f5a524"></i>★ 영업이익</span><span>연한 막대 = 예상치</span></div>';
+    return h;
+  }
+  function ftable(tb, r) {
+    if (!tb || !tb.p || !tb.p.length) return '<p class="er-unit">재무표를 아직 받지 못했습니다. 다음 갱신(2시간 안)에 채워집니다.</p>';
+    var h = '<div class="er-ft-wrap"><table class="er-ft"><thead><tr><th class="rl">항목</th>' + tb.p.map(function (p, i) { return '<th class="' + (isE(tb, i) ? 'e' : '') + '">' + qLabel(p, S.ftab, r) + (tb.pre === i ? ' (잠정)' : tb.e[i] ? ' (E)' : '') + '</th>'; }).join('') + '</tr></thead><tbody>';
+    var any = false;
+    FROWS.forEach(function (fr) {
+      if (fr[0] === 'g') { h += '<tr class="grp"><th colspan="' + (tb.p.length + 1) + '">' + fr[1] + '</th></tr>'; return; }
+      var vals = tb.v[fr[0]];
+      if (!vals || !vals.some(isNum)) {
+        if (fr[0] === 'per' || fr[0] === 'pbr' || fr[0] === 'eveb' || fr[0] === 'adjop') return;   /* 자료 없는 가치평가·조정 행은 숨김 */
+      }
+      any = true;
+      var key = KEY_ROWS[fr[0]] ? ' key' : '';
+      h += '<tr class="' + key.trim() + '"><th class="rl"><button type="button" data-tip="' + fr[2] + '">' + (key ? '<em class="er-star">★</em> ' : '') + fr[1] + '<i>?</i></button></th>' +
+        tb.p.map(function (p, i) { var v = vals ? vals[i] : null, e = isE(tb, i, fr[0]); return '<td class="' + (e ? 'e ' : '') + (fr[3] !== 'a' && fr[3] !== 'e' && !e ? grade(fr[0], v) : '') + '">' + cell(v, fr[3]) + '</td>'; }).join('') + '</tr>';
+    });
+    h += '</tbody></table></div>';
+    var u = r.mk === 'kr' ? '억원' : (r.fc === 'USD' ? '억 달러' : '억 ' + r.fc);
+    h += '<p class="er-unit">금액 단위: <b>' + u + '</b> · 비율 % · 배수 배 · EPS ' + (r.mk === 'kr' ? '원' : r.fc) + ' · (E)·연한 칸 = 증권사 예상치 · 행 이름을 누르면 뜻이 나옵니다' +
+      (tb.pre != null ? ' · <b>(잠정)</b> 열 = 거래소 잠정실적 공시의 매출액·영업이익(다른 칸은 아직 예상치)' : '') +
+      (S.ftab === 'q' ? ' · 분기 ROE·ROIC·EV/EBITDA 는 1년 기준으로 환산한 값' : '') + (r.mk === 'us' ? ' · 미국 기업의 분기 PER·PBR·EV/EBITDA 이력은 제공하지 않음(현재 값은 위 카드)' : '') + '</p>';
+    return h;
+  }
+  function histTable(r, det) {
+    if (r.mk === 'us') {
+      var h = ((det && det.fin) || {}).hist || [];
+      if (!h.length) return '';
+      return '<div class="er-m-sec"><h3>지난 발표 · EPS 서프라이즈 <small>최근 ' + h.length + '번</small></h3><div class="er-tbl-wrap"><table class="er-hist"><thead><tr><th>발표일</th><th>분기 말</th><th>EPS 실제</th><th>EPS 예상</th><th>서프라이즈</th></tr></thead><tbody>' +
+        h.slice().reverse().map(function (x) { return '<tr><td>' + x.d.replace(/-/g, '.') + '</td><td>' + esc(x.pe || '—') + '</td><td>' + (isNum(x.a) ? comma(x.a, 2) : '—') + '</td><td>' + (isNum(x.e) ? comma(x.e, 2) : '—') + '</td><td>' + spTxt(x.sp) + '</td></tr>'; }).join('') + '</tbody></table></div></div>';
+    }
+    var ds = (det && det.dsc) || [];
+    if (!ds.length) return '';
+    return '<div class="er-m-sec"><h3>지난 잠정실적 공시 <small>거래소 공시 · 최근 ' + Math.min(ds.length, 12) + '건</small></h3><div class="er-tbl-wrap"><table class="er-hist"><thead><tr><th>공시일</th><th>시각</th><th>구분</th><th>해당 분기(추정)</th></tr></thead><tbody>' +
+      ds.slice(0, 12).map(function (x) {
+        var d = pd(x.d), qd = new Date(Date.UTC(d.getUTCFullYear(), Math.floor(d.getUTCMonth() / 3) * 3, 0));   /* 공시일 직전 분기 말 */
+        return '<tr><td>' + x.d.replace(/-/g, '.') + '</td><td>' + esc(x.tm || '—') + '</td><td style="font-family:var(--font)">' + (x.fix ? '정정(확정치 재공시)' : '잠정실적') + '</td><td>' + qd.toISOString().slice(0, 7).replace('-', '.') + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>';
+  }
+  function links(r) {
+    var a = [];
+    if (r.mk === 'kr') {
+      a.push(['네이버 증권', 'https://m.stock.naver.com/domestic/stock/' + r.code + '/total']);
+      a.push(['네이버 기업 실적분석', 'https://navercomp.wisereport.co.kr/v2/company/c1010001.aspx?cmp_cd=' + r.code]);
+      a.push(['전자공시 DART', 'https://dart.fss.or.kr/dsab007/main.do?option=corp&textCrpNm=' + encodeURIComponent(r.n)]);
+    } else {
+      a.push(['Yahoo Finance', 'https://finance.yahoo.com/quote/' + encodeURIComponent(r.code) + '/']);
+      a.push(['나스닥 실적', 'https://www.nasdaq.com/market-activity/stocks/' + encodeURIComponent(r.code.toLowerCase().replace('-', '.')) + '/earnings']);
+      a.push(['SEC 공시', 'https://www.sec.gov/edgar/search/#/q=' + encodeURIComponent(r.n)]);
+    }
+    return '<div class="er-links">' + a.map(function (x) { return '<a href="' + esc(x[1]) + '" target="_blank" rel="noopener nofollow">' + esc(x[0]) + ' ↗</a>'; }).join('') + '</div>';
+  }
+  function modalHTML(r, det) {
+    var fv = isFav(r.key), fin = det && det.fin;
+    var h = '<div class="er-m-h"><div><h2 id="er-m-name"><i class="er-flag ' + r.mk + '">' + r.mk.toUpperCase() + '</i>' + esc(r.name) + ' <small>' + esc(r.code) + '</small>' +
+      '<button type="button" class="er-fav' + (fv ? ' on' : '') + '" data-fav="' + esc(r.key) + '" style="font-size:18px" aria-label="관심 기업 ' + (fv ? '해제' : '추가') + '">' + (fv ? '♥' : '♡') + '</button></h2>' +
+      '<div class="er-m-meta">' + (r.mk === 'us' && r.n !== r.name ? esc(r.n) + ' · ' : '') + (r.mk === 'kr' ? '코스피 시가총액 ' : '미국 상장 시가총액 ') + '<b>' + r.r + '위</b> · ' + capTxt(r) + ' · 주가 <b>' + priceTxt(r) + '</b>' +
+      (isNum(r.ch) ? ' (' + spTxt(r.ch) + ')' : '') + (r.sec ? ' · ' + esc(r.sec) : '') + (r.mk === 'us' && r.cty && r.cty !== 'United States' ? ' · 본사 ' + esc(r.cty) + '(미국 예탁증서)' : '') +
+      (isNum(r.pbr) ? ' · PBR <b>' + comma(r.pbr, 2) + '</b>' : '') + '</div></div></div>';
+    h += nextBox(r);
+    h += '<div class="er-m-sec"><h3><em class="er-star">★</em> 기업 가치 핵심 지표 <small>최근 4분기 기준 · 색은 일반적인 참고 기준(업종마다 다름) · 카드를 누르면 설명</small></h3>' + keyCards(r) + '</div>';
+    h += '<div class="er-m-sec"><h3>PER 3종 — 후행 · 혼합 · 선행 <small>현재 주가 기준</small></h3>' + perCards(r) + '</div>';
+    h += '<div class="er-m-sec"><h3>지난 실적 발표 <small>' + (r.mk === 'kr' ? '거래소 잠정실적 공시 본문' : 'Yahoo Finance') + '</small></h3>' + lastBox(r) + '</div>';
+    var tb = withPrelim(fin ? fin[S.ftab] : null, r);
+    h += '<div class="er-m-sec"><h3>과거 실적 한눈에 <small>연결재무제표 · 최근 실적 + 증권사 예상(E)</small></h3>' +
+      '<div class="chart-tabs er-ftabs" role="group" aria-label="분기·연간"><button class="chart-tab' + (S.ftab === 'q' ? ' active' : '') + '" data-ftab="q">분기</button><button class="chart-tab' + (S.ftab === 'y' ? ' active' : '') + '" data-ftab="y">연간</button></div>' +
+      (det === undefined ? '<p class="er-unit">재무표를 불러오는 중…</p>' : bars(tb, r) + ftable(tb, r)) + '</div>';
+    if (det) h += histTable(r, det);
+    h += links(r);
+    h += '<p class="er-m-note">자료: ' + (r.mk === 'kr' ? '네이버 증권 · 와이즈리포트(재무·컨센서스) · 거래소 공시' : 'Yahoo Finance · 나스닥 · companiesmarketcap') + ' — 자료 제공처 사정으로 늦거나 다를 수 있으며 투자 권유가 아닙니다. 중요한 결정 전에는 회사 공시를 직접 확인하세요.</p>';
+    return h;
+  }
+  function openCo(key, push) {
+    var r = find(key); if (!r) return;
+    S.open = key;
+    var m = $('er-modal');
+    m.hidden = false; document.body.classList.add('er-lock');
+    $('er-m-body').innerHTML = modalHTML(r, undefined);
+    loadDet(r.mk).then(function (d) {
+      if (S.open !== key) return;
+      $('er-m-body').innerHTML = modalHTML(r, d && d.co ? d.co[r.code] || null : null);
+    });
+    if (push !== false) { try { history.replaceState(null, '', location.pathname + location.search + '#co=' + key); } catch (e) {} }
+    setTimeout(function () { var x = m.querySelector('.er-x'); if (x) x.focus({ preventScroll: true }); }, 0);
+  }
+  function closeCo() {
+    if (!S.open) return;
+    var key = S.open; S.open = null;
+    $('er-modal').hidden = true; document.body.classList.remove('er-lock');
+    if (/^#co=/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} }
+    var tr = document.querySelector('#er-body tr[data-key="' + key + '"]'); if (tr) tr.focus && tr.focus();
+  }
+  function rerenderModal() {
+    if (!S.open) return;
+    var r = find(S.open); if (!r) return;
+    var d = S.det[r.mk];
+    var box = $('er-modal'), st = box.scrollTop;
+    $('er-m-body').innerHTML = modalHTML(r, d && d.co ? d.co[r.code] || null : (d ? null : undefined));
+    box.scrollTop = st;
+  }
+  function gotoTerm(id) {
+    var t = $('er-t-' + id); if (!t) return;
+    closeCo();
+    t.open = true;
+    t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    t.classList.add('er-flash'); setTimeout(function () { t.classList.remove('er-flash'); }, 1600);
+  }
+
+  /* ── 불러오기 ── */
+  async function load() {
+    if (!window.mdLoad) return;
+    var d = await window.mdLoad('earnings.json').catch(function () { return null; });
+    if (d && ((d.kr && d.kr.length) || (d.us && d.us.length))) {
+      var changed = !S.d || S.d.updated !== d.updated;
+      S.d = d;
+      if (changed) { S.det = {}; S._all = null; }
+      render();
+      if (changed && S.open) { rerenderModal(); loadDet(find(S.open) ? find(S.open).mk : 'kr').then(rerenderModal); }
+    } else if (!S.d) $('er-body').innerHTML = '<tr><td colspan="8" class="er-empty">데이터를 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.</td></tr>';
+  }
+  function hashOpen() {
+    var m = /#co=((?:kr|us)-[A-Za-z0-9.\-]+)/.exec(location.hash);
+    if (m && S.d && find(m[1]) && S.open !== m[1]) openCo(m[1], false);
+  }
+  window.erRender = function () {
+    var pg = $('page-earn'); if (!pg || !pg.classList.contains('active')) { clearInterval(S.timer); S.timer = null; return; }
+    if (!S.loading) S.loading = load().then(hashOpen).finally(function () { setTimeout(function () { S.loading = null; }, 5 * 60 * 1000); });
+    render();
+    if (!S.timer) S.timer = setInterval(function () {   /* 열려 있는 동안 10분마다 새 자료 확인 */
+      if (!$('page-earn').classList.contains('active')) { clearInterval(S.timer); S.timer = null; return; }
+      if (!document.hidden) { S.loading = null; load(); }
+    }, 10 * 60 * 1000);
+  };
+  window.ERdebug = { S: S, rows: rows, events: events, listRows: listRows, nyToKst: nyToKst, openCo: openCo, closeCo: closeCo };
+
+  /* ── 이벤트 ── */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t.closest || !t.closest('#page-earn')) return;
+    var b;
+    if ((b = t.closest('[data-fav]'))) {
+      e.stopPropagation();
+      var k = b.getAttribute('data-fav'), a = favs(), i = a.indexOf(k);
+      if (i >= 0) a.splice(i, 1); else a.push(k);
+      setFavs(a); render(); rerenderModal(); return;
+    }
+    if ((b = t.closest('[data-er-close]'))) { closeCo(); return; }
+    if ((b = t.closest('[data-ftab]'))) { S.ftab = b.getAttribute('data-ftab'); rerenderModal(); return; }
+    if ((b = t.closest('#er-m-body [data-tip]'))) {
+      var id = b.getAttribute('data-tip'), tr = b.closest('tr'), nx = tr.nextElementSibling;
+      if (nx && nx.classList.contains('tip')) { nx.remove(); return; }
+      var tip = document.createElement('tr'); tip.className = 'tip';
+      tip.innerHTML = '<td colspan="' + tr.children.length + '">' + esc(termOne(id)) + ' <a href="#er-t-' + id + '" data-term="' + id + '">자세히 →</a></td>';
+      tr.parentNode.insertBefore(tip, tr.nextSibling); return;
+    }
+    if ((b = t.closest('[data-term]'))) { e.preventDefault(); gotoTerm(b.getAttribute('data-term')); return; }
+    if ((b = t.closest('.er-day'))) { var d = b.getAttribute('data-d'); S.sel = S.sel === d ? null : d; S.shown = 40; render(); if (S.sel) { var c = $('er-list-card'); if (c && window.innerWidth < 760) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); } return; }
+    if (t.closest('#er-unsel')) { S.sel = null; render(); return; }
+    if ((b = t.closest('.er-mk .chart-tab'))) { S.mk = b.getAttribute('data-mk'); S.shown = 40; render(); return; }
+    if ((b = t.closest('.er-mode .chart-tab'))) { S.mode = b.getAttribute('data-mode'); S.sel = null; S.shown = 40; render(); return; }
+    if ((b = t.closest('.er-sort .er-chip'))) { S.sort = b.getAttribute('data-sort'); S.shown = 40; table(); return; }
+    if (t.closest('#er-favonly')) { S.favOnly = !S.favOnly; S.shown = 40; render(); return; }
+    if (t.closest('#er-more')) { S.shown += 40; table(); return; }
+    if (t.closest('#er-prev') || t.closest('#er-next')) { var dm = t.closest('#er-prev') ? -1 : 1, m = S.ym[1] + dm; S.ym = [S.ym[0] + Math.floor(m / 12), (m % 12 + 12) % 12]; cal(); return; }
+    if (t.closest('#er-today')) { var tt = today('kr').split('-'); S.ym = [+tt[0], +tt[1] - 1]; cal(); return; }
+    if ((b = t.closest('#er-body tr[data-key]')) || (b = t.closest('.er-kpi-v.er-link'))) { var kk = b.getAttribute('data-key'); if (kk) openCo(kk); return; }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && S.open) { closeCo(); return; }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.matches && e.target.matches('#er-body tr[data-key]')) { e.preventDefault(); openCo(e.target.getAttribute('data-key')); }
+  });
+  document.addEventListener('input', function (e) { if (e.target && e.target.id === 'er-search') { S.q = e.target.value; S.shown = 40; if (S.d) { kpis(); cal(); table(); } } });
+  window.addEventListener('hashchange', function () { if ($('page-earn') && $('page-earn').classList.contains('active')) { if (/#co=/.test(location.hash)) hashOpen(); else closeCo(); } });
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.erRender); else window.erRender();
+})();
+
+/* ════════════════════════════════════════
    [SRANK] 국내 나의 연봉 순위 — data/salary_rank.json (Actions '연봉 순위 자료 갱신': 매주 확인)
    국세청 근로소득 백분위(천분위): 상위 0.1~1%(0.1%p) + 2~100%(1%p) 구간별 인원·총급여 합계
    · 경계 연봉: 구간 평균을 구간 가운데에 두고 직선으로 이음 · 상위 0.1% 안은 파레토 분포(위 두 누적 평균으로 α 추정)
@@ -9118,6 +9678,7 @@ function switchSubTab(tab, grpId, btn) {
   if (tab === 'fear') window._fearTimer = setInterval(function () { if (!document.hidden) fetchFearGreed(); }, 5 * 60 * 1000);
   if (tab === 'etfcagr' && window.ecRender) window.ecRender();
   if (tab === 'mcap' && window.mcRender) window.mcRender();
+  if (window.erRender) window.erRender();   /* [EARN] 실적발표 캘린더: 열리면 그리고, 다른 탭이면 자동 갱신 중지 */
   if (tab === 'aptrank' && window.apRender) window.apRender();
   if (window.dvRender) window.dvRender();   /* ETF 분배 달력: 열리면 그리고, 다른 탭이면 자동 갱신 중지 */
   if (tab === 'muhan') requestAnimationFrame(function(){ requestAnimationFrame(function(){ if (typeof muhanInit === 'function') muhanInit(); }); });
