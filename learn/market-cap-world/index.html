@@ -89,6 +89,7 @@
   .cat { display:inline-block; font-size:12px; font-weight:600; color:var(--accent); background:var(--accent-dim); border-radius:999px; padding:3px 10px; margin-bottom:10px; text-decoration:none; }
   h1 { font-size:28px; line-height:1.4; font-weight:700; margin-bottom:10px; letter-spacing:-.3px; }
   .meta { font-size:13px; color:var(--text3); margin-bottom:22px; }
+  .meta .auto { color:var(--accent); }
   .lead { font-size:16.5px; color:var(--text); background:var(--bg2); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:12px; padding:16px 18px; margin:0 0 22px; }
   .toc { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:14px 18px; margin:0 0 28px; font-size:14px; }
   .toc b { display:block; font-size:13px; color:var(--text3); font-weight:600; margin-bottom:6px; }
@@ -150,7 +151,7 @@
 <nav class="crumb" aria-label="현재 위치"><a href="/">홈</a> › <a href="/learn/">투자 공부</a> › 기업·실적 읽기</nav>
 <a class="cat" href="/learn/#company">기업·실적 읽기</a>
 <h1>시가총액 순위로 보는 세계 자본의 흐름 — 숫자가 알려 주는 것과 알려 주지 않는 것</h1>
-<p class="meta">글 <a href="/about/">아키텍트</a> · 작성 2026년 10월 17일 · 읽는 데 약 3분</p>
+<p class="meta">글 <a href="/about/">아키텍트</a> · 작성 2026년 10월 17일 · 읽는 데 약 3분 · <span class="auto">숫자는 2026년 10월 16일 자료 기준 자동 갱신</span></p>
 <nav class="toc" aria-label="목차"><b>목차</b><ol><li><a href="#s1">시가총액 = 주가 × 주식 수</a></li><li><a href="#s2">지금 세계의 상위 기업 (2026년 10월 16일 종가 기준)</a></li><li><a href="#s3">숫자가 보여 주는 흐름</a></li><li><a href="#s4">시가총액이 알려 주지 않는 것</a></li><li><a href="#s5">한국 투자자가 볼 점</a></li></ol></nav>
 <article>
 <p class="lead">"엔비디아가 시가총액 1위에 올랐다"는 뉴스는 무엇을 뜻할까요? 시가총액은 시장이 매긴 <b>회사 전체의 가격</b>입니다. 세계 시가총액 순위를 보면 돈이 어느 나라, 어느 산업으로 몰리고 있는지가 한눈에 보입니다. 이 글은 시가총액을 읽는 법과, 그 숫자만으로 판단하면 안 되는 이유를 설명합니다.</p>
@@ -164,20 +165,13 @@
 <div class="tbl"><table>
 <thead><tr><th class="n">순위</th><th>기업</th><th>국가</th><th class="n">시가총액</th></tr></thead>
 <tbody>
-<tr><td class="n">1</td><td>엔비디아</td><td>미국</td><td class="n">약 5.17조 달러</td></tr>
-<tr><td class="n">2</td><td>애플</td><td>미국</td><td class="n">약 5.01조 달러</td></tr>
-<tr><td class="n">3</td><td>알파벳(구글)</td><td>미국</td><td class="n">약 4.12조 달러</td></tr>
-<tr><td class="n">4</td><td>마이크로소프트</td><td>미국</td><td class="n">약 3.93조 달러</td></tr>
-<tr><td class="n">5</td><td>아마존</td><td>미국</td><td class="n">약 2.70조 달러</td></tr>
-<tr><td class="n">6</td><td>TSMC</td><td>대만</td><td class="n">약 2.14조 달러</td></tr>
-<tr><td class="n">14</td><td>삼성전자</td><td>한국</td><td class="n">약 1.05조 달러</td></tr>
-<tr><td class="n">21</td><td>SK하이닉스</td><td>한국</td><td class="n">약 0.70조 달러</td></tr>
+<tr><td class="n">1</td><td>엔비디아</td><td>미국</td><td class="n">약 5.17조 달러</td></tr><tr><td class="n">2</td><td>애플</td><td>미국</td><td class="n">약 5.01조 달러</td></tr><tr><td class="n">3</td><td>알파벳(구글)</td><td>미국</td><td class="n">약 4.12조 달러</td></tr><tr><td class="n">4</td><td>마이크로소프트</td><td>미국</td><td class="n">약 3.93조 달러</td></tr><tr><td class="n">5</td><td>아마존</td><td>미국</td><td class="n">약 2.70조 달러</td></tr><tr><td class="n">6</td><td>TSMC</td><td>대만</td><td class="n">약 2.14조 달러</td></tr><tr><td class="n">14</td><td>삼성전자</td><td>한국</td><td class="n">약 1.05조 달러</td></tr><tr><td class="n">21</td><td>SK하이닉스</td><td>한국</td><td class="n">약 0.69조 달러</td></tr>
 </tbody></table></div>
-<p class="note">출처: 이 사이트의 전세계 시가총액 TOP 100(companiesmarketcap.com·Yahoo Finance 종가) — 순위는 매일 바뀝니다.</p>
+<p class="note">출처: 이 사이트의 전세계 시가총액 TOP 100(companiesmarketcap.com·Yahoo Finance 종가) — 매일 자동으로 새 종가로 바뀝니다.</p>
 
 <h2 id="s3">숫자가 보여 주는 흐름</h2>
 <h3>1. 미국 쏠림</h3>
-<p>같은 날 TOP 100 시가총액 합계는 약 64.1조 달러였고, 그중 미국 기업이 61곳, 금액 비중으로 약 76%를 차지했습니다. 중국 기업은 11곳(약 5.7%), 대만 2곳(약 3.7%), 한국 2곳(약 2.7%)이었습니다. 세계 주식시장의 가치 대부분이 미국 대형 기업에 몰려 있다는 뜻이고, 세계 지수 ETF를 사도 미국 비중이 클 수밖에 없는 이유입니다.</p>
+<p>같은 날 TOP 100 시가총액 합계는 약 64.1조 달러였고, 그중 미국 기업이 61곳, 금액 비중으로 약 76%를 차지했습니다. 그다음은 중국 11곳(약 5.7%), 대만 2곳(약 3.7%), 한국 2곳(약 2.7%)이었습니다. 세계 주식시장의 가치 대부분이 미국 대형 기업에 몰려 있다는 뜻이고, 세계 지수 ETF를 사도 미국 비중이 클 수밖에 없는 이유입니다.</p>
 <h3>2. 반도체·AI가 이끄는 순위</h3>
 <p>상위권에는 엔비디아·TSMC·브로드컴·마이크론·삼성전자·SK하이닉스처럼 반도체와 AI 인프라 기업이 많습니다. 돈이 어떤 산업의 미래 이익에 가장 크게 베팅하고 있는지를 보여 줍니다. 반도체 기업만 따로 보고 싶다면 <a href="/earnings-calendar/">실적발표 캘린더</a>의 '필라델피아 반도체(SOX)' 보기에서 구성 종목 30곳의 실적을 모아 볼 수 있습니다.</p>
 <h3>3. 순위는 영원하지 않다</h3>
@@ -193,8 +187,8 @@
 <div class="box key"><b>이렇게 함께 보세요</b><p>시가총액 순위에서 관심 기업을 찾았다면, <a href="/earnings-calendar/">실적발표 캘린더</a>의 기업 상세에서 영업이익·FCF·ROE·ROIC·부채비율·PER 3종을 함께 확인하세요. 크기(시가총액)와 실력(이익·현금)과 가격(배수)을 나란히 놓아야 판단이 됩니다.</p></div>
 
 <h2 id="s5">한국 투자자가 볼 점</h2>
-<p>한국 기업 중 세계 TOP 100에 드는 곳은 두 곳뿐입니다. 같은 날 코스피 시가총액 상위 100개 기업을 모두 합쳐도 약 4,118조 원(원·달러 1,329.6원 기준 약 3.1조 달러)으로, 엔비디아 한 회사(약 5.2조 달러)보다 작았습니다. 국내 주식만 갖고 있다면 세계 시장의 아주 작은 부분에만 투자하고 있는 셈입니다. 반대로 해외 자산에 투자할 때는 환율 변동과 해외주식 세금(<a href="/learn/overseas-stock-tax/">해외주식 양도세 글</a>)도 함께 고려해야 합니다.</p>
-<div class="box warn"><b>주의</b><p>이 글의 순위와 금액은 2026년 10월 16일 종가 기준이며 매일 바뀝니다. 특정 기업의 매수·매도를 권하는 글이 아닙니다.</p></div>
+<p>한국 기업 중 세계 TOP 100에 드는 곳은 2곳. 코스피 시가총액 상위 100개 기업을 모두 합치면 약 4,118조 원(원·달러 1,329.6원 기준 약 3.1조 달러)으로, 세계 1위 엔비디아 한 회사(약 5.17조 달러)보다 작았습니다. 국내 주식만 갖고 있다면 세계 시장의 아주 작은 부분에만 투자하고 있는 셈입니다. 반대로 해외 자산에 투자할 때는 환율 변동과 해외주식 세금(<a href="/learn/overseas-stock-tax/">해외주식 양도세 글</a>)도 함께 고려해야 합니다.</p>
+<div class="box warn"><b>주의</b><p>이 글의 순위와 금액은 2026년 10월 16일 종가 기준이며, 새 종가가 나오면 자동으로 바뀝니다. 특정 기업의 매수·매도를 권하는 글이 아닙니다.</p></div>
 </article>
 <h2 class="sec-h">이 글과 함께 쓰는 계산기·자료</h2>
 <div class="tools"><a class="tool" href="/marketcap/"><b>전세계 시가총액 TOP 100</b><span>엔비디아·애플·삼성전자 등 전 세계 상장 기업 시가총액 상위 100개를 매일 종가 기준 달러·원화로 비교합니다.</span></a><a class="tool" href="/earnings-calendar/"><b>실적발표 캘린더</b><span>코스피·미국 시가총액 TOP 100 기업의 실적발표일, 잠정실적·EPS 서프라이즈, PER 3종과 ROE·FCF 등 핵심 지표를 봅니다.</span></a></div>

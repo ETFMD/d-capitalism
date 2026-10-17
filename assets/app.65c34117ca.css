@@ -2498,12 +2498,21 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .ss-opt.on, .ss-opt:hover { background:rgba(var(--fg-rgb),0.07); color:var(--text); }
   .ss-none { padding:10px; font-size:12.5px; color:var(--text3); }
   /* [FOOTMAP] 푸터의 전체 도구 링크 (scripts/build_pages.py 가 routes.json 으로 채움) */
-  .sf-map { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:18px 24px; padding:22px 0 20px; border-top:1px solid var(--card-border); text-align:left; }
-  .sf-col { display:flex; flex-direction:column; gap:7px; min-width:0; }
-  .sf-h { margin:0 0 3px; font-size:12px; font-weight:700; color:var(--text2); }
-  .sf-col a { font-size:12px; color:var(--text3); text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .sf-col a:hover { color:var(--accent); }
-  @media (max-width: 760px) { .sf-map { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+  /* 하단 사이트맵: 영역별 열(+ 투자 공부) · 아래에 지수 성장률 한 줄 묶음 — 긴 이름은 잘리지 않고 줄바꿈 */
+  .sf-map { padding:26px 0 22px; border-top:1px solid var(--card-border); text-align:left; }
+  .sf-cols { display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:22px 20px; }
+  .sf-col { display:flex; flex-direction:column; gap:8px; min-width:0; }
+  .sf-h { margin:0 0 4px; font-size:12.5px; font-weight:700; color:var(--text2); }
+  .sf-col a { font-size:12px; line-height:1.45; color:var(--text3); text-decoration:none; word-break:keep-all; overflow-wrap:anywhere; }
+  .sf-col a:hover, .sf-grp a:hover { color:var(--accent); }
+  .sf-sub { margin-top:6px; font-size:11px; font-weight:600; color:var(--text3); opacity:.75; }
+  .sf-band { margin-top:22px; padding-top:18px; border-top:1px dashed var(--card-border); }
+  .sf-grps { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:9px 32px; }
+  .sf-grp { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; font-size:12px; min-width:0; }
+  .sf-grp b { flex:0 0 auto; min-width:34px; font-weight:600; color:var(--text2); }
+  .sf-grp a { color:var(--text3); text-decoration:none; white-space:nowrap; }
+  @media (max-width: 1100px) { .sf-cols { grid-template-columns:repeat(4, minmax(0, 1fr)); } }
+  @media (max-width: 760px) { .sf-cols { grid-template-columns:repeat(2, minmax(0, 1fr)); } .sf-grps { grid-template-columns:1fr; gap:10px; } }
   .drop-label { padding:8px 12px 3px; font-size:11px; font-weight:600; color:var(--text3); letter-spacing:0.02em; border-top:1px solid rgba(var(--fg-rgb),0.08); margin-top:3px; }
   /* 태블릿 폭: 홈 + 영역 6개가 한 줄에 들어가게 여백·화살표(·아이콘)를 줄임 */
   @media (max-width: 880px) { .app-nav .tab-group-btn { padding:10px 9px; } .app-nav .tab-group-btn .tab-group-arrow { display:none !important; } }
@@ -2516,10 +2525,11 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
     .top-bar .visit-bar { order:2; }
     .top-bar .visit-pop { right:auto; left:0; }   /* 왼쪽 끝에 있으므로 목록은 오른쪽으로 펼침 */
     .top-bar .site-search { order:3; flex:1 1 200px; width:auto; min-width:0; }
-    .app-nav .tab-group-btn { padding:10px 6px; font-size:13.5px; }
+    .app-nav { gap:0; justify-content:space-between; }   /* 홈 + 영역 6개 + 투자 공부가 한 줄에 들어가게 (남으면 고르게 벌림) */
+    .app-nav .tab-group-btn { padding:10px 4px; font-size:13.5px; }
     .app-nav .tab-group-btn > svg, .app-nav .tab-group-btn .tab-group-arrow { display:none !important; }   /* 좁은 화면: 홈 + 영역 6개가 한 줄에 들어가게 아이콘·화살표 숨김 */
   }
-  @media (max-width: 380px) { .app-nav .tab-group-btn { padding:10px 5px; font-size:12.5px; } }   /* 아주 좁은 화면(360 이하): 더 줄이고, 그래도 넘치면 가로 스크롤 */
+  @media (max-width: 380px) { .app-nav .tab-group-btn { padding:10px 3px; font-size:12.5px; } }   /* 아주 좁은 화면(360 이하): 더 줄이고, 그래도 넘치면 가로 스크롤 */
   /* [HM-PATH] 홈: 노동자 → 자본가 6단계 */
   .hm-path { margin:4px 0 36px; }
   .hm-path, .hm-path h2, .hm-path h3, .hm-path p, .hm-path .hm-go { font-family:var(--font); letter-spacing:normal; word-spacing:normal; word-break:keep-all; }
@@ -2588,6 +2598,20 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .learn-rel .lr-all { margin:14px 0 0; text-align:right; }
   .learn-rel .lr-all a { font-size:14px; font-weight:600; color:var(--accent); text-decoration:none; }
   .learn-home { max-width:1100px; margin-left:auto; margin-right:auto; }
+  .app-nav a.tab-group-btn { text-decoration:none; }
+  /* [IDXNOTE] 지수 성장률 페이지 고유 해설 + 자동 갱신 통계 (scripts/data_facts.py) */
+  .idx-note .g-card + .g-card { margin-top:16px; }
+  .idx-note h3 { font-size:16px; font-weight:700; color:var(--text); margin:18px 0 8px; }
+  .idx-note h3:first-child { margin-top:0; }
+  .idx-note h3 small { font-size:12px; font-weight:500; color:var(--text3); margin-left:6px; }
+  .idx-note .in-text p, .idx-note .in-text li { font-size:14.5px; line-height:1.8; color:var(--text2); }
+  .idx-note .in-text p { margin:0 0 10px; }
+  .idx-note .in-text a { color:var(--accent); }
+  .idx-note .in-tbl td.n { text-align:right; font-variant-numeric:tabular-nums; white-space:normal; color:var(--text); }
+  .idx-note .in-tbl td small { font-family:var(--font); color:var(--text3); }
+  .idx-note .in-auto li { font-size:14px; line-height:1.75; color:var(--text2); }
+  .idx-note .in-src { font-size:12px; color:var(--text3); line-height:1.7; margin:12px 0 0; }
+  @media (max-width:600px) { .idx-note .in-tbl td:first-child { min-width:0; width:42%; } }
   .guide .g-faqs { margin-top:16px; }
   .guide h3 { font-size:15px; font-weight:700; color:var(--text); margin:0 0 12px; }
   .guide .g-steps, .guide .g-list { margin:0; padding-left:20px; font-size:13px; line-height:1.8; color:var(--text2); }

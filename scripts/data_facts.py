@@ -233,14 +233,11 @@ def index_block(key, text_html):
     if cc:
         a, b = cc
         pn = IDX_NAME[peer]
-        gap = a - b
-        if abs(gap) < 0.005:
-            word = '거의 같았습니다'
-        elif gap > 0:
-            word = f'연 {abs(gap) * 100:.1f}%p 높았습니다'
+        gap = round(a * 100, 1) - round(b * 100, 1)   # 표에 보이는 반올림 값끼리 빼서 문장과 표가 맞게
+        if abs(gap) < 0.5:
+            notes.append(f'최근 {yrs}년 연평균은 {name} {pct(a)}, {pn} {pct(b)}로 두 지수가 비슷했습니다.')
         else:
-            word = f'연 {abs(gap) * 100:.1f}%p 낮았습니다'
-        notes.append(f'최근 {yrs}년 연평균은 {name} {pct(a)}, {pn} {pct(b)}로 {name}{josa(name)} {word}.')
+            notes.append(f'최근 {yrs}년 연평균은 {name} {pct(a)}, {pn} {pct(b)}로 {name}{josa(name)} 연 {abs(gap):.1f}%p {"높았" if gap > 0 else "낮았"}습니다.')
     if st['from_hi'] > -0.03:
         notes.append(f'지금 지수는 {f["first_y"]}년 이후 최고치 근처에 있습니다. 최고치 근처에서는 기대가 이미 가격에 많이 반영돼 있을 수 있어, 한 번에 사기보다 나눠 사는 방법이 위험을 줄입니다.')
     elif st['from_hi'] < -0.3:

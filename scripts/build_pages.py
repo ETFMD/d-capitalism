@@ -323,7 +323,7 @@ def footmap(en=False):
             rs = [by[t] for t in tabs if t in by]
             if '지수 성장률' in sec:   # 지수 20쪽은 아래 한 줄 묶음으로
                 lab = sec.replace(' 지수 성장률', '')
-                band.append(f'<span class="sf-grp"><b>{esc(T(lab))}</b>' + ''.join(link(r, T(NAV_LABEL[r["tab"]]).replace(' 성장률', '').replace(' Growth', '')) for r in rs) + '</span>')
+                band.append(f'<span class="sf-grp"><b>{esc(T(lab))}</b>' + ''.join(link(r, T(NAV_LABEL[r["tab"]]).replace(' 성장률', '').replace(' growth', '').replace(' Growth', '')) for r in rs) + '</span>')
                 continue
             if i:
                 parts.append(f'<span class="sf-sub">{esc(T(sec))}</span>')
