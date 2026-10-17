@@ -2830,6 +2830,16 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .guide .g-lead { font-size:14px; line-height:1.8; color:var(--text2); margin:0 0 16px; max-width:900px; }
   .guide .g-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
   .guide .g-card { min-width:0; background:var(--card); border:1px solid var(--card-border); border-radius:14px; padding:18px 20px; }
+  /* [LEARN] 투자 공부 글 카드 (도구 페이지 '함께 읽으면 좋은 글' · 홈 · 허브) */
+  .learn-rel .g-grid { align-items:stretch; }
+  .learn-rel .lr-card { display:block; text-decoration:none; color:inherit; transition:border-color .15s, transform .15s; }
+  .learn-rel .lr-card:hover { border-color:var(--accent); transform:translateY(-1px); }
+  .learn-rel .lr-card b { display:block; font-size:15.5px; line-height:1.45; color:var(--text); margin-bottom:6px; }
+  .learn-rel .lr-card span { display:block; font-size:13.5px; line-height:1.6; color:var(--text2); }
+  .learn-rel .lr-sub { font-size:14px; line-height:1.7; color:var(--text2); margin:0 0 14px; }
+  .learn-rel .lr-all { margin:14px 0 0; text-align:right; }
+  .learn-rel .lr-all a { font-size:14px; font-weight:600; color:var(--accent); text-decoration:none; }
+  .learn-home { max-width:1100px; margin-left:auto; margin-right:auto; }
   .guide .g-faqs { margin-top:16px; }
   .guide h3 { font-size:15px; font-weight:700; color:var(--text); margin:0 0 12px; }
   .guide .g-steps, .guide .g-list { margin:0; padding-left:20px; font-size:13px; line-height:1.8; color:var(--text2); }
@@ -3402,6 +3412,9 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="hm-rule"><b>3</b><p><strong>AI는 노동의 값을 낮춥니다.</strong> AI 노출이 큰 직업일수록 고용 비중과 임금 상승률이 낮아진다는 분석이 나왔습니다(한국은행, 2023). 신입 자리와 임금 인상부터 줄어듭니다.</p></div>
       <div class="hm-rule"><b>4</b><p><strong>그래서 답은 자본입니다.</strong> 자산을 가진 사람과 현금·노동만 가진 사람의 격차는 시간이 갈수록 벌어집니다. 일찍 시작할수록 복리가 일할 시간이 길어집니다.</p></div>
     </section>
+
+    <!-- [LEARN] 투자 공부 글 — 카드는 scripts/build_learn.py 원본(content/learn)에서 빌드 때 채움 -->
+    <section class="guide learn-rel learn-home" aria-label="투자 공부 글"><h2>투자 공부 — 계산기 뒤에 있는 원리</h2><p class="lr-sub">숫자만으로는 판단하기 어렵습니다. 노동소득과 자본소득의 차이, 복리·CAGR 읽는 법, 레버리지·커버드콜 ETF의 구조, 실적 읽는 법, 절세 계좌와 세금까지 이 사이트의 계산기와 실제 데이터로 풀어 쓴 글입니다.</p><div class="g-grid"><!--LEARNLIST--><!--/LEARNLIST--></div><p class="lr-all"><a href="learn/">투자 공부 글 전체 보기 →</a></p></section>
 
     <p class="hm-disclaimer" id="hm-src">—</p>
   </div><!-- /page-home -->
@@ -8329,6 +8342,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
     <nav class="hub-path" aria-label="노동자에서 자본가로 가는 단계"><a href="my-position/" class="on" aria-current="page"><b>1</b>내 위치</a><a href="labor/"><b>2</b>노동자</a><a href="invest/"><b>3</b>투자</a><a href="real-estate/"><b>4</b>부동산</a><a href="capitalist/"><b>5</b>자본가</a><a href="passive-income/"><b>6</b>불로소득</a></nav>
     <section class="card hub-todo"><h2>이 단계에서 할 일</h2><ol><li><b>연봉 순위</b>로 내 노동소득이 전체 근로자 중 상위 몇 %인지 확인합니다. 소득이 높아도 자산으로 바뀌지 않으면 자본가가 될 수 없습니다.</li><li><b>자산 순위</b>로 우리 집 순자산(자산 − 부채)을 전체 가구와 비교합니다. 연봉 순위보다 자산 순위가 낮다면 버는 돈이 쌓이지 않고 있다는 신호입니다.</li><li><b>노후 준비 성적표</b>와 <b>집 사기까지 몇 년</b>으로 지금 속도라면 목표까지 얼마나 걸리는지 계산하고, <b>돈·자산·노동의 가치 속도</b>로 월급만으로는 왜 따라잡기 어려운지 확인합니다.</li></ol></section>
     <!--HUBGRID:me--><!--/HUBGRID-->
+    <!--LEARNHUB:me--><!--/LEARNHUB-->
     <a class="hub-next" href="labor/"><span>다음 단계 2</span><b>노동자 →</b></a>
   </div><!-- /page-hubme -->
 
@@ -8341,6 +8355,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
     <nav class="hub-path" aria-label="노동자에서 자본가로 가는 단계"><a href="my-position/"><b>1</b>내 위치</a><a href="labor/" class="on" aria-current="page"><b>2</b>노동자</a><a href="invest/"><b>3</b>투자</a><a href="real-estate/"><b>4</b>부동산</a><a href="capitalist/"><b>5</b>자본가</a><a href="passive-income/"><b>6</b>불로소득</a></nav>
     <section class="card hub-todo"><h2>이 단계에서 할 일</h2><ol><li><b>연봉 실수령액</b>으로 매달 실제로 손에 쥐는 돈을 확인하고, 그중 얼마를 투자로 돌릴지 먼저 정합니다.</li><li><b>연말정산</b> 계산기로 돌려받을 세금을 미리 계산하고, <b>연금저축·IRP</b> 세액공제로 세금을 줄이면서 노후 자산까지 쌓습니다. 월급쟁이가 자본을 만드는 가장 쉬운 첫걸음입니다.</li><li><b>퇴직금</b>과 <b>국민연금 손익</b>으로 회사와 국가가 대신 쌓아 주는 돈의 크기를 확인하고, 그것만으로 노후가 충분한지 따져 봅니다.</li></ol></section>
     <!--HUBGRID:pay--><!--/HUBGRID-->
+    <!--LEARNHUB:pay--><!--/LEARNHUB-->
     <a class="hub-next" href="invest/"><span>다음 단계 3</span><b>투자 →</b></a>
   </div><!-- /page-hubpay -->
 
@@ -8353,6 +8368,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
     <nav class="hub-path" aria-label="노동자에서 자본가로 가는 단계"><a href="my-position/"><b>1</b>내 위치</a><a href="labor/"><b>2</b>노동자</a><a href="invest/" class="on" aria-current="page"><b>3</b>투자</a><a href="real-estate/"><b>4</b>부동산</a><a href="capitalist/"><b>5</b>자본가</a><a href="passive-income/"><b>6</b>불로소득</a></nav>
     <section class="card hub-todo"><h2>이 단계에서 할 일</h2><ol><li><b>복리 계산기</b>로 매달 적립한 돈이 10년·20년 뒤 얼마가 되는지 확인합니다. 수익률만큼이나 기간이 결과를 크게 바꿉니다.</li><li><b>지수 성장률</b>로 S&amp;P 500·나스닥 100·코스피 같은 시장 전체의 장기 성과를 비교합니다. 개별 종목 고르기보다 지수에 꾸준히 넣는 방법이 대부분의 개인에게 더 안정적인 결과를 냈습니다.</li><li><b>물타기</b>·<b>해외주식 양도소득세</b>·<b>환율</b> 계산기로 매수 전략과 세금, 환전 비용까지 따져 실제로 남는 수익을 계산합니다.</li></ol></section>
     <!--HUBGRID:invest--><!--/HUBGRID-->
+    <!--LEARNHUB:invest--><!--/LEARNHUB-->
     <a class="hub-next" href="real-estate/"><span>다음 단계 4</span><b>부동산 →</b></a>
   </div><!-- /page-hubinvest -->
 
@@ -8365,6 +8381,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
     <nav class="hub-path" aria-label="노동자에서 자본가로 가는 단계"><a href="my-position/"><b>1</b>내 위치</a><a href="labor/"><b>2</b>노동자</a><a href="invest/"><b>3</b>투자</a><a href="real-estate/" class="on" aria-current="page"><b>4</b>부동산</a><a href="capitalist/"><b>5</b>자본가</a><a href="passive-income/"><b>6</b>불로소득</a></nav>
     <section class="card hub-todo"><h2>이 단계에서 할 일</h2><ol><li><b>청약 가점</b>과 <b>주담대 LTV·DSR 한도</b>로 지금 노릴 수 있는 집의 가격대를 먼저 확인합니다.</li><li><b>대출 이자</b>·<b>취득세</b>·<b>중개수수료</b>로 집값 외에 실제로 드는 돈을 모두 더해 봅니다.</li><li><b>종합부동산세</b>·<b>양도소득세</b>로 보유하는 동안과 팔 때 내는 세금까지 계산해, 세금을 뺀 순수익으로 판단합니다. 매년 내는 재산세는 5단계 <a href="capitalist/">자본가</a>의 재산세 계산기에서 가진 재산을 모두 합쳐 계산합니다.</li></ol></section>
     <!--HUBGRID:realty--><!--/HUBGRID-->
+    <!--LEARNHUB:realty--><!--/LEARNHUB-->
     <a class="hub-next" href="capitalist/"><span>다음 단계 5</span><b>자본가 →</b></a>
   </div><!-- /page-hubrealty -->
 
@@ -8377,6 +8394,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
     <nav class="hub-path" aria-label="노동자에서 자본가로 가는 단계"><a href="my-position/"><b>1</b>내 위치</a><a href="labor/"><b>2</b>노동자</a><a href="invest/"><b>3</b>투자</a><a href="real-estate/"><b>4</b>부동산</a><a href="capitalist/" class="on" aria-current="page"><b>5</b>자본가</a><a href="passive-income/"><b>6</b>불로소득</a></nav>
     <section class="card hub-todo"><h2>이 단계에서 할 일</h2><ol><li><b>종합소득세</b> 계산기로 프리랜서·부업·사업 소득이 생겼을 때 5월에 낼 세금을 미리 계산합니다. 근로소득과 합쳐지면 더 높은 세율 구간이 적용될 수 있습니다.</li><li><b>건강보험료</b> 계산기로 회사를 나와 지역가입자가 되거나 소득이 늘어 피부양자 자격을 잃을 때 소득·재산에 매겨지는 보험료를 확인합니다.</li><li><b>증여·상속세</b>와 <b>법인세</b> 계산기로 자산을 가족에게 넘기거나 법인으로 사업을 키울 때 세금이 얼마인지 비교해 가장 유리한 구조를 찾습니다.</li><li><b>재산세</b> 계산기에 가진 주택·건물·토지·선박·항공기를 모두 넣어 시·군·구별 합산과 비과세·감면까지 반영한 1년 보유세와 7월·9월 고지액을 확인합니다.</li></ol></section>
     <!--HUBGRID:capital--><!--/HUBGRID-->
+    <!--LEARNHUB:capital--><!--/LEARNHUB-->
     <a class="hub-next" href="passive-income/"><span>다음 단계 6</span><b>불로소득 →</b></a>
   </div><!-- /page-hubcapital -->
 
@@ -8389,6 +8407,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
     <nav class="hub-path" aria-label="노동자에서 자본가로 가는 단계"><a href="my-position/"><b>1</b>내 위치</a><a href="labor/"><b>2</b>노동자</a><a href="invest/"><b>3</b>투자</a><a href="real-estate/"><b>4</b>부동산</a><a href="capitalist/"><b>5</b>자본가</a><a href="passive-income/" class="on" aria-current="page"><b>6</b>불로소득</a></nav>
     <section class="card hub-todo"><h2>이 단계에서 할 일</h2><ol><li><b>ETF 월분배 달력</b>과 <b>배당금 계산기</b>로 목표한 월 현금흐름을 만들려면 얼마의 자산이 필요한지 계산합니다.</li><li><b>배당소득세</b> 계산기로 이자·배당이 연 2천만원을 넘어 금융소득종합과세가 붙는지 확인하고, 연금계좌·ISA처럼 세금을 늦추거나 줄이는 계좌로 배당을 받는 방법을 따져 봅니다.</li><li><b>파이어족 계산기</b>로 생활비를 자산 수익만으로 충당하는 시점을 계산하고, <b>커버드콜 시뮬레이터</b>로 분배금과 원금 성장의 균형을 비교합니다.</li></ol></section>
     <!--HUBGRID:passive--><!--/HUBGRID-->
+    <!--LEARNHUB:passive--><!--/LEARNHUB-->
     <a class="hub-next" href="my-position/"><span>한 바퀴 돌았다면</span><b>1단계로 돌아가 내 위치 다시 진단하기 →</b></a>
   </div><!-- /page-hubpassive -->
 

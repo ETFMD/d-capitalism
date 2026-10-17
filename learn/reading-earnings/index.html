@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<!-- [ADSENSE] Google 애드센스 (사이트 소유 확인 · 광고) -->
+<meta name="google-adsense-account" content="ca-pub-8051182229751523">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8051182229751523" crossorigin="anonymous"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>실적발표 읽는 법 — 잠정실적·컨센서스·PER 3종을 삼성전자 사례로 따라가기 | 디코딩 자본주의</title>
+<meta name="description" content="실적 발표 날 무엇을 어떤 순서로 봐야 하는지, 잠정실적·예상치 대비·이익률·현금흐름·PER 3종을 실제 공시 숫자로 따라가 봅니다.">
+<link rel="canonical" href="https://d-capitalism.com/learn/reading-earnings/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="디코딩 자본주의">
+<meta property="og:title" content="실적발표 읽는 법 — 잠정실적·컨센서스·PER 3종을 삼성전자 사례로 따라가기 | 디코딩 자본주의">
+<meta property="og:description" content="실적 발표 날 무엇을 어떤 순서로 봐야 하는지, 잠정실적·예상치 대비·이익률·현금흐름·PER 3종을 실제 공시 숫자로 따라가 봅니다.">
+<meta property="og:url" content="https://d-capitalism.com/learn/reading-earnings/">
+<meta property="og:image" content="https://d-capitalism.com/assets/og/home.png">
+<meta property="og:locale" content="ko_KR">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/logo-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<script>(function(){try{var m=localStorage.getItem("site-theme")||"dark";var l=m==="light"||(m==="auto"&&window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches);document.documentElement.setAttribute("data-theme",l?"light":"dark");}catch(e){document.documentElement.setAttribute("data-theme","dark");}})();</script>
+<script>
+/* [ANALYTICS] Google Analytics 4 · Microsoft Clarity · 네이버 애널리틱스 — 실제 도메인(d-capitalism.com)에서만 동작 (로컬 파일·미리보기는 집계 안 함)
+   · 탭 이동은 [ROUTER] 가 제목을 먼저 바꾼 뒤 주소를 바꾸므로(pushState) GA4 '향상된 측정'이 탭별 페이지뷰를 정확한 제목으로 자동 집계
+   · 네이버 애널리틱스는 주소 변경을 스스로 감지하지 못하므로 pushState·뒤로가기 때 wcs_do() 를 직접 호출
+     (이때 이전 주소를 referrer 로 넘겨, 탭 이동이 '외부 유입'으로 중복 집계되지 않게 함)
+   · ID 를 비워 두면 해당 도구는 설치되지 않음 */
+(function () {
+  var GA_ID = 'G-Z76QH8HLZ9', CLARITY_ID = 'ytm7hk3l3d', NAVER_ID = '1c5d67738faa0a0';
+  if (!/(^|\.)d-capitalism\.com$/.test(location.hostname)) return;
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = function () { window.dataLayer.push(arguments); };
+  window.gtag('js', new Date());
+  window.gtag('config', GA_ID);
+  var s = document.createElement('script');
+  s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+  document.head.appendChild(s);
+  if (CLARITY_ID) {
+    window.clarity = window.clarity || function () { (window.clarity.q = window.clarity.q || []).push(arguments); };
+    var c = document.createElement('script');
+    c.async = true; c.src = 'https://www.clarity.ms/tag/' + CLARITY_ID;
+    document.head.appendChild(c);
+  }
+  if (NAVER_ID) {
+    window.wcs_add = window.wcs_add || {};
+    window.wcs_add.wa = NAVER_ID;
+    var lastHref = location.href, ready = false;
+    var hit = function () { try { if (window.wcs_do) window.wcs_do(); } catch (e) {} };
+    var n = document.createElement('script');
+    n.async = true; n.src = 'https://wcs.naver.net/wcslog.js';
+    n.onload = function () { ready = true; hit(); };
+    document.head.appendChild(n);
+    var onNav = function () {
+      if (location.href.split('#')[0] === lastHref.split('#')[0]) return;
+      var prev = lastHref; lastHref = location.href;
+      try { Object.defineProperty(document, 'referrer', { configurable: true, get: function () { return prev; } }); } catch (e) {}
+      if (ready) setTimeout(hit, 0);
+    };
+    var ps = history.pushState;
+    history.pushState = function () { var r = ps.apply(this, arguments); onNav(); return r; };
+    window.addEventListener('popstate', onNav);
+  }
+})();
+</script>
+<script type="application/ld+json">[{"@context": "https://schema.org", "@type": "Article", "headline": "실적발표 읽는 법 — 잠정실적·컨센서스·PER 3종을 삼성전자 사례로 따라가기", "description": "실적 발표 날 무엇을 어떤 순서로 봐야 하는지, 잠정실적·예상치 대비·이익률·현금흐름·PER 3종을 실제 공시 숫자로 따라가 봅니다.", "datePublished": "2026-10-17", "dateModified": "2026-10-17", "inLanguage": "ko-KR", "mainEntityOfPage": "https://d-capitalism.com/learn/reading-earnings/", "author": {"@type": "Person", "name": "아키텍트", "url": "https://d-capitalism.com/about/"}, "publisher": {"@type": "Organization", "name": "디코딩 자본주의", "logo": {"@type": "ImageObject", "url": "https://d-capitalism.com/assets/logo-512.png"}}}, {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "홈", "item": "https://d-capitalism.com/"}, {"@type": "ListItem", "position": 2, "name": "투자 공부", "item": "https://d-capitalism.com/learn/"}, {"@type": "ListItem", "position": 3, "name": "실적발표 읽는 법 — 잠정실적·컨센서스·PER 3종을 삼성전자 사례로 따라가기", "item": "https://d-capitalism.com/learn/reading-earnings/"}]}]</script>
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#101013; --bg2:#17171c; --bg3:#1e1e24; --border:rgba(255,255,255,.08); --text:#e4e4e5; --text2:#a9a9b0; --text3:#6f6f78; --accent:#3182f6; --accent-dim:rgba(49,130,246,.12); --warn:#f5a524; --up:#f04452; }
+  html[data-theme="light"] { --bg:#f2f4f6; --bg2:#ffffff; --bg3:#f7f8fa; --border:rgba(0,27,55,.10); --text:#191f28; --text2:#4e5968; --text3:#8b95a1; --accent-dim:rgba(49,130,246,.08); }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:'Noto Sans KR',sans-serif; font-size:16px; line-height:1.85; word-break:keep-all; overflow-wrap:anywhere; }
+  a { color:var(--accent); }
+  .top { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--border); }
+  .top-in { max-width:1040px; margin:0 auto; padding:10px 16px; display:flex; align-items:center; gap:14px; }
+  .logo { display:flex; align-items:center; gap:8px; font-weight:700; font-size:16px; color:var(--text); text-decoration:none; white-space:nowrap; }
+  .logo img { width:28px; height:28px; border-radius:7px; }
+  .tnav { display:flex; gap:4px; overflow-x:auto; scrollbar-width:none; margin-left:auto; }
+  .tnav::-webkit-scrollbar { display:none; }
+  .tnav a { font-size:13px; color:var(--text2); text-decoration:none; padding:6px 10px; border-radius:8px; white-space:nowrap; }
+  .tnav a:hover, .tnav a.on { color:var(--text); background:var(--accent-dim); }
+  .tnav a.on { color:var(--accent); font-weight:600; }
+  .wrap { max-width:760px; margin:0 auto; padding:28px 16px 64px; }
+  .crumb { font-size:12.5px; color:var(--text3); margin-bottom:14px; }
+  .crumb a { color:var(--text3); text-decoration:none; } .crumb a:hover { color:var(--accent); }
+  .cat { display:inline-block; font-size:12px; font-weight:600; color:var(--accent); background:var(--accent-dim); border-radius:999px; padding:3px 10px; margin-bottom:10px; text-decoration:none; }
+  h1 { font-size:28px; line-height:1.4; font-weight:700; margin-bottom:10px; letter-spacing:-.3px; }
+  .meta { font-size:13px; color:var(--text3); margin-bottom:22px; }
+  .lead { font-size:16.5px; color:var(--text); background:var(--bg2); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:12px; padding:16px 18px; margin:0 0 22px; }
+  .toc { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:14px 18px; margin:0 0 28px; font-size:14px; }
+  .toc b { display:block; font-size:13px; color:var(--text3); font-weight:600; margin-bottom:6px; }
+  .toc ol { padding-left:20px; } .toc li { margin:3px 0; color:var(--text2); } .toc a { color:var(--text2); text-decoration:none; } .toc a:hover { color:var(--accent); }
+  article h2 { font-size:21px; line-height:1.45; font-weight:700; margin:40px 0 12px; scroll-margin-top:70px; letter-spacing:-.2px; }
+  article h3 { font-size:17px; font-weight:700; margin:26px 0 8px; }
+  article p { color:var(--text2); margin:0 0 14px; }
+  article ul, article ol { padding-left:22px; margin:0 0 14px; color:var(--text2); }
+  article li { margin:5px 0; }
+  article b, article strong { color:var(--text); font-weight:600; }
+  .tbl { overflow-x:auto; margin:6px 0 18px; border:1px solid var(--border); border-radius:12px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; background:var(--bg2); }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); vertical-align:top; color:var(--text2); }
+  th { color:var(--text); font-weight:600; background:var(--bg3); white-space:nowrap; }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  tr:last-child td { border-bottom:none; }
+  .note { font-size:12.5px; color:var(--text3); margin:-10px 0 18px; }
+  .box { border-radius:12px; padding:14px 16px; margin:18px 0; border:1px solid var(--border); background:var(--bg2); }
+  .box p:last-child, .box ul:last-child { margin-bottom:0; }
+  .box.key { border-color:rgba(49,130,246,.4); background:var(--accent-dim); }
+  .box.warn { border-color:rgba(245,165,36,.45); background:rgba(245,165,36,.07); }
+  .box > b:first-child { display:block; margin-bottom:6px; color:var(--text); }
+  .formula { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px; background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin:6px 0 16px; color:var(--text); overflow-x:auto; white-space:nowrap; }
+  .tools { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin:10px 0 0; }
+  .tool { display:block; background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:12px 14px; text-decoration:none; }
+  .tool:hover { border-color:rgba(49,130,246,.5); }
+  .tool b { display:block; color:var(--text); font-size:14.5px; margin-bottom:2px; }
+  .tool span { display:block; color:var(--text3); font-size:12.5px; line-height:1.6; }
+  .sec-h { font-size:18px; font-weight:700; margin:44px 0 6px; }
+  .more { list-style:none; padding:0; margin:8px 0 0; }
+  .more li { border-bottom:1px solid var(--border); }
+  .more a { display:block; padding:11px 2px; text-decoration:none; color:var(--text); font-size:15px; }
+  .more a small { display:block; color:var(--text3); font-size:12.5px; margin-top:2px; }
+  .more a:hover { color:var(--accent); }
+  .disc { margin-top:36px; font-size:12.5px; color:var(--text3); background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:12px 14px; line-height:1.75; }
+  .list-cat { margin:34px 0 8px; font-size:18px; font-weight:700; }
+  .cards { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+  .card { display:block; background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:16px 18px; text-decoration:none; }
+  .card:hover { border-color:rgba(49,130,246,.5); }
+  .card b { display:block; color:var(--text); font-size:16px; line-height:1.5; margin-bottom:6px; }
+  .card span { display:block; color:var(--text2); font-size:13.5px; line-height:1.7; }
+  .card small { display:block; color:var(--text3); font-size:12px; margin-top:8px; }
+  footer { margin-top:48px; padding-top:18px; border-top:1px solid var(--border); font-size:12px; color:var(--text3); text-align:center; }
+  footer a { color:var(--text3); white-space:nowrap; }
+  @media (max-width:640px) {
+    body { font-size:15.5px; }
+    h1 { font-size:23px; }
+    article h2 { font-size:19px; }
+    .tools, .cards { grid-template-columns:1fr; }
+    .tnav { margin-left:0; }
+    .top-in { gap:8px; }
+    .logo span { display:none; }
+  }
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in"><a class="logo" href="/"><img src="/assets/logo-96.png" alt="" width="28" height="28"><span>디코딩 자본주의</span></a><nav class="tnav" aria-label="사이트 메뉴"><a href="/">홈</a><a href="/learn/" class="on">투자 공부</a><a href="/my-position/">내 위치</a><a href="/labor/">노동자</a><a href="/invest/">투자</a><a href="/real-estate/">부동산</a><a href="/capitalist/">자본가</a><a href="/passive-income/">불로소득</a></nav></div></header>
+<main class="wrap">
+<nav class="crumb" aria-label="현재 위치"><a href="/">홈</a> › <a href="/learn/">투자 공부</a> › 기업·실적 읽기</nav>
+<a class="cat" href="/learn/#company">기업·실적 읽기</a>
+<h1>실적발표 읽는 법 — 잠정실적·컨센서스·PER 3종을 삼성전자 사례로 따라가기</h1>
+<p class="meta">글 <a href="/about/">아키텍트</a> · 작성 2026년 10월 17일 · 읽는 데 약 4분</p>
+<nav class="toc" aria-label="목차"><b>목차</b><ol><li><a href="#s1">1단계: 무엇이 발표됐나 — 잠정실적</a></li><li><a href="#s2">2단계: 예상보다 좋았나 — 컨센서스와 서프라이즈</a></li><li><a href="#s3">3단계: 얼마나 남겼나 — 이익률</a></li><li><a href="#s4">4단계: 현금이 실제로 들어왔나 — 현금흐름</a></li><li><a href="#s5">5단계: 지금 가격은 비싼가 — PER 3종</a></li><li><a href="#s6">6단계: 튼튼한가 — 부채와 이자</a></li><li><a href="#s7">미국 기업 실적은 이렇게 다르다</a></li><li><a href="#s8">실적 시즌 체크리스트</a></li></ol></nav>
+<article>
+<p class="lead">주가는 길게 보면 기업의 이익을 따라갑니다. 그 이익이 석 달에 한 번 공개되는 날이 실적발표일이고, 주가가 가장 크게 움직이는 날이기도 합니다. 이 글은 실적 발표가 나왔을 때 <b>무엇을 어떤 순서로 봐야 하는지</b>를, 2026년 10월 8일 삼성전자 3분기 잠정실적 공시를 예로 따라가 봅니다.</p>
+
+<h2 id="s1">1단계: 무엇이 발표됐나 — 잠정실적</h2>
+<p>국내 대기업 중에는 분기가 끝나고 1~2주 안에 거래소에 <b>잠정실적</b>을 먼저 내는 곳이 있습니다. 감사가 끝나기 전의 숫자라 '잠정'이라 부르고, 보통 매출액과 영업이익만 나옵니다. 삼성전자의 2026년 3분기 잠정실적 공시(연결 기준)는 이랬습니다.</p>
+<div class="tbl"><table>
+<thead><tr><th>항목</th><th class="n">2026년 3분기</th><th class="n">직전 분기 대비</th><th class="n">1년 전 같은 분기 대비</th></tr></thead>
+<tbody>
+<tr><td>매출액</td><td class="n">195.00조 원</td><td class="n">+13.7% (171.50조)</td><td class="n">+126.6% (86.06조)</td></tr>
+<tr><td>영업이익</td><td class="n">107.40조 원</td><td class="n">+20.0% (89.49조)</td><td class="n">+782.5% (12.17조)</td></tr>
+</tbody></table></div>
+<p class="note">출처: 삼성전자 연결재무제표기준영업(잠정)실적(공정공시), 2026년 10월 8일. 괄호는 비교 기간 실적.</p>
+<p>여기서 가장 먼저 볼 것은 <b>1년 전 같은 분기와의 비교</b>입니다. 계절에 따라 실적이 달라지는 업종이 많아서, 직전 분기보다 작년 같은 분기와 비교해야 실제 성장인지 알 수 있습니다.</p>
+
+<h2 id="s2">2단계: 예상보다 좋았나 — 컨센서스와 서프라이즈</h2>
+<p>주가에는 이미 시장의 '예상'이 들어 있습니다. 그래서 실적이 좋아도 예상에 못 미치면 주가가 떨어지기도 합니다. 증권사 애널리스트 예상치의 평균을 <b>컨센서스</b>라고 합니다. 이 분기 영업이익 컨센서스는 약 106.94조 원(와이즈리포트 기준)이었고, 실제는 107.40조 원으로 <b>예상 대비 +0.4%</b>였습니다. 보통 ±10% 이상 벗어나면 '어닝 서프라이즈/쇼크'라고 부르는데, 이번은 예상에 거의 정확히 들어맞은 셈입니다.</p>
+<p>이 사례가 알려 주는 점은, 1년 만에 영업이익이 9배 가까이 늘어도 시장이 이미 그만큼을 기대하고 있었다면 "놀랄 일"은 아니라는 것입니다. 실적의 절대 크기와 '예상 대비'는 따로 봐야 합니다.</p>
+
+<h2 id="s3">3단계: 얼마나 남겼나 — 이익률</h2>
+<p>영업이익률 = 영업이익 ÷ 매출액입니다. 이 분기는 107.40 ÷ 195.00 ≈ <b>55.1%</b>로, 매출 100원당 55원을 영업이익으로 남겼습니다. 1년 전 같은 분기(12.17 ÷ 86.06 ≈ 14.1%)보다 크게 높아졌습니다. 매출보다 이익이 훨씬 빨리 늘었다는 것은 제품 가격이 크게 오르거나 규모의 경제가 작동했다는 뜻입니다. 반도체처럼 업황(사이클)을 타는 업종에서는 이익률이 매우 높은 시기가 영원히 이어지지 않는다는 점도 함께 기억해야 합니다.</p>
+
+<h2 id="s4">4단계: 현금이 실제로 들어왔나 — 현금흐름</h2>
+<p>잠정실적에는 현금흐름이 나오지 않습니다. 분기보고서가 나오면 <b>영업활동현금흐름</b>과 <b>잉여현금흐름(FCF = 영업활동현금흐름 − 설비투자)</b>을 확인합니다. 장부상 이익은 많은데 현금이 계속 적게 들어온다면, 외상 매출이나 재고가 쌓이고 있다는 경고일 수 있습니다. 반도체처럼 설비투자가 큰 업종은 영업이익과 FCF의 차이가 크므로 둘을 함께 봐야 합니다.</p>
+
+<h2 id="s5">5단계: 지금 가격은 비싼가 — PER 3종</h2>
+<p>PER(주가수익비율)은 주가가 1주당 이익의 몇 배인지입니다. 어떤 이익을 쓰느냐에 따라 세 가지로 나눌 수 있습니다. 2026년 10월 16일 종가 216,000원 기준 삼성전자의 PER은 이렇습니다(이 사이트 <a href="/earnings-calendar/">실적발표 캘린더</a> 계산).</p>
+<div class="tbl"><table>
+<thead><tr><th>구분</th><th>쓰는 이익(EPS)</th><th class="n">PER</th></tr></thead>
+<tbody>
+<tr><td>후행 PER</td><td>최근 4개 분기 실제 EPS</td><td class="n">약 9.7배</td></tr>
+<tr><td>혼합 PER</td><td>올해 EPS(발표된 분기 실제 + 남은 분기 예상)</td><td class="n">약 4.8배</td></tr>
+<tr><td>선행 PER</td><td>내년 예상 EPS</td><td class="n">약 3.2배</td></tr>
+</tbody></table></div>
+<p>후행 → 혼합 → 선행으로 갈수록 PER이 작아진다는 것은, 증권사들이 <b>앞으로 이익이 훨씬 커질 것</b>으로 예상한다는 뜻입니다. 하지만 업황을 크게 타는 기업은 이익이 최고점일 때 PER이 가장 낮아 보이는 경향이 있습니다. "PER이 낮으니 싸다"가 아니라, <b>그 예상 이익이 얼마나 지속될 수 있는지</b>를 함께 판단해야 합니다.</p>
+
+<h2 id="s6">6단계: 튼튼한가 — 부채와 이자</h2>
+<p>마지막으로 부채비율(부채총계 ÷ 자본총계)과 이자보상배율(영업이익 ÷ 이자비용)을 확인합니다. 이익이 커도 빚이 너무 많으면 불황에 위험해집니다. 실적발표 캘린더의 기업 상세 화면은 이 지표들을 분기·연간 표로 보여 주고, 기업 가치 판단에 중요한 지표를 ★로 표시해 둡니다.</p>
+
+<h2 id="s7">미국 기업 실적은 이렇게 다르다</h2>
+<ul>
+<li><b>EPS가 주인공</b> — 미국은 매출과 함께 주당순이익(EPS)이 예상치를 넘었는지(beat/miss)를 가장 먼저 봅니다.</li>
+<li><b>발표 시각</b> — 대부분 정규장 시작 전(한국 시간 밤) 또는 마감 후(한국 시간 새벽)에 발표합니다. 마감 후 발표는 시간외 거래에서 먼저 주가가 움직입니다.</li>
+<li><b>가이던스</b> — 회사가 다음 분기 전망을 함께 내놓는 경우가 많고, 주가는 지난 실적보다 이 전망에 더 크게 반응하기도 합니다.</li>
+</ul>
+
+<h2 id="s8">실적 시즌 체크리스트</h2>
+<ol>
+<li>1년 전 같은 분기보다 매출·영업이익이 늘었나</li>
+<li>컨센서스(예상치) 대비 얼마나 벗어났나</li>
+<li>영업이익률이 좋아졌나, 나빠졌나</li>
+<li>분기보고서의 현금흐름이 이익을 뒷받침하나</li>
+<li>후행·혼합·선행 PER이 말하는 이익 전망은 무엇이고, 지속 가능한가</li>
+<li>부채비율·이자보상배율은 안전한가</li>
+</ol>
+<div class="box key"><b>직접 보기</b><p><a href="/earnings-calendar/">실적발표 캘린더</a>에서 코스피 TOP 100과 미국 TOP 100 기업의 다음 발표일, 지난 실적과 예상치 대비, PER 3종, ★ 핵심 지표를 한 화면에서 볼 수 있습니다. 용어가 낯설다면 같은 페이지의 '실적 용어 사전'에 초보자용 설명이 있습니다.</p></div>
+<div class="box warn"><b>주의</b><p>이 글의 삼성전자 숫자는 기업 분석 방법을 보여 주기 위한 예시이며, 매수·매도 권유가 아닙니다. 잠정실적은 확정치와 다를 수 있고, 증권사 예상치와 PER은 매일 바뀝니다.</p></div>
+</article>
+<h2 class="sec-h">이 글과 함께 쓰는 계산기·자료</h2>
+<div class="tools"><a class="tool" href="/earnings-calendar/"><b>실적발표 캘린더</b><span>코스피·미국 시가총액 TOP 100 기업의 실적발표일, 잠정실적·EPS 서프라이즈, PER 3종과 ROE·FCF 등 핵심 지표를 봅니다.</span></a><a class="tool" href="/marketcap/"><b>전세계 시가총액 TOP 100</b><span>엔비디아·애플·삼성전자 등 전 세계 상장 기업 시가총액 상위 100개를 매일 종가 기준 달러·원화로 비교합니다.</span></a></div>
+<h2 class="sec-h">다른 글</h2>
+<ul class="more"><li><a href="/learn/market-cap-world/">시가총액 순위로 보는 세계 자본의 흐름 — 숫자가 알려 주는 것과 알려 주지 않는 것<small>기업·실적 읽기 · 시가총액의 뜻과 계산, 세계 TOP 100에서 미국·한국 기업의 비중, 시가총액만으로 판단하면 안 되는 이유를 실제 순위로 설명합니다.</small></a></li><li><a href="/learn/labor-vs-capital/">노동소득과 자본소득 — 월급만으로는 왜 점점 뒤처질까<small>자본주의 이해 · 통화량·물가·임금·집값의 30년 연평균 상승률을 나란히 놓고, 노동소득만으로 뒤처지는 이유와 자본소득을 만드는 순서를 정리합니다.</small></a></li><li><a href="/learn/inflation-real-return/">인플레이션과 실질수익률 — 예금 이자 3%는 정말 3% 번 것일까<small>자본주의 이해 · 물가가 오르면 같은 돈의 가치가 줄어듭니다. 명목수익률과 실질수익률의 차이, 세금까지 뺀 진짜 수익률 계산법을 예시로 설명합니다.</small></a></li><li><a href="/learn/compound-interest/">복리의 수학 — 72의 법칙, 시작 시점, 세금과 수수료가 결과를 바꾸는 방식<small>자본주의 이해 · 복리가 왜 기간이 길수록 강해지는지, 72의 법칙과 시작 나이·세금·수수료가 최종 자산을 얼마나 바꾸는지 실제 계산으로 보여 줍니다.</small></a></li><li><a href="/learn/cagr-start-point/">CAGR 제대로 읽기 — 같은 지수인데 성장률이 7%도 되고 2%도 되는 이유<small>지수·ETF 투자 · 연평균 성장률(CAGR)의 정의와 계산법, 시작 시점에 따라 결과가 크게 달라지는 이유를 코스피·닛케이·S&amp;P 500 실제 숫자로 설명합니다.</small></a></li><li><a href="/learn/index-investing/">지수 투자 입문 — S&amp;P 500·나스닥 100·코스피, 무엇을 어떤 기준으로 고를까<small>지수·ETF 투자 · 지수가 무엇이고 어떻게 계산되는지, 가격지수와 총수익의 차이, 지수 ETF를 고를 때 볼 보수·환율·세금 기준을 정리합니다.</small></a></li></ul>
+<p class="disc">이 글은 공부를 돕기 위한 일반적인 설명이며 특정 상품의 매수·매도 권유가 아닙니다. 세법·요율은 바뀔 수 있으니 실제 신고·투자 전에는 국세청·금융회사 등 공식 자료를 확인하세요. 글에 쓴 숫자는 표시한 기준일 기준이며, 틀린 곳을 알려 주시면 바로 고칩니다 (<a href="mailto:gusrudgma@gmail.com">gusrudgma@gmail.com</a>). 자세한 내용은 <a href="/disclaimer/">투자 면책</a>을 확인하세요.</p>
+<footer><a href="/">홈</a> · <a href="/learn/">투자 공부</a> · <a href="/about/">소개</a> · <a href="/terms/">이용약관</a> · <a href="/disclaimer/">투자 면책</a> · <a href="/privacy/">개인정보처리방침</a><br>© 디코딩 자본주의 · 운영자 아키텍트 · 문의 <a href="mailto:gusrudgma@gmail.com">gusrudgma@gmail.com</a></footer>
+</main>
+</body>
+</html>

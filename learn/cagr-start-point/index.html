@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<!-- [ADSENSE] Google 애드센스 (사이트 소유 확인 · 광고) -->
+<meta name="google-adsense-account" content="ca-pub-8051182229751523">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8051182229751523" crossorigin="anonymous"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CAGR 제대로 읽기 — 같은 지수인데 성장률이 7%도 되고 2%도 되는 이유 | 디코딩 자본주의</title>
+<meta name="description" content="연평균 성장률(CAGR)의 정의와 계산법, 시작 시점에 따라 결과가 크게 달라지는 이유를 코스피·닛케이·S&amp;P 500 실제 숫자로 설명합니다.">
+<link rel="canonical" href="https://d-capitalism.com/learn/cagr-start-point/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="디코딩 자본주의">
+<meta property="og:title" content="CAGR 제대로 읽기 — 같은 지수인데 성장률이 7%도 되고 2%도 되는 이유 | 디코딩 자본주의">
+<meta property="og:description" content="연평균 성장률(CAGR)의 정의와 계산법, 시작 시점에 따라 결과가 크게 달라지는 이유를 코스피·닛케이·S&amp;P 500 실제 숫자로 설명합니다.">
+<meta property="og:url" content="https://d-capitalism.com/learn/cagr-start-point/">
+<meta property="og:image" content="https://d-capitalism.com/assets/og/home.png">
+<meta property="og:locale" content="ko_KR">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/logo-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<script>(function(){try{var m=localStorage.getItem("site-theme")||"dark";var l=m==="light"||(m==="auto"&&window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches);document.documentElement.setAttribute("data-theme",l?"light":"dark");}catch(e){document.documentElement.setAttribute("data-theme","dark");}})();</script>
+<script>
+/* [ANALYTICS] Google Analytics 4 · Microsoft Clarity · 네이버 애널리틱스 — 실제 도메인(d-capitalism.com)에서만 동작 (로컬 파일·미리보기는 집계 안 함)
+   · 탭 이동은 [ROUTER] 가 제목을 먼저 바꾼 뒤 주소를 바꾸므로(pushState) GA4 '향상된 측정'이 탭별 페이지뷰를 정확한 제목으로 자동 집계
+   · 네이버 애널리틱스는 주소 변경을 스스로 감지하지 못하므로 pushState·뒤로가기 때 wcs_do() 를 직접 호출
+     (이때 이전 주소를 referrer 로 넘겨, 탭 이동이 '외부 유입'으로 중복 집계되지 않게 함)
+   · ID 를 비워 두면 해당 도구는 설치되지 않음 */
+(function () {
+  var GA_ID = 'G-Z76QH8HLZ9', CLARITY_ID = 'ytm7hk3l3d', NAVER_ID = '1c5d67738faa0a0';
+  if (!/(^|\.)d-capitalism\.com$/.test(location.hostname)) return;
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = function () { window.dataLayer.push(arguments); };
+  window.gtag('js', new Date());
+  window.gtag('config', GA_ID);
+  var s = document.createElement('script');
+  s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+  document.head.appendChild(s);
+  if (CLARITY_ID) {
+    window.clarity = window.clarity || function () { (window.clarity.q = window.clarity.q || []).push(arguments); };
+    var c = document.createElement('script');
+    c.async = true; c.src = 'https://www.clarity.ms/tag/' + CLARITY_ID;
+    document.head.appendChild(c);
+  }
+  if (NAVER_ID) {
+    window.wcs_add = window.wcs_add || {};
+    window.wcs_add.wa = NAVER_ID;
+    var lastHref = location.href, ready = false;
+    var hit = function () { try { if (window.wcs_do) window.wcs_do(); } catch (e) {} };
+    var n = document.createElement('script');
+    n.async = true; n.src = 'https://wcs.naver.net/wcslog.js';
+    n.onload = function () { ready = true; hit(); };
+    document.head.appendChild(n);
+    var onNav = function () {
+      if (location.href.split('#')[0] === lastHref.split('#')[0]) return;
+      var prev = lastHref; lastHref = location.href;
+      try { Object.defineProperty(document, 'referrer', { configurable: true, get: function () { return prev; } }); } catch (e) {}
+      if (ready) setTimeout(hit, 0);
+    };
+    var ps = history.pushState;
+    history.pushState = function () { var r = ps.apply(this, arguments); onNav(); return r; };
+    window.addEventListener('popstate', onNav);
+  }
+})();
+</script>
+<script type="application/ld+json">[{"@context": "https://schema.org", "@type": "Article", "headline": "CAGR 제대로 읽기 — 같은 지수인데 성장률이 7%도 되고 2%도 되는 이유", "description": "연평균 성장률(CAGR)의 정의와 계산법, 시작 시점에 따라 결과가 크게 달라지는 이유를 코스피·닛케이·S&P 500 실제 숫자로 설명합니다.", "datePublished": "2026-10-17", "dateModified": "2026-10-17", "inLanguage": "ko-KR", "mainEntityOfPage": "https://d-capitalism.com/learn/cagr-start-point/", "author": {"@type": "Person", "name": "아키텍트", "url": "https://d-capitalism.com/about/"}, "publisher": {"@type": "Organization", "name": "디코딩 자본주의", "logo": {"@type": "ImageObject", "url": "https://d-capitalism.com/assets/logo-512.png"}}}, {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "홈", "item": "https://d-capitalism.com/"}, {"@type": "ListItem", "position": 2, "name": "투자 공부", "item": "https://d-capitalism.com/learn/"}, {"@type": "ListItem", "position": 3, "name": "CAGR 제대로 읽기 — 같은 지수인데 성장률이 7%도 되고 2%도 되는 이유", "item": "https://d-capitalism.com/learn/cagr-start-point/"}]}]</script>
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#101013; --bg2:#17171c; --bg3:#1e1e24; --border:rgba(255,255,255,.08); --text:#e4e4e5; --text2:#a9a9b0; --text3:#6f6f78; --accent:#3182f6; --accent-dim:rgba(49,130,246,.12); --warn:#f5a524; --up:#f04452; }
+  html[data-theme="light"] { --bg:#f2f4f6; --bg2:#ffffff; --bg3:#f7f8fa; --border:rgba(0,27,55,.10); --text:#191f28; --text2:#4e5968; --text3:#8b95a1; --accent-dim:rgba(49,130,246,.08); }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--text); font-family:'Noto Sans KR',sans-serif; font-size:16px; line-height:1.85; word-break:keep-all; overflow-wrap:anywhere; }
+  a { color:var(--accent); }
+  .top { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--border); }
+  .top-in { max-width:1040px; margin:0 auto; padding:10px 16px; display:flex; align-items:center; gap:14px; }
+  .logo { display:flex; align-items:center; gap:8px; font-weight:700; font-size:16px; color:var(--text); text-decoration:none; white-space:nowrap; }
+  .logo img { width:28px; height:28px; border-radius:7px; }
+  .tnav { display:flex; gap:4px; overflow-x:auto; scrollbar-width:none; margin-left:auto; }
+  .tnav::-webkit-scrollbar { display:none; }
+  .tnav a { font-size:13px; color:var(--text2); text-decoration:none; padding:6px 10px; border-radius:8px; white-space:nowrap; }
+  .tnav a:hover, .tnav a.on { color:var(--text); background:var(--accent-dim); }
+  .tnav a.on { color:var(--accent); font-weight:600; }
+  .wrap { max-width:760px; margin:0 auto; padding:28px 16px 64px; }
+  .crumb { font-size:12.5px; color:var(--text3); margin-bottom:14px; }
+  .crumb a { color:var(--text3); text-decoration:none; } .crumb a:hover { color:var(--accent); }
+  .cat { display:inline-block; font-size:12px; font-weight:600; color:var(--accent); background:var(--accent-dim); border-radius:999px; padding:3px 10px; margin-bottom:10px; text-decoration:none; }
+  h1 { font-size:28px; line-height:1.4; font-weight:700; margin-bottom:10px; letter-spacing:-.3px; }
+  .meta { font-size:13px; color:var(--text3); margin-bottom:22px; }
+  .lead { font-size:16.5px; color:var(--text); background:var(--bg2); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:12px; padding:16px 18px; margin:0 0 22px; }
+  .toc { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:14px 18px; margin:0 0 28px; font-size:14px; }
+  .toc b { display:block; font-size:13px; color:var(--text3); font-weight:600; margin-bottom:6px; }
+  .toc ol { padding-left:20px; } .toc li { margin:3px 0; color:var(--text2); } .toc a { color:var(--text2); text-decoration:none; } .toc a:hover { color:var(--accent); }
+  article h2 { font-size:21px; line-height:1.45; font-weight:700; margin:40px 0 12px; scroll-margin-top:70px; letter-spacing:-.2px; }
+  article h3 { font-size:17px; font-weight:700; margin:26px 0 8px; }
+  article p { color:var(--text2); margin:0 0 14px; }
+  article ul, article ol { padding-left:22px; margin:0 0 14px; color:var(--text2); }
+  article li { margin:5px 0; }
+  article b, article strong { color:var(--text); font-weight:600; }
+  .tbl { overflow-x:auto; margin:6px 0 18px; border:1px solid var(--border); border-radius:12px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; background:var(--bg2); }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); vertical-align:top; color:var(--text2); }
+  th { color:var(--text); font-weight:600; background:var(--bg3); white-space:nowrap; }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  tr:last-child td { border-bottom:none; }
+  .note { font-size:12.5px; color:var(--text3); margin:-10px 0 18px; }
+  .box { border-radius:12px; padding:14px 16px; margin:18px 0; border:1px solid var(--border); background:var(--bg2); }
+  .box p:last-child, .box ul:last-child { margin-bottom:0; }
+  .box.key { border-color:rgba(49,130,246,.4); background:var(--accent-dim); }
+  .box.warn { border-color:rgba(245,165,36,.45); background:rgba(245,165,36,.07); }
+  .box > b:first-child { display:block; margin-bottom:6px; color:var(--text); }
+  .formula { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px; background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin:6px 0 16px; color:var(--text); overflow-x:auto; white-space:nowrap; }
+  .tools { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin:10px 0 0; }
+  .tool { display:block; background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:12px 14px; text-decoration:none; }
+  .tool:hover { border-color:rgba(49,130,246,.5); }
+  .tool b { display:block; color:var(--text); font-size:14.5px; margin-bottom:2px; }
+  .tool span { display:block; color:var(--text3); font-size:12.5px; line-height:1.6; }
+  .sec-h { font-size:18px; font-weight:700; margin:44px 0 6px; }
+  .more { list-style:none; padding:0; margin:8px 0 0; }
+  .more li { border-bottom:1px solid var(--border); }
+  .more a { display:block; padding:11px 2px; text-decoration:none; color:var(--text); font-size:15px; }
+  .more a small { display:block; color:var(--text3); font-size:12.5px; margin-top:2px; }
+  .more a:hover { color:var(--accent); }
+  .disc { margin-top:36px; font-size:12.5px; color:var(--text3); background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:12px 14px; line-height:1.75; }
+  .list-cat { margin:34px 0 8px; font-size:18px; font-weight:700; }
+  .cards { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+  .card { display:block; background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:16px 18px; text-decoration:none; }
+  .card:hover { border-color:rgba(49,130,246,.5); }
+  .card b { display:block; color:var(--text); font-size:16px; line-height:1.5; margin-bottom:6px; }
+  .card span { display:block; color:var(--text2); font-size:13.5px; line-height:1.7; }
+  .card small { display:block; color:var(--text3); font-size:12px; margin-top:8px; }
+  footer { margin-top:48px; padding-top:18px; border-top:1px solid var(--border); font-size:12px; color:var(--text3); text-align:center; }
+  footer a { color:var(--text3); white-space:nowrap; }
+  @media (max-width:640px) {
+    body { font-size:15.5px; }
+    h1 { font-size:23px; }
+    article h2 { font-size:19px; }
+    .tools, .cards { grid-template-columns:1fr; }
+    .tnav { margin-left:0; }
+    .top-in { gap:8px; }
+    .logo span { display:none; }
+  }
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in"><a class="logo" href="/"><img src="/assets/logo-96.png" alt="" width="28" height="28"><span>디코딩 자본주의</span></a><nav class="tnav" aria-label="사이트 메뉴"><a href="/">홈</a><a href="/learn/" class="on">투자 공부</a><a href="/my-position/">내 위치</a><a href="/labor/">노동자</a><a href="/invest/">투자</a><a href="/real-estate/">부동산</a><a href="/capitalist/">자본가</a><a href="/passive-income/">불로소득</a></nav></div></header>
+<main class="wrap">
+<nav class="crumb" aria-label="현재 위치"><a href="/">홈</a> › <a href="/learn/">투자 공부</a> › 지수·ETF 투자</nav>
+<a class="cat" href="/learn/#invest">지수·ETF 투자</a>
+<h1>CAGR 제대로 읽기 — 같은 지수인데 성장률이 7%도 되고 2%도 되는 이유</h1>
+<p class="meta">글 <a href="/about/">아키텍트</a> · 작성 2026년 10월 17일 · 읽는 데 약 3분</p>
+<nav class="toc" aria-label="목차"><b>목차</b><ol><li><a href="#s1">CAGR이란</a></li><li><a href="#s2">산술평균 수익률과 다르다</a></li><li><a href="#s3">시작점이 결과를 정한다: 코스피</a></li><li><a href="#s4">고점에서 시작하면: 닛케이 225의 34년</a></li><li><a href="#s5">미국 S&amp;P 500도 기간에 따라 다르다</a></li><li><a href="#s6">CAGR을 읽을 때 확인할 다섯 가지</a></li><li><a href="#s7">직접 계산해 보기</a></li></ol></nav>
+<article>
+<p class="lead">"S&P 500은 연평균 10% 올랐다", "코스피는 박스권이다" 같은 말은 모두 어떤 기간을 기준으로 한 이야기입니다. 기간을 조금만 바꿔도 숫자는 완전히 달라집니다. 이 글은 투자 성과를 비교할 때 가장 많이 쓰는 지표인 <b>CAGR(연평균 성장률)</b>을 정확히 읽는 법과, 그 숫자에 숨은 함정을 설명합니다.</p>
+
+<h2 id="s1">CAGR이란</h2>
+<p>CAGR(Compound Annual Growth Rate)은 시작값이 끝값이 되기까지 <b>매년 같은 비율로 복리 성장했다고 가정했을 때의 연 성장률</b>입니다. 실제로는 어떤 해는 크게 오르고 어떤 해는 떨어지지만, 그 울퉁불퉁한 길을 하나의 평평한 비율로 바꿔 서로 다른 투자를 비교할 수 있게 해 줍니다.</p>
+<div class="formula">CAGR = (끝값 ÷ 시작값)^(1 ÷ 기간) − 1   · 기간(년) = 일수 ÷ 365.25</div>
+<p>예를 들어 100이 10년 뒤 250이 되었다면 CAGR = 2.5^(1/10) − 1 ≈ 연 9.6%입니다. "10년 동안 150% 올랐다"보다 "연 9.6%씩 불어났다"가 다른 투자와 비교하기 쉽습니다.</p>
+
+<h2 id="s2">산술평균 수익률과 다르다</h2>
+<p>흔한 착각은 해마다의 수익률을 단순히 평균 내는 것입니다. 첫해 +50%, 둘째 해 −50%라면 산술평균은 0%지만, 실제로 100은 150을 거쳐 75가 됩니다. CAGR은 −13.4%입니다. <b>변동이 클수록 산술평균은 실제 성과보다 좋아 보이고</b>, CAGR이 실제 내 돈의 변화를 정확히 보여 줍니다.</p>
+
+<h2 id="s3">시작점이 결과를 정한다: 코스피</h2>
+<p>디코딩 자본주의 <a href="/kospi/">코스피 성장률</a> 페이지가 보관한 주간 종가로 계산하면, 2024년 12월 27일 종가 2,404.77 기준 결과는 이렇습니다.</p>
+<div class="tbl"><table>
+<thead><tr><th>시작점</th><th class="n">시작 지수</th><th class="n">기간</th><th class="n">CAGR</th></tr></thead>
+<tbody>
+<tr><td>1980.1.4 (기준지수)</td><td class="n">100</td><td class="n">44.98년</td><td class="n">연 7.33%</td></tr>
+<tr><td>2014.12.26 (최근 10년)</td><td class="n">1,948.16</td><td class="n">10년</td><td class="n">연 2.13%</td></tr>
+</tbody></table></div>
+<p>같은 지수인데 하나는 연 7%를 넘고, 하나는 연 2%대입니다. 둘 다 맞는 숫자입니다. 다른 것은 <b>어디서 출발했느냐</b>뿐입니다. 코스피는 가격지수라 배당이 빠져 있다는 점도 함께 기억해야 합니다(배당을 다시 투자했다면 결과는 이보다 높습니다).</p>
+
+<h2 id="s4">고점에서 시작하면: 닛케이 225의 34년</h2>
+<p>시작점의 영향이 가장 극적으로 드러나는 예는 일본 닛케이 225입니다. 1989년 12월 29일 38,915.87로 거품 경제의 정점을 찍은 뒤, 2009년 3월에는 7,000선까지 떨어졌습니다. 2024년 2월 22일 종가 39,098.68로 고점을 넘어서기까지 <b>34년</b>이 걸렸습니다. 1989년 말에 투자를 시작했다면 34년 동안의 가격 CAGR은 0%에 가깝습니다.</p>
+<p>반면 같은 지수를 2014년 말부터 보면 2024년 말까지 연 8.62%입니다(<a href="/n225/">닛케이 225 성장률</a> 기준). 장기 성장률이 높은 지수라도 <b>지나치게 비싼 시점에 한꺼번에 사면 오랫동안 회복하지 못할 수 있다</b>는 교훈입니다.</p>
+
+<h2 id="s5">미국 S&P 500도 기간에 따라 다르다</h2>
+<div class="tbl"><table>
+<thead><tr><th>지수</th><th>기간</th><th class="n">CAGR(가격 기준)</th></tr></thead>
+<tbody>
+<tr><td>S&P 500</td><td>1928.1.3 → 2024.12.27 (96.98년)</td><td class="n">연 6.19%</td></tr>
+<tr><td>S&P 500</td><td>2014.12.26 → 2024.12.27 (10년)</td><td class="n">연 11.07%</td></tr>
+<tr><td>나스닥 100</td><td>1985.1.31 → 2024.12.27 (39.90년)</td><td class="n">연 11.81%</td></tr>
+<tr><td>나스닥 100</td><td>2014.12.26 → 2024.12.27 (10년)</td><td class="n">연 17.40%</td></tr>
+</tbody></table></div>
+<p class="note">출처: 이 사이트가 보관한 주간 종가(달러 기준)로 계산. 모두 가격지수라 배당은 포함하지 않습니다.</p>
+<p>"S&P 500은 연 10%"라는 말은 주로 배당을 재투자한 총수익률과 특정 기간을 기준으로 한 것입니다. 가격만 보면 100년 가까이 연 6%대이고, 최근 10년은 그보다 훨씬 높았습니다. 최근 10년의 높은 숫자가 앞으로도 이어진다고 가정하면 계획이 지나치게 낙관적일 수 있습니다.</p>
+
+<h2 id="s6">CAGR을 읽을 때 확인할 다섯 가지</h2>
+<ol>
+<li><b>기간</b> — 시작일과 끝일은 언제인가? 고점·저점에서 시작하지 않았는가?</li>
+<li><b>배당 포함 여부</b> — 가격지수인가, 배당을 재투자한 총수익인가?</li>
+<li><b>통화</b> — 달러 기준인가, 원화 기준인가? 해외 투자는 환율 변동이 더해집니다.</li>
+<li><b>비용·세금</b> — 지수 성장률에는 ETF 보수, 거래 비용, 세금이 빠져 있습니다.</li>
+<li><b>변동 폭</b> — 같은 CAGR이라도 중간에 −50%를 겪은 길과 꾸준히 오른 길은 견디기 어려움이 완전히 다릅니다. 최대 낙폭(MDD)도 함께 보세요.</li>
+</ol>
+<div class="box key"><b>실전 팁</b><p>여러 기간(5·10·15·20·30년, 전체)의 CAGR을 함께 보면 한 숫자에 속지 않습니다. 이 사이트의 지수 성장률 페이지는 기간 단추로 이것을 바로 비교할 수 있습니다. 한꺼번에 사는 대신 여러 번 나눠 사면(적립식) 특정 시작점에 결과가 좌우되는 위험을 줄일 수 있습니다.</p></div>
+
+<h2 id="s7">직접 계산해 보기</h2>
+<p><a href="/cagr/">CAGR 계산기</a>에 시작값·끝값과 날짜를 넣으면 연평균 성장률과 2배·10배 도달 기간을 계산합니다. <a href="/sp500/">S&P 500</a>·<a href="/kospi/">코스피</a>·<a href="/n225/">닛케이 225</a> 등 20개 지수 페이지에서 현재 지수 기준으로 기간별 CAGR을 비교해 보세요.</p>
+</article>
+<h2 class="sec-h">이 글과 함께 쓰는 계산기·자료</h2>
+<div class="tools"><a class="tool" href="/cagr/"><b>CAGR 계산기</b><span>초기·최종 금액과 기간으로 연평균 성장률(CAGR), 2배·10배 도달 기간, 목표 수익률 역산을 계산합니다.</span></a><a class="tool" href="/kospi/"><b>코스피 성장률 분석</b><span>1980년 기준지수 100에서 출발한 코스피의 연평균·월평균·일평균 성장률과 기간별 수익률을 현재 지수로 계산합니다.</span></a><a class="tool" href="/n225/"><b>닛케이 225 성장률 분석</b><span>1949년 176.21에서 출발한 닛케이 225의 연평균·월평균·일평균 성장률과 기간별 수익률을 현재 지수로 계산합니다.</span></a><a class="tool" href="/sp500/"><b>S&amp;P 500 성장률 분석</b><span>1928년부터 산출된 S&amp;P 500 지수의 연평균·월평균·일평균 성장률과 기간별 수익률을 계산합니다.</span></a></div>
+<h2 class="sec-h">다른 글</h2>
+<ul class="more"><li><a href="/learn/index-investing/">지수 투자 입문 — S&amp;P 500·나스닥 100·코스피, 무엇을 어떤 기준으로 고를까<small>지수·ETF 투자 · 지수가 무엇이고 어떻게 계산되는지, 가격지수와 총수익의 차이, 지수 ETF를 고를 때 볼 보수·환율·세금 기준을 정리합니다.</small></a></li><li><a href="/learn/leveraged-etf/">레버리지 ETF의 변동성 끌림 — TQQQ·SOXL을 오래 들고 있으면 생기는 일<small>지수·ETF 투자 · 하루 수익률의 3배를 따라가는 레버리지 ETF가 장기적으로 3배가 되지 않는 이유와, 실제 TQQQ·SOXL의 수익률·최대 낙폭을 함께 봅니다.</small></a></li><li><a href="/learn/monthly-dividend-etf/">월배당·월분배 ETF 제대로 고르기 — 분배율보다 먼저 봐야 할 것들<small>지수·ETF 투자 · 분배락일·기준일·지급일의 뜻, 분배율과 총수익의 차이, 과세표준과 세금, 월분배 ETF를 고를 때 확인할 다섯 가지를 정리합니다.</small></a></li><li><a href="/learn/covered-call-etf/">커버드콜 ETF의 구조 — 연 15% 넘는 분배금은 어디서 나오고, 무엇을 포기하나<small>지수·ETF 투자 · 커버드콜 ETF가 높은 분배금을 만드는 원리, 상승장에서 수익이 제한되는 이유, 세금 구조와 고를 때 볼 점을 예시로 설명합니다.</small></a></li><li><a href="/learn/labor-vs-capital/">노동소득과 자본소득 — 월급만으로는 왜 점점 뒤처질까<small>자본주의 이해 · 통화량·물가·임금·집값의 30년 연평균 상승률을 나란히 놓고, 노동소득만으로 뒤처지는 이유와 자본소득을 만드는 순서를 정리합니다.</small></a></li><li><a href="/learn/inflation-real-return/">인플레이션과 실질수익률 — 예금 이자 3%는 정말 3% 번 것일까<small>자본주의 이해 · 물가가 오르면 같은 돈의 가치가 줄어듭니다. 명목수익률과 실질수익률의 차이, 세금까지 뺀 진짜 수익률 계산법을 예시로 설명합니다.</small></a></li></ul>
+<p class="disc">이 글은 공부를 돕기 위한 일반적인 설명이며 특정 상품의 매수·매도 권유가 아닙니다. 세법·요율은 바뀔 수 있으니 실제 신고·투자 전에는 국세청·금융회사 등 공식 자료를 확인하세요. 글에 쓴 숫자는 표시한 기준일 기준이며, 틀린 곳을 알려 주시면 바로 고칩니다 (<a href="mailto:gusrudgma@gmail.com">gusrudgma@gmail.com</a>). 자세한 내용은 <a href="/disclaimer/">투자 면책</a>을 확인하세요.</p>
+<footer><a href="/">홈</a> · <a href="/learn/">투자 공부</a> · <a href="/about/">소개</a> · <a href="/terms/">이용약관</a> · <a href="/disclaimer/">투자 면책</a> · <a href="/privacy/">개인정보처리방침</a><br>© 디코딩 자본주의 · 운영자 아키텍트 · 문의 <a href="mailto:gusrudgma@gmail.com">gusrudgma@gmail.com</a></footer>
+</main>
+</body>
+</html>

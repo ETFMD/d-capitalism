@@ -13,6 +13,8 @@
 사용: python3 scripts/build_pages.py   (GitHub Actions 'build-pages' 가 src/index.html 변경 시 자동 실행)
 """
 import datetime, hashlib, html, json, os, re, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import build_learn as BL   # '투자 공부' 글 모음 (content/learn → learn/)
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 SRC = os.path.join(ROOT, 'src', 'index.html')
@@ -44,6 +46,8 @@ EN = json.load(open(EN_FILE, encoding='utf-8')) if os.path.exists(EN_FILE) else 
 HOME = dict(CFG['home'], path='')
 ROUTES = CFG['routes']
 ALL = [HOME] + ROUTES
+ARTS = BL.load()          # 투자 공부 글 (order 순)
+PATH_OF = {r['tab']: r['path'] for r in ROUTES}
 
 
 def esc(s):
@@ -310,7 +314,25 @@ def footmap(en=False):
         links = ''.join(f'<a href="{esc(r["path"])}/">{esc(T(NAV_LABEL[r["tab"]]))}</a>' for r in ROUTES if r['group'] == g and not r.get('hub'))
         head = f'<a href="{esc(HUB[g]["path"])}/">{esc(T(name))}</a>' if g in HUB else esc(T(name))
         cols.append(f'<div class="sf-col"><p class="sf-h">{head}</p>{links}</div>')
+    if ARTS and not en:   # 모든 페이지 아래에 투자 공부 글 링크 (검색엔진·이용자가 글로 바로 갈 수 있게)
+        links = ''.join(f'<a href="learn/{esc(a["slug"])}/">{esc(a.get("short") or a["title"].split(" — ")[0])}</a>' for a in ARTS)
+        cols.append(f'<div class="sf-col"><p class="sf-h"><a href="learn/">투자 공부</a></p>{links}</div>')
     return f'<nav class="sf-map" aria-label="{esc(T("전체 도구"))}">' + ''.join(cols) + '</nav>'
+
+
+def learn_cards(arts, limit=None):
+    xs = arts[:limit] if limit else arts
+    return ''.join(f'<a class="g-card lr-card" href="learn/{esc(a["slug"])}/"><b>{esc(a["title"])}</b><span>{esc(a["desc"])}</span></a>' for a in xs)
+
+
+def learn_hub(g):
+    """허브 페이지(영역)에 넣을 그 영역 도구를 쓰는 글"""
+    paths = {r['path'] for r in ROUTES if r['group'] == g and not r.get('hub')}
+    xs = [a for a in ARTS if paths & set(a['tools'])]
+    if not xs:
+        return ''
+    return (f'<section class="guide learn-rel"><h2>이 단계에서 읽어 볼 글</h2><div class="g-grid">{learn_cards(xs)}</div>'
+            f'<p class="lr-all"><a href="learn/">투자 공부 글 전체 보기 →</a></p></section>')
 
 
 def finalize(html_text, tab, en=False):
@@ -327,6 +349,12 @@ def finalize(html_text, tab, en=False):
     a, b = style_span(html_text)
     html_text = html_text[:a] + f'<link rel="stylesheet" href="{ASSET["css"]}">' + html_text[b:]
     html_text = re.sub(r'<!--HUBGRID:([a-z]+)-->.*?<!--/HUBGRID-->', lambda m: f'<!--HUBGRID:{m.group(1)}-->' + hub_grid(m.group(1), en) + '<!--/HUBGRID-->', html_text, flags=re.S)
+    if not en:
+        rel = BL.related_block(ARTS, PATH_OF.get(tab, ''))
+        if rel:
+            html_text = html_text.replace(f'<!-- /page-{tab} -->', rel + f'  <!-- /page-{tab} -->', 1) if f'<!-- /page-{tab} -->' in html_text else html_text
+        html_text = re.sub(r'<!--LEARNLIST-->.*?<!--/LEARNLIST-->', lambda m: '<!--LEARNLIST-->' + learn_cards(ARTS, 6) + '<!--/LEARNLIST-->', html_text, flags=re.S)
+        html_text = re.sub(r'<!--LEARNHUB:([a-z]+)-->.*?<!--/LEARNHUB-->', lambda m: f'<!--LEARNHUB:{m.group(1)}-->' + learn_hub(m.group(1)) + '<!--/LEARNHUB-->', html_text, flags=re.S)
     html_text, n = re.subn(r'<!--FOOTMAP-->.*?<!--/FOOTMAP-->', lambda m: '<!--FOOTMAP-->' + footmap(en) + '<!--/FOOTMAP-->', html_text, count=1, flags=re.S)
     if n != 1:
         sys.exit('<!--FOOTMAP--> 표시를 찾지 못했습니다')
@@ -473,10 +501,23 @@ def main():
         print(f'  ※ 영어 번역이 없는 문구 {len(_missing)}개 (자동 번역으로 보임 — scripts/i18n/make_en.py 에 추가):')
         for t in sorted(_missing)[:40]:
             print('     ·', t[:70])
+    # 투자 공부 글 (src 의 [ANALYTICS] 스크립트를 그대로 넣어 방문 집계)
+    am = re.search(r'<script>\n/\* \[ANALYTICS\].*?</script>', src, re.S)
+    if not am:
+        sys.exit('[ANALYTICS] 스크립트를 찾지 못했습니다')
+    learn_urls = BL.write_all(ARTS, SITE, ROUTES, am.group(0), write_if_changed) if ARTS else []
+    ldir = os.path.join(ROOT, 'learn')
+    if os.path.isdir(ldir):   # 원본에서 빠진 글 정리
+        for d in sorted(os.listdir(ldir)):
+            f = os.path.join(ldir, d, 'index.html')
+            if os.path.isfile(f) and d not in {a['slug'] for a in ARTS}:
+                os.remove(f); print('  삭제', f'learn/{d}/index.html')
     today = datetime.date.today().isoformat()
     urls = ''.join(f'  <url><loc>{esc(SITE + (r["path"] + "/" if r["path"] else ""))}</loc><lastmod>{today}</lastmod>'
                    f'<changefreq>{"daily" if not r["path"] else "weekly"}</changefreq><priority>{"1.0" if not r["path"] else "0.9" if r.get("hub") else "0.8"}</priority></url>\n'
                    for r in ALL)
+    for u, lm in learn_urls:
+        urls += f'  <url><loc>{esc(u)}</loc><lastmod>{lm}</lastmod><changefreq>monthly</changefreq><priority>{"0.9" if u.endswith("/learn/") else "0.8"}</priority></url>\n'
     for r in ROUTES:   # 영어판 페이지
         if 'en' in r:
             urls += f'  <url><loc>{esc(url_of(r, "en"))}</loc><lastmod>{today}</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>\n'
@@ -496,7 +537,7 @@ def main():
 <body style="font-family:sans-serif;background:#111;color:#ddd;text-align:center;padding:60px 16px;">
 <p>페이지를 찾을 수 없습니다. <a href="{esc(SITE)}" style="color:#3182f6;">{esc(BRAND)} 홈으로 이동</a></p></body></html>
 ''')
-    print(f'완료 — 주소 {len(ALL)}개 + 영어 {sum(1 for r in ROUTES if "en" in r)}개 · {SITE}')
+    print(f'완료 — 주소 {len(ALL)}개 + 영어 {sum(1 for r in ROUTES if "en" in r)}개 + 투자 공부 {len(learn_urls)}쪽 · {SITE}')
 
 
 if __name__ == '__main__':

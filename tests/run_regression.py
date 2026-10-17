@@ -1338,7 +1338,9 @@ def main():
     cfg = json.load(open(os.path.join(ROOT, 'scripts', 'routes.json'), encoding='utf-8'))
     routes = cfg['routes']
     en = sorted(d for d in os.listdir(os.path.join(ROOT, 'en')) if os.path.isfile(os.path.join(ROOT, 'en', d, 'index.html')))
-    paths = [''] + [r['path'] + '/' for r in routes] + ['en/' + d + '/' for d in en]
+    learn = sorted(d for d in os.listdir(os.path.join(ROOT, 'learn')) if os.path.isfile(os.path.join(ROOT, 'learn', d, 'index.html'))) if os.path.isdir(os.path.join(ROOT, 'learn')) else []
+    n_src = len([f for f in os.listdir(os.path.join(ROOT, 'content', 'learn')) if f.endswith('.html')]) if os.path.isdir(os.path.join(ROOT, 'content', 'learn')) else 0
+    paths = [''] + [r['path'] + '/' for r in routes] + ['en/' + d + '/' for d in en] + (['learn/'] if learn or n_src else []) + ['learn/' + d + '/' for d in learn]
     if a.only:
         paths = [p for p in paths if a.only in p]
     widths = QUICK if a.quick else WIDTHS
@@ -1517,6 +1519,44 @@ def main():
             got = page.evaluate("[...document.querySelectorAll('.app-page')].filter(p => getComputedStyle(p).display !== 'none').reduce((a, p) => a + p.querySelectorAll('.hub-card').length, 0)")
             if got != want:
                 fail(hub['path'], '허브 카드 %d개 (같은 그룹 도구 %d개)' % (got, want))
+
+        # 투자 공부 글 (애드센스 '가치 있는 콘텐츠' 보완) — 목록·글·도구 페이지 연결
+        if n_src:
+            print('[2-1] 투자 공부 글 %d편' % n_src, flush=True)
+            if len(learn) != n_src:
+                fail('learn', '글 페이지 %d개 (원본 content/learn %d편)' % (len(learn), n_src))
+            page.goto(base + 'learn/', wait_until='load'); page.wait_for_timeout(300)
+            got = page.evaluate("new Set([...document.querySelectorAll('a[href^=\"/learn/\"]')].map(a => a.getAttribute('href')).filter(h => /^\\/learn\\/[a-z0-9-]+\\/$/.test(h))).size")
+            if got != n_src:
+                fail('learn/', '목록의 글 링크 %d개 (기대 %d)' % (got, n_src))
+            seen = set()
+            for d in learn:
+                page.goto(base + 'learn/' + d + '/', wait_until='load'); page.wait_for_timeout(150)
+                r = page.evaluate("""() => ({ h1: (document.querySelector('h1') || {}).textContent || '',
+                    ads: !!document.querySelector('script[src*="adsbygoogle.js?client=ca-pub-8051182229751523"]'),
+                    canon: (document.querySelector('link[rel=canonical]') || {}).href || '',
+                    ld: [...document.querySelectorAll('script[type="application/ld+json"]')].map(s => { try { const j = JSON.parse(s.textContent); return (Array.isArray(j) ? j : [j]).map(x => x['@type']); } catch (e) { return ['ERR']; } }).flat(),
+                    body: (document.querySelector('article') || {}).innerText || '',
+                    links: [...document.querySelectorAll('a[href^="/"]')].map(a => a.getAttribute('href').split('#')[0]) })""")
+                if not r['h1'].strip(): fail('learn/' + d, '제목(h1) 없음')
+                if not r['ads']: fail('learn/' + d, '애드센스 스크립트 없음')
+                if not r['canon'].endswith('/learn/' + d + '/'): fail('learn/' + d, 'canonical 주소 이상: ' + r['canon'])
+                if 'ERR' in r['ld'] or 'Article' not in r['ld']: fail('learn/' + d, '구조화 데이터 이상: %s' % r['ld'])
+                if len(r['body']) < 1200: fail('learn/' + d, '본문이 짧음 (%d자)' % len(r['body']))
+                if '—' == r['body'].strip() or '조회 중' in r['body']: fail('learn/' + d, '본문에 빈 값 표시')
+                seen.update(r['links'])
+            if local:   # 글에 있는 사이트 안 링크가 모두 실제 파일인지 (배포 사이트는 빌드 단계에서 검사)
+                for h in sorted(seen):
+                    f = os.path.join(ROOT, h.strip('/'), 'index.html') if h.endswith('/') else os.path.join(ROOT, h.lstrip('/'))
+                    if h != '/' and not os.path.isfile(f):
+                        fail('learn', '깨진 링크 ' + h)
+            page.goto(base, wait_until='load'); page.wait_for_timeout(300)
+            if page.evaluate("document.querySelectorAll('.learn-home .lr-card').length") < 6:
+                fail('', '홈의 투자 공부 글 카드 6개 미만')
+            for pth in ['compound/', 'earnings-calendar/', 'fire/']:
+                page.goto(base + pth, wait_until='load'); page.wait_for_timeout(300)
+                k = page.evaluate("[...document.querySelectorAll('.learn-rel .lr-card')].filter(a => a.offsetParent).length")
+                if not k: fail(pth, '\'함께 읽으면 좋은 글\' 카드가 보이지 않음')
 
         # 4. 무한매수법 엔진 · 화면 · 가이드북
         print('[3] 무한매수법 엔진 · 기록 화면 · 가이드북', flush=True)
