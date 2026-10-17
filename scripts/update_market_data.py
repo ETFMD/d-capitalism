@@ -533,6 +533,27 @@ def naver_daily(symbol, count):
     return _naver_points(xml, FCHART_RE)
 
 
+def naver_raw_daily(code, max_pages=60):
+    """네이버 일별 시세의 실제 종가(분배락·수정 반영 안 함) → [[일수(KST 날짜), 종가], ...]
+    fchart·siseJson 일봉은 '수정주가'라 ETF 는 분배금만큼 과거 가격이 낮아짐 → 주가 수익률 비교에 쓰면 안 됨"""
+    out = {}
+    for page in range(1, max_pages + 1):
+        rows = get_json(f'https://m.stock.naver.com/api/stock/{code}/price?pageSize=60&page={page}')
+        if not rows:
+            break
+        for x in rows:
+            try:
+                d = datetime.date.fromisoformat(x['localTradedAt'][:10])
+                c = float(str(x['closePrice']).replace(',', ''))
+            except Exception:
+                continue
+            if c > 0:
+                out[d.toordinal() - 719163] = c
+        if len(rows) < 60:
+            break
+    return [[d, out[d]] for d in sorted(out)]
+
+
 def yahoo_daily(sym):
     """야후 상장 이후 일봉 종가와 분배금 → ([[일수, 종가]], [[일수, 분배금]])"""
     res = yahoo_chart(sym, DAILY_ALL.format(now=int(time.time())))
@@ -554,8 +575,10 @@ def dedup(pts):
 
 
 def build_compare():
-    """ETF 가격(네이버 우선·야후 보조)·분배금(야후)·비교 지수(네이버 우선) 일봉을 compare.json 으로 저장
-    비교 지수는 여러 ETF가 함께 쓰므로, 모든 ETF 중 가장 이른 상장일부터 한 번만 받음"""
+    """ETF 실제 종가(네이버 일별 시세 우선·야후 보조)·분배금(야후)·비교 지수(네이버 우선) 일봉을 compare.json 으로 저장
+    · ETF 가격은 반드시 '실제 거래 종가' — 네이버 fchart/siseJson 은 분배금까지 반영한 수정주가라서 쓰면
+      '분배금 제외 주가 수익률'이 실제보다 높게(총수익률처럼) 나오고, 분배금 포함 모드는 분배금을 두 번 더하게 됨
+    · 비교 지수는 여러 ETF가 함께 쓰므로, 모든 ETF 중 가장 이른 상장일부터 한 번만 받음"""
     old = load(COMPARE)
     series, divs = dict(old.get('series') or {}), dict(old.get('divs') or {})
     starts = {}                                   # 비교 지수 → 필요한 시작일(가장 이른 상장일)
@@ -567,12 +590,17 @@ def build_compare():
             print(f'  {sym} 야후 일봉 실패: {e}')
         npts = []
         try:
-            npts = naver_daily(cfg['naver'], 1500)
+            npts = naver_raw_daily(cfg['naver'])
         except Exception as e:
-            print(f'  {sym} 네이버 일봉 실패: {e}')
+            print(f'  {sym} 네이버 일별 시세 실패: {e}')
+        if npts and ypts:   # 두 자료의 같은 날 종가가 2% 넘게 다르면 어느 한쪽이 수정주가 — 그날들은 네이버(실제 거래가)를 믿되 알림
+            ym = dict(map(tuple, ypts))
+            bad = [d for d, c in npts if d in ym and abs(ym[d] / c - 1) > 0.02]
+            if bad:
+                print(f'  ※ {sym} 네이버·야후 종가가 2% 넘게 다른 날 {len(bad)}일 (예: {datetime.date.fromordinal(719163 + bad[0])}) — 네이버 실제 종가 사용')
         etf = dedup(merge_older(npts, ypts) if npts else ypts)
-        if len(etf) < 5:
-            print(f'  {sym} 일봉 부족(직전값 유지)')
+        if len(etf) < 5 or (old.get('basis') == 'raw' and series.get(sym) and len(etf) < len(series[sym]) * 0.9):
+            print(f'  {sym} 일봉 부족·짧아짐(직전값 유지)')
             etf = series.get(sym) or []
         else:
             series[sym] = etf
@@ -603,7 +631,7 @@ def build_compare():
             if len(bpts) >= 5:
                 series[bench] = bpts
         print(f'  비교 지수 {bench} {len(series.get(bench) or [])}일 (시작 {datetime.date.fromordinal(719163 + start)} 필요)')
-    save_if_changed(COMPARE, {'unit': 'day', 'pairs': {s: c['bench'] for s, c in COMPARE_PAIRS.items()},
+    save_if_changed(COMPARE, {'unit': 'day', 'basis': 'raw', 'pairs': {s: c['bench'] for s, c in COMPARE_PAIRS.items()},
                               'series': series, 'divs': divs}, old)
 
 
