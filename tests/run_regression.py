@@ -1569,7 +1569,9 @@ def main():
         for w in (320, 360, 390, 768, 1440):
             page.set_viewport_size({'width': w, 'height': 900}); page.wait_for_timeout(120)
             r = page.evaluate("""() => { const n = document.getElementById('mainNav'), a = document.getElementById('grp-learn-btn');
-                return { sw: n.scrollWidth, cw: n.clientWidth, href: a ? a.getAttribute('href') : null }; }""")
+                return { sw: n.scrollWidth, cw: n.clientWidth, href: a ? a.getAttribute('href') : null,
+                         order: [...n.querySelectorAll(':scope > .tab-group')].map(g => g.id).slice(0, 3).join(',') }; }""")
+            if r['order'] != 'grp-home,grp-learn,grp-me': fail('compound/', "상단 메뉴 순서 이상 (홈 → 투자 공부 → 내 위치 기대): " + r['order'])
             if r['href'] != 'learn/': fail('compound/', "상단 메뉴 '투자 공부' 링크 이상: %s" % r['href'])
             if w >= 360 and r['sw'] > r['cw'] + 1: fail('compound/', '%dpx 상단 메뉴가 한 줄에 안 들어감 (%d > %d)' % (w, r['sw'], r['cw']))
         page.set_viewport_size({'width': 1440, 'height': 900})
