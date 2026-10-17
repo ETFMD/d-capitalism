@@ -15,6 +15,7 @@
 import datetime, hashlib, html, json, os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import build_learn as BL   # '투자 공부' 글 모음 (content/learn → learn/)
+import data_facts as DF    # 자동 갱신 숫자 (data/*.json) · 지수 고유 해설 [IDXNOTE]
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 SRC = os.path.join(ROOT, 'src', 'index.html')
@@ -308,16 +309,61 @@ def make_assets(src):
 
 
 def footmap(en=False):
+    """모든 페이지 맨 아래 사이트맵 — 영역별 열(도구) + 투자 공부 열 + 아래 '지수 성장률' 한 줄 묶음 (긴 지수 목록을 열에서 빼서 깔끔하게)"""
     T = tr_text if en else (lambda t: t)
-    cols = []
+    by = {x['tab']: x for x in ROUTES}
+    cols, band = [], []
+
+    def link(r, label=None):
+        return f'<a href="{esc(r["path"])}/">{esc(label or T(NAV_LABEL[r["tab"]]))}</a>'
     for g, name in AREA.items():
-        links = ''.join(f'<a href="{esc(r["path"])}/">{esc(T(NAV_LABEL[r["tab"]]))}</a>' for r in ROUTES if r['group'] == g and not r.get('hub'))
         head = f'<a href="{esc(HUB[g]["path"])}/">{esc(T(name))}</a>' if g in HUB else esc(T(name))
-        cols.append(f'<div class="sf-col"><p class="sf-h">{head}</p>{links}</div>')
-    if ARTS and not en:   # 모든 페이지 아래에 투자 공부 글 링크 (검색엔진·이용자가 글로 바로 갈 수 있게)
+        parts = []
+        for i, (sec, tabs) in enumerate(DROP.get(g, [])):
+            rs = [by[t] for t in tabs if t in by]
+            if '지수 성장률' in sec:   # 지수 20쪽은 아래 한 줄 묶음으로
+                lab = sec.replace(' 지수 성장률', '')
+                band.append(f'<span class="sf-grp"><b>{esc(T(lab))}</b>' + ''.join(link(r, T(NAV_LABEL[r["tab"]]).replace(' 성장률', '').replace(' Growth', '')) for r in rs) + '</span>')
+                continue
+            if i:
+                parts.append(f'<span class="sf-sub">{esc(T(sec))}</span>')
+            parts.extend(link(r) for r in rs)
+        cols.append(f'<div class="sf-col"><p class="sf-h">{head}</p>{"".join(parts)}</div>')
+    if ARTS and not en:   # 투자 공부 글 (한국어 페이지만)
         links = ''.join(f'<a href="learn/{esc(a["slug"])}/">{esc(a.get("short") or a["title"].split(" — ")[0])}</a>' for a in ARTS)
-        cols.append(f'<div class="sf-col"><p class="sf-h"><a href="learn/">투자 공부</a></p>{links}</div>')
-    return f'<nav class="sf-map" aria-label="{esc(T("전체 도구"))}">' + ''.join(cols) + '</nav>'
+        cols.append(f'<div class="sf-col sf-learn"><p class="sf-h"><a href="learn/">투자 공부</a></p>{links}</div>')
+    out = f'<nav class="sf-map" aria-label="{esc(T("전체 도구"))}"><div class="sf-cols">' + ''.join(cols) + '</div>'
+    if band:
+        out += f'<div class="sf-band"><p class="sf-h"><a href="{esc(HUB["invest"]["path"])}/">{esc(T("지수 성장률"))}</a></p><div class="sf-grps">' + ''.join(band) + '</div></div>'
+    return out + '</nav>'
+
+
+_IDX = {}
+
+
+def idx_note(key):
+    """지수 페이지 고유 해설(content/index/<키>.html) + 자동 통계 — 지수마다 한 번만 계산"""
+    if key not in _IDX:
+        f = os.path.join(ROOT, 'content', 'index', key + '.html')
+        if not os.path.isfile(f):
+            sys.exit(f'지수 해설 원본이 없습니다: content/index/{key}.html')
+        text = open(f, encoding='utf-8').read().strip()
+        valid = {r['path'] for r in ROUTES} | {'learn/' + a['slug'] for a in ARTS}
+        for h in re.findall(r'href="([^"#]*)"', text):   # 해설 안 링크는 상대 주소(<base href>) — 실제 페이지인지 확인
+            if h.rstrip('/') not in valid:
+                sys.exit(f'content/index/{key}.html: 없는 주소 링크 {h}')
+        try:
+            _IDX[key] = DF.index_block(key, text)
+        except SystemExit:
+            raise
+        except Exception as e:   # 시세 자료 이상 — 빌드는 계속, 지난 페이지의 해설을 그대로 씀(없으면 사람이 쓴 해설만)
+            print(f'  ※ {key} 지수 통계 계산 실패 — 지난 해설 유지: {e!r}')
+            path = next(r['path'] for r in ROUTES if r['tab'] == key)
+            old = os.path.join(ROOT, path, 'index.html')
+            m = re.search(r'<!--IDXNOTE:%s-->(.*?)<!--/IDXNOTE-->' % key, open(old, encoding='utf-8').read(), re.S) if os.path.isfile(old) else None
+            _IDX[key] = m.group(1) if m and m.group(1).strip() else (
+                f'<section class="guide idx-note"><div class="g-card in-text">{re.sub(r"{{[a-zA-Z0-9_.]+}}", "—", text)}</div></section>')
+    return _IDX[key]
 
 
 def learn_cards(arts, limit=None):
@@ -349,7 +395,12 @@ def finalize(html_text, tab, en=False):
     a, b = style_span(html_text)
     html_text = html_text[:a] + f'<link rel="stylesheet" href="{ASSET["css"]}">' + html_text[b:]
     html_text = re.sub(r'<!--HUBGRID:([a-z]+)-->.*?<!--/HUBGRID-->', lambda m: f'<!--HUBGRID:{m.group(1)}-->' + hub_grid(m.group(1), en) + '<!--/HUBGRID-->', html_text, flags=re.S)
-    if not en:
+    if en:   # 투자 공부 글은 한국어만 — 영어판 상단 메뉴에서 뺌
+        html_text, k = re.subn(r'\s*<!-- \[LEARN\] 투자 공부 글 모음.*?<div class="tab-group" id="grp-learn">.*?</div>', '', html_text, count=1, flags=re.S)
+        if not k:
+            sys.exit('상단 메뉴 grp-learn 을 찾지 못했습니다')
+    else:
+        html_text = re.sub(r'<!--IDXNOTE:([a-z0-9]+)-->.*?<!--/IDXNOTE-->', lambda m: f'<!--IDXNOTE:{m.group(1)}-->' + idx_note(m.group(1)) + '<!--/IDXNOTE-->', html_text, flags=re.S)
         rel = BL.related_block(ARTS, PATH_OF.get(tab, ''))
         if rel:
             html_text = html_text.replace(f'<!-- /page-{tab} -->', rel + f'  <!-- /page-{tab} -->', 1) if f'<!-- /page-{tab} -->' in html_text else html_text

@@ -13,6 +13,8 @@
 · 모든 글: 작성자·작성일·수정일·읽는 시간·목차·관련 계산기·다른 글·출처/면책 — 표준 라이브러리만
 """
 import html, json, os, re, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import data_facts as DF   # 본문 {{키}} → data/*.json 최신 값 (자동 갱신)
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 SRC_DIR = os.path.join(ROOT, 'content', 'learn')
@@ -35,6 +37,7 @@ def load():
     arts = []
     if not os.path.isdir(SRC_DIR):
         return arts
+    facts = asof = None
     for fn in sorted(os.listdir(SRC_DIR)):
         if not fn.endswith('.html'):
             continue
@@ -53,9 +56,24 @@ def load():
         if len(meta['desc']) > 80:
             sys.exit(f'설명이 80자를 넘습니다({len(meta["desc"])}자): {fn}')
         body = raw[m.end():].strip()
+        if '{{' in body:   # 자동 갱신 숫자: 자료 기준일을 글에 표시 · 검색엔진 수정일(dateModified)·sitemap lastmod 도 그날로
+            if facts is None:
+                try:
+                    facts, asof = DF.learn_facts()
+                except Exception as e:   # 데이터 파일 이상(봇 실패 등) — 사이트 빌드 전체를 멈추지 않고 이 글들은 지난 페이지를 그대로 둠
+                    print(f'  ※ 자동 숫자 자료를 읽지 못해 자동 숫자 글은 지난 페이지를 유지: {e!r}')
+                    facts, asof = {}, None
+            if facts:
+                body = DF.fill(body, facts, where=f'content/learn/{fn}')
+                meta['asof'] = asof
+            else:
+                DF.fill(body, {k: '' for k in re.findall(r'\{\{([a-zA-Z0-9_.]+)\}\}', body)})
+                body = re.sub(r'\{\{[a-zA-Z0-9_.]+\}\}', '—', body)
+                meta['stale'] = True
         meta['body'] = body
         meta['chars'] = len(plain(body).replace(' ', ''))
         meta.setdefault('updated', meta['date'])
+        meta['mod'] = max(meta['updated'], meta.get('asof') or '')   # 검색엔진 수정일 = 글 수정일과 자동 숫자 기준일 중 늦은 날
         meta.setdefault('order', 999)
         arts.append(meta)
     slugs = [a['slug'] for a in arts]
@@ -109,6 +127,7 @@ CSS = '''
   .cat { display:inline-block; font-size:12px; font-weight:600; color:var(--accent); background:var(--accent-dim); border-radius:999px; padding:3px 10px; margin-bottom:10px; text-decoration:none; }
   h1 { font-size:28px; line-height:1.4; font-weight:700; margin-bottom:10px; letter-spacing:-.3px; }
   .meta { font-size:13px; color:var(--text3); margin-bottom:22px; }
+  .meta .auto { color:var(--accent); }
   .lead { font-size:16.5px; color:var(--text); background:var(--bg2); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:12px; padding:16px 18px; margin:0 0 22px; }
   .toc { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:14px 18px; margin:0 0 28px; font-size:14px; }
   .toc b { display:block; font-size:13px; color:var(--text3); font-weight:600; margin-bottom:6px; }
@@ -250,7 +269,7 @@ def write_all(arts, site, routes, analytics, write):
         body, toc = _toc(a['body'])
         mins = max(3, round(a['chars'] / 600))
         ld = [{'@context': 'https://schema.org', '@type': 'Article', 'headline': a['title'], 'description': a['desc'],
-               'datePublished': a['date'], 'dateModified': a['updated'], 'inLanguage': 'ko-KR', 'mainEntityOfPage': url,
+               'datePublished': a['date'], 'dateModified': a['mod'], 'inLanguage': 'ko-KR', 'mainEntityOfPage': url,
                'author': {'@type': 'Person', 'name': AUTHOR, 'url': f'{site}about/'},
                'publisher': {'@type': 'Organization', 'name': '디코딩 자본주의', 'logo': {'@type': 'ImageObject', 'url': f'{site}assets/logo-512.png'}}},
               {'@context': 'https://schema.org', '@type': 'BreadcrumbList', 'itemListElement': [
@@ -267,7 +286,7 @@ def write_all(arts, site, routes, analytics, write):
                 f'<main class="wrap">\n<nav class="crumb" aria-label="현재 위치"><a href="/">홈</a> › <a href="/learn/">투자 공부</a> › {esc(CAT_NAME[a["cat"]])}</nav>\n'
                 f'<a class="cat" href="/learn/#{esc(a["cat"])}">{esc(CAT_NAME[a["cat"]])}</a>\n<h1>{esc(a["title"])}</h1>\n'
                 f'<p class="meta">글 <a href="/about/">{AUTHOR}</a> · 작성 {_ymd(a["date"])}' + (f' · 수정 {_ymd(a["updated"])}' if a['updated'] != a['date'] else '') +
-                f' · 읽는 데 약 {mins}분</p>\n'
+                f' · 읽는 데 약 {mins}분' + (f' · <span class="auto">숫자는 {_ymd(a["asof"])} 자료 기준 자동 갱신</span>' if a.get('asof') else '') + '</p>\n'
                 + (f'<nav class="toc" aria-label="목차"><b>목차</b><ol>{tochtml}</ol></nav>\n' if len(toc) >= 3 else '') +
                 f'<article>\n{body}\n</article>\n'
                 f'<h2 class="sec-h">이 글과 함께 쓰는 계산기·자료</h2>\n<div class="tools">{tools}</div>\n'
@@ -276,8 +295,13 @@ def write_all(arts, site, routes, analytics, write):
                 f'국세청·금융회사 등 공식 자료를 확인하세요. 글에 쓴 숫자는 표시한 기준일 기준이며, 틀린 곳을 알려 주시면 바로 고칩니다 '
                 f'(<a href="mailto:gusrudgma@gmail.com">gusrudgma@gmail.com</a>). 자세한 내용은 <a href="/disclaimer/">투자 면책</a>을 확인하세요.</p>\n'
                 f'{FOOT}\n</main>\n</body>\n</html>\n')
-        write(f'{OUT_DIR}/{a["slug"]}/index.html', page)
-        urls.append((url, a['updated']))
+        if a.get('stale') and os.path.isfile(os.path.join(ROOT, OUT_DIR, a['slug'], 'index.html')):
+            print(f'  ※ learn/{a["slug"]}/ 는 자료 문제로 지난 페이지 유지')
+        elif a.get('stale'):
+            sys.exit(f'learn/{a["slug"]}: 자동 숫자 자료를 읽지 못했고 지난 페이지도 없음')
+        else:
+            write(f'{OUT_DIR}/{a["slug"]}/index.html', page)
+        urls.append((url, a['mod']))
     # 목록 페이지
     url = f'{site}learn/'
     desc = '노동소득과 자본소득, 복리·CAGR, 지수·레버리지·월배당 ETF, 실적 읽는 법, 절세까지 — 계산기와 함께 읽는 투자 공부 글 모음입니다.'
@@ -303,7 +327,7 @@ def write_all(arts, site, routes, analytics, write):
             '<li>세법·제도가 바뀌면 글을 고치고 수정일을 표시합니다.</li></ul></div>\n'
             f'{secs}{FOOT}\n</main>\n</body>\n</html>\n')
     write(f'{OUT_DIR}/index.html', page)
-    urls.insert(0, (url, max([a['updated'] for a in arts] or ['2026-10-17'])))
+    urls.insert(0, (url, max([a['mod'] for a in arts] or ['2026-10-17'])))
     print(f'  투자 공부 글 {len(arts)}편 · 본문 {total:,}자')
     return urls
 

@@ -6,9 +6,15 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '20 15 1 * *'   # 매월 2일 00:20 KST — 날짜가 들어간 정적 화면(나의 직업 수명 등)을 새 달 기준으로
+    - cron: '40 9 * * 1-5'  # 평일 18:40 KST — 아시아 지수 마감 뒤 지수 해설 [IDXNOTE] 숫자 갱신 (data/history.json)
+  # 데이터 봇이 끝나면 다시 빌드 → 투자 공부 글·지수 해설의 자동 숫자({{키}} · scripts/data_facts.py)가 새 자료를 따라감
+  # (봇의 push 는 GITHUB_TOKEN 이라 push 이벤트로는 이 워크플로가 안 돌기 때문에 workflow_run 으로 연결)
+  workflow_run:
+    workflows: ['시가총액 순위 갱신', '실적발표 캘린더 갱신']
+    types: [completed]
   push:
     branches: [main]
-    paths: ['src/index.html', 'scripts/routes.json', 'scripts/build_pages.py', 'scripts/build_learn.py', 'content/**', 'scripts/joblife_snapshot.js', 'scripts/i18n/**', 'assets/**', 'CNAME', '.github/workflows/build-pages.yml']
+    paths: ['src/index.html', 'scripts/routes.json', 'scripts/build_pages.py', 'scripts/build_learn.py', 'scripts/data_facts.py', 'content/**', 'scripts/joblife_snapshot.js', 'scripts/i18n/**', 'assets/**', 'CNAME', '.github/workflows/build-pages.yml']
 
 permissions:
   contents: write
@@ -19,6 +25,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

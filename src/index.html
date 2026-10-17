@@ -2750,12 +2750,21 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .ss-opt.on, .ss-opt:hover { background:rgba(var(--fg-rgb),0.07); color:var(--text); }
   .ss-none { padding:10px; font-size:12.5px; color:var(--text3); }
   /* [FOOTMAP] 푸터의 전체 도구 링크 (scripts/build_pages.py 가 routes.json 으로 채움) */
-  .sf-map { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:18px 24px; padding:22px 0 20px; border-top:1px solid var(--card-border); text-align:left; }
-  .sf-col { display:flex; flex-direction:column; gap:7px; min-width:0; }
-  .sf-h { margin:0 0 3px; font-size:12px; font-weight:700; color:var(--text2); }
-  .sf-col a { font-size:12px; color:var(--text3); text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .sf-col a:hover { color:var(--accent); }
-  @media (max-width: 760px) { .sf-map { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+  /* 하단 사이트맵: 영역별 열(+ 투자 공부) · 아래에 지수 성장률 한 줄 묶음 — 긴 이름은 잘리지 않고 줄바꿈 */
+  .sf-map { padding:26px 0 22px; border-top:1px solid var(--card-border); text-align:left; }
+  .sf-cols { display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:22px 20px; }
+  .sf-col { display:flex; flex-direction:column; gap:8px; min-width:0; }
+  .sf-h { margin:0 0 4px; font-size:12.5px; font-weight:700; color:var(--text2); }
+  .sf-col a { font-size:12px; line-height:1.45; color:var(--text3); text-decoration:none; word-break:keep-all; overflow-wrap:anywhere; }
+  .sf-col a:hover, .sf-grp a:hover { color:var(--accent); }
+  .sf-sub { margin-top:6px; font-size:11px; font-weight:600; color:var(--text3); opacity:.75; }
+  .sf-band { margin-top:22px; padding-top:18px; border-top:1px dashed var(--card-border); }
+  .sf-grps { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:9px 32px; }
+  .sf-grp { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; font-size:12px; min-width:0; }
+  .sf-grp b { flex:0 0 34px; font-weight:600; color:var(--text2); }
+  .sf-grp a { color:var(--text3); text-decoration:none; white-space:nowrap; }
+  @media (max-width: 1100px) { .sf-cols { grid-template-columns:repeat(4, minmax(0, 1fr)); } }
+  @media (max-width: 760px) { .sf-cols { grid-template-columns:repeat(2, minmax(0, 1fr)); } .sf-grps { grid-template-columns:1fr; gap:10px; } }
   .drop-label { padding:8px 12px 3px; font-size:11px; font-weight:600; color:var(--text3); letter-spacing:0.02em; border-top:1px solid rgba(var(--fg-rgb),0.08); margin-top:3px; }
   /* 태블릿 폭: 홈 + 영역 6개가 한 줄에 들어가게 여백·화살표(·아이콘)를 줄임 */
   @media (max-width: 880px) { .app-nav .tab-group-btn { padding:10px 9px; } .app-nav .tab-group-btn .tab-group-arrow { display:none !important; } }
@@ -2768,10 +2777,11 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
     .top-bar .visit-bar { order:2; }
     .top-bar .visit-pop { right:auto; left:0; }   /* 왼쪽 끝에 있으므로 목록은 오른쪽으로 펼침 */
     .top-bar .site-search { order:3; flex:1 1 200px; width:auto; min-width:0; }
-    .app-nav .tab-group-btn { padding:10px 6px; font-size:13.5px; }
+    .app-nav { gap:0; justify-content:space-between; }   /* 홈 + 영역 6개 + 투자 공부가 한 줄에 들어가게 (남으면 고르게 벌림) */
+    .app-nav .tab-group-btn { padding:10px 4px; font-size:13.5px; }
     .app-nav .tab-group-btn > svg, .app-nav .tab-group-btn .tab-group-arrow { display:none !important; }   /* 좁은 화면: 홈 + 영역 6개가 한 줄에 들어가게 아이콘·화살표 숨김 */
   }
-  @media (max-width: 380px) { .app-nav .tab-group-btn { padding:10px 5px; font-size:12.5px; } }   /* 아주 좁은 화면(360 이하): 더 줄이고, 그래도 넘치면 가로 스크롤 */
+  @media (max-width: 380px) { .app-nav .tab-group-btn { padding:10px 3px; font-size:12.5px; } }   /* 아주 좁은 화면(360 이하): 더 줄이고, 그래도 넘치면 가로 스크롤 */
   /* [HM-PATH] 홈: 노동자 → 자본가 6단계 */
   .hm-path { margin:4px 0 36px; }
   .hm-path, .hm-path h2, .hm-path h3, .hm-path p, .hm-path .hm-go { font-family:var(--font); letter-spacing:normal; word-spacing:normal; word-break:keep-all; }
@@ -2840,6 +2850,20 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .learn-rel .lr-all { margin:14px 0 0; text-align:right; }
   .learn-rel .lr-all a { font-size:14px; font-weight:600; color:var(--accent); text-decoration:none; }
   .learn-home { max-width:1100px; margin-left:auto; margin-right:auto; }
+  .app-nav a.tab-group-btn { text-decoration:none; }
+  /* [IDXNOTE] 지수 성장률 페이지 고유 해설 + 자동 갱신 통계 (scripts/data_facts.py) */
+  .idx-note .g-card + .g-card { margin-top:16px; }
+  .idx-note h3 { font-size:16px; font-weight:700; color:var(--text); margin:18px 0 8px; }
+  .idx-note h3:first-child { margin-top:0; }
+  .idx-note h3 small { font-size:12px; font-weight:500; color:var(--text3); margin-left:6px; }
+  .idx-note .in-text p, .idx-note .in-text li { font-size:14.5px; line-height:1.8; color:var(--text2); }
+  .idx-note .in-text p { margin:0 0 10px; }
+  .idx-note .in-text a { color:var(--accent); }
+  .idx-note .in-tbl td.n { text-align:right; font-variant-numeric:tabular-nums; white-space:normal; color:var(--text); }
+  .idx-note .in-tbl td small { font-family:var(--font); color:var(--text3); }
+  .idx-note .in-auto li { font-size:14px; line-height:1.75; color:var(--text2); }
+  .idx-note .in-src { font-size:12px; color:var(--text3); line-height:1.7; margin:12px 0 0; }
+  @media (max-width:600px) { .idx-note .in-tbl td:first-child { min-width:0; width:42%; } }
   .guide .g-faqs { margin-top:16px; }
   .guide h3 { font-size:15px; font-weight:700; color:var(--text); margin:0 0 12px; }
   .guide .g-steps, .guide .g-list { margin:0; padding-left:20px; font-size:13px; line-height:1.8; color:var(--text2); }
@@ -3228,6 +3252,10 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <button class="tab-group-btn" id="grp-passive-btn" onclick="toggleTabGroup('passive')">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;"><path d="M14.6 7.2A5.8 5.8 0 0 0 4 5.6M3.4 10.8A5.8 5.8 0 0 0 14 12.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M4 2.6v3h3M14 15.4v-3h-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 6.3v5.4M7.6 7.4h2a1 1 0 0 1 0 2h-1.2a1 1 0 0 0 0 2h2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>불로소득<span class="tab-group-arrow">▼</span>
       </button>
+    </div>
+    <!-- [LEARN] 투자 공부 글 모음 (/learn/ — scripts/build_learn.py) · 드롭다운 없는 바로가기 · 영어판에서는 build_pages 가 뺌 -->
+    <div class="tab-group" id="grp-learn">
+      <a class="tab-group-btn" id="grp-learn-btn" href="learn/"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;"><path d="M9 4.6C7.6 3.5 5.6 3 2.6 3.1v10.6c3-.1 5 .4 6.4 1.5 1.4-1.1 3.4-1.6 6.4-1.5V3.1C12.4 3 10.4 3.5 9 4.6z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9 4.6v10.6" stroke="currentColor" stroke-width="1.2"/></svg>투자 공부</a>
     </div>
   </nav>
 
@@ -9342,6 +9370,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>같은 코스피인데 기간마다 성장률이 왜 이렇게 다른가요?</summary><div class="g-ans"><p>CAGR은 시작 시점의 지수에 크게 좌우됩니다. 위 예시처럼 1980년부터 보면 연 7.33%지만, 2014년 말부터 10년만 보면 연 2.13%에 그칩니다. 시작점이 고점이었는지 저점이었는지에 따라 달라지므로 여러 기간을 함께 보는 것이 좋습니다.</p></div></details><details class="g-faq"><summary>코스피와 코스피 200은 무엇이 다른가요?</summary><div class="g-ans"><p>코스피는 유가증권시장 전체 보통주로, 코스피 200은 그중 시가총액·거래량 등을 기준으로 고른 대형주 200종목으로 계산합니다. 코스피 200은 1990년 1월 3일 100에서 시작해 기준 시점이 다르므로 두 지수의 숫자를 직접 비교하면 안 되고, 성장률로 비교해야 합니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. 코스피는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>1억 투자 시뮬레이션 결과를 믿어도 되나요?</summary><div class="g-ans"><p>과거 기간의 연평균 성장률이 앞으로도 똑같이 이어진다는 단순 가정입니다. 실제로는 해마다 수익률이 크게 다르고, 세금·수수료·환율도 빠져 있습니다. 여러 기간 버튼을 눌러 결과가 얼마나 달라지는지 함께 보는 것이 좋습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance 시세를 받아 오고, 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 주기적으로 모아 둔 주간 데이터(data/history.json)를 씁니다. '지수 갱신' 버튼으로 현재 값을 다시 불러올 수 있습니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:kospi] -->
+    <!--IDXNOTE:kospi--><!--/IDXNOTE-->
   </div><!-- /page-kospi -->
 
   <!-- ── KOSPI 200 페이지 ── -->
@@ -9449,6 +9478,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>코스피보다 코스피 200의 성장률이 낮게 나오는 이유는 무엇인가요?</summary><div class="g-ans"><p>두 지수는 기준 시점이 다릅니다. 코스피는 1980년(100)부터, 코스피 200은 코스피가 이미 크게 오른 뒤인 1990년(100)부터 계산하므로 같은 '전체 기간'이라도 출발점이 달라 성장률이 다르게 나옵니다. 같은 기간 버튼(예: 최근 10년)으로 비교하는 것이 공정합니다.</p></div></details><details class="g-faq"><summary>코스피 200 ETF에 투자하면 이 성장률만큼 벌 수 있나요?</summary><div class="g-ans"><p>ETF는 코스피 200을 따라가도록 운용되지만 운용보수와 추적오차가 있고, 대신 배당을 분배금으로 받습니다. 그래서 실제 투자 성과는 이 가격지수 성장률과 조금 다릅니다. 커버드콜 ETF처럼 옵션을 함께 쓰는 상품은 차이가 더 커집니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. 코스피 200는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다. 배당을 다시 투자했다고 보고 계산하는 코스피 200 총수익지수(코스피 200 TR)가 따로 있습니다.</p></div></details><details class="g-faq"><summary>1억 투자 시뮬레이션 결과를 믿어도 되나요?</summary><div class="g-ans"><p>과거 기간의 연평균 성장률이 앞으로도 똑같이 이어진다는 단순 가정입니다. 실제로는 해마다 수익률이 크게 다르고, 세금·수수료·환율도 빠져 있습니다. 여러 기간 버튼을 눌러 결과가 얼마나 달라지는지 함께 보는 것이 좋습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance 시세를 받아 오고, 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 주기적으로 모아 둔 주간 데이터(data/history.json)를 씁니다. '지수 갱신' 버튼으로 현재 값을 다시 불러올 수 있습니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:kospi200] -->
+    <!--IDXNOTE:kospi200--><!--/IDXNOTE-->
   </div><!-- /page-kospi200 -->
 
   <!-- ── KOSDAQ 페이지 ── -->
@@ -9554,6 +9584,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>코스닥 성장률이 마이너스로 나오는 이유는 무엇인가요?</summary><div class="g-ans"><p>코스닥은 2000년 IT 버블 때 지금 기준으로 2,800선까지 올랐다가 크게 떨어졌고, 그 뒤 오랫동안 기준값 1,000 아래에 머물렀습니다. 그래서 1996년부터 계산한 전체 기간 CAGR은 마이너스가 될 수 있습니다. 같은 지수라도 시작 시점을 바꾸면 결과가 크게 달라집니다.</p></div></details><details class="g-faq"><summary>기준지수가 왜 100이 아니라 1000인가요?</summary><div class="g-ans"><p>지수 숫자가 너무 작아 변동이 잘 드러나지 않는 문제를 줄이려고 2004년 1월 26일 기준지수를 100에서 1000으로 10배 바꿨습니다. 과거 지수도 같은 비율로 환산되어 있으므로 성장률 계산에는 영향이 없습니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. 코스닥는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>1억 투자 시뮬레이션 결과를 믿어도 되나요?</summary><div class="g-ans"><p>과거 기간의 연평균 성장률이 앞으로도 똑같이 이어진다는 단순 가정입니다. 실제로는 해마다 수익률이 크게 다르고, 세금·수수료·환율도 빠져 있습니다. 여러 기간 버튼을 눌러 결과가 얼마나 달라지는지 함께 보는 것이 좋습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance 시세를 받아 오고, 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 주기적으로 모아 둔 주간 데이터(data/history.json)를 씁니다. '지수 갱신' 버튼으로 현재 값을 다시 불러올 수 있습니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:kosdaq] -->
+    <!--IDXNOTE:kosdaq--><!--/IDXNOTE-->
   </div><!-- /page-kosdaq -->
 
 
@@ -9634,6 +9665,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>나스닥 종합지수와 나스닥 100은 무엇이 다른가요?</summary><div class="g-ans"><p>나스닥 종합지수는 나스닥에 상장된 수천 개 종목 전체를, 나스닥 100은 그중 금융주를 뺀 시가총액 상위 100개 기업을 담습니다. QQQ 같은 대표 ETF는 나스닥 100을 따라가므로, ETF 성과와 비교하려면 나스닥 100 성장률 페이지를 함께 보세요.</p></div></details><details class="g-faq"><summary>원화로 투자하면 성장률이 달라지나요?</summary><div class="g-ans"><p>이 페이지의 성장률은 달러 기준입니다. 원화로 투자하면 원/달러 환율 변화가 더해져, 환율이 오르면(원화 약세) 원화 수익률이 더 커지고 내리면 줄어듭니다. 환율 흐름은 환율 계산기에서 확인할 수 있습니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. 나스닥 종합지수는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>1억 투자 시뮬레이션 결과를 믿어도 되나요?</summary><div class="g-ans"><p>과거 기간의 연평균 성장률이 앞으로도 똑같이 이어진다는 단순 가정입니다. 실제로는 해마다 수익률이 크게 다르고, 세금·수수료·환율도 빠져 있습니다. 여러 기간 버튼을 눌러 결과가 얼마나 달라지는지 함께 보는 것이 좋습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance 시세를 받아 오고, 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 주기적으로 모아 둔 주간 데이터(data/history.json)를 씁니다. '지수 갱신' 버튼으로 현재 값을 다시 불러올 수 있습니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:nasdaq] -->
+    <!--IDXNOTE:nasdaq--><!--/IDXNOTE-->
   </div><!-- /page-nasdaq -->
 
   <!-- ── 나스닥 100 페이지 ── -->
@@ -9713,6 +9745,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>TQQQ 같은 3배 레버리지 ETF는 성장률도 3배인가요?</summary><div class="g-ans"><p>아닙니다. 레버리지 ETF는 <b>하루</b> 수익률의 3배를 목표로 하므로 기간이 길어지면 변동성 때문에 단순 3배와 크게 달라집니다. 오르내림이 심한 구간에서는 지수가 제자리여도 레버리지 ETF는 손실이 날 수 있습니다. 실제 결과는 ETF CAGR 비교 페이지에서 QQQ와 TQQQ를 함께 비교해 보세요.</p></div></details><details class="g-faq"><summary>원화로 투자하면 성장률이 달라지나요?</summary><div class="g-ans"><p>이 페이지의 성장률은 달러 기준입니다. 원화로 투자하면 원/달러 환율 변화가 더해집니다. 환율이 오르면(원화 약세) 원화 기준 수익률이 높아지고, 환율이 내리면 낮아집니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. 나스닥 100는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>1억 투자 시뮬레이션 결과를 믿어도 되나요?</summary><div class="g-ans"><p>과거 기간의 연평균 성장률이 앞으로도 똑같이 이어진다는 단순 가정입니다. 실제로는 해마다 수익률이 크게 다르고, 세금·수수료·환율도 빠져 있습니다. 여러 기간 버튼을 눌러 결과가 얼마나 달라지는지 함께 보는 것이 좋습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance 시세를 받아 오고, 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 주기적으로 모아 둔 주간 데이터(data/history.json)를 씁니다. '지수 갱신' 버튼으로 현재 값을 다시 불러올 수 있습니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:nasdaq100] -->
+    <!--IDXNOTE:nasdaq100--><!--/IDXNOTE-->
   </div><!-- /page-nasdaq100 -->
 
   <!-- ── 다우존스 산업평균지수 페이지 ── -->
@@ -9792,6 +9825,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>다우존스는 S&P 500과 계산 방식이 어떻게 다른가요?</summary><div class="g-ans"><p>다우존스는 30개 종목의 <b>주가</b>를 더해 나누는 가격가중 방식이라 주가가 높은 종목의 영향이 큽니다. S&amp;P 500은 500개 종목의 <b>시가총액</b>으로 계산합니다. 종목 수와 방식이 달라 장기 성장률도 다르게 나옵니다.</p></div></details><details class="g-faq"><summary>120년 넘는 기간의 연 5.56%는 큰 수익률인가요?</summary><div class="g-ans"><p>배당을 빼고도 128년 동안 약 1,050배가 된 숫자입니다. 연 5.56%를 128년간 복리로 굴리면 이 정도 차이가 납니다. 같은 기간 배당을 재투자했다면 결과는 훨씬 커집니다. 다만 그 사이 대공황처럼 수십 년 회복이 걸린 하락도 있었습니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. 다우존스 산업평균지수는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>1억 투자 시뮬레이션 결과를 믿어도 되나요?</summary><div class="g-ans"><p>과거 기간의 연평균 성장률이 앞으로도 똑같이 이어진다는 단순 가정입니다. 실제로는 해마다 수익률이 크게 다르고, 세금·수수료·환율도 빠져 있습니다. 여러 기간 버튼을 눌러 결과가 얼마나 달라지는지 함께 보는 것이 좋습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance 시세를 받아 오고, 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 주기적으로 모아 둔 주간 데이터(data/history.json)를 씁니다. '지수 갱신' 버튼으로 현재 값을 다시 불러올 수 있습니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:dowjones] -->
+    <!--IDXNOTE:dowjones--><!--/IDXNOTE-->
   </div><!-- /page-dowjones -->
 
   <!-- ── S&P 500 페이지 ── -->
@@ -9871,6 +9905,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>S&amp;P 500은 1928년부터 500개 종목이었나요?</summary><div class="g-ans"><p>아닙니다. 지금처럼 500개 종목으로 확대된 것은 1957년이고, 그 전 기간은 더 적은 종목으로 계산한 전신 지수의 값입니다. 장기 데이터로는 이어서 쓰는 것이 일반적이지만, 이런 차이가 있다는 점은 알아 두면 좋습니다.</p></div></details><details class="g-faq"><summary>S&amp;P 500 지수에 투자하는 가장 쉬운 방법은 무엇인가요?</summary><div class="g-ans"><p>S&amp;P 500을 따라가는 ETF(미국 상장 SPY·VOO·IVV, 국내 상장 S&amp;P 500 ETF 등)를 사는 방법이 일반적입니다. 상품마다 운용보수·환헤지 여부·세금이 다르므로 비교해 보고 고르세요. ETF CAGR 비교 페이지에서 SPY의 실제 성과도 볼 수 있습니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. S&amp;P 500는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다. S&amp;P 500은 배당 비중이 꽤 커서 배당 재투자 여부에 따라 장기 결과 차이가 큽니다.</p></div></details><details class="g-faq"><summary>1억 투자 시뮬레이션 결과를 믿어도 되나요?</summary><div class="g-ans"><p>과거 기간의 연평균 성장률이 앞으로도 똑같이 이어진다는 단순 가정입니다. 실제로는 해마다 수익률이 크게 다르고, 세금·수수료·환율도 빠져 있습니다. 여러 기간 버튼을 눌러 결과가 얼마나 달라지는지 함께 보는 것이 좋습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance 시세를 받아 오고, 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 주기적으로 모아 둔 주간 데이터(data/history.json)를 씁니다. '지수 갱신' 버튼으로 현재 값을 다시 불러올 수 있습니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:sp500] -->
+    <!--IDXNOTE:sp500--><!--/IDXNOTE-->
   </div><!-- /page-sp500 -->
 
   <!-- ── 필라델피아 반도체지수 페이지 ── -->
@@ -9950,6 +9985,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>최근 10년 성장률이 전체 기간보다 훨씬 높은 이유는 무엇인가요?</summary><div class="g-ans"><p>2000년 IT 버블 붕괴와 2008년 금융위기 때 반도체 지수가 크게 떨어졌다가, 최근 10년은 데이터센터·인공지능 수요로 크게 올랐기 때문입니다. 위 예시에서 전체 기간은 연 11.00%, 최근 10년은 연 22.07%입니다. 업황 사이클이 뚜렷한 업종이라 시작 시점에 특히 민감합니다.</p></div></details><details class="g-faq"><summary>SOX와 다우존스 미국 반도체 지수는 무엇이 다른가요?</summary><div class="g-ans"><p>둘 다 미국 반도체 기업 지수지만 산출 기관, 편입 기준, 종목 수가 다릅니다. SOX는 나스닥이 30개 종목으로 산출하고, 다우존스 미국 반도체 지수는 S&amp;P 다우존스 인디시즈가 산출합니다. 반도체 ETF마다 따라가는 지수가 다르므로 투자 전에 기초지수를 확인하세요.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. 필라델피아 반도체지수는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>1억 투자 시뮬레이션 결과를 믿어도 되나요?</summary><div class="g-ans"><p>과거 기간의 연평균 성장률이 앞으로도 똑같이 이어진다는 단순 가정입니다. 실제로는 해마다 수익률이 크게 다르고, 세금·수수료·환율도 빠져 있습니다. 여러 기간 버튼을 눌러 결과가 얼마나 달라지는지 함께 보는 것이 좋습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance 시세를 받아 오고, 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 주기적으로 모아 둔 주간 데이터(data/history.json)를 씁니다. '지수 갱신' 버튼으로 현재 값을 다시 불러올 수 있습니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:sox] -->
+    <!--IDXNOTE:sox--><!--/IDXNOTE-->
   </div><!-- /page-sox -->
 
   <!-- ── 다우존스 미국 반도체 지수 페이지 ── -->
@@ -10029,6 +10065,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>전체 기간이 왜 2000년부터인가요?</summary><div class="g-ans"><p>이 지수는 공개된 기준일·기준값을 확인하기 어렵고, 무료로 받을 수 있는 과거 데이터가 2000년 2월부터입니다. 그래서 확인된 첫 데이터부터 계산합니다. 시작점이 IT 버블 고점 근처라 전체 기간 CAGR(8.21%)이 최근 10년(26.19%)보다 크게 낮습니다.</p></div></details><details class="g-faq"><summary>반도체 레버리지 ETF는 이 성장률의 2배·3배인가요?</summary><div class="g-ans"><p>아닙니다. 레버리지 ETF는 하루 수익률의 2배·3배를 목표로 하므로 장기 수익률은 변동성에 따라 단순 2배보다 낮거나 높을 수 있습니다. 실제 성과는 ETF CAGR 비교 페이지에서 확인할 수 있습니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. 다우존스 미국 반도체 지수는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>1억 투자 시뮬레이션 결과를 믿어도 되나요?</summary><div class="g-ans"><p>과거 기간의 연평균 성장률이 앞으로도 똑같이 이어진다는 단순 가정입니다. 실제로는 해마다 수익률이 크게 다르고, 세금·수수료·환율도 빠져 있습니다. 여러 기간 버튼을 눌러 결과가 얼마나 달라지는지 함께 보는 것이 좋습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance 시세를, 과거 값은 Yahoo가 제공하지 않아 CNBC 주간 데이터를 GitHub Actions로 모아 둔 값(data/history.json)을 씁니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:djsemi] -->
+    <!--IDXNOTE:djsemi--><!--/IDXNOTE-->
   </div><!-- /page-djsemi -->
   <div class="app-page" id="page-n225">
     <div class="header">
@@ -10106,6 +10143,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>1989년 고점을 다시 넘는 데 왜 34년이나 걸렸나요?</summary><div class="g-ans"><p>닛케이 225는 1989년 12월 29일 38,915.87로 거품 경제의 정점을 찍은 뒤, 거품이 꺼진 긴 침체와 2008년 금융위기를 거치며 2009년 3월 7,000선까지 떨어졌습니다. 이후 회복해 2024년 2월 22일 종가 39,098.68로 34년 만에 고점을 넘어섰습니다. 그래서 1989년 말을 시작점으로 잡으면 연평균 성장률이 0%에 가깝고, 위 예시처럼 2014년 말부터 보면 연 8.62%가 됩니다.</p></div></details><details class="g-faq"><summary>닛케이 225와 TOPIX는 무엇이 다른가요?</summary><div class="g-ans"><p>닛케이 225는 225개 종목의 <b>주가를 평균</b>하는 가격가중 지수라 주가가 높은 몇몇 종목의 영향이 큽니다. TOPIX는 훨씬 많은 종목을 <b>시가총액 비중대로</b> 담아 일본 증시 전체에 더 가깝습니다. 같은 기간이라도 두 지수의 성장률이 다를 수 있으니 TOPIX 성장률도 함께 확인해 보세요.</p></div></details><details class="g-faq"><summary>원화로 투자하면 수익률이 같나요?</summary><div class="g-ans"><p>아닙니다. 이 화면의 성장률은 엔 기준 지수로 계산합니다. 원화로 투자하면 그 기간 동안 엔·원 환율이 오르면 수익률이 더 높아지고, 내리면 낮아집니다. 국내 상장 ETF 중에는 환율 변동을 막는(환헤지, 이름에 &lsquo;(H)&rsquo;) 상품도 있습니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. 닛케이 225는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance를 먼저 쓰고, 받지 못하면 EastMoney·CNBC 순으로 대신 받아 옵니다. 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 매일 모아 둔 주간 종가(data/history.json)이며, Yahoo Finance 자료가 짧거나 없는 구간은 EastMoney·Sina·CNBC 주간 종가로 채웁니다. 실제로 쓴 출처는 화면의 &lsquo;출처&rsquo;와 기간 옆 괄호에 표시됩니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:n225] -->
+    <!--IDXNOTE:n225--><!--/IDXNOTE-->
   </div><!-- /page-n225 -->
   <div class="app-page" id="page-topix">
     <div class="header">
@@ -10183,6 +10221,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>TOPIX가 1989년 고점을 넘어선 것은 언제인가요?</summary><div class="g-ans"><p>TOPIX는 1989년 12월 18일 2,884.80이 오랫동안 최고치였고, 2024년 7월 4일 종가 2,898.47로 약 34년 만에 이를 넘어섰습니다. 1989년 말 무렵을 시작점으로 잡으면 성장률이 0%에 가깝게 나오는 이유입니다.</p></div></details><details class="g-faq"><summary>TOPIX와 닛케이 225 중 무엇을 봐야 하나요?</summary><div class="g-ans"><p>일본 증시 <b>전체</b>의 흐름을 보려면 시가총액 가중 방식인 TOPIX가, 뉴스에서 흔히 쓰는 대표 지수를 보려면 닛케이 225가 맞습니다. 닛케이 225는 주가가 높은 일부 종목의 영향이 커서 두 지수의 성장률이 벌어질 때가 있습니다. 투자하려는 ETF가 어떤 지수를 따라가는지 먼저 확인하세요.</p></div></details><details class="g-faq"><summary>원화로 투자하면 수익률이 같나요?</summary><div class="g-ans"><p>아닙니다. 이 화면의 성장률은 엔 기준 지수로 계산합니다. 원화로 투자하면 그 기간 동안 엔·원 환율이 오르면 수익률이 더 높아지고, 내리면 낮아집니다. 국내 상장 ETF 중에는 환율 변동을 막는(환헤지, 이름에 &lsquo;(H)&rsquo;) 상품도 있습니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. TOPIX는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance를 먼저 쓰고, 받지 못하면 EastMoney·CNBC 순으로 대신 받아 옵니다. 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 매일 모아 둔 주간 종가(data/history.json)이며, Yahoo Finance 자료가 짧거나 없는 구간은 EastMoney·Sina·CNBC 주간 종가로 채웁니다. 실제로 쓴 출처는 화면의 &lsquo;출처&rsquo;와 기간 옆 괄호에 표시됩니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:topix] -->
+    <!--IDXNOTE:topix--><!--/IDXNOTE-->
   </div><!-- /page-topix -->
   <div class="app-page" id="page-sse">
     <div class="header">
@@ -10260,6 +10299,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>전체 기간 성장률이 최근 10년보다 훨씬 높은 이유는 무엇인가요?</summary><div class="g-ans"><p>시장이 막 생긴 1990년대 초에 지수가 짧은 기간 100에서 10배 넘게 오른 영향이 전체 기간 평균에 크게 남아 있기 때문입니다. 그 뒤로는 2007년 10월 6,000선 → 2008년 10월 1,700선, 2015년 6월 5,000선 → 같은 해 3,000선처럼 급등과 급락이 반복되었고, 위 예시처럼 2014년 말부터 10년 동안은 연 0.36%에 그쳤습니다.</p></div></details><details class="g-faq"><summary>상해종합지수와 CSI 300은 무엇이 다른가요?</summary><div class="g-ans"><p>상해종합지수는 <b>상하이 거래소에 상장된 종목 전체</b>를 담고, CSI 300은 <b>상하이·선전 두 거래소</b>에서 시가총액과 거래대금이 큰 300개 종목만 담습니다. 중국 대형주에 투자하는 ETF는 CSI 300을 따라가는 경우가 많으니, 투자 대상과 같은 지수의 성장률을 보는 것이 정확합니다.</p></div></details><details class="g-faq"><summary>원화로 투자하면 수익률이 같나요?</summary><div class="g-ans"><p>아닙니다. 이 화면의 성장률은 위안 기준 지수로 계산합니다. 원화로 투자하면 그 기간 동안 위안·원 환율이 오르면 수익률이 더 높아지고, 내리면 낮아집니다. 국내 상장 ETF 중에는 환율 변동을 막는(환헤지, 이름에 &lsquo;(H)&rsquo;) 상품도 있습니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. 상해종합지수는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance를 먼저 쓰고, 받지 못하면 EastMoney·CNBC 순으로 대신 받아 옵니다. 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 매일 모아 둔 주간 종가(data/history.json)이며, Yahoo Finance 자료가 짧거나 없는 구간은 EastMoney·Sina·CNBC 주간 종가로 채웁니다. 실제로 쓴 출처는 화면의 &lsquo;출처&rsquo;와 기간 옆 괄호에 표시됩니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:sse] -->
+    <!--IDXNOTE:sse--><!--/IDXNOTE-->
   </div><!-- /page-sse -->
   <div class="app-page" id="page-csi300">
     <div class="header">
@@ -10337,6 +10377,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>최근 30년 버튼은 왜 눌리지 않나요?</summary><div class="g-ans"><p>CSI 300은 2004년 12월 31일을 기준일로 만든 지수라, 그보다 앞선 시점의 지수 값이 없습니다. 숫자를 지어내지 않도록 지수가 생기기 전으로 거슬러 가는 기간 버튼은 꺼 두었습니다. 날짜가 지나 기간이 기준일 이후가 되면 자동으로 켜집니다.</p></div></details><details class="g-faq"><summary>CSI 300과 상해종합지수는 무엇이 다른가요?</summary><div class="g-ans"><p>CSI 300은 <b>두 거래소의 대형주 300개</b>, 상해종합지수는 <b>상하이 거래소 전체 종목</b>입니다. 선전 거래소의 성장기업까지 포함하는 CSI 300이 중국 본토 대형주 전체를 더 넓게 대표합니다.</p></div></details><details class="g-faq"><summary>원화로 투자하면 수익률이 같나요?</summary><div class="g-ans"><p>아닙니다. 이 화면의 성장률은 위안 기준 지수로 계산합니다. 원화로 투자하면 그 기간 동안 위안·원 환율이 오르면 수익률이 더 높아지고, 내리면 낮아집니다. 국내 상장 ETF 중에는 환율 변동을 막는(환헤지, 이름에 &lsquo;(H)&rsquo;) 상품도 있습니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. CSI 300는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance를 먼저 쓰고, 받지 못하면 EastMoney·CNBC 순으로 대신 받아 옵니다. 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 매일 모아 둔 주간 종가(data/history.json)이며, Yahoo Finance 자료가 짧거나 없는 구간은 EastMoney·Sina·CNBC 주간 종가로 채웁니다. 실제로 쓴 출처는 화면의 &lsquo;출처&rsquo;와 기간 옆 괄호에 표시됩니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:csi300] -->
+    <!--IDXNOTE:csi300--><!--/IDXNOTE-->
   </div><!-- /page-csi300 -->
   <div class="app-page" id="page-szse">
     <div class="header">
@@ -10414,6 +10455,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>선전성분지수와 상해종합지수는 무엇이 다른가요?</summary><div class="g-ans"><p>상해종합지수에는 은행·에너지 같은 대형 국유기업 비중이 높고, 선전성분지수에는 민간 제조·소비·기술 기업 비중이 높습니다. 그래서 중국 경기 흐름은 같이 타도 업종 분위기에 따라 두 지수의 성장률이 달라집니다.</p></div></details><details class="g-faq"><summary>최근 10년 성장률이 마이너스인 것은 계산 오류인가요?</summary><div class="g-ans"><p>아닙니다. 위 예시처럼 2014년 말 11,014.62에서 2024년 말 10,414.61로 지수가 오히려 낮아져 연평균 성장률이 −0.56%가 됩니다. 2015년과 2021년에 고점을 찍은 뒤 크게 내려온 영향입니다.</p></div></details><details class="g-faq"><summary>원화로 투자하면 수익률이 같나요?</summary><div class="g-ans"><p>아닙니다. 이 화면의 성장률은 위안 기준 지수로 계산합니다. 원화로 투자하면 그 기간 동안 위안·원 환율이 오르면 수익률이 더 높아지고, 내리면 낮아집니다. 국내 상장 ETF 중에는 환율 변동을 막는(환헤지, 이름에 &lsquo;(H)&rsquo;) 상품도 있습니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. 선전성분지수는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance를 먼저 쓰고, 받지 못하면 EastMoney·CNBC 순으로 대신 받아 옵니다. 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 매일 모아 둔 주간 종가(data/history.json)이며, Yahoo Finance 자료가 짧거나 없는 구간은 EastMoney·Sina·CNBC 주간 종가로 채웁니다. 실제로 쓴 출처는 화면의 &lsquo;출처&rsquo;와 기간 옆 괄호에 표시됩니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:szse] -->
+    <!--IDXNOTE:szse--><!--/IDXNOTE-->
   </div><!-- /page-szse -->
   <div class="app-page" id="page-chinext">
     <div class="header">
@@ -10491,6 +10533,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>창업판지수는 왜 등락 폭이 큰가요?</summary><div class="g-ans"><p>2차전지·바이오·IT 같은 성장 기업 비중이 높아 금리와 업황 기대에 민감하기 때문입니다. 위 예시에서도 2021년 말 3,322.67이던 지수가 2024년 말 2,141.60이 되었습니다. 시작 시점에 따라 성장률이 크게 달라지니 여러 기간을 함께 비교해 보세요.</p></div></details><details class="g-faq"><summary>최근 20년·30년 버튼은 왜 눌리지 않나요?</summary><div class="g-ans"><p>창업판지수는 2010년 5월 31일을 기준일로 시작한 지수라 그보다 앞선 값이 없습니다. 지수가 생기기 전으로 거슬러 가는 기간 버튼은 꺼 두었고, 날짜가 지나면 자동으로 켜집니다.</p></div></details><details class="g-faq"><summary>원화로 투자하면 수익률이 같나요?</summary><div class="g-ans"><p>아닙니다. 이 화면의 성장률은 위안 기준 지수로 계산합니다. 원화로 투자하면 그 기간 동안 위안·원 환율이 오르면 수익률이 더 높아지고, 내리면 낮아집니다. 국내 상장 ETF 중에는 환율 변동을 막는(환헤지, 이름에 &lsquo;(H)&rsquo;) 상품도 있습니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. 창업판지수는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance를 먼저 쓰고, 받지 못하면 EastMoney·CNBC 순으로 대신 받아 옵니다. 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 매일 모아 둔 주간 종가(data/history.json)이며, Yahoo Finance 자료가 짧거나 없는 구간은 EastMoney·Sina·CNBC 주간 종가로 채웁니다. 실제로 쓴 출처는 화면의 &lsquo;출처&rsquo;와 기간 옆 괄호에 표시됩니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:chinext] -->
+    <!--IDXNOTE:chinext--><!--/IDXNOTE-->
   </div><!-- /page-chinext -->
   <div class="app-page" id="page-star50">
     <div class="header">
@@ -10568,6 +10611,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>최근 10년 이상 버튼은 왜 눌리지 않나요?</summary><div class="g-ans"><p>과창판50은 2019년 12월 31일을 기준일로 만든 지수라 그보다 앞선 값이 없습니다. 숫자를 지어내지 않도록 지수가 생기기 전으로 거슬러 가는 기간 버튼은 꺼 두었습니다. 시간이 지나면 해당 버튼이 자동으로 켜집니다.</p></div></details><details class="g-faq"><summary>역사가 짧은 지수의 성장률은 어떻게 보면 좋을까요?</summary><div class="g-ans"><p>기간이 짧을수록 시작 시점 한두 해의 등락이 연평균 성장률을 크게 흔듭니다. 위 예시처럼 2021년 말 1,398.19에서 2024년 말 988.93까지 3년 동안은 연 −10.90%였지만, 그 뒤 기간에는 크게 다를 수 있습니다. 짧은 기간의 숫자를 긴 미래에 그대로 적용하는 것은 특히 조심해야 합니다.</p></div></details><details class="g-faq"><summary>원화로 투자하면 수익률이 같나요?</summary><div class="g-ans"><p>아닙니다. 이 화면의 성장률은 위안 기준 지수로 계산합니다. 원화로 투자하면 그 기간 동안 위안·원 환율이 오르면 수익률이 더 높아지고, 내리면 낮아집니다. 국내 상장 ETF 중에는 환율 변동을 막는(환헤지, 이름에 &lsquo;(H)&rsquo;) 상품도 있습니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. 과창판50는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance를 먼저 쓰고, 받지 못하면 EastMoney·CNBC 순으로 대신 받아 옵니다. 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 매일 모아 둔 주간 종가(data/history.json)이며, Yahoo Finance 자료가 짧거나 없는 구간은 EastMoney·Sina·CNBC 주간 종가로 채웁니다. 실제로 쓴 출처는 화면의 &lsquo;출처&rsquo;와 기간 옆 괄호에 표시됩니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:star50] -->
+    <!--IDXNOTE:star50--><!--/IDXNOTE-->
   </div><!-- /page-star50 -->
   <div class="app-page" id="page-hsi">
     <div class="header">
@@ -10645,6 +10689,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>전체 기간 성장률은 높은데 최근 10년은 왜 마이너스인가요?</summary><div class="g-ans"><p>항셍지수는 1964년 100에서 2024년 말 20,059.95로 약 200배가 되었지만, 2018년 1월 33,154로 최고치를 찍은 뒤 크게 내려왔습니다. 그래서 위 예시처럼 2014년 말부터 10년 동안은 연 −1.61%가 됩니다. 같은 지수라도 어느 시점부터 보느냐에 따라 결과가 정반대가 될 수 있습니다.</p></div></details><details class="g-faq"><summary>항셍지수와 홍콩H지수는 무엇이 다른가요?</summary><div class="g-ans"><p>항셍지수는 홍콩 증시 대형주 전체(중국 본토 기업과 HSBC·AIA 같은 홍콩·국제 기업 포함)를, 홍콩H지수는 그중 <b>중국 본토 기업 50곳</b>만 담습니다. 중국 기업 비중이 더 높은 H지수가 중국 경기에 더 민감합니다.</p></div></details><details class="g-faq"><summary>원화로 투자하면 수익률이 같나요?</summary><div class="g-ans"><p>아닙니다. 이 화면의 성장률은 홍콩달러 기준 지수로 계산합니다. 원화로 투자하면 그 기간 동안 홍콩달러·원 환율이 오르면 수익률이 더 높아지고, 내리면 낮아집니다. 국내 상장 ETF 중에는 환율 변동을 막는(환헤지, 이름에 &lsquo;(H)&rsquo;) 상품도 있습니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. 항셍지수는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance를 먼저 쓰고, 받지 못하면 EastMoney·CNBC 순으로 대신 받아 옵니다. 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 매일 모아 둔 주간 종가(data/history.json)이며, Yahoo Finance 자료가 짧거나 없는 구간은 EastMoney·Sina·CNBC 주간 종가로 채웁니다. 실제로 쓴 출처는 화면의 &lsquo;출처&rsquo;와 기간 옆 괄호에 표시됩니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:hsi] -->
+    <!--IDXNOTE:hsi--><!--/IDXNOTE-->
   </div><!-- /page-hsi -->
   <div class="app-page" id="page-hscei">
     <div class="header">
@@ -10722,6 +10767,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>기준일이 2000년인데 최근 30년은 어떻게 계산하나요?</summary><div class="g-ans"><p>홍콩H지수는 1994년 8월 8일부터 발표되었고, 이후 2000년 1월 3일 값을 2000으로 삼는 지금의 기준을 쓰고 있습니다. 1994년 이후의 지수 값은 이어져 있으므로 최근 30년은 보관한 주간 종가로 계산하고, &lsquo;전체 기간&rsquo;은 공식 기준일인 2000년 1월 3일(2000)부터 계산합니다.</p></div></details><details class="g-faq"><summary>H지수 ELS 손실은 지수가 얼마나 내려서 생긴 건가요?</summary><div class="g-ans"><p>주간 종가 기준으로 2021년 2월 12,000선이던 홍콩H지수가 2024년 1월 5,100선까지 내려왔습니다. 고점 무렵 발행된 ELS는 만기 때 지수가 발행 시점의 일정 비율 아래에 있으면 손실이 나는 구조인데, 지수가 고점의 절반 아래까지 내려오며 그 기준을 밑돌았기 때문입니다.</p></div></details><details class="g-faq"><summary>원화로 투자하면 수익률이 같나요?</summary><div class="g-ans"><p>아닙니다. 이 화면의 성장률은 홍콩달러 기준 지수로 계산합니다. 원화로 투자하면 그 기간 동안 홍콩달러·원 환율이 오르면 수익률이 더 높아지고, 내리면 낮아집니다. 국내 상장 ETF 중에는 환율 변동을 막는(환헤지, 이름에 &lsquo;(H)&rsquo;) 상품도 있습니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. 홍콩H지수는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance를 먼저 쓰고, 받지 못하면 EastMoney·CNBC 순으로 대신 받아 옵니다. 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 매일 모아 둔 주간 종가(data/history.json)이며, Yahoo Finance 자료가 짧거나 없는 구간은 EastMoney·Sina·CNBC 주간 종가로 채웁니다. 실제로 쓴 출처는 화면의 &lsquo;출처&rsquo;와 기간 옆 괄호에 표시됩니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:hscei] -->
+    <!--IDXNOTE:hscei--><!--/IDXNOTE-->
   </div><!-- /page-hscei -->
   <div class="app-page" id="page-hstech">
     <div class="header">
@@ -10799,6 +10845,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>발표는 2020년인데 기준일은 왜 2014년인가요?</summary><div class="g-ans"><p>지수를 처음 발표하면서 2014년 12월 31일을 3000으로 놓고 그 뒤의 값을 같은 방식으로 거슬러 계산해 공개했기 때문입니다. 그래서 2015년부터의 지수 값은 있지만, 실제로 이 지수를 기준으로 거래가 이루어진 것은 2020년부터입니다.</p></div></details><details class="g-faq"><summary>최근 15년 이상 버튼은 왜 눌리지 않나요?</summary><div class="g-ans"><p>기준일인 2014년 12월 31일보다 앞선 값이 없기 때문입니다. 지수가 생기기 전으로 거슬러 가는 기간 버튼은 꺼 두었고, 날짜가 지나면 자동으로 켜집니다.</p></div></details><details class="g-faq"><summary>원화로 투자하면 수익률이 같나요?</summary><div class="g-ans"><p>아닙니다. 이 화면의 성장률은 홍콩달러 기준 지수로 계산합니다. 원화로 투자하면 그 기간 동안 홍콩달러·원 환율이 오르면 수익률이 더 높아지고, 내리면 낮아집니다. 국내 상장 ETF 중에는 환율 변동을 막는(환헤지, 이름에 &lsquo;(H)&rsquo;) 상품도 있습니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. 항셍테크지수는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance를 먼저 쓰고, 받지 못하면 EastMoney·CNBC 순으로 대신 받아 옵니다. 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 매일 모아 둔 주간 종가(data/history.json)이며, Yahoo Finance 자료가 짧거나 없는 구간은 EastMoney·Sina·CNBC 주간 종가로 채웁니다. 실제로 쓴 출처는 화면의 &lsquo;출처&rsquo;와 기간 옆 괄호에 표시됩니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:hstech] -->
+    <!--IDXNOTE:hstech--><!--/IDXNOTE-->
   </div><!-- /page-hstech -->
   <div class="app-page" id="page-taiex">
     <div class="header">
@@ -10876,6 +10923,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>기준이 1966년 &lsquo;평균&rsquo;이면 전체 기간은 어떻게 계산하나요?</summary><div class="g-ans"><p>대만증권거래소는 1966년 한 해 평균 시가총액을 100으로 정해 1967년부터 지수를 발표했습니다. 하루짜리 기준일이 없으므로 이 사이트는 1966년의 가운데인 7월 1일을 기준일로 놓고 계산합니다. 60년 가까운 기간이라 기준일을 1월 1일이나 12월 31일로 바꿔도 연평균 성장률 차이는 0.1%포인트 안팎입니다.</p></div></details><details class="g-faq"><summary>최근 성장률이 특히 높은 이유는 무엇인가요?</summary><div class="g-ans"><p>대만 가권지수는 시가총액 가중 방식이라 시가총액이 가장 큰 TSMC의 영향이 매우 큽니다. 인공지능·데이터센터용 반도체 수요가 늘며 TSMC 주가가 크게 오른 것이 지수 상승을 이끌었습니다. 반대로 반도체 업황이 꺾이면 지수도 크게 흔들릴 수 있습니다.</p></div></details><details class="g-faq"><summary>원화로 투자하면 수익률이 같나요?</summary><div class="g-ans"><p>아닙니다. 이 화면의 성장률은 대만달러 기준 지수로 계산합니다. 원화로 투자하면 그 기간 동안 대만달러·원 환율이 오르면 수익률이 더 높아지고, 내리면 낮아집니다. 국내 상장 ETF 중에는 환율 변동을 막는(환헤지, 이름에 &lsquo;(H)&rsquo;) 상품도 있습니다.</p></div></details><details class="g-faq"><summary>배당금도 포함된 성장률인가요?</summary><div class="g-ans"><p>아닙니다. 대만 가권지수는 주가만으로 계산하는 <b>가격지수</b>라 배당은 들어 있지 않습니다. 배당을 받아 다시 투자했다고 보는 총수익률은 이보다 높습니다.</p></div></details><details class="g-faq"><summary>지수 값은 어디서 가져오나요?</summary><div class="g-ans"><p>현재 지수는 Yahoo Finance를 먼저 쓰고, 받지 못하면 EastMoney·CNBC 순으로 대신 받아 옵니다. 최근 N년 계산에 쓰는 과거 값은 이 사이트가 GitHub Actions로 매일 모아 둔 주간 종가(data/history.json)이며, Yahoo Finance 자료가 짧거나 없는 구간은 EastMoney·Sina·CNBC 주간 종가로 채웁니다. 실제로 쓴 출처는 화면의 &lsquo;출처&rsquo;와 기간 옆 괄호에 표시됩니다.</p></div></details></div>
     </section>
     <!-- [/GUIDE:taiex] -->
+    <!--IDXNOTE:taiex--><!--/IDXNOTE-->
   </div><!-- /page-taiex -->
 
   <!-- ── 공포 & 탐욕 지수 페이지 ── -->

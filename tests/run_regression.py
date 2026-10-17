@@ -1317,6 +1317,10 @@ def earn_check(page, base, fail, errs, ignorable):
         fail('earn', '콘솔 오류: ' + t[:200])
 
 
+IDX_KEYS = ['nasdaq', 'nasdaq100', 'dowjones', 'sp500', 'sox', 'djsemi', 'kospi', 'kospi200', 'kosdaq', 'n225', 'topix', 'sse',
+            'csi300', 'szse', 'chinext', 'star50', 'hsi', 'hscei', 'hstech', 'taiex']
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--base', help='검사할 사이트 주소 (기본: 저장소 루트를 임시 서버로)')
@@ -1553,10 +1557,43 @@ def main():
             page.goto(base, wait_until='load'); page.wait_for_timeout(300)
             if page.evaluate("document.querySelectorAll('.learn-home .lr-card').length") < 6:
                 fail('', '홈의 투자 공부 글 카드 6개 미만')
-            for pth in ['compound/', 'earnings-calendar/', 'fire/']:
-                page.goto(base + pth, wait_until='load'); page.wait_for_timeout(300)
-                k = page.evaluate("[...document.querySelectorAll('.learn-rel .lr-card')].filter(a => a.offsetParent).length")
-                if not k: fail(pth, '\'함께 읽으면 좋은 글\' 카드가 보이지 않음')
+            # 자동 숫자({{키}})가 모두 채워졌는지 · 자동 갱신 글에 자료 기준일 표시
+            for d in learn:
+                page.goto(base + 'learn/' + d + '/', wait_until='load'); page.wait_for_timeout(100)
+                r = page.evaluate("({ raw: document.body.innerHTML.includes('{{'), auto: !!document.querySelector('.meta .auto') })")
+                if r['raw']: fail('learn/' + d, '채워지지 않은 자동 값 {{…}} 남음')
+                if d in ('index-investing', 'leveraged-etf', 'reading-earnings', 'market-cap-world') and not r['auto']:
+                    fail('learn/' + d, '자동 갱신 기준일 표시(.meta .auto) 없음')
+        # 상단 메뉴 '투자 공부' · 좁은 화면에서도 메뉴 한 줄에 다 들어가는지 · 영어판에는 없음
+        page.goto(base + 'compound/', wait_until='load'); page.wait_for_timeout(300)
+        for w in (320, 360, 390, 768, 1440):
+            page.set_viewport_size({'width': w, 'height': 900}); page.wait_for_timeout(120)
+            r = page.evaluate("""() => { const n = document.getElementById('mainNav'), a = document.getElementById('grp-learn-btn');
+                return { sw: n.scrollWidth, cw: n.clientWidth, href: a ? a.getAttribute('href') : null }; }""")
+            if r['href'] != 'learn/': fail('compound/', "상단 메뉴 '투자 공부' 링크 이상: %s" % r['href'])
+            if w >= 360 and r['sw'] > r['cw'] + 1: fail('compound/', '%dpx 상단 메뉴가 한 줄에 안 들어감 (%d > %d)' % (w, r['sw'], r['cw']))
+        page.set_viewport_size({'width': 1440, 'height': 900})
+        r = page.evaluate("""() => ({ cols: [...document.querySelectorAll('.sf-map .sf-cols > .sf-col')].length,
+            band: document.querySelectorAll('.sf-map .sf-band .sf-grp a').length })""")
+        n_idx = sum(1 for x in routes if x['group'] == 'invest' and x['tab'] in IDX_KEYS)
+        if r['cols'] != 7 or r['band'] != n_idx:
+            fail('compound/', '하단 사이트맵 열 %d개(기대 7) · 지수 묶음 %d개(기대 %d)' % (r['cols'], r['band'], n_idx))
+        if en:
+            page.goto(base + 'en/' + en[0] + '/', wait_until='load'); page.wait_for_timeout(200)
+            if page.evaluate("!!document.getElementById('grp-learn')"): fail('en/' + en[0], "영어판 상단 메뉴에 '투자 공부'가 남음")
+        # 지수 20쪽 고유 해설 + 자동 통계
+        for k in IDX_KEYS:
+            page.goto(base + next(x['path'] for x in routes if x['tab'] == k) + '/', wait_until='load'); page.wait_for_timeout(150)
+            r = page.evaluate("""() => { const s = document.querySelector('.idx-note'); if (!s || !s.offsetParent) return null;
+                return { txt: s.querySelector('.in-text').innerText.length, rows: s.querySelectorAll('.in-tbl tr').length,
+                         raw: s.innerHTML.includes('{{'), auto: s.querySelectorAll('.in-auto li').length }; }""")
+            if not r: fail(k, '지수 해설(.idx-note)이 보이지 않음'); continue
+            if r['txt'] < 500 or r['rows'] < 6 or r['raw'] or not r['auto']:
+                fail(k, '지수 해설 이상: %s' % r)
+        for pth in ['compound/', 'earnings-calendar/', 'fire/']:
+            page.goto(base + pth, wait_until='load'); page.wait_for_timeout(300)
+            k = page.evaluate("[...document.querySelectorAll('.learn-rel .lr-card')].filter(a => a.offsetParent).length")
+            if not k: fail(pth, '\'함께 읽으면 좋은 글\' 카드가 보이지 않음')
 
         # 4. 무한매수법 엔진 · 화면 · 가이드북
         print('[3] 무한매수법 엔진 · 기록 화면 · 가이드북', flush=True)

@@ -196,7 +196,6 @@ def kr_period_days(rows):
         if r and r[0] == '당기실적' and len(r) >= 4 and re.match(r'\d{4}-\d\d-\d\d$', r[1]) and re.match(r'\d{4}-\d\d-\d\d$', r[3]):
             return (datetime.date.fromisoformat(r[3]) - datetime.date.fromisoformat(r[1])).days
     return None
-    return res
 
 
 UNIT = {'조원': 1e4, '억원': 1, '백만원': 1e-2, '천원': 1e-5, '원': 1e-8}
