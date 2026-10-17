@@ -1060,6 +1060,41 @@ class Actual:
         return 'skip' if self.c[sym] is None else self.c[sym].get(ymd)
 
 
+KCMP_SYMS = {'simulator': ('kodex', '498400.KS'), 'sol': ('sol', '0167B0.KS'), 'tiger': ('tiger', '0104N0.KS'),
+             'tigerdiv': ('tigerdiv', '472150.KS'), 'tigersemi': ('tigersemi', '0177R0.KS')}
+
+
+def kcmp_check(page, base, fail, local):
+    """커버드콜 시뮬레이터 '코스피 대비 수익률 비교' — ETF 가격이 실제 거래 종가(분배금 미반영)인지
+    · compare.json basis:'raw' · 상장일·마지막 종가 = 네이버 일별 시세(독립 출처) · 화면: 분배금 포함 > 주가(분배금 제외)"""
+    try:
+        j = json.load(open(os.path.join(ROOT, 'data', 'compare.json'), encoding='utf-8')) if local else json.loads(http_text(base + 'data/compare.json'))
+    except Exception as e:
+        fail('kcmp', 'compare.json 읽기 실패: %s' % e); return
+    if j.get('basis') != 'raw':
+        fail('kcmp', "compare.json basis 가 'raw' 아님 (수정주가 자료일 수 있음): %s" % j.get('basis'))
+    A = Actual()
+    for tab, (path, sym) in KCMP_SYMS.items():
+        ser = (j.get('series') or {}).get(sym) or []
+        if len(ser) < 5: fail(path, 'compare.json %s 일봉 부족' % sym); continue
+        for d, c in (ser[0], ser[-1]):
+            ymd = time.strftime('%Y%m%d', time.gmtime(d * 86400))
+            try:
+                act = A.kr('stock', sym.split('.')[0], ymd)
+            except Exception as e:
+                print('  ! 네이버 일별 시세 %s 받기 실패 (대조 건너뜀): %s' % (sym, str(e)[:80]), flush=True); break
+            if act and act[1] and abs(c / act[1] - 1) > 0.005:
+                fail(path, '%s %s 종가 %s ≠ 실제 거래 종가 %s (수정주가 의심)' % (sym, ymd, c, act[1]))
+        page.goto(base + path + '/', wait_until='load'); page.wait_for_timeout(800)
+        r = page.evaluate("""async (k) => { for (let i = 0; i < 40 && !(document.getElementById((k === 'simulator' ? '' : k + '-') + 'kcmp-ret-etf') || {}).textContent.match(/\\d/); i++) await new Promise(r => setTimeout(r, 250));
+            const g = id => (document.getElementById((k === 'simulator' ? '' : k + '-') + 'kcmp-' + id) || {}).textContent || '';
+            const v = () => parseFloat(g('ret-etf').replace(/[^\\d.+-]/g, ''));
+            window.kcmpSetPeriod(k, 'MAX'); window.kcmpSetMode(k, false); const p = v(); window.kcmpSetMode(k, true); const t = v(); window.kcmpSetMode(k, false);
+            return { p, t, note: g('note') }; }""", tab)
+        if not (r['t'] > r['p'] + 1): fail(path, '코스피 비교: 분배금 포함(%s%%)이 주가 기준(%s%%)보다 1%%p 이상 높지 않음 — 분배금이 반영되지 않았거나 수정주가' % (r['t'], r['p']))
+        if '분배금 제외' not in r['note']: fail(path, '코스피 비교 설명에 "분배금 제외" 없음')
+
+
 def etf_audit(page, base, fail):
     """배포된 /etf-compare/ — 기준·끝 가격이 실제 거래 가격과 같은지 · 날짜·시가/종가 규칙 · 수익률 = 끝 ÷ 기준 − 1 · 표 칸 표시"""
     A, n = Actual(), 0
@@ -1592,6 +1627,8 @@ def main():
             if not r: fail(k, '지수 해설(.idx-note)이 보이지 않음'); continue
             if r['txt'] < 500 or r['rows'] < 6 or r['raw'] or not r['auto']:
                 fail(k, '지수 해설 이상: %s' % r)
+        print('[2-2] 커버드콜 코스피 비교 — 실제 종가(분배금 미반영)', flush=True)
+        kcmp_check(page, base, fail, local)
         for pth in ['compound/', 'earnings-calendar/', 'fire/']:
             page.goto(base + pth, wait_until='load'); page.wait_for_timeout(300)
             k = page.evaluate("[...document.querySelectorAll('.learn-rel .lr-card')].filter(a => a.offsetParent).length")

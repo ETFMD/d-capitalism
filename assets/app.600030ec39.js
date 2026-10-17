@@ -1830,7 +1830,8 @@ window.chartZoom = (function () {
 /* ════════════════════════════════════════
    [KODEX-CMP] 분배 시뮬레이터 공통 — ETF ↔ 코스피 수익률 비교 (상장 이후)
    대상: KODEX·SOL·TIGER·TIGER배당·TIGER반도체 (KCMP_LIST) — 화면 id 는 '{접두어}kcmp-…'
-   데이터: data/compare.json (Actions: 일봉 종가·분배금) → 없으면 Yahoo 직접(프록시)
+   데이터: data/compare.json (Actions: ETF '실제 거래 종가'(네이버 일별 시세) · 분배금 · 코스피 일봉 — basis:'raw') → 없거나 수정주가 자료면 Yahoo 직접
+   ※ 네이버 차트(fchart·siseJson)의 ETF 일봉은 분배금까지 반영한 수정주가 — 쓰면 '분배금 제외'가 총수익률처럼 보이므로 받지 않음
    기간: 1M·3M·6M·YTD·1Y·MAX·기간설정 — 시작일(포함) 이전 마지막 거래일 종가를 0%로 맞춰 비교
    분배금 포함: 분배락일 종가로 재투자한다고 보고 TR_t = TR_t-1 × (P_t + D_t) / P_t-1
 ════════════════════════════════════════ */
@@ -1880,7 +1881,7 @@ window.chartZoom = (function () {
       C.loading = (async function () {
         try {
           var j = window.mdLoad ? await window.mdLoad('compare.json') : null, s = j && j.series;
-          if (s && s[cfg.sym] && s[cfg.sym].length > 5 && s[BENCH] && s[BENCH].length > 5) {
+          if (j && j.basis === 'raw' && s && s[cfg.sym] && s[cfg.sym].length > 5 && s[BENCH] && s[BENCH].length > 5) {
             C.etf = s[cfg.sym]; C.bench = s[BENCH]; C.divs = (j.divs && j.divs[cfg.sym]) || [];
             C.src = '네이버 금융·Yahoo Finance 일봉' + (j.updated ? ' (' + j.updated.slice(0, 10) + ' 갱신)' : '');
             return true;
