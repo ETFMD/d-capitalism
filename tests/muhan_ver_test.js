@@ -6,6 +6,7 @@
    · ⑱ 증권사 주문 거부(o.rej — 한도 = 시가 × 1.2 · 한도로 낮춰 넣기 / 그날 건너뛰기)
    · ⑲ 주문 넣는 때(o.fill — 'open' 정규장 시작 전: 갭 상승이면 시가 · 'pre' 프리장 시작: 전날 종가가 이미 넘으면 전날 종가, 주문 거부 기준 전날 종가)
    · ⑳ 다시 계산(replay)의 기록별 수수료율(r.feeRate — 자동매매 프로그램)
+   · ㉑ 연말 절세(harvest) 수수료는 계좌 현금 안에서 — 모자라면 수량을 줄임(out.hcut)
    실패가 있으면 'FAIL …' 줄과 종료 코드 1 */
 'use strict';
 const fs = require('fs'), path = require('path');
@@ -406,6 +407,24 @@ function bdays(from, n, skip) { const out = []; let t = Date.parse(from + 'T12:0
   check('replay: 기록 율(feeRate)이 있으면 그 날만 그 율 · 없으면 x.fee', Math.abs(base - (10000 - 390 * 1.0007)) < 1e-9 && Math.abs(mixed - (10000 - 200 * 1.0007 - 190 * 1.0025)) < 1e-9, base + ' / ' + mixed);
   const zero = MHV.replay(cfg, { capital: 10000, fee: 0.0025 }, [Object.assign({ feeRate: 0 }, recs[0])]).st.cash;
   check('replay: 기록 율 0(수수료 없음)도 그대로 씀', Math.abs(zero - 9800) < 1e-9, zero); }
+
+/* ㉑ 연말 절세(harvest) 수수료는 계좌 현금 안에서 (2026-10-17) — 팔고 다시 사는 수수료가 현금보다 크면 수량을 줄임(전략 평단·수량은 그대로)
+      · 예전: SOXL V1.0 30분할 소진 hold $1,000,000 2010-12-02 ~ 2021-03-15 선입선출에서 2015-12-29 수수료 $5,595 로 현금 $2,157 → −$3,438 (105일 음수 · ⑮ 무작위 구간이 새 날짜로 밀려 드러남) */
+{ const cfg = Object.assign(MHV.defaults('1.0', 'SOXL'), { splits: 30, exhaust: 'hold' }), from = SX.d.indexOf('2010-12-02'), to = SX.d.indexOf('2021-03-15');
+  /* 실패했던 그대로: ⑮ 의 무작위 원/달러(부를 때마다 1,100 + 300 × 난수 · 그 회차 시작 씨앗 129171712) + 고정 원/달러 두 가지 */
+  const fxOf = fx => { if (fx !== 'seed') return () => fx; let sd = 129171712; return () => 1100 + 300 * ((sd = (sd * 1103515245 + 12345) % 2147483648) / 2147483648); };
+  for (const [method, fx] of [['fifo', 'seed'], ['fifo', 1400], ['avg', 1250]]) {
+    const O = MHV.run(cfg, SX, { from, to, capital: 1e6, fee: 0.0025, sec: 0.0000206, divTax: 0.15, rows: true, tax: { fx: fxOf(fx), method, harvest: true } });
+    const neg = O.rows.filter(r => r.cash < -1e-9), hv = O.rows.filter(r => r.hv > 0), d29 = O.rows.find(r => SX.d[r.i] === '2015-12-29');
+    let rz = 0, fe = 0, dd = 0; O.rows.forEach(r => { rz += r.rz; fe += r.fee; dd += r.dv; });
+    const L = O.rows[O.rows.length - 1], want = 1e6 + rz + L.q * (SX.c[L.i] * L.k - L.avg * L.k) - fe + dd - O.taxPaid;
+    check('연말 절세 수수료는 현금 안에서 — ' + method + ' 원/달러 ' + fx + ': 현금 음수 0일 · 절세 매매는 그대로 함(' + hv.length + '번) · 현금 모자란 해는 수량을 줄임(' + O.hcut + '해) · 세후 평가금 식 그대로',
+      from > 0 && to > from && neg.length === 0 && hv.length > 0 && (fx !== 'seed' || (O.hcut >= 1 && d29 && d29.cash >= -1e-9 && d29.hv > 0)) && Math.abs(want - O.final) < 1e-6 * Math.max(1e6, Math.abs(O.final)),
+      [neg.length, hv.length, O.hcut, d29 && d29.cash, want, O.final].join(' · '));
+  }
+  const O2 = MHV.run(cfg, SX, { from, to, capital: 1e6, fee: 0.0025, sec: 0.0000206, divTax: 0.15, rows: true, tax: { fx: () => 1200, method: 'fifo', harvest: false } });
+  check('연말 절세를 끄면 줄인 해 0 · 현금 음수 0', O2.hcut === 0 && O2.rows.every(r => r.cash > -1e-9 && !r.hv), O2.hcut);
+}
 
 console.log((bad ? 'FAIL ' : 'OK ') + '무한매수법 버전 엔진 검사 ' + ok + ' / ' + (ok + bad));
 process.exit(bad ? 1 : 0);

@@ -25415,11 +25415,11 @@ var MHV = (function () {
     var fee = o.fee || 0, sec = o.sec || 0, divTax = o.divTax || 0, norm = o.norm || 'auto', keep = o.rows !== false, syn = D.L > 0 ? D.L : 0;
     var rj = o.rej && (o.rej.mode === 'clamp' || o.rej.mode === 'skip') ? o.rej : null, Do = D.o || null, fm = o.fill === 'open' || o.fill === 'pre' ? o.fill : null;
     var st = init(cfg, o.capital), out = { eq: [], cash: [], cycles: [], rows: keep ? [] : null, fees: 0, divs: 0, taxPaid: 0, taxes: [], ev: [], minCash: o.capital,
-                                           rs: 0, nob: 0, nobFrom: null, over: 0, overFrom: null, rebase: 0, lack: 0, lack0: 0, lack0From: null, tsell: 0, taxExt: 0,
+                                           rs: 0, nob: 0, nobFrom: null, over: 0, overFrom: null, rebase: 0, lack: 0, lack0: 0, lack0From: null, tsell: 0, taxExt: 0, hcut: 0,
                                            rj: rj ? { mode: rj.mode, cap: rj.cap || 1.2, days: 0, rows: 0, miss: 0, noO: 0, sell: 0, first: null } : null,
                                            fx: fm ? { mode: fm, days: 0, noO: 0 } : null };
     /* rs 액면 병합 · nob 1회 매수금 < 1주 가격인 날 · over V3 사이클 시작 때 현금 < 1회 × 분할 · rebase V3 다시 정함
-       · lack 잔금 소진(T 가 아니라 현금 < 1회)으로 소진한 날 · lack0 (V3.0 만) 그것도 전반전(T < 분할/2)에 — 반복리 완충이 바닥난 표시 · tsell 세금 내려 판 해 · taxExt 밖에서 낸 세금($) */
+       · lack 잔금 소진(T 가 아니라 현금 < 1회)으로 소진한 날 · lack0 (V3.0 만) 그것도 전반전(T < 분할/2)에 — 반복리 완충이 바닥난 표시 · tsell 세금 내려 판 해 · taxExt 밖에서 낸 세금($) · hcut 연말 절세 수량을 계좌 현금(수수료)만큼으로 줄인 해 */
     var cyc = null, cs = from, n = { win: 0, loss: 0, part: 0, ql: 0, xsell: 0, rev: 0, exh: 0 }, maxCost = 0, d4 = '9999-12-31';
     /* 세금 장부 (원화) */
     var tx = o.tax ? { lots: [], q: 0, cost: 0, gain: {}, due: [] } : null;
@@ -25488,6 +25488,11 @@ var MHV = (function () {
           var ps = c[i] * k, wps = ps * fxAt(i), hq = 0, want = g - DED, got = 0;   /* 1주(이 사이클 단위)의 원화 가치 */
           if (o.tax.method === 'avg') { var lp = tx.q > 0 ? tx.cost / tx.q - wps : 0; if (lp > 0) hq = Math.min(st.qty, Math.ceil(want / lp)); }
           else { for (var li = 0; li < tx.lots.length && got < want; li++) { var Lq = tx.lots[li], lpp = Lq[1] - wps; if (lpp <= 0) break; var tq = Math.min(Lq[0], Math.ceil((want - got) / lpp)); hq += tq; got += tq * lpp; } hq = Math.min(st.qty, hq); }
+          if (hq > 0) {                                                   /* 수수료(팔 때 수수료·SEC + 다시 살 때 수수료)는 계좌 현금에서 — 현금보다 많이 들면 그만큼으로 수량을 줄임 (2026-10-17 · 예전엔 현금이 음수가 될 수 있었음: 사이클 끝 무렵 현금이 적을 때) */
+            var hr = ps * (2 * fee + sec), hmax = hr > 0 ? Math.max(0, st.cash) / hr : hq;
+            if (!cfg.ideal) hmax = Math.floor(hmax + 1e-9);
+            if (hq > hmax) { hq = hmax; out.hcut++; }
+          }
           if (hq > 0) {                                                   /* 같은 가격(종가)에 팔고 다시 삼 — 전략의 평단·수량은 그대로 */
             var amt = hq * ps, fs = amt * (fee + sec), fb = amt * fee;
             taxSell(i, hq, amt - fs); taxBuy(i, hq, amt + fb);
