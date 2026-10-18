@@ -147,6 +147,19 @@ CSS = '''
   .note { font-size:12.5px; color:var(--text3); margin:-10px 0 18px; }
   .box { border-radius:12px; padding:14px 16px; margin:18px 0; border:1px solid var(--border); background:var(--bg2); }
   .box p:last-child, .box ul:last-child { margin-bottom:0; }
+  /* 그림(인라인 SVG) — 색은 테마 변수를 따름 · 좁은 화면에서도 글자가 읽히게 세로형(viewBox 폭 360)으로 그림 */
+  .fig { margin:18px 0 22px; text-align:center; }
+  .fig svg { width:100%; max-width:480px; height:auto; font-family:inherit; }
+  .fig .bx { fill:var(--bg2); stroke:var(--border); stroke-width:1.2; }
+  .fig .bx.hl { fill:var(--accent-dim); stroke:var(--accent); }
+  .fig .bx.warn { fill:rgba(245,165,36,.10); stroke:rgba(245,165,36,.55); }
+  .fig .bx.key { fill:var(--bg3); stroke:var(--border); }
+  .fig .ln { stroke:var(--text3); stroke-width:1.5; fill:none; }
+  .fig .t { fill:var(--text); font-size:13px; }
+  .fig .t.b { font-weight:700; font-size:14px; }
+  .fig .t.s { font-size:11.5px; fill:var(--text2); }
+  .fig .t.m { fill:var(--text3); }
+  .fig figcaption { font-size:13px; color:var(--text3); line-height:1.6; margin-top:8px; text-align:left; }
   .box ul, .box ol { padding-left:22px; margin:8px 0 0; color:var(--text2); } .box li { margin:5px 0; } .box li::marker { color:var(--text3); }
   .box.key { border-color:rgba(49,130,246,.4); background:var(--accent-dim); }
   .box.warn { border-color:rgba(245,165,36,.45); background:rgba(245,165,36,.07); }

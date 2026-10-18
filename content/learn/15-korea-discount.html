@@ -1,0 +1,156 @@
+<!--{"slug":"korea-discount","title":"한국 증시의 우상향은 왜 더딘가 — 코리아 디스카운트와 기업 지배구조","desc":"코스피가 미국보다 덜 오른 이유를 지배구조·물적분할·중복상장·자사주·주주환원으로 풀고, 미국 기업 구조와 그림으로 비교합니다.","cat":"company","date":"2026-10-18","tools":["kospi","sp500","earnings-calendar","marketcap"],"order":15}-->
+<p class="lead">"미국 주식은 길게 들고 있으면 오르는데, 한국 주식은 왜 제자리일까?" 한국 투자자라면 한 번쯤 해 본 질문입니다. 한국 기업이 미국 기업보다 이익을 못 내서만은 아닙니다. 같은 이익을 내도 한국 주식에는 더 낮은 값이 매겨지는 현상, 이른바 <b>코리아 디스카운트</b>가 있고, 그 한가운데에 <b>기업 지배구조</b>가 있습니다. 이 글은 숫자로 차이를 확인하고, 그림으로 한국과 미국 기업 구조의 차이를 설명합니다.</p>
+
+<h2>숫자로 보는 차이</h2>
+<p>이 사이트가 매일 모으는 주간 종가로 계산한 결과입니다(가격 지수 기준 · 배당 제외 · {{idx.kospi.asof}} 기준 · 자동 갱신).</p>
+<div class="tbl"><table>
+<thead><tr><th>기간</th><th class="n">코스피 연평균</th><th class="n">S&amp;P 500 연평균</th></tr></thead>
+<tbody>
+<tr><td>최근 30년</td><td class="n">{{idx.kospi.cagr30}}</td><td class="n">{{idx.sp500.cagr30}}</td></tr>
+<tr><td>최근 20년</td><td class="n">{{idx.kospi.cagr20}}</td><td class="n">{{idx.sp500.cagr20}}</td></tr>
+<tr><td>최근 10년</td><td class="n">{{idx.kospi.cagr10}}</td><td class="n">{{idx.sp500.cagr10}}</td></tr>
+<tr><td>30년 동안 지수가 불어난 배수</td><td class="n">약 {{idx.kospi_vs_sp500.x30}}</td><td class="n">약 {{idx.sp500.x30}}</td></tr>
+</tbody></table></div>
+<p>차이가 가장 분명한 시기는 2010년대입니다. 코스피는 2013년 {{idx.kospi.y2013}}, 2014년 {{idx.kospi.y2014}}, 2015년 {{idx.kospi.y2015}}, 2016년 {{idx.kospi.y2016}}로 4년 동안 제자리였고, 같은 해 S&amp;P 500은 {{idx.sp500.y2013}}, {{idx.sp500.y2014}}, {{idx.sp500.y2015}}, {{idx.sp500.y2016}}였습니다. 이 기간 코스피에 붙은 별명이 '박스피'입니다.</p>
+<p>반대로 2025년에는 코스피가 {{idx.kospi.y2025}}(S&amp;P 500 {{idx.sp500.y2025}}) 오르며 오랜만에 크게 앞섰습니다. 반도체 이익 급증과 함께 아래에서 설명할 지배구조 개선 정책이 힘을 실었다는 평가가 많았습니다. 다만 지금 코스피는 이 사이트 데이터의 최고치보다 {{idx.kospi.below_hi}} 낮은 곳에 있어, 오를 때도 내릴 때도 변동이 크다는 점은 여전합니다(<a href="/kospi/">코스피 성장률 페이지</a>의 '숫자로 보는 코스피' 참고).</p>
+<div class="box key"><b>배당까지 넣으면?</b><p>위 숫자는 배당을 뺀 가격 지수입니다. 두 시장의 배당수익률은 대체로 연 1~2%대로 큰 차이가 없어서, 배당을 넣어도 장기 순서는 크게 바뀌지 않습니다. 대신 미국 기업은 자사주 매입으로 주식 수를 꾸준히 줄여 왔고, 그 효과는 이미 가격 지수 안에 들어 있습니다.</p></div>
+
+<h2>코리아 디스카운트란</h2>
+<p>주가가 기업의 장부상 순자산의 몇 배인지를 나타내는 PBR(주가순자산비율)로 보면 차이가 잘 보입니다. 2024년 무렵 코스피 전체의 PBR은 <b>1배 안팎</b>이었고, S&amp;P 500은 <b>4~5배</b> 수준이었습니다. PBR 1배는 "회사를 지금 청산해서 나눠 줘도 주가만큼은 받는다"는 뜻인데, 그 정도 값밖에 못 받는다는 것은 시장이 그 회사의 미래 이익이 주주에게 제대로 돌아올 것이라고 믿지 않는다는 신호입니다. 업종 구성 차이(미국은 고PBR인 소프트웨어·플랫폼 비중이 큼)를 감안해도, 비슷한 업종끼리 비교했을 때 한국 기업이 낮은 값을 받는 경향이 꾸준히 확인됩니다.</p>
+<p>원인은 하나가 아니지만, 국내외 연구와 투자자들이 가장 먼저 꼽는 것은 <b>"이익은 나는데 그 이익이 일반 주주에게 오지 않는 구조"</b>, 즉 지배구조입니다.</p>
+
+<h2>원인 1. 적은 지분으로 그룹 전체를 지배하는 구조</h2>
+<p>한국 대기업 집단은 보통 오너 일가가 지주회사(또는 핵심 계열사)를 지배하고, 지주회사가 사업회사를, 사업회사가 다시 손자회사를 지배하는 피라미드 구조입니다. 층마다 지분이 절반이 안 돼도 최대주주라서 이사회를 장악할 수 있기 때문에, 아래로 내려갈수록 오너의 <b>실제 몫(현금흐름권)</b>은 작아지지만 <b>지배력(의결권)</b>은 그대로입니다.</p>
+<figure class="fig">
+<svg viewBox="0 0 360 430" role="img" aria-label="한국형 피라미드 지배구조: 오너 일가가 지주회사 30%, 지주회사가 사업회사 40%, 사업회사가 손자회사 50%를 가지면 손자회사에 대한 오너의 실제 몫은 6%이지만 지배권은 그대로">
+<rect class="bx hl" x="105" y="10" width="150" height="46" rx="10"/><text class="t b" x="180" y="38" text-anchor="middle">오너 일가</text>
+<path class="ln" d="M180 56 V92"/><text class="t s" x="190" y="79">지분 30%</text>
+<rect class="bx" x="90" y="92" width="180" height="50" rx="10"/><text class="t b" x="180" y="114" text-anchor="middle">지주회사 (상장)</text><text class="t s m" x="180" y="132" text-anchor="middle">일반 주주 70%</text>
+<path class="ln" d="M180 142 V178"/><text class="t s" x="190" y="165">지분 40%</text>
+<rect class="bx" x="90" y="178" width="180" height="50" rx="10"/><text class="t b" x="180" y="200" text-anchor="middle">사업회사 B (상장)</text><text class="t s m" x="180" y="218" text-anchor="middle">일반 주주 60%</text>
+<path class="ln" d="M180 228 V264"/><text class="t s" x="190" y="251">지분 50%</text>
+<rect class="bx" x="90" y="264" width="180" height="50" rx="10"/><text class="t b" x="180" y="286" text-anchor="middle">손자회사 C (상장)</text><text class="t s m" x="180" y="304" text-anchor="middle">일반 주주 50%</text>
+<rect class="bx warn" x="14" y="334" width="332" height="84" rx="10"/>
+<text class="t b" x="180" y="358" text-anchor="middle">C에 대한 오너의 실제 몫</text>
+<text class="t" x="180" y="380" text-anchor="middle">30% × 40% × 50% = 6%</text>
+<text class="t s m" x="180" y="404" text-anchor="middle">그런데 C의 이사 선임·경영은 사실상 오너가 결정</text>
+</svg>
+<figcaption>그림 1. 피라미드 지배구조(숫자는 이해를 돕기 위한 예시). 층이 하나 늘 때마다 실제 몫은 줄고 지배력은 유지됩니다.</figcaption>
+</figure>
+<p>문제는 실제 몫과 지배력이 크게 벌어질 때 생깁니다. 위 그림에서 손자회사 C가 1,000억 원을 벌면 오너에게 돌아오는 몫은 60억 원뿐입니다. 그런데 C가 오너가 100% 가진 회사와 거래해 그 회사에 1,000억 원의 이익을 몰아주면, 오너는 1,000억 원을 고스란히 가집니다. 이렇게 상장회사의 이익이 지배주주 쪽으로 빠져나가는 것을 <b>터널링</b>, 흔히 '일감 몰아주기'라고 부릅니다. 일반 주주는 이런 가능성 자체를 위험으로 보고 주식에 낮은 값을 매기게 됩니다.</p>
+<p>오너 입장에서 주가가 오르는 것이 오히려 불편한 경우도 있습니다. 상속·증여세는 주가를 기준으로 매겨지는데, 최고세율 50%에 최대주주 할증까지 붙으면 실제 부담이 최대 60%에 이릅니다(2025년 기준 · 제도는 바뀔 수 있음). 경영권을 물려줘야 하는 시기에는 "주가가 낮게 유지되는 것"이 지배주주에게 유리해지는, 일반 주주와 정반대의 이해관계가 생깁니다.</p>
+
+<h2>원인 2. 물적분할과 중복상장 — 알짜 사업이 빠져나간다</h2>
+<p>머니코믹스의 '호구와트' 영상 시리즈(아래 참고 영상)가 다루는 것도 이런 '소액주주가 손해 보는 구조'입니다. 소액주주가 성장성을 보고 산 회사에서, 가장 잘 나가는 사업을 떼어 내 따로 상장시키는 일이 한국에서는 드물지 않았습니다.</p>
+<figure class="fig">
+<svg viewBox="0 0 360 470" role="img" aria-label="물적분할과 중복상장: 상장사 A가 성장 사업을 100% 자회사로 떼어 낸 뒤 그 자회사를 따로 상장하면 A의 주주는 성장 사업을 간접적으로만 갖게 되어 A 주가가 할인된다">
+<text class="t b" x="14" y="24">① 처음</text>
+<rect class="bx" x="70" y="36" width="220" height="62" rx="10"/><text class="t b" x="180" y="60" text-anchor="middle">상장사 A</text><text class="t s m" x="180" y="82" text-anchor="middle">기존 사업 + 성장 사업(배터리 등)</text>
+<text class="t b" x="14" y="128">② 물적분할</text>
+<rect class="bx" x="40" y="140" width="130" height="56" rx="10"/><text class="t b" x="105" y="164" text-anchor="middle">A (기존 사업)</text><text class="t s m" x="105" y="184" text-anchor="middle">주주 그대로</text>
+<path class="ln" d="M170 168 H200"/>
+<rect class="bx hl" x="200" y="140" width="130" height="56" rx="10"/><text class="t b" x="265" y="164" text-anchor="middle">신설 B (성장 사업)</text><text class="t s m" x="265" y="184" text-anchor="middle">A가 100% · 비상장</text>
+<text class="t b" x="14" y="230">③ B를 따로 상장 (중복상장)</text>
+<rect class="bx" x="40" y="242" width="130" height="56" rx="10"/><text class="t b" x="105" y="266" text-anchor="middle">A</text><text class="t s m" x="105" y="286" text-anchor="middle">B 지분 70~80%</text>
+<path class="ln" d="M170 270 H200"/>
+<rect class="bx hl" x="200" y="242" width="130" height="56" rx="10"/><text class="t b" x="265" y="266" text-anchor="middle">B (상장)</text><text class="t s m" x="265" y="286" text-anchor="middle">새 투자자 20~30%</text>
+<rect class="bx warn" x="14" y="320" width="332" height="138" rx="10"/>
+<text class="t b" x="180" y="344" text-anchor="middle">A 주주에게 생기는 일</text>
+<text class="t s" x="30" y="370">· 성장 사업을 '직접' 갖지 못하고 A를 거쳐 간접 보유</text>
+<text class="t s" x="30" y="394">· B에 투자하고 싶은 돈은 이제 B를 바로 삼</text>
+<text class="t s" x="30" y="418">· 같은 사업이 A와 B에 두 번 상장 → A 주가 할인</text>
+<text class="t s" x="30" y="442">  ('지주사 할인' · '더블 카운팅')</text>
+</svg>
+<figcaption>그림 2. 물적분할 뒤 자회사를 따로 상장하는 '쪼개기 상장'. 회사 입장에서는 경영권을 지키면서 새 자금을 끌어오는 방법이지만, 기존 주주에게는 성장 기대가 빠져나가는 일입니다.</figcaption>
+</figure>
+<p>대표적인 사례가 2020년 LG화학의 배터리 사업 물적분할과 2022년 LG에너지솔루션 상장입니다. 배터리 성장을 보고 LG화학을 산 투자자들의 반발이 컸고, 이 일을 계기로 2022년 말부터 물적분할에 반대하는 주주가 회사에 주식을 사 달라고 요구할 수 있는 권리(주식매수청구권)가 생기는 등 제도가 바뀌었습니다. 미국에서는 모회사와 자회사가 함께 상장된 경우가 드물고, 사업을 떼어 낼 때는 보통 기존 주주에게 새 회사 주식을 그대로 나눠 주는 <b>스핀오프</b> 방식을 씁니다(2015년 이베이에서 페이팔이 분리될 때 이베이 주주가 페이팔 주식을 받은 것처럼).</p>
+
+<h2>원인 3. 자사주 마법과 합병 비율</h2>
+<p>영상의 후속편 제목이기도 한 <b>'자사주 마법'</b>은 회사가 사 둔 자기주식(자사주)이 지배력을 키우는 데 쓰이는 현상입니다.</p>
+<figure class="fig">
+<svg viewBox="0 0 360 400" role="img" aria-label="자사주 마법: 자사주 10%를 가진 회사가 인적분할하면 자사주에도 사업회사 신주가 배정되어 지주회사가 사업회사 지분 10%를 공짜로 얻고 의결권이 되살아난다">
+<rect class="bx" x="70" y="10" width="220" height="60" rx="10"/><text class="t b" x="180" y="34" text-anchor="middle">회사 X</text><text class="t s m" x="180" y="56" text-anchor="middle">대주주 20% · 자사주 10% (의결권 없음)</text>
+<path class="ln" d="M180 70 V84 M95 84 H265 M95 84 V100 M265 84 V100"/><text class="t s" x="188" y="77">인적분할</text>
+<rect class="bx" x="20" y="100" width="150" height="62" rx="10"/><text class="t b" x="95" y="124" text-anchor="middle">지주회사 X</text><text class="t s m" x="95" y="146" text-anchor="middle">자사주 10% 그대로</text>
+<rect class="bx hl" x="190" y="100" width="150" height="62" rx="10"/><text class="t b" x="265" y="124" text-anchor="middle">사업회사 Y</text><text class="t s m" x="265" y="146" text-anchor="middle">X 주주 비율대로 신주</text>
+<rect class="bx warn" x="14" y="184" width="332" height="96" rx="10"/>
+<text class="t b" x="180" y="208" text-anchor="middle">마법 ① 자사주 몫에도 Y 주식이 배정</text>
+<text class="t s" x="30" y="234">· 지주회사 X가 Y 지분 10%를 돈 한 푼 없이 확보</text>
+<text class="t s" x="30" y="258">· 의결권 없던 자사주가 '의결권 있는 Y 지분'으로 부활</text>
+<rect class="bx warn" x="14" y="292" width="332" height="96" rx="10"/>
+<text class="t b" x="180" y="316" text-anchor="middle">마법 ② 지분 맞바꾸기 (현물출자)</text>
+<text class="t s" x="30" y="342">· 대주주가 가진 Y 주식을 X에 넘기고 X 새 주식을 받음</text>
+<text class="t s" x="30" y="366">· 대주주의 X 지분↑ → 적은 돈으로 X·Y 모두 지배</text>
+</svg>
+<figcaption>그림 3. 인적분할을 이용한 '자사주 마법'(숫자는 예시). 일반 주주의 돈으로 사들인 자사주가 지배주주의 지배력을 키우는 데 쓰입니다.</figcaption>
+</figure>
+<p>미국에서는 자사주 매입이 유통 주식 수를 줄여 주주에게 이익을 돌려주는 수단으로 쓰이지만, 한국에서는 사들인 자사주를 소각하지 않고 쌓아 두었다가 이런 식으로 활용하는 경우가 많았습니다. 그래서 같은 '자사주 매입' 발표라도 시장의 반응이 다릅니다. 2024년 금융당국은 상장사 인적분할 때 자사주에 신주를 배정하지 못하게 하는 제도 개선을 발표했고, 자사주를 일정 기간 안에 소각하도록 하는 방안도 논의되어 왔습니다.</p>
+<p><b>합병 비율</b>도 비슷한 문제를 낳습니다. 상장사끼리 합병할 때 몇 대 몇으로 주식을 바꿔 줄지는 법에 정해진 대로 최근 주가를 기준으로 정해집니다. 그래서 지배주주가 많이 가진 회사의 주가가 높고 상대 회사의 주가가 낮을 때 합병하면, 실제 기업 가치와 상관없이 한쪽 주주가 손해를 볼 수 있습니다. 2015년 삼성물산·제일모직 합병 때 합병 비율이 삼성물산 주주에게 불리했다는 논란이 대표적입니다.</p>
+
+<h2>원인 4. 이익이 주주에게 덜 돌아온다</h2>
+<ul>
+<li><b>배당 성향</b> — 순이익 중 배당으로 나눠 주는 비율이 한국 상장사는 오랫동안 20%대 수준으로, 미국(대략 30~40%대)보다 낮았습니다.</li>
+<li><b>자사주 매입</b> — S&amp;P 500 기업들은 해마다 1조 달러 안팎을 자사주 매입에 씁니다. 사들인 주식은 소각하거나 의결권 없는 금고주로 묶어 두어 유통 주식 수가 줄고, 같은 이익에서도 주당이익(EPS)이 올라갑니다.</li>
+<li><b>현금을 쌓아 두는 회사</b> — 쓸 곳 없는 현금을 계속 쌓아 두면 자기자본이익률(ROE)이 떨어지고, 시장은 그 현금이 주주에게 오지 않을 것으로 보고 할인합니다.</li>
+</ul>
+
+<h2>원인 5. 산업 구조와 시장 제도</h2>
+<ul>
+<li><b>경기에 민감한 수출 대기업 중심</b> — 반도체·자동차·화학·철강처럼 업황(사이클)을 크게 타는 업종 비중이 큽니다. 이익이 들쭉날쭉하면 시장은 높은 배수를 주지 않습니다. 반면 미국은 꾸준히 현금을 버는 소프트웨어·플랫폼·헬스케어 대기업 비중이 큽니다(<a href="/learn/market-cap-world/">세계 시가총액 글</a> 참고).</li>
+<li><b>선진국 지수 미편입</b> — 한국은 MSCI 선진국 지수에 들어가지 못해, 선진국 지수를 따라가는 큰 자금이 한국 주식을 기계적으로 사지 않습니다. 외환 거래 접근성, 공매도 제도(2023년 11월 전면 금지 → 2025년 3월 재개) 등이 걸림돌로 꼽혀 왔습니다.</li>
+<li><b>지정학 위험</b> — 남북 대치 같은 위험이 할인 요인으로 거론되지만, 위 요인들보다 영향이 작다는 분석이 많습니다.</li>
+</ul>
+
+<h2>미국 기업은 어떻게 다른가</h2>
+<figure class="fig">
+<svg viewBox="0 0 360 380" role="img" aria-label="미국형 기업 구조: 연기금, 인덱스펀드, 개인으로 지분이 분산되어 있고 독립 사외이사가 다수인 이사회가 전문경영인을 감시하며, 경영진 보상이 주가와 연동되고 회사는 한 곳만 상장된다">
+<rect class="bx" x="14" y="10" width="102" height="52" rx="10"/><text class="t b" x="65" y="33" text-anchor="middle">연기금</text><text class="t s m" x="65" y="51" text-anchor="middle">수 %씩</text>
+<rect class="bx" x="129" y="10" width="102" height="52" rx="10"/><text class="t b" x="180" y="33" text-anchor="middle">인덱스펀드</text><text class="t s m" x="180" y="51" text-anchor="middle">수 %씩</text>
+<rect class="bx" x="244" y="10" width="102" height="52" rx="10"/><text class="t b" x="295" y="33" text-anchor="middle">개인 등</text><text class="t s m" x="295" y="51" text-anchor="middle">나머지</text>
+<path class="ln" d="M65 62 V92 M180 62 V92 M295 62 V92 M65 92 H295 M180 92 V112"/>
+<rect class="bx hl" x="60" y="112" width="240" height="60" rx="10"/><text class="t b" x="180" y="136" text-anchor="middle">이사회</text><text class="t s m" x="180" y="158" text-anchor="middle">독립 사외이사가 대부분</text>
+<path class="ln" d="M180 172 V202"/><text class="t s" x="190" y="192">선임·감시·보상 결정</text>
+<rect class="bx" x="60" y="202" width="240" height="60" rx="10"/><text class="t b" x="180" y="226" text-anchor="middle">CEO (전문경영인)</text><text class="t s m" x="180" y="248" text-anchor="middle">보상 대부분이 주식 · 주가와 연동</text>
+<rect class="bx key" x="14" y="280" width="332" height="90" rx="10"/>
+<text class="t s" x="30" y="304">· 회사는 한 곳만 상장 (사업 분리는 주주에게 나눠 주는 스핀오프)</text>
+<text class="t s" x="30" y="328">· 주가가 떨어지면 CEO 교체 · 주주 소송 압력</text>
+<text class="t s" x="30" y="352">· 남는 현금은 배당 + 자사주 매입</text>
+</svg>
+<figcaption>그림 4. 미국 대형 상장사의 전형적인 구조. 지배주주가 따로 없거나 아주 작아, 경영진의 이해관계가 일반 주주와 같은 방향(주가 상승)을 향합니다.</figcaption>
+</figure>
+<div class="tbl"><table>
+<thead><tr><th>항목</th><th>한국 대기업(전형)</th><th>미국 대기업(전형)</th></tr></thead>
+<tbody>
+<tr><td>누가 지배하나</td><td>오너 일가 · 적은 지분 + 계열사 지분</td><td>지분이 분산 · 이사회가 전문경영인 선임</td></tr>
+<tr><td>경영진의 이해관계</td><td>지배권 유지·승계가 중요 (주가 상승과 엇갈릴 수 있음)</td><td>보상이 주식 중심 → 주가 상승과 같은 방향</td></tr>
+<tr><td>이사회</td><td>사외이사가 있어도 지배주주 영향이 큼</td><td>독립 사외이사가 다수 · 위원회 중심</td></tr>
+<tr><td>사업 분리</td><td>물적분할 → 자회사 상장(중복상장)이 잦았음</td><td>스핀오프 — 기존 주주가 새 회사 주식을 받음</td></tr>
+<tr><td>자사주</td><td>쌓아 두고 지배력에 활용하는 경우가 많았음</td><td>유통 주식 수를 줄이는 주주환원 수단</td></tr>
+<tr><td>주주의 견제 수단</td><td>제한적 (집단소송·증거개시 제도가 약함)</td><td>주주 소송·행동주의 펀드가 활발</td></tr>
+</tbody></table></div>
+<p>정리하면, 미국 기업은 "주가를 올리는 것"이 경영진에게 가장 이익이 되도록 짜여 있고, 한국 대기업은 "지배권을 유지하고 물려주는 것"이 지배주주에게 더 중요한 경우가 많았습니다. 같은 이익을 내도 그 이익이 누구에게 가는지에 대한 시장의 믿음이 다르고, 그 차이가 수십 년 동안 쌓인 것이 지수 수익률의 차이로 나타났습니다.</p>
+
+<h2>바뀌고 있는 것</h2>
+<ul>
+<li><b>기업 밸류업 프로그램(2024년 2월~)</b> — 상장사가 주주환원·자본효율 개선 계획을 공시하도록 권장하고, 이를 잘한 기업을 모은 '코리아 밸류업 지수'가 만들어졌습니다. 일본이 2023년부터 PBR 1배 미만 기업에 개선을 요구한 개혁을 참고했습니다(<a href="/topix/">TOPIX 해설</a> 참고).</li>
+<li><b>상법 개정(2025년)</b> — 이사가 회사뿐 아니라 <b>주주</b>에 대해서도 충실할 의무를 지도록 바뀌었고, 감사위원 선임 때 대주주 의결권을 제한하는 규칙이 강화되었으며, 대형 상장사의 집중투표제 의무화 등도 이어졌습니다.</li>
+<li><b>물적분할 견제</b> — 반대 주주의 주식매수청구권, 분할 계획 공시 강화 등으로 '쪼개기 상장'이 예전보다 어려워졌습니다.</li>
+</ul>
+<p>제도가 바뀌었다고 할인이 하루아침에 사라지지는 않습니다. 시장은 실제로 기업들이 주주를 위해 행동하는 사례가 쌓이는 것을 보고 값을 다시 매깁니다.</p>
+
+<h2>투자자가 확인할 것</h2>
+<ol>
+<li><b>지배주주 지분과 계열 구조</b> — 지배주주의 실제 지분이 작고 층이 많을수록 이해관계가 엇갈릴 위험이 큽니다.</li>
+<li><b>중복상장 여부</b> — 핵심 자회사가 따로 상장돼 있거나 상장 계획이 있는지 확인합니다.</li>
+<li><b>주주환원 이력</b> — 배당 성향, 자사주를 실제로 소각했는지(사기만 하고 쌓아 두는지).</li>
+<li><b>분할·합병 공시</b> — 물적분할인지 인적분할인지, 합병 비율이 어떻게 정해졌는지 읽어 봅니다.</li>
+<li><b>숫자로 확인</b> — <a href="/earnings-calendar/">실적발표 캘린더</a>에서 ROE·PBR·FCF를 보고, 이익이 늘어도 PBR이 계속 낮다면 그 이유가 위 원인 중 무엇인지 생각해 봅니다.</li>
+</ol>
+<p>한 나라 시장의 할인 요인을 개인이 바꾸기는 어렵습니다. 그래서 장기 자산의 일부를 <a href="/learn/index-investing/">미국 등 해외 지수</a>로 분산하는 것이 한국 투자자에게 흔히 권해지는 방법이기도 합니다. 반대로 지배구조 개선이 실제로 이어진다면, 오랫동안 할인받아 온 한국 주식이 재평가될 여지도 그만큼 큽니다.</p>
+
+<h2>참고 영상</h2>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=kPcMtr0RzDo" rel="noopener" target="_blank">머니코믹스 — 호구와트 주식시장</a> (2026년 10월)</li>
+<li><a href="https://www.youtube.com/watch?v=XDKu7_4cyFA" rel="noopener" target="_blank">머니코믹스 — 호구와트 심화과정: 자사주 마법</a> (2026년 10월)</li>
+</ul>
+<div class="box warn"><b>주의</b><p>그림의 지분율은 구조를 이해하기 위한 예시이며 특정 기업의 실제 지분이 아닙니다. 제도(상법·자본시장법·세법)는 계속 바뀌고 있으니 최신 내용은 금융위원회·한국거래소 공시를 확인하세요. 특정 종목의 매수·매도를 권하는 글이 아닙니다.</p></div>

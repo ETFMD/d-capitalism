@@ -331,7 +331,7 @@ def footmap(en=False):
         cols.append(f'<div class="sf-col"><p class="sf-h">{head}</p>{"".join(parts)}</div>')
     if ARTS and not en:   # 투자 공부 글 (한국어 페이지만)
         links = ''.join(f'<a href="learn/{esc(a["slug"])}/">{esc(a.get("short") or a["title"].split(" — ")[0])}</a>' for a in ARTS)
-        cols.append(f'<div class="sf-col sf-learn"><p class="sf-h"><a href="learn/">투자 공부</a></p>{links}</div>')
+        cols.insert(0, f'<div class="sf-col sf-learn"><p class="sf-h"><a href="learn/">투자 공부</a></p>{links}</div>')   # 상단 메뉴처럼 맨 앞(왼쪽)
     out = f'<nav class="sf-map" aria-label="{esc(T("전체 도구"))}"><div class="sf-cols">' + ''.join(cols) + '</div>'
     if band:
         out += f'<div class="sf-band"><p class="sf-h"><a href="{esc(HUB["invest"]["path"])}/">{esc(T("지수 성장률"))}</a></p><div class="sf-grps">' + ''.join(band) + '</div></div>'

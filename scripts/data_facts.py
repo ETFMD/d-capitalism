@@ -405,7 +405,33 @@ def learn_facts(src_text=None):
     else:
         f['ss.per_word'] = '세 PER의 차이는 증권사들이 예상하는 이익의 방향을 보여 줍니다.'
     f['earn.asof'] = ymd_ko(ss['pd'])
-    return f, max(m['asOf'], ss['pd'], day(min(x['end'] for x in e.values())).isoformat())
+    # 지수 통계 (15 한국 증시 등) — idx.<지수>.cagr<N> · .y<연도> · .from_hi · .asof · .first_y · .up(오른 해 비율)
+    idx_last = []
+    for key in ('kospi', 'kosdaq', 'sp500', 'nasdaq100', 'n225', 'taiex'):
+        try:
+            st = hist_stats(key)
+        except Exception:
+            continue
+        idx_last.append(st['last'])
+        for n, r in st['ret'].items():
+            f[f'idx.{key}.cagr{n}'] = pct(r) if n > 1 else pct(r, sign=True)
+        for y, r in st['years'].items():
+            f[f'idx.{key}.y{y}'] = pct(r, sign=True)
+        f[f'idx.{key}.from_hi'] = pct(st['from_hi'])
+        f[f'idx.{key}.below_hi'] = pct(-st['from_hi'])
+        f[f'idx.{key}.asof'] = ymd_ko(day(st['last']))
+        f[f'idx.{key}.first_y'] = str(day(st['first']).year)
+        f[f'idx.{key}.up'] = f"{len(st['years'])}년 중 {st['up_y']}년" if st.get('years') else '—'
+        if st.get('roll10'):
+            lo, hi, pos, cnt = st['roll10']
+            f[f'idx.{key}.roll10'] = f'연평균 {pct(lo, sign=True)} ~ {pct(hi, sign=True)}'
+            f[f'idx.{key}.roll10loss'] = pct(1 - pos, 0)
+    if 'idx.kospi.cagr30' in f and 'idx.sp500.cagr30' in f:
+        k30, s30 = hist_stats('kospi')['ret'][30], hist_stats('sp500')['ret'][30]
+        f['idx.kospi_vs_sp500.x30'] = f'{(1 + k30) ** 30:.1f}배'
+        f['idx.sp500.x30'] = f'{(1 + s30) ** 30:.1f}배'
+    dates = [m['asOf'], ss['pd'], day(min(x['end'] for x in e.values())).isoformat()] + ([day(min(idx_last)).isoformat()] if idx_last else [])
+    return f, max(dates)
 
 
 def fill(text, facts, where=''):

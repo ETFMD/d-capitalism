@@ -1611,8 +1611,10 @@ def main():
             if w >= 360 and r['sw'] > r['cw'] + 1: fail('compound/', '%dpx 상단 메뉴가 한 줄에 안 들어감 (%d > %d)' % (w, r['sw'], r['cw']))
         page.set_viewport_size({'width': 1440, 'height': 900})
         r = page.evaluate("""() => ({ cols: [...document.querySelectorAll('.sf-map .sf-cols > .sf-col')].length,
+            first: ((document.querySelector('.sf-map .sf-cols > .sf-col .sf-h') || {}).textContent || '').trim(),
             band: document.querySelectorAll('.sf-map .sf-band .sf-grp a').length })""")
         n_idx = sum(1 for x in routes if x['group'] == 'invest' and x['tab'] in IDX_KEYS)
+        if r['first'] != '투자 공부': fail('compound/', "하단 사이트맵 첫 열이 '투자 공부'가 아님: " + r['first'])
         if r['cols'] != 7 or r['band'] != n_idx:
             fail('compound/', '하단 사이트맵 열 %d개(기대 7) · 지수 묶음 %d개(기대 %d)' % (r['cols'], r['band'], n_idx))
         if en:
