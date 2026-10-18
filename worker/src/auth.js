@@ -14,7 +14,12 @@
  */
 const enc = new TextEncoder();
 const TOKEN_DAYS = 30, TICKET_MIN = 10, MAX_SAVES = 200, MAX_DATA = 16000, TERMS_VER = '2026-10-09';
-const UDATA_KEYS = ['muhan', 'vr', 'r72'], MAX_UDATA = 1800000;   /* 계정 자료 키 (허용 목록: 무한매수법·밸류리밸런싱·72루틴 기록 — 화면에서 새 키를 쓰면 여기에도 추가, 회귀 테스트가 확인) · 한 덩어리 최대 크기(UTF-8 바이트, D1 한 칸 한도 2MB 안쪽) */
+const UDATA_KEYS = ['muhan', 'vr', 'r72'], MAX_UDATA = 1800000;
+/* 관리자(사이트 운영자 현경흠 — 카카오 로그인 회원 번호 2, D1 users.id) — 닉네임은 누구나 같게 지을 수 있어 회원 번호로만 판단
+ * · /auth/me·로그인 응답의 user.admin = true → 사이트가 계정 메뉴에 '관리자 기능'(자산 속도 시뮬레이터·72루틴)을 보여 줌
+ * · 관리자 전용 계정 자료 키(ADMIN_UDATA)는 관리자만 읽고 쓸 수 있음 (다른 회원은 403 · 이미 저장된 자료는 지우지 않음) */
+const ADMIN_UIDS = [2], ADMIN_UDATA = ['r72'];
+function isAdmin(u) { return !!u && ADMIN_UIDS.includes(Number(u.id)); }   /* 계정 자료 키 (허용 목록: 무한매수법·밸류리밸런싱·72루틴 기록 — 화면에서 새 키를 쓰면 여기에도 추가, 회귀 테스트가 확인) · 한 덩어리 최대 크기(UTF-8 바이트, D1 한 칸 한도 2MB 안쪽) */
 
 function b64u(buf) {
   const s = typeof buf === 'string' ? btoa(unescape(encodeURIComponent(buf))) : btoa(String.fromCharCode(...new Uint8Array(buf)));
@@ -93,7 +98,7 @@ async function issue(env, user) {
   const exp = Math.floor(Date.now() / 1000) + TOKEN_DAYS * 86400;
   return { token: await sign(env, { k: 'u', uid: user.id, v: user.ver || 0, exp }), exp, user: pub(user) };
 }
-function pub(u) { return { id: u.id, provider: u.provider, nick: u.nick, created: u.created }; }
+function pub(u) { return { id: u.id, provider: u.provider, nick: u.nick, created: u.created, admin: isAdmin(u) }; }
 async function me(env, req) {
   const h = req.headers.get('Authorization') || '';
   const t = await verify(env, h.replace(/^Bearer\s+/i, ''), 'u');
@@ -169,6 +174,7 @@ export async function auth(req, env, url, json) {
   if (ud) {                                                       /* 계정 자료: 읽기 · 쓰기(낙관적 잠금) · 지우기 */
     const k = ud[1];
     if (!UDATA_KEYS.includes(k)) return json({ error: 'unknown key' }, 404);
+    if (ADMIN_UDATA.includes(k) && !isAdmin(u)) return json({ error: 'admin only' }, 403);   /* 72루틴 기록 = 관리자 전용 */
     const row = await env.DB.prepare('SELECT v, t FROM udata WHERE uid = ? AND k = ?').bind(u.id, k).first();
     if (req.method === 'GET') return json(row ? { v: JSON.parse(row.v), t: row.t } : { v: null, t: 0 });
     if (req.method === 'POST') {

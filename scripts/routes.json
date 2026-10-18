@@ -120,6 +120,7 @@
     },
     {
       "path": "asset-speed",
+      "admin": true,
       "tab": "aspeed",
       "group": "me",
       "title": "자산 속도 시뮬레이터 — 코스피·S&P500·아파트·금·비트코인·통화량·물가 수익률 경주",
@@ -307,6 +308,7 @@
     },
     {
       "path": "72",
+      "admin": true,
       "tab": "t72",
       "group": "invest",
       "title": "72루틴 — SOXL 72분할 규칙 매매 기록·주문표와 백테스트",

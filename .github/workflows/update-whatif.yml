@@ -25,7 +25,7 @@ jobs:
       - name: 월봉 수집 (야후·네이버·FRED 환율·아파트 실거래 중위가)
         run: python3 scripts/update_whatif.py
       - name: 자산 속도 시뮬레이터 거시 자료 (한국은행 M2·소비자물가 월별)
-        run: python3 scripts/update_assetspeed.py || echo "M2·물가 갱신 실패 — 직전 자료 유지"
+        run: timeout 600 python3 scripts/update_assetspeed.py || echo "M2·물가·상장 전 재료 갱신 실패(또는 10분 넘음) — 직전 자료 유지"
       - name: 변경된 경우에만 커밋
         run: |
           git config user.name  'github-actions[bot]'

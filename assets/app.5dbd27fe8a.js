@@ -12761,23 +12761,25 @@ window.MBT = (function () {
   }
   /* 상장 전 재현 받기 → { rc, pre: {d: YYYY-MM-DD, a} (상장 첫날 = 1), late: {d, a} (상장 뒤까지 재현 — 오차 시험용) } · 식이 없으면 null */
   var PRE = {};
-  function preload(tk) {
-    tk = String(tk || '').toUpperCase(); var key = 'U:' + tk;
-    if (PRE[tk]) return PRE[tk];
-    if (!window.ECX || !window.ECX.btLevels) return Promise.resolve(null);
-    PRE[tk] = shard(window.ECX.btShard(key)).then(function () {
+  function preload(tk) { return preKey('U:' + String(tk || '').toUpperCase()); }
+  /* 키('U:티커' 미국 · 'K:코드' 국내 ETF)로 상장 전 재현 — 국내는 코스피 달력·원화 식 (자산 속도 시뮬레이터 [ASPEED] 도 씀) · late 는 미국만 */
+  function preKey(key) {
+    key = String(key || '').toUpperCase();
+    if (PRE[key]) return PRE[key];
+    if (!window.ECX || !window.ECX.btLevels || !/^[UK]:/.test(key)) return Promise.resolve(null);
+    PRE[key] = shard(window.ECX.btShard(key)).then(function () {
       var rc = recipe(key); if (!rc) return null;
       return collect(rc, 1, {}).then(function (need) {
         return Promise.all(Object.keys(need).map(function (k) { return dep(k).catch(function () { return null; }); })).then(function () {
           MEMO = {};
           var lev = levels(rc, 1); if (!lev || !(lev.iS >= 1)) return null;
-          var cs = DEP['Y:^GSPC'], lastDay = cs ? cs.d[cs.d.length - 1] : null, late = null;
+          var cs = DEP['Y:^GSPC'], lastDay = cs && key.charAt(0) === 'U' ? cs.d[cs.d.length - 1] : null, late = null;
           if (lastDay && lastDay > rc.s) { var l2 = levels(Object.assign({}, rc, { s: lastDay }), 1); if (l2 && l2.iS >= 1) late = { d: l2.d.map(ymd), a: l2.a }; }
           return { rc: rc, pre: { d: lev.d.map(ymd), a: lev.a, iS: lev.iS }, late: late };
         });
       });
-    }).catch(function () { delete PRE[tk]; return null; });
-    return PRE[tk];
+    }).catch(function () { delete PRE[key]; return null; });
+    return PRE[key];
   }
 
   /* ── 고가 추정: x = ln(고가 ÷ max(전날 종가, 종가)) ÷ σ20 의 q 분위수 α → 고가 ≈ max(전날, 오늘 종가) × e^(α·σ20) ── */
@@ -12824,7 +12826,7 @@ window.MBT = (function () {
              fees: fees, divs: R.divs, tax: R.taxPaid || 0, taxDue: R.taxDue || 0, maxCost: R.maxCost, days: days, years: days / 365.25,
              bh: { final: bh[bh.length - 1], ret: bh[bh.length - 1] / cap - 1, cagr: cagr(cap, bh[bh.length - 1], days), mdd: bm.v }, bhEq: bh };
   }
-  return { load: load, parseY: parseY, fromCagr: fromCagr, openDayNY: openDayNY, fxData: fxData, fxFor: fxFor, preload: preload, join: join, lateSeries: lateSeries,
+  return { load: load, parseY: parseY, fromCagr: fromCagr, openDayNY: openDayNY, fxData: fxData, fxFor: fxFor, preload: preload, preKey: preKey, join: join, lateSeries: lateSeries,
            hiAlpha: hiAlpha, hiModel: hiModel, stats: stats, mdd: mdd, cagr: cagr, ymd: ymd, dnum: dnum, HQ: HQ,
            okOpen: okOpen, withOpen: withOpen, preOpen: preOpen, OPX: OPX };
 })();
@@ -18179,6 +18181,47 @@ if (typeof module !== 'undefined') module.exports = R72D;
 /* [/T72-DIST] */
 
 /* ════════════════════════════════════════════════════════════
+   [ADMIN] 관리자 전용 화면 (자산 속도 시뮬레이터 /asset-speed/ · 72루틴 /72/) — 사이트 운영자(현경흠) 계정으로 로그인했을 때만 열림
+   · 판단: Worker /auth/me 의 user.admin (worker/src/auth.js ADMIN_UIDS — 회원 번호로 판단, 닉네임 아님) · 72루틴 계정 기록(/udata/r72)도 Worker 가 관리자만 허용
+   · 화면: 처음엔 내용을 감추고(CSS #page-… :not(.adm-ok)) '확인 중' → 관리자면 .adm-ok 를 붙이고 그 화면의 시작 함수(when 으로 맡긴 것)를 실행 · 아니면 안내 상자
+   · 지난번 확인 결과(dc_auth.user.admin)가 있으면 바로 열고, 서버 확인이 다르게 오면 다시 닫음 · 서버에 닿지 못하면 지난 결과를 씀
+   · 메뉴·허브·사이트맵·검색 색인에서 뺌 (scripts/routes.json "admin": true → build_pages.py · noindex) — 계정 메뉴 '관리자 기능'에서만 들어감
+   · 이 사이트 코드는 공개 저장소라 화면 코드 자체를 숨기지는 못함 — 막는 것은 '사용'(화면 열기·계정 기록)이다
+════════════════════════════════════════════════════════════ */
+window.dcAdmin = (function () {
+  var PAGES = ['page-aspeed', 'page-t72'], LINKS = [['asset-speed/', '자산 속도 시뮬레이터'], ['72/', '72루틴']];
+  var st = null, q = [];                        /* st: null = 확인 중 · true = 관리자 · false = 아님 */
+  var TEST = window.__dcAdminTest === 1;        /* 회귀 검사 전용 탭(tests/run_regression.py 가 따로 연 탭의 시작 스크립트)만 — 화면 잠금만 풀고, 계정 기록(/udata/r72)은 Worker 가 관리자만 허용 */
+  function cached() { try { var a = JSON.parse(localStorage.getItem('dc_auth') || 'null'); return !!(a && a.token && a.exp * 1000 > Date.now() && a.user && a.user.admin === true); } catch (e) { return false; } }
+  function loggedIn() { try { var a = JSON.parse(localStorage.getItem('dc_auth') || 'null'); return !!(a && a.token && a.exp * 1000 > Date.now()); } catch (e) { return false; } }
+  function box(pg) {
+    var b = pg.querySelector(':scope > .adm-lock');
+    if (!b) { b = document.createElement('div'); b.className = 'adm-lock'; b.setAttribute('role', 'status'); pg.insertBefore(b, pg.firstChild); }
+    var h1 = pg.id === 'page-t72' ? '72루틴' : '자산 속도 시뮬레이터';
+    b.innerHTML = st === null
+      ? '<p class="adm-t">' + h1 + '</p><p class="adm-p">관리자 계정인지 확인하는 중…</p>'
+      : '<p class="adm-t">🔒 관리자 전용 기능</p><p class="adm-p"><b>' + h1 + '</b>' + (pg.id === 'page-t72' ? '은' : '는') + ' 사이트 관리자만 쓸 수 있습니다.' + (loggedIn() ? ' 지금 로그인한 계정은 관리자가 아닙니다.' : ' 관리자 계정으로 로그인해 주세요.') + '</p>' +
+        (loggedIn() ? '' : '<button type="button" class="adm-btn" data-adm-login>로그인</button>') + '<a class="adm-home" href="./">홈으로</a>';
+  }
+  function apply() {
+    PAGES.forEach(function (id) { var pg = document.getElementById(id); if (!pg) return; pg.classList.toggle('adm-ok', st === true); if (st !== true) box(pg); });
+    if (st === true) { var f; while ((f = q.shift())) { try { f(); } catch (e) { if (window.console) console.error(e); } } }
+  }
+  function set(v) { if (TEST) return; v = v === true ? true : v === false ? false : null; if (v === st) return; st = v; apply(); }
+  document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('[data-adm-login]') && window.dcAuth) window.dcAuth.open(); });
+  window.addEventListener('dc-auth', function () { if (!loggedIn()) set(false); else if (cached()) set(true); });   /* 로그아웃하면 바로 닫음 */
+  if (cached() || TEST) st = true;              /* 지난번 확인 결과로 먼저 열고, [AUTH] 가 서버 확인 뒤 set() 으로 바로잡음 */
+  else if (!loggedIn()) st = false;
+  apply();
+  return {
+    PAGES: PAGES, LINKS: LINKS, cached: cached,
+    ok: function () { return st === true; }, state: function () { return st; },
+    when: function (fn) { if (st === true) fn(); else if (q.indexOf(fn) < 0) q.push(fn); },   /* 관리자 확인이 끝나면 한 번 실행 (화면 시작 함수) */
+    set: set
+  };
+})();
+
+/* ════════════════════════════════════════════════════════════
    [T72] 72루틴 (/72/ · #t7-root) — 무한매수법 기록 화면([MUHAN] mhApp)을 고정 규칙 프로필로 씀 → 화면·기록·로그인 자동 저장이 같음
    · 고정 규칙(lock) = 계산 엔진 MHV V1.0 규칙 · SOXL · 72분할 · 목표 52.5% · 상단 매수선(엔진 big) 13% · 평단 매수선(엔진 avgOff) 0%
                       · 소진 대응 recover(매수 멈추고 평단 −10% 안이면 전량 매도) · 1주 단위 — 저장된 설정과 상관없이 이 값으로 계산(vcfg)
@@ -18211,7 +18254,7 @@ if (typeof module !== 'undefined') module.exports = R72D;
     btDist: true,   /* ㊿ 백테스트 카드 '총자산·그냥 보유' 그래프 아래 시작일별 연평균 수익률·최대 낙폭 분포([T72-DIST]) */
     rejWarn: true, btRej: true, btFill: true, recheck: { min: 30, lo: 1.7, up: 10, band: 15 },   /* ㉟ 오늘의 주문: 주문이 거부됐다면 마감 30분 전 다시 걸기(전일 종가 −1.7% ~ +13% · +13% 넘음 → 원래 가격 · −1.7% 아래 → 지금 가격 +10%) · ㊱ 경계 −2% → −1.7%: 한도가 +15%인 증권사(토스증권)도 거부되지 않게(1.13 ÷ 1.15 = 0.9826) · 다시 걸 가격이 지금 가격 × 1.15 를 넘으면 지금 가격 +10% · ㉞ 백테스트: 주문 넣는 때 3가지 비교 · ㉝ 오늘의 주문: 매수 지정가가 지금 한도(기준가 × 1.2)를 넘으면 경고 + 한도로 낮춘 입력 가격 · 백테스트: 증권사 주문 거부 처리 3가지 비교 */
     legacy: { log: 't72-log', keys: ['t72-set', 't72-log', 't72-tab', 't72-open'] } });   /* 예전 '72매매법' 화면(2026-10-13 저녁 잠깐) 기록 — 옮기지 못함 안내 */
-  function go() { if (document.getElementById('t7-root') && window.t72Init) window.t72Init(); }
+  function go() { if (document.getElementById('t7-root') && window.t72Init) window.dcAdmin.when(window.t72Init); }   /* [ADMIN] 관리자 확인 뒤에만 시작 (기록 불러오기·계정 동기화 포함) */
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
   /* 사이트 테마(밝게·어둡게)를 바꾸면 그래프 색도 새로 — 이미 그려진 뒤에만 · 같은 테마를 다시 적용한 것은 건너뜀(입력 중인 칸이 다시 그려지지 않게) */
   var thm = document.documentElement.getAttribute('data-theme');
@@ -20667,18 +20710,26 @@ var WIF = (function () {
 })();
 
 /* ════════════════════════════════════════
-   [ASPEED] 자산 속도 시뮬레이터 — 같은 돈을 여러 자산에 넣었을 때 시간에 따라 불어나는 속도를 '정한 초' 동안 그려 나감
+   [ASPEED] 자산 속도 시뮬레이터 — 같은 돈을 여러 자산에 넣었을 때 시간에 따라 불어나는 속도를 '정한 초' 동안 그려 나감 (관리자 전용 — [ADMIN])
    · 기본 자산·월봉: data/whatif.json (그때 샀더라면 자료 — 국내·미국 주식·지수·코인·금·은·달러·아파트 연도별 중위가 · 원달러 월말 환율)
-   · 통화량(M2)·물가: data/assetspeed.json (scripts/update_assetspeed.py — 한국은행 ECOS 월별)
-   · 검색한 종목: Worker /etf?m=k(네이버 일봉)|u(야후 일봉) → 달마다 마지막 종가 (실패하면 공개 프록시)
-   · 모든 값은 원화 — 달러 자산은 그 달 환율로 원화 환산 · 아파트는 해마다 6월에 그해 중위가격을 두고 달마다 기하 보간
-   · 거치식: 첫 달 가격으로 전부 매수 · 적립식: 매달 같은 금액을 그 달 가격으로 매수 · 비교 기간 = 고른 자산이 모두 있는 기간
+   · 통화량(M2)·물가·상장 전 재료: data/assetspeed.json (scripts/update_assetspeed.py — 한국은행 ECOS 월별 · pre: KB 아파트지수·세계은행 금은·Coin Metrics 코인)
+   · 검색한 종목·매일 적립·ETF 상장 전 연결용 일봉: Worker /etf?m=k(네이버 일봉)|u(야후 일봉) (실패하면 공개 프록시) · 일별 원/달러: data/usdkrw.json (1990~ · 그 전은 월말 환율)
+   · 모든 값은 원화 — 달러 자산은 그 달(매일 적립은 그날) 환율로 원화 환산 · 아파트는 해마다 6월에 그해 중위가격을 두고 달마다 기하 보간
+   · 거치식: 첫 달 가격으로 전부 매수 · 적립식 매달: 매달 같은 금액을 그 달 가격으로 · 적립식 매일: 영업일(월~금)마다 같은 금액을 그날 종가로
+       (그날 장이 쉬면 직전 종가 · 아파트·M2·물가는 달 끝 값 사이를 날짜로 기하 보간) · 그래프·순위는 달마다 마지막 영업일 값
+   · 비교 기간 = 고른 자산이 모두 있는 기간
+   · 상장 전 가상 데이터(as-pre): 시세가 시작되기 전 구간을 재현해 첫 실제 값에 비율로 맞춰 앞에 붙임 → 그래프 점선 · 결과표 '가상 구간' 표시
+       ETF(국내·미국) = ETF 차트 비교와 같은 재현 식(data/etfbt · window.MBT.preKey · 총수익 기준 — 배당 재투자를 끄면 식의 분배율만큼 빼서 가격 기준으로)
+       비트코인·이더리움 = Coin Metrics 일별 가격 · 금·은 = 세계은행 월평균 · 서울·강남 아파트 = KB 서울 아파트 매매지수 (강남도 서울 지수로 근사)
    · 그리기: requestAnimationFrame 으로 진행률 t(0~1) → 달 위치 t×(N−1) (달 사이는 직선 보간해 부드럽게)
+   · 전체보기: 그래프 카드를 화면 전체 창으로 옮김(Esc·닫기) · 영상: 같은 계산을 1920×1080(16:9)·1080×1920(9:16) 캔버스에 한 장씩 그려
+       WebCodecs H.264 로 인코딩 → assets/vendor/mp4-muxer 로 MP4 (실시간이 아니라 프레임 단위 — 정한 초 그대로 30fps) · H.264 인코더가 없는 브라우저는 WebAssembly H.264(assets/vendor/h264-mp4-encoder)
 ════════════════════════════════════════ */
 (function () {
   var PG = document.getElementById('page-aspeed');
   if (!PG) return;
   function $(id) { return document.getElementById(id); }
+  var DAY = 864e5, FPS = 30;
   var COLORS = ['#f04452', '#3182f6', '#fe9800', '#16b47a', '#a35cff', '#e6b400', '#00a6c8', '#ff5fa2', '#7cb342', '#8d96a0', '#ff7043', '#5c6bc0'];
   var MAXN = 12;
   var DEF = ['^KS11', 'SPY', 'APT-seoul', 'APT-gangnam', 'GC=F', 'SI=F', 'BTC-USD', 'ETH-USD', 'M2', 'CPI'];
@@ -20689,7 +20740,10 @@ var WIF = (function () {
     { k: 'u', s: '^NDX', n: '나스닥 100 지수', t: '미국 지수' }, { k: 'u', s: '^DJI', n: '다우존스 지수', t: '미국 지수' },
     { k: 'u', s: '^SOX', n: '필라델피아 반도체 지수', t: '미국 지수' }, { k: 'k', s: 'KPI200', n: '코스피 200 지수', t: '국내 지수' }
   ];
-  var S = { W: null, M: null, built: {}, sel: [], colors: {}, mode: 'lump', t: 1, raf: 0, playing: false, chart: null, sim: null, list: null, listP: null, pend: {}, shown: false };
+  var PRE_SRC = { 'APT-seoul': 'KB 서울 아파트 매매지수', 'APT-gangnam': 'KB 서울 아파트 매매지수(강남 근사)', 'GC=F': '세계은행 금 월평균', 'SI=F': '세계은행 은 월평균',
+    'BTC-USD': 'Coin Metrics 일별', 'ETH-USD': 'Coin Metrics 일별' };
+  var S = { W: null, M: null, FX: null, FXP: null, built: {}, D: {}, Dp: {}, Derr: {}, PRE: {}, sel: [], colors: {}, mode: 'lump', freq: 'm', t: 1, raf: 0, playing: false,
+            chart: null, sim: null, list: null, listP: null, pend: {}, shown: false, seq: 0, busy: false };
   function mi(s) { s = String(s); return +s.slice(0, 4) * 12 + (s.length > 4 ? +s.slice(5, 7) - 1 : 0); }
   function ym(k) { return Math.floor(k / 12) + '.' + String(k % 12 + 1).padStart(2, '0'); }
   function num(v) { return +(String(v || '').replace(/[^\d.]/g, '')) || 0; }
@@ -20701,13 +20755,29 @@ var WIF = (function () {
     if (a >= 1e4) return s + comma(a / 1e4) + '만';
     return s + comma(a) + '원';
   }
+  function mx(m) { return (m >= 100 ? comma(m) : m.toFixed(2)) + '배'; }   /* 넣은 돈의 몇 배 (100배 넘으면 정수·쉼표) */
   function pct(v) { return v == null || !isFinite(v) ? '—' : (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(1) + '%'; }
   function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem('as.' + k)); localStorage.setItem('as.' + k, JSON.stringify(v)); } catch (e) { return null; } }
+  /* 날짜 = 1970-01-01 부터 일수 (UTC) */
+  function dOf(y, m, d) { return Math.round(Date.UTC(y, m, d) / DAY); }
+  function dStr(x) { return new Date(x * DAY).toISOString().slice(0, 10); }
+  function dNum(s) { return Math.round(Date.parse(String(s).slice(0, 10) + 'T00:00:00Z') / DAY); }
+  function monthOfDay(x) { var t = new Date(x * DAY); return t.getUTCFullYear() * 12 + t.getUTCMonth(); }
+  function mFirst(k) { return dOf(Math.floor(k / 12), k % 12, 1); }
+  function mLast(k) { return dOf(Math.floor(k / 12), k % 12 + 1, 0); }
+  function weekday(x) { var w = new Date(x * DAY).getUTCDay(); return w > 0 && w < 6; }
+  function dKo(x) { var t = new Date(x * DAY); return t.getUTCFullYear() + '년 ' + (t.getUTCMonth() + 1) + '월 ' + t.getUTCDate() + '일'; }
+  function idxLE(a, x) { var lo = 0, hi = a.length - 1, r = -1; while (lo <= hi) { var mid = (lo + hi) >> 1; if (a[mid] <= x) { r = mid; lo = mid + 1; } else hi = mid - 1; } return r; }
 
   /* ── 자산 → 월별 원화 가격 {start, v[]} ── */
   function lastMonth() { var e = 0; (S.W.assets || []).forEach(function (a) { if (!a.yearly && a.c) e = Math.max(e, mi(a.start) + a.c.length - 1); }); return e; }
   function fxAt(k) { var fx = S.W.fx, i = k - mi(fx.start); if (i < 0) return null; return fx.v[Math.min(i, fx.v.length - 1)]; }
+  function fxDay(x) {                                          /* 그날 원/달러 (한국은행 매매기준율 일별 1990~ · 그 전·빈 날은 직전 값 · 1990 전은 그 달 월말 환율) */
+    var F = S.FX;
+    if (F && x >= F.d[0]) return F.v[idxLE(F.d, x)];
+    return fxAt(monthOfDay(x));
+  }
   function trim(start, v) {
     var a = 0, b = v.length - 1;
     while (a <= b && !(v[a] > 0)) a++;
@@ -20745,6 +20815,7 @@ var WIF = (function () {
     return trim(s, v);
   }
   function wifAsset(id) { var r = null; (S.W.assets || []).forEach(function (a) { if (a.id === id) r = a; }); return r; }
+  function isExt(key) { return key === 'M2' || key === 'CPI' || /^APT-/.test(key); }   /* 날마다 시세가 없는 자산 (달 끝 값 사이를 보간 · 끝 날짜를 정하지 않음) */
   function info(key) {                                        /* 이름·분류 */
     if (key === 'M2') return { name: '통화량 (M2 광의통화)', tag: '거시' };
     if (key === 'CPI') return { name: '물가 (소비자물가지수)', tag: '거시' };
@@ -20763,55 +20834,195 @@ var WIF = (function () {
     return b ? (div && b.a ? b.a : b.c) : null;
   }
 
-  /* ── 검색 종목: Worker 일봉 → 달마다 마지막 종가 ── */
+  /* ── 상장 전 가상 데이터 ── */
+  function etfKey(key) {                                      /* 이 화면의 키 → ETF 차트 비교 재현 식 키 (식이 있는 ETF 만 실제로 이어짐) */
+    if (/^k:[0-9][0-9A-Z]{5}$/.test(key)) return 'K:' + key.slice(2);
+    if (/^u:[A-Z][A-Z0-9.\-]*$/i.test(key)) return 'U:' + key.slice(2).toUpperCase();
+    var a = wifAsset(key);
+    if (a && (a.g === 'idx' || a.g === 'us') && /^[A-Z][A-Z0-9.\-]*$/.test(key)) return 'U:' + key;
+    return null;
+  }
+  function preMats() { return (S.M && S.M.pre) || {}; }
+  function coinPre(key) { var p = preMats()[key === 'BTC-USD' ? 'btc' : key === 'ETH-USD' ? 'eth' : '']; return p && p.d0 && p.v ? { d0: dNum(p.d0), v: p.v } : null; }
+  function monthlyOfDaily(d, p, fx) {                        /* 일봉 → {start, v} 달마다 마지막 값 (fx: 달러면 그 달 월말 환율로 원화) */
+    var m = {}, lo = Infinity, hi = -Infinity;
+    for (var i = 0; i < d.length; i++) { if (!(p[i] > 0)) continue; var k = monthOfDay(d[i]); m[k] = p[i]; lo = Math.min(lo, k); hi = Math.max(hi, k); }
+    if (!isFinite(lo)) return null;
+    var v = []; for (var k2 = lo; k2 <= hi; k2++) { var x = m[k2]; if (x > 0 && fx) { var f = fxAt(k2); x = f > 0 ? x * f : null; } v.push(x > 0 ? x : null); }
+    return trim(lo, v);
+  }
+  /* ETF 재현 → 그 ETF 통화의 날짜별 가격 {d, p} (상장 첫날 L 전까지 · 실제 일봉 첫날 가격에 맞춤) */
+  function etfPreDaily(key, div) {
+    var P = S.PRE[key], D = S.D[key];
+    if (!P || !P.pre || !D) return null;
+    var pd = P.pre.d.map(dNum), pa = P.pre.a, L = pd[P.pre.iS];
+    var j = idxLE(D.d, L); if (j < 0 || D.d[j] !== L) j = idxLE(D.d, L + 6);   /* 실제 첫 일봉 = 상장 첫날 (조금 어긋나면 일주일 안에서) */
+    if (j < 0) return null;
+    var real = div && D.a ? D.a : D.c, r0 = real[j], li = idxLE(pd, D.d[j]);
+    if (!(r0 > 0) || li < 0 || !(pa[li] > 0)) return null;
+    var y = !div && P.rc && P.rc.dv && P.rc.dv.y > 0 ? P.rc.dv.y : 0, d = [], p = [];
+    for (var i = 0; i < P.pre.iS && pd[i] < D.d[j]; i++) {
+      if (!(pa[i] > 0)) continue;
+      var v = r0 * pa[i] / pa[li];
+      if (y) v *= Math.pow(1 + y, (D.d[j] - pd[i]) / 365.25);   /* 배당 재투자 끔 → 재현(총수익)에서 분배율만큼 빼서 가격 기준 */
+      d.push(pd[i]); p.push(v);
+    }
+    return d.length ? { d: d, p: p, cur: D.cur, real: D.d[j] } : null;
+  }
+  function monthlyPre(key, div, base) {                      /* base(실제 월별 원화) 앞에 붙일 가상 월별 원화 {start, v} */
+    var R = base.start, x0 = base.v[0], out = null, FX0 = mi(S.W.fx.start), i, k;
+    var pm = preMats();
+    if (/^APT-/.test(key) && pm.kb) {
+      var kb = pm.kb, ks = mi(kb.start), kR = kb.v[R - ks];
+      if (kR > 0 && R > ks) { out = { start: ks, v: [] }; for (k = ks; k < R; k++) out.v.push(x0 * kb.v[k - ks] / kR); }
+    } else if ((key === 'GC=F' || key === 'SI=F') && pm[key === 'GC=F' ? 'gold' : 'silver']) {
+      var g = pm[key === 'GC=F' ? 'gold' : 'silver'], gs = Math.max(mi(g.start), FX0), gR = g.v[R - mi(g.start)] * fxAt(R);
+      if (gR > 0 && R > gs) { out = { start: gs, v: [] }; for (k = gs; k < R; k++) out.v.push(x0 * g.v[k - mi(g.start)] * fxAt(k) / gR); }
+    } else if (coinPre(key)) {
+      var c = coinPre(key), cd = [], cp = [];
+      for (i = 0; i < c.v.length; i++) { cd.push(c.d0 + i); cp.push(c.v[i]); }
+      var cm = monthlyOfDaily(cd, cp, true);                  /* 달러 → 그 달 월말 환율로 원화 */
+      if (cm && R > cm.start && R - cm.start < cm.v.length) { var cR = cm.v[R - cm.start]; out = { start: cm.start, v: [] }; for (k = cm.start; k < R; k++) out.v.push(x0 * cm.v[k - cm.start] / cR); }
+    } else if (etfKey(key)) {
+      var e = etfPreDaily(key, div), D = S.D[key];
+      if (e) {
+        var usd = e.cur === 'USD', em = monthlyOfDaily(e.d.concat([e.real]), e.p.concat([(div && D.a ? D.a : D.c)[idxLE(D.d, e.real)]]), usd);
+        /* 실제 월별 첫 달(R) 값과 일봉으로 이은 값의 기준을 맞춤: R 달 끝 실제 일봉 가격 ↔ base 첫 값 */
+        var rp = div && D.a ? D.a : D.c, jR = idxLE(D.d, mLast(R));
+        var xR = jR >= 0 && D.d[jR] >= mFirst(R) ? rp[jR] * (usd ? fxAt(R) : 1) : null;
+        if (em && xR > 0 && R > em.start) { out = { start: em.start, v: [] }; for (k = em.start; k < R && k - em.start < em.v.length; k++) out.v.push(em.v[k - em.start] * x0 / xR); }
+      }
+    }
+    if (!out || !out.v.length) return null;
+    var t = trim(out.start, out.v);
+    if (!t || t.start + t.v.length !== R) return null;        /* 실제 첫 달 바로 앞까지 빈틈없이 이어질 때만 */
+    if (t.start < FX0) { t.v = t.v.slice(FX0 - t.start); t.start = FX0; }
+    return t.v.length ? t : null;
+  }
+  function mseries(key, div, pre) {                           /* 월별 원화 + 상장 전 가상 구간 → {start, v, real(실제 첫 달)} */
+    var b = series(key, div); if (!b) return null;
+    var out = { start: b.start, v: b.v, real: b.start };
+    if (!pre || key === 'M2' || key === 'CPI' || key === 'USD') return out;
+    var p = monthlyPre(key, div, b);
+    return p ? { start: p.start, v: p.v.concat(b.v), real: b.start, src: PRE_SRC[key] || '재현 식(ETF 차트 비교)' } : out;
+  }
+
+  /* ── 일봉 받기 (Worker → 실패하면 공개 프록시) ── */
   var EP = null;
   function endpoint() { if (EP !== null) return Promise.resolve(EP); return (window.mdLoad ? window.mdLoad('counter.json') : Promise.resolve(null)).then(function (c) { EP = (c && c.endpoint) || ''; return EP; }, function () { EP = ''; return ''; }); }
-  function get(url) { return fetch(url, { cache: 'no-store' }).then(function (r) { if (r.status === 404) { var e = new Error('nodata'); e.nodata = 1; throw e; } if (!r.ok) throw new Error('http ' + r.status); return r.text(); }); }
+  function get(url) {   /* XHR — 사이트의 fetch 가로채기([YAHOO] 최근 30일 캐시 응답)를 거치지 않고 원본 일봉 전체를 받음 */
+    return new Promise(function (res, rej) {
+      var x = new XMLHttpRequest(); x.open('GET', url, true); x.timeout = 30000;
+      x.onload = function () { if (x.status >= 200 && x.status < 300) res(x.responseText); else { var e = new Error(x.status === 404 ? 'nodata' : 'http ' + x.status); if (x.status === 404) e.nodata = 1; rej(e); } };
+      x.onerror = function () { rej(new Error('network')); }; x.ontimeout = function () { rej(new Error('timeout')); };
+      x.send();
+    });
+  }
   function upstream(m, s) {
     var t = new Date(Date.now() + 9 * 3600e3 + 864e5).toISOString().slice(0, 10).replace(/-/g, '');
     return m === 'k' ? 'https://api.finance.naver.com/siseJson.naver?symbol=' + encodeURIComponent(s) + '&requestType=1&startTime=19900101&endTime=' + t + '&timeframe=day'
       : 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(s) + '?period1=315532800&period2=' + (Math.floor(Date.now() / 1000) + 86400) + '&interval=1d&includePrePost=false&events=div';
   }
-  function monthly(rows) {   /* rows: [[월 번호, 값], ...] 날짜순 → {start, v} (달마다 마지막 값) */
-    var m = {}, lo = Infinity, hi = -Infinity;
-    rows.forEach(function (r) { if (r[1] > 0) { m[r[0]] = r[1]; lo = Math.min(lo, r[0]); hi = Math.max(hi, r[0]); } });
-    if (!isFinite(lo)) return null;
-    var v = []; for (var k = lo; k <= hi; k++) v.push(m[k] || null);
-    return trim(lo, v);
+  function raw(m, s) {
+    return endpoint().then(function (ep) { if (!ep) throw new Error('no endpoint'); return get(ep + '/etf?m=' + m + '&s=' + encodeURIComponent(s)); })
+      .catch(function (e) { if (e && e.nodata) throw e; return get('https://api.allorigins.win/raw?url=' + encodeURIComponent(upstream(m, s))); });
   }
-  function parse(m, txt) {
+  function parseDaily(m, txt) {                               /* → {d: 일수[], c: 종가[], a: 수정 종가(배당 반영)|null, cur} */
+    var d = [], c = [], a = [], i;
     if (m === 'k') {
-      var re = /\["(\d{4})(\d{2})(\d{2})",\s*(?:-?[\d.]+|null),\s*(?:-?[\d.]+|null),\s*(?:-?[\d.]+|null),\s*(-?[\d.]+)/g, x, rows = [];
-      while ((x = re.exec(String(txt || '')))) rows.push([(+x[1]) * 12 + (+x[2]) - 1, +x[4]]);
-      var c = monthly(rows); return c ? { c: c, a: null, cur: 'KRW' } : null;
+      var re = /\["(\d{4})(\d{2})(\d{2})",\s*(?:-?[\d.]+|null),\s*(?:-?[\d.]+|null),\s*(?:-?[\d.]+|null),\s*(-?[\d.]+)/g, x;
+      while ((x = re.exec(String(txt || '')))) {
+        var day = dOf(+x[1], +x[2] - 1, +x[3]), v = +x[4]; if (!(v > 0)) continue;
+        if (d.length && day <= d[d.length - 1]) { if (day === d[d.length - 1]) c[c.length - 1] = v; continue; }
+        d.push(day); c.push(v);
+      }
+      return d.length ? { d: d, c: c, a: null, cur: 'KRW' } : null;
     }
     var j = JSON.parse(txt), r = j && j.chart && j.chart.result && j.chart.result[0];
     if (!r || !r.timestamp) return null;
-    var off = (r.meta && r.meta.gmtoffset) || 0, cur = (r.meta && r.meta.currency) || 'USD';
-    var cl = (r.indicators.quote[0] || {}).close || [], ad = ((r.indicators.adjclose || [])[0] || {}).adjclose || null, rc = [], ra = [];
-    r.timestamp.forEach(function (t, i) { var d = new Date((t + off) * 1000), k = d.getUTCFullYear() * 12 + d.getUTCMonth(); rc.push([k, cl[i]]); if (ad) ra.push([k, ad[i]]); });
-    return { c: monthly(rc), a: ad ? monthly(ra) : null, cur: cur };
+    var off = (r.meta && r.meta.gmtoffset) || 0, cur = String((r.meta && r.meta.currency) || 'USD').toUpperCase();
+    var cl = (r.indicators.quote[0] || {}).close || [], ad = ((r.indicators.adjclose || [])[0] || {}).adjclose || null;
+    for (i = 0; i < r.timestamp.length; i++) {
+      var dd = Math.floor((r.timestamp[i] + off) / 86400), cv = cl[i], av = ad ? ad[i] : null;
+      if (!(cv > 0)) continue;
+      if (d.length && dd <= d[d.length - 1]) { if (dd === d[d.length - 1]) { c[c.length - 1] = cv; a[a.length - 1] = av > 0 ? av : null; } continue; }
+      d.push(dd); c.push(cv); a.push(av > 0 ? av : null);
+    }
+    if (!d.length) return null;
+    if (ad) { for (i = 0; i < a.length; i++) if (!(a[i] > 0)) a[i] = i ? a[i - 1] / c[i - 1] * c[i] : c[i]; }
+    return { d: d, c: c, a: ad ? a : null, cur: cur };
   }
+  function dsrc(key) {                                        /* 일봉을 받을 곳 (없으면 null — 아파트·M2·물가·달러는 받지 않음) */
+    if (/^[ku]:/.test(key)) return { m: key.charAt(0), s: key.slice(2) };
+    if (key === '^KS11') return { m: 'k', s: 'KOSPI' };
+    if (key === '^KQ11') return { m: 'k', s: 'KOSDAQ' };
+    if (/\.(KS|KQ)$/.test(key)) return { m: 'k', s: key.replace(/\.(KS|KQ)$/, '') };
+    var a = wifAsset(key); if (a && !a.yearly && key !== 'USD') return { m: 'u', s: key };
+    return null;
+  }
+  function loadDaily(key) {
+    if (S.D[key]) return Promise.resolve(S.D[key]);
+    if (S.Dp[key]) return S.Dp[key];
+    var src = dsrc(key); if (!src) return Promise.resolve(null);
+    S.Dp[key] = raw(src.m, src.s).then(function (txt) {
+      var D = parseDaily(src.m, txt);
+      if (!D || D.d.length < 3) throw new Error('nodata');
+      if (D.cur !== 'KRW' && D.cur !== 'USD') throw new Error('통화 ' + D.cur + ' 는 지원하지 않음');
+      S.D[key] = D; delete S.Derr[key]; return D;
+    }).then(function (D) { delete S.Dp[key]; return D; }, function (e) { delete S.Dp[key]; S.Derr[key] = e; throw e; });
+    return S.Dp[key];
+  }
+  function loadFx() {
+    if (S.FX) return Promise.resolve(S.FX);
+    if (S.FXP) return S.FXP;
+    S.FXP = window.mdLoad('usdkrw.json').then(function (j) {
+      if (!j || !j.c || !j.dd || j.c.length !== j.dd.length + 1) throw new Error('fx');
+      var d = [j.d0]; for (var i = 0; i < j.dd.length; i++) d.push(d[i] + j.dd[i]);
+      S.FX = { d: d, v: j.c }; return S.FX;
+    }).catch(function (e) { S.FXP = null; throw e; });
+    return S.FXP;
+  }
+  function loadPre(key) {                                     /* ETF 상장 전 재현 식 + 실제 일봉 (이을 첫날 가격) */
+    if (key in S.PRE) return Promise.resolve(S.PRE[key]);
+    var ek = etfKey(key);
+    if (!ek || !window.MBT || !window.MBT.preKey) { S.PRE[key] = null; return Promise.resolve(null); }
+    return window.MBT.preKey(ek).then(function (P) {
+      if (!P) { S.PRE[key] = null; return null; }
+      return loadDaily(key).then(function () { S.PRE[key] = P; return P; }, function () { S.PRE[key] = null; return null; });
+    }, function () { S.PRE[key] = null; return null; });
+  }
+  function need(o) {                                          /* 지금 설정 계산에 필요한 자료를 모두 받음 (이미 있으면 바로) */
+    var ps = [];
+    if (o.daily) ps.push(loadFx().catch(function () { return null; }));
+    S.sel.forEach(function (key) {
+      if (o.daily && dsrc(key)) ps.push(loadDaily(key).catch(function () { return null; }));
+      if (o.pre && etfKey(key)) ps.push(loadPre(key));
+    });
+    return Promise.all(ps);
+  }
+  function missing(o) {                                       /* 받지 않은 자료가 있나 (있으면 받은 뒤 계산) */
+    if (o.daily && !S.FX) return true;
+    return S.sel.some(function (key) { return (o.daily && dsrc(key) && !S.D[key] && !S.Derr[key]) || (o.pre && etfKey(key) && !(key in S.PRE)); });
+  }
+
+  /* ── 검색 종목: 일봉 → 달마다 마지막 종가 ── */
   function toKrw(s) {
     if (!s) return null;
     var v = s.v.map(function (p, i) { var f = fxAt(s.start + i); return p > 0 && f > 0 ? p * f : null; });
     return trim(s.start, v);
   }
-  function fetchItem(it) {   /* it: {k:'k'|'u', s, n, t} → S.built[key] */
+  function fetchItem(it) {   /* it: {k:'k'|'u', s, n, t} → S.built[key] (월별 원화) · S.D[key] (일봉) */
     var key = it.k + ':' + it.s;
     if (S.built[key]) return Promise.resolve(key);
     if (S.pend[key]) return S.pend[key];
     S.built[key + '|meta'] = { name: it.n, tag: it.t };
-    var p = endpoint().then(function (ep) { if (!ep) throw new Error('no endpoint'); return get(ep + '/etf?m=' + it.k + '&s=' + encodeURIComponent(it.s)); })
-      .catch(function (e) { if (e && e.nodata) throw e; return get('https://api.allorigins.win/raw?url=' + encodeURIComponent(upstream(it.k, it.s))); })
-      .then(function (txt) {
-        var r = parse(it.k, txt);
-        if (!r || !r.c || r.c.v.length < 3) throw new Error('nodata');
-        if (r.cur !== 'KRW' && r.cur !== 'USD') throw new Error('통화 ' + r.cur + ' 는 지원하지 않음');
-        S.built[key] = r.cur === 'USD' ? { c: toKrw(r.c), a: toKrw(r.a) } : { c: r.c, a: r.a };
-        if (!S.built[key].c) throw new Error('nodata');
-        return key;
-      });
+    var p = loadDaily(key).then(function (D) {
+      var c = monthlyOfDaily(D.d, D.c, false), a = D.a ? monthlyOfDaily(D.d, D.a, false) : null;
+      if (!c || c.v.length < 3) throw new Error('nodata');
+      S.built[key] = D.cur === 'USD' ? { c: toKrw(c), a: toKrw(a) } : { c: c, a: a };
+      if (!S.built[key].c) throw new Error('nodata');
+      return key;
+    });
     S.pend[key] = p;
     p.then(function () { delete S.pend[key]; }, function () { delete S.pend[key]; delete S.built[key + '|meta']; });
     return p;
@@ -20820,7 +21031,9 @@ var WIF = (function () {
   /* ── 계산 ── */
   function inputs() {
     var amt = num($('as-amt').value) * 1e4, sec = Math.min(120, Math.max(2, num($('as-sec').value) || 15));
-    return { mode: S.mode, amt: amt, start: (+$('as-y').value) * 12 + (+$('as-m').value) - 1, sec: sec, div: $('as-div').checked, log: $('as-log').checked };
+    var daily = S.mode === 'dca' && S.freq === 'd';
+    return { mode: S.mode, freq: S.mode === 'dca' ? S.freq : 'm', daily: daily, amt: amt, start: (+$('as-y').value) * 12 + (+$('as-m').value) - 1, sec: sec,
+             div: $('as-div').checked, log: $('as-log').checked, pre: $('as-pre').checked };
   }
   function irr(A, n, V) {   /* 매달 A씩 n번(0..n−1달째 매수) · n−1달째 가치 V → 연환산 */
     function fv(g) { var v = 0; for (var k = 0; k < n; k++) v += A * Math.pow(g, n - 1 - k); return v; }
@@ -20829,9 +21042,16 @@ var WIF = (function () {
     for (var i = 0; i < 100; i++) { var mid = (lo + hi) / 2; if (fv(mid) < V) lo = mid; else hi = mid; }
     return Math.pow((lo + hi) / 2, 12) - 1;
   }
-  function simulate() {
-    var o = inputs(), list = [], lim = null;
-    S.sel.forEach(function (key) { var s = series(key, o.div); if (s) list.push({ key: key, s: s }); });
+  function irrDays(A, days, end, V) {   /* 날마다 A 씩(days 날짜들) · end 날 가치 V → 연환산 내부수익률 */
+    function fv(r) { var v = 0, g = Math.log(1 + r) / 365.25; for (var i = 0; i < days.length; i++) v += A * Math.exp(g * (end - days[i])); return v; }
+    var lo = -0.95, hi = 20;
+    if (fv(lo) > V || fv(hi) < V) return null;
+    for (var i = 0; i < 80; i++) { var mid = (lo + hi) / 2; if (fv(mid) < V) lo = mid; else hi = mid; }
+    return (lo + hi) / 2;
+  }
+  function simMonthly(o) {
+    var list = [], lim = null;
+    S.sel.forEach(function (key) { var s = mseries(key, o.div, o.pre); if (s) list.push({ key: key, s: s }); });
     if (!list.length) return { err: '비교할 자산을 하나 이상 고르세요.' };
     var s0 = o.start, e0 = Infinity;
     list.forEach(function (x) { if (x.s.start > s0) { s0 = x.s.start; lim = x.key; } e0 = Math.min(e0, x.s.start + x.s.v.length - 1); });
@@ -20847,16 +21067,89 @@ var WIF = (function () {
       }
       x.v = v; x.final = v[N - 1]; x.mult = x.final / inv[N - 1];
       x.cagr = o.mode === 'dca' ? irr(o.amt, N, x.final) : (N > 1 ? Math.pow(x.final / o.amt, 12 / (N - 1)) - 1 : null);
+      x.realK = x.s.real > s0 ? x.s.real - s0 : 0;             /* 이 달 전까지는 가상(재현) 구간 */
+      x.preTo = x.realK ? ym(x.s.real - 1) : null;
     });
     return { o: o, list: list, s0: s0, e0: e0, N: N, inv: inv, lim: lim && s0 > o.start ? lim : null };
   }
+  /* 매일 적립용: 자산 → 날짜별 가격 {d, p, usd, ext, real} (usd = 달러 가격 → 계산할 때 그 영업일 환율로 원화 · 미국 휴장일에도 그날 환율로 삼 · ext = 달 끝 원화 값 사이 기하 보간) */
+  function dseries(key, o) {
+    if (isExt(key)) {
+      var m = mseries(key, o.div, o.pre); if (!m) return null;
+      var d = [], p = [];
+      for (var i = 0; i < m.v.length; i++) { d.push(mLast(m.start + i)); p.push(m.v[i]); }
+      return { d: d, p: p, ext: true, real: mLast(m.real), src: m.src };
+    }
+    if (key === 'USD') { if (!S.FX) return null; return { d: S.FX.d, p: S.FX.v.map(function () { return 1; }), usd: true, ext: false, real: S.FX.d[0] }; }   /* 달러 1 = 그날 환율 */
+    var D = S.D[key]; if (!D) return null;
+    var usd = D.cur === 'USD', base = o.div && D.a ? D.a : D.c, dd = D.d.slice(), pp = base.slice(), j, real = D.d[0], src = null;
+    if (o.pre) {
+      var pre = null;
+      if (coinPre(key)) {                                     /* Coin Metrics 일별(달러) → 첫 실제 날 가격에 맞춤 */
+        var c = coinPre(key), ci = D.d[0] - c.d0;
+        if (ci > 0 && ci < c.v.length) { pre = { d: [], p: [] }; for (j = 0; j < ci; j++) { pre.d.push(c.d0 + j); pre.p.push(base[0] * c.v[j] / c.v[ci]); } }
+      } else if ((key === 'GC=F' || key === 'SI=F') && preMats()[key === 'GC=F' ? 'gold' : 'silver']) {   /* 세계은행 월평균 → 날짜로 기하 보간 */
+        var g = preMats()[key === 'GC=F' ? 'gold' : 'silver'], gs = mi(g.start), gd = [], gp = [];
+        for (j = 0; j < g.v.length; j++) { gd.push(mLast(gs + j)); gp.push(g.v[j]); }
+        var g0 = interp(gd, gp, D.d[0]);
+        if (g0 > 0 && gd[0] < D.d[0]) { pre = { d: [], p: [] }; for (var x = gd[0]; x < D.d[0]; x++) if (weekday(x)) { pre.d.push(x); pre.p.push(base[0] * interp(gd, gp, x) / g0); } }
+      } else if (etfKey(key)) {
+        var e = etfPreDaily(key, o.div);
+        if (e) pre = { d: e.d, p: e.p };
+      }
+      if (pre && pre.d.length) {
+        var keep = pre.d.length; while (keep && pre.d[keep - 1] >= D.d[0]) keep--;
+        var f0 = 0; while (f0 < keep && !(pre.p[f0] > 0)) f0++;
+        if (keep > f0) { dd = pre.d.slice(f0, keep).concat(dd); pp = pre.p.slice(f0, keep).concat(pp); src = PRE_SRC[key] || '재현 식(ETF 차트 비교)'; }
+      }
+    }
+    var a0 = 0, fx0 = mFirst(mi(S.W.fx.start)); while (a0 < pp.length && (!(pp[a0] > 0) || (usd && dd[a0] < fx0))) a0++;      /* 값이 없거나 환율이 없는 앞부분(1981.04 전) 빼기 */
+    if (a0) { dd = dd.slice(a0); pp = pp.slice(a0); }
+    return dd.length ? { d: dd, p: pp, usd: usd, ext: false, real: real, src: src } : null;
+  }
+  function interp(d, p, x) {                                  /* 달 끝 값 사이 기하 보간 (앞은 없음 · 뒤는 마지막 값) */
+    var j = idxLE(d, x); if (j < 0) return null;
+    if (j >= d.length - 1 || d[j] === x) return p[j];
+    return p[j] * Math.pow(p[j + 1] / p[j], (x - d[j]) / (d[j + 1] - d[j]));
+  }
+  function simDaily(o) {
+    var list = [], lost = [];
+    S.sel.forEach(function (key) { var s = dseries(key, o); if (s) list.push({ key: key, s: s }); else lost.push(key); });
+    if (!list.length) return { err: lost.length ? '일봉 시세를 불러오지 못했습니다. 잠시 후 다시 시도하거나 매달 적립으로 계산해 보세요.' : '비교할 자산을 하나 이상 고르세요.' };
+    var D0 = mFirst(o.start), D1 = Infinity, lim = null, today = Math.floor((Date.now() + 9 * 3600e3) / DAY);
+    list.forEach(function (x) { if (x.s.d[0] > D0) { D0 = x.s.d[0]; lim = x.key; } if (!x.s.ext) D1 = Math.min(D1, x.s.d[x.s.d.length - 1]); });
+    if (!isFinite(D1)) D1 = Math.min(today, mLast(lastMonth()));
+    var G = []; for (var g = D0; g <= D1; g++) if (weekday(g)) G.push(g);
+    if (G.length < 40) return { err: '고른 자산이 함께 있는 기간이 너무 짧습니다. 늦게 시작하는 자산을 빼 보세요.' };
+    /* 달마다 마지막 영업일 → 그래프·순위 표본 */
+    var ends = [], s0 = monthOfDay(G[0]), e0 = monthOfDay(G[G.length - 1]);
+    for (var i = 0; i < G.length; i++) { var k = monthOfDay(G[i]); if (i === G.length - 1 || monthOfDay(G[i + 1]) !== k) ends.push(i); }
+    var N = ends.length, inv = ends.map(function (i) { return o.amt * (i + 1); });
+    list.forEach(function (x) {
+      var s = x.s, j = 0, u = 0, v = [], m = 0;
+      for (var i = 0; i < G.length; i++) {
+        var p;
+        if (s.ext) p = interp(s.d, s.p, G[i]);
+        else { while (j + 1 < s.d.length && s.d[j + 1] <= G[i]) j++; p = s.usd ? s.p[j] * fxDay(G[i]) : s.p[j]; }
+        u += o.amt / p;
+        if (i === ends[m]) { v.push(u * p); m++; }
+      }
+      x.v = v; x.final = v[N - 1]; x.mult = x.final / inv[N - 1];
+      x.cagr = irrDays(o.amt, G, G[G.length - 1], x.final);
+      x.realK = s.real > G[0] ? monthOfDay(s.real) - s0 : 0;
+      x.preTo = x.realK ? dStr(s.real - 1).replace(/-/g, '.') : null;
+    });
+    return { o: o, list: list, s0: s0, e0: e0, N: N, inv: inv, lim: lim && D0 > mFirst(o.start) ? lim : null, days: G.length, G0: G[0], G1: G[G.length - 1],
+             lost: lost.filter(function (k) { return !isExt(k); }) };
+  }
+  function simulate() { var o = inputs(); return o.daily ? simDaily(o) : simMonthly(o); }
 
   /* ── 그래프 ── */
   function cssVar(n, f) { var v = getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return v || f; }
   var endLabels = {
     id: 'asEnd',
-    afterDatasetsDraw: function (ch) {
-      var ctx = ch.ctx, area = ch.chartArea, items = [], narrow = ch.width < 520;
+    afterDatasetsDraw: function (ch, args, opt) {
+      var ctx = ch.ctx, area = ch.chartArea, items = [], fs = (opt && opt.fs) || 11, narrow = opt && opt.narrow, gap = fs + 2;
       ch.data.datasets.forEach(function (ds, i) {
         var meta = ch.getDatasetMeta(i), pts = meta.data;
         if (meta.hidden || !pts.length) return;
@@ -20864,38 +21157,41 @@ var WIF = (function () {
         items.push({ x: p.x, y: p.y, y0: p.y, c: ds.borderColor, t: narrow ? ds.label : ds.label + ' ' + won(last.y) });
       });
       items.sort(function (a, b) { return a.y - b.y; });
-      for (var k = 1; k < items.length; k++) if (items[k].y - items[k - 1].y < 13) items[k].y = items[k - 1].y + 13;
-      var over = items.length ? items[items.length - 1].y - (area.bottom - 4) : 0;
-      if (over > 0) items.forEach(function (it) { it.y -= over; });
+      for (var k = 1; k < items.length; k++) if (items[k].y - items[k - 1].y < gap) items[k].y = items[k - 1].y + gap;
+      /* 아래로 넘치면 아래에서부터 필요한 만큼만 위로 밀고(멀리 떨어진 이름은 제자리), 위로 넘치면 다시 아래로 (영상 9:16 에서 맨 위 이름이 잘리던 것) */
+      var bot = area.bottom - 4, top = area.top + gap / 2;
+      for (k = items.length - 1; k >= 0; k--) items[k].y = Math.min(items[k].y, k === items.length - 1 ? bot : items[k + 1].y - gap);
+      if (items.length && items[0].y < top) { items[0].y = top; for (k = 1; k < items.length; k++) if (items[k].y - items[k - 1].y < gap) items[k].y = items[k - 1].y + gap; }
       ctx.save();
-      ctx.font = '600 ' + (narrow ? 10 : 11) + 'px ' + cssVar('--font', 'sans-serif');
+      ctx.font = '600 ' + fs + 'px ' + cssVar('--font', 'sans-serif');
       ctx.textBaseline = 'middle';
       items.forEach(function (it) {
-        ctx.fillStyle = it.c; ctx.beginPath(); ctx.arc(it.x, it.y0, 3.2, 0, Math.PI * 2); ctx.fill();
-        var w = ctx.measureText(it.t).width, tx = it.x + 7;
+        ctx.fillStyle = it.c; ctx.beginPath(); ctx.arc(it.x, it.y0, fs * 0.3, 0, Math.PI * 2); ctx.fill();
+        var w = ctx.measureText(it.t).width, tx = it.x + fs * 0.65;
         if (tx + w > ch.width - 2) tx = Math.max(area.left, ch.width - 2 - w);
         ctx.fillText(it.t, tx, it.y);
       });
       ctx.restore();
     }
   };
-  function makeChart() {
-    if (S.chart) { S.chart.destroy(); S.chart = null; }
-    var sim = S.sim, cv = $('as-chart');
-    if (!sim || sim.err || !window.Chart || !cv) return;
-    var tick = cssVar('--text3', '#888'), grid = 'rgba(128,128,128,0.12)', narrow = (cv.parentNode.clientWidth || 600) < 520;
+  /* 그래프 설정 — 화면용(반응형)·영상용(고정 크기 · fs 글자 크기) 공통 */
+  function chartConfig(sim, opt) {
+    var tick = opt.tick || cssVar('--text3', '#888'), grid = 'rgba(128,128,128,0.14)', narrow = !!opt.narrow, fs = opt.fs || 11;
     var ds = sim.list.map(function (x) {
-      var c = S.colors[x.key];
-      return { label: short(x.key), data: [], borderColor: c, backgroundColor: c, borderWidth: x.key === 'M2' || x.key === 'CPI' ? 1.6 : 2, borderDash: x.key === 'M2' || x.key === 'CPI' ? [5, 4] : [], pointRadius: 0, tension: 0, fill: false };
+      var c = S.colors[x.key], macro = x.key === 'M2' || x.key === 'CPI', rk = x.realK;
+      var d = { label: short(x.key), data: [], borderColor: c, backgroundColor: c, borderWidth: (macro ? 1.6 : 2) * (opt.lw || 1), borderDash: macro ? [5, 4] : [], pointRadius: 0, tension: 0, fill: false };
+      if (rk > 0) d.segment = { borderDash: function (cx) { return cx.p1.parsed.x <= rk ? [2 * (opt.lw || 1), 3 * (opt.lw || 1)] : undefined; } };   /* 상장 전 가상 구간 = 잘게 끊긴 점선 */
+      return d;
     });
-    ds.push({ label: '넣은 돈', data: [], borderColor: tick, backgroundColor: tick, borderWidth: 1.2, borderDash: [2, 3], pointRadius: 0, fill: false, _inv: true });
-    S.chart = new Chart(cv, {
+    ds.push({ label: '넣은 돈', data: [], borderColor: tick, backgroundColor: tick, borderWidth: 1.2 * (opt.lw || 1), borderDash: [2, 3], pointRadius: 0, fill: false, _inv: true });
+    return {
       type: 'line', data: { datasets: ds }, plugins: [endLabels],
       options: {
-        responsive: true, maintainAspectRatio: false, animation: false, parsing: false, normalized: true,
-        layout: { padding: { right: narrow ? 70 : 128, top: 6 } },
+        responsive: !opt.fixed, maintainAspectRatio: false, animation: false, parsing: false, normalized: true, devicePixelRatio: opt.fixed ? 1 : undefined,
+        layout: { padding: { right: opt.padR != null ? opt.padR : narrow ? 70 : 128, top: 6 } },
         interaction: { mode: 'nearest', intersect: false, axis: 'x' },
-        plugins: { legend: { display: false }, tooltip: { callbacks: {
+        events: opt.fixed ? [] : undefined,
+        plugins: { legend: { display: false }, asEnd: { fs: opt.efs || fs, narrow: narrow }, tooltip: { enabled: !opt.fixed, callbacks: {
           title: function (it) { return it.length ? ym(sim.s0 + Math.round(it[0].parsed.x)) : ''; },
           label: function (c) { return ' ' + c.dataset.label + '  ' + won(c.parsed.y); } } } },
         scales: {
@@ -20906,18 +21202,24 @@ var WIF = (function () {
                  if (!t.length) t.push({ value: 0 });
                  ax.ticks = t;
                },
-               ticks: { color: tick, maxRotation: 0, autoSkip: false, font: { size: narrow ? 10 : 11 },
+               ticks: { color: tick, maxRotation: 0, autoSkip: false, font: { size: narrow ? Math.round(fs * 0.9) : fs },
                         callback: function (v) { var k = sim.s0 + Math.round(v); return k % 12 === 0 ? String(k / 12) + (narrow ? '' : '년') : ym(k); } } },
           y: { type: sim.o.log ? 'logarithmic' : 'linear', beginAtZero: !sim.o.log, position: 'left', grid: { color: grid }, border: { display: false },
-               ticks: { color: tick, maxTicksLimit: 6, font: { size: narrow ? 10 : 11 }, callback: function (v) { return won(v); } } }
+               ticks: { color: tick, maxTicksLimit: 6, font: { size: narrow ? Math.round(fs * 0.9) : fs }, callback: function (v) { return won(v); } } }
         }
       }
-    });
+    };
+  }
+  function makeChart() {
+    if (S.chart) { S.chart.destroy(); S.chart = null; }
+    var sim = S.sim, cv = $('as-chart');
+    if (!sim || sim.err || !window.Chart || !cv) return;
+    var w = cv.parentNode.clientWidth || 600, full = PG.classList.contains('as-full-on');
+    var big = full && w >= 640;   /* 전체보기(넓은 화면)는 글자·이름 칸을 크게 */
+    S.chart = new Chart(cv, chartConfig(sim, { narrow: w < 520, fs: big ? 13 : 11, efs: big ? 14 : 11, padR: w < 520 ? 70 : big ? 160 : 128 }));
     draw(S.t);
   }
-  function draw(t) {
-    var sim = S.sim, ch = S.chart;
-    if (!sim || sim.err || !ch) return;
+  function setChartT(ch, sim, t) {                            /* 진행률 t 까지 그린 점들 → 그래프 */
     var pos = t * (sim.N - 1), idx = Math.floor(pos), f = pos - idx;
     function pts(v) {
       var a = new Array(idx + 1);
@@ -20929,17 +21231,27 @@ var WIF = (function () {
     ch.data.datasets[sim.list.length].data = pts(sim.inv);
     ch.options.scales.x.max = Math.max(pos, Math.min(sim.N - 1, 6));
     ch.update('none');
+    return pos;
+  }
+  function invText(sim, k) {
+    return '넣은 돈 ' + won(sim.inv[k]) + '원' + (sim.o.mode === 'dca' ? ' (' + (sim.o.daily ? '매일' : '매달') + ' ' + won(sim.o.amt) + '원)' : '');
+  }
+  function dateText(sim, k) { return Math.floor((sim.s0 + k) / 12) + '년 ' + ((sim.s0 + k) % 12 + 1) + '월'; }
+  function draw(t) {
+    var sim = S.sim, ch = S.chart;
+    if (!sim || sim.err || !ch) return;
+    var pos = setChartT(ch, sim, t);
     var k = Math.min(sim.N - 1, Math.round(pos));
-    $('as-date').textContent = Math.floor((sim.s0 + k) / 12) + '년 ' + ((sim.s0 + k) % 12 + 1) + '월';
-    $('as-inv').textContent = '넣은 돈 ' + won(sim.inv[k]) + '원' + (sim.o.mode === 'dca' ? ' (매달 ' + won(sim.o.amt) + '원)' : '');
+    $('as-date').textContent = dateText(sim, k);
+    $('as-inv').textContent = invText(sim, k);
     $('as-prog').style.width = (t * 100).toFixed(1) + '%';
     if (k !== S.rankK) { S.rankK = k; rank(k); }
   }
   function rank(k) {
     var sim = S.sim, ol = $('as-rank');
-    var rows = sim.list.map(function (x) { return { key: x.key, v: x.v[k] }; }).sort(function (a, b) { return b.v - a.v; });
+    var rows = sim.list.map(function (x) { return { key: x.key, v: x.v[k], pre: x.realK > k }; }).sort(function (a, b) { return b.v - a.v; });
     ol.innerHTML = rows.map(function (r, i) {
-      return '<li><span class="as-r">' + (i + 1) + '</span><i style="background:' + S.colors[r.key] + '"></i><span class="as-n">' + esc(short(r.key)) + '</span><b>' + won(r.v) + '</b><small>' + (r.v / sim.inv[k]).toFixed(2) + '배</small></li>';
+      return '<li><span class="as-r">' + (i + 1) + '</span><i style="background:' + S.colors[r.key] + '"></i><span class="as-n">' + esc(short(r.key)) + (r.pre ? ' <em class="as-v">가상</em>' : '') + '</span><b>' + won(r.v) + '</b><small>' + mx(r.v / sim.inv[k]) + '</small></li>';
     }).join('');
   }
   function play() {
@@ -20973,49 +21285,79 @@ var WIF = (function () {
     var used = {}; Object.keys(S.colors).forEach(function (k) { if (S.sel.indexOf(k) >= 0) used[S.colors[k]] = 1; });
     S.colors[key] = COLORS.filter(function (c) { return !used[c]; })[0] || COLORS[S.sel.length % COLORS.length];
   }
+  function scenario(sim) {                                    /* 한 줄 요약 (결과 위 · 전체보기 · 영상 제목) */
+    var o = sim.o, per = sim.o.daily ? dStr(sim.G0).replace(/-/g, '.') + ' ~ ' + dStr(sim.G1).replace(/-/g, '.') : ym(sim.s0) + ' ~ ' + ym(sim.e0);
+    return (o.mode === 'dca' ? (o.daily ? '매일 ' : '매달 ') + won(o.amt) + '원씩 적립' : won(o.amt) + '원 한 번에 투자') + ' · ' + per + (o.div ? '' : ' · 배당 제외') + (o.pre ? ' · 상장 전 가상 포함' : '');
+  }
   function table() {
     var sim = S.sim, tb = $('as-tbody');
     if (sim.err) { tb.innerHTML = '<tr><td colspan="5">' + esc(sim.err) + '</td></tr>'; $('as-sum').textContent = sim.err; return; }
     var rows = sim.list.slice().sort(function (a, b) { return b.final - a.final; });
     tb.innerHTML = rows.map(function (x, i) {
       var macro = x.key === 'M2' || x.key === 'CPI';
-      return '<tr' + (macro ? ' class="as-macro"' : '') + '><td>' + (i + 1) + '</td><td style="text-align:left;"><i class="as-dot" style="background:' + S.colors[x.key] + '"></i>' + esc(info(x.key).name) + '</td><td>' + won(x.final) + '원</td><td>' + x.mult.toFixed(2) + '배</td><td>' + pct(x.cagr) + '</td></tr>';
+      return '<tr' + (macro ? ' class="as-macro"' : '') + '><td>' + (i + 1) + '</td><td style="text-align:left;"><i class="as-dot" style="background:' + S.colors[x.key] + '"></i>' + esc(info(x.key).name) +
+        (x.preTo ? '<small class="as-vnote">~' + esc(x.preTo) + ' 가상 · ' + esc(x.s.src || '') + '</small>' : '') + '</td><td>' + won(x.final) + '원</td><td>' + mx(x.mult) + '</td><td>' + pct(x.cagr) + '</td></tr>';
     }).join('');
-    var inv = sim.inv[sim.N - 1];
-    $('as-sum').textContent = ym(sim.s0) + ' ~ ' + ym(sim.e0) + ' (' + (sim.N - 1) + '개월) · ' + (sim.o.mode === 'dca' ? '매달 ' + won(sim.o.amt) + '원씩 ' : '처음에 ') + '넣은 돈 합계 ' + won(inv) + '원 · ' + (sim.o.mode === 'dca' ? '연평균 = 내부수익률(IRR)' : '연평균 = 연복리 수익률');
+    var inv = sim.inv[sim.N - 1], o = sim.o;
+    $('as-sum').textContent = (o.daily ? dStr(sim.G0).replace(/-/g, '.') + ' ~ ' + dStr(sim.G1).replace(/-/g, '.') + ' (영업일 ' + comma(sim.days) + '일)' : ym(sim.s0) + ' ~ ' + ym(sim.e0) + ' (' + (sim.N - 1) + '개월)') + ' · ' +
+      (o.mode === 'dca' ? (o.daily ? '영업일마다 ' : '매달 ') + won(o.amt) + '원씩 ' : '처음에 ') + '넣은 돈 합계 ' + won(inv) + '원 · ' + (o.mode === 'dca' ? '연평균 = 내부수익률(IRR)' : '연평균 = 연복리 수익률') +
+      (sim.list.some(function (x) { return x.preTo; }) ? ' · 점선 = 상장 전 가상 구간' : '') +
+      (sim.lost && sim.lost.length ? ' · 일봉을 불러오지 못해 뺀 자산: ' + sim.lost.map(short).join(', ') : '');
   }
   function startNote(sim) {
     var el = $('as-start-note');
-    el.textContent = sim && !sim.err && sim.lim ? '· ' + short(sim.lim) + ' 자료가 ' + ym(sim.s0) + '부터라 그때부터 비교' : '';
+    el.textContent = sim && !sim.err && sim.lim ? '· ' + short(sim.lim) + ' 자료가 ' + (sim.o.daily ? dStr(sim.G0).replace(/-/g, '.') : ym(sim.s0)) + '부터라 그때부터 비교' : '';
   }
   function recompute(keepT) {
     pause(); $('as-play').textContent = '▶ 재생';
+    var o = inputs(), my = ++S.seq;
+    store('cfg', { sel: S.sel, mode: S.mode, freq: S.freq, amt: $('as-amt').value, y: $('as-y').value, m: $('as-m').value, sec: o.sec, div: o.div, log: o.log, pre: o.pre });
+    if (missing(o)) {
+      S.busy = true; $('as-date').textContent = '…'; $('as-inv').textContent = o.daily ? '일봉 시세를 불러오는 중…' : '상장 전 재현 자료를 불러오는 중…';
+      need(o).then(function () { if (my === S.seq) { S.busy = false; recompute(keepT); } });
+      return;
+    }
+    S.busy = false;
     S.sim = simulate(); S.rankK = -1;
     startNote(S.sim);
     table();
     S.t = keepT ? S.t : 1;
     makeChart();
-    if (S.sim.err) { $('as-rank').innerHTML = ''; $('as-date').textContent = '—'; $('as-inv').textContent = S.sim.err; }
-    var o = inputs();
-    store('cfg', { sel: S.sel, mode: S.mode, amt: $('as-amt').value, y: $('as-y').value, m: $('as-m').value, sec: o.sec, div: o.div, log: o.log });
+    if (S.sim.err) { if (S.chart) { S.chart.destroy(); S.chart = null; } $('as-rank').innerHTML = ''; $('as-date').textContent = '—'; $('as-inv').textContent = S.sim.err; }
+    if (S.full) fullHead();
   }
   function addKey(key) {
     if (S.sel.indexOf(key) >= 0) return;
     if (S.sel.length >= MAXN) { alert('최대 ' + MAXN + '개까지 비교할 수 있습니다. 하나를 뺀 뒤 더해 주세요.'); return; }
     S.sel.push(key); color(key); chips(); recompute();
   }
-  function quickAmt() {   /* 빠른 금액 버튼: 거치식 100만~1억 · 적립식 매달 10만~300만 */
-    var v = S.mode === 'dca' ? [[10, '10만'], [50, '50만'], [100, '100만'], [300, '300만']] : [[100, '100만'], [1000, '1천만'], [5000, '5천만'], [10000, '1억']];
+  function quickAmt() {   /* 빠른 금액 버튼: 거치식 100만~1억 · 적립식 매달 10만~300만 · 매일 1만~10만 */
+    var v = S.mode !== 'dca' ? [[100, '100만'], [1000, '1천만'], [5000, '5천만'], [10000, '1억']] : S.freq === 'd' ? [[1, '1만'], [3, '3만'], [5, '5만'], [10, '10만']] : [[10, '10만'], [50, '50만'], [100, '100만'], [300, '300만']];
     $('as-amt-q').innerHTML = v.map(function (x) { return '<button type="button" data-v="' + x[0] + '">' + x[1] + '</button>'; }).join('');
+  }
+  function modeUi() {
+    $('as-mode').querySelectorAll('.mode-btn').forEach(function (x) { x.classList.toggle('active', x.getAttribute('data-v') === S.mode); });
+    $('as-freq').querySelectorAll('.mode-btn').forEach(function (x) { x.classList.toggle('active', x.getAttribute('data-v') === S.freq); });
+    $('as-freq-f').hidden = S.mode !== 'dca';
+    $('as-amt-l').textContent = S.mode !== 'dca' ? '처음에 넣는 돈' : S.freq === 'd' ? '매일(영업일) 넣는 돈' : '매달 넣는 돈';
+    quickAmt();
   }
   function fillYears() {
     var ys = $('as-y'), now = lastMonth(), y1 = Math.floor(now / 12), html = '';
-    for (var y = y1; y >= 1986; y--) html += '<option value="' + y + '">' + y + '년</option>';
+    for (var y = y1; y >= 1981; y--) html += '<option value="' + y + '">' + y + '년</option>';
     ys.innerHTML = html;
     var ms = $('as-m'), mh = ''; for (var m = 1; m <= 12; m++) mh += '<option value="' + m + '">' + m + '월</option>'; ms.innerHTML = mh;
   }
   function setStart(k) { $('as-y').value = String(Math.floor(k / 12)); $('as-m').value = String(k % 12 + 1); }
-  function earliest() { var o = inputs(), s = -Infinity; S.sel.forEach(function (key) { var x = series(key, o.div); if (x) s = Math.max(s, x.start); }); return isFinite(s) ? s : lastMonth() - 120; }
+  function earliest() {   /* 고른 자산이 모두 있는 첫 달 (상장 전 가상 포함이면 그 앞까지 — ETF 재현은 받아 온 뒤) */
+    var o = inputs(), s = -Infinity;
+    S.sel.forEach(function (key) {
+      var x = mseries(key, o.div, o.pre);
+      if (x) s = Math.max(s, x.start);
+      if (o.daily && !isExt(key) && key !== 'USD') { var d = S.D[key] ? dseries(key, o) : null; if (d) s = Math.max(s, monthOfDay(d.d[0])); }
+    });
+    return isFinite(s) ? s : lastMonth() - 120;
+  }
 
   /* ── 검색 ── */
   function loadList() {
@@ -21079,26 +21421,237 @@ var WIF = (function () {
     });
   }
 
+  /* ── 전체보기: 그래프 카드를 화면 전체 창으로 옮김 ── */
+  function fullHead() {
+    var h = $('as-full-h'); if (!h || !S.sim) return;
+    h.innerHTML = '<b>자산 속도 시뮬레이터</b><span>' + esc(S.sim.err ? S.sim.err : scenario(S.sim)) + '</span>';
+  }
+  function openFull() {
+    if (S.full) return;
+    var stage = PG.querySelector('.as-stage'), ov = document.createElement('div');
+    ov.className = 'as-ov'; ov.id = 'as-ov'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', '자산 속도 시뮬레이터 전체보기');
+    ov.innerHTML = '<div class="as-ov-top"><div class="as-ov-h" id="as-full-h"></div><button type="button" class="as-btn" id="as-full-x" aria-label="전체보기 닫기">✕ 닫기</button></div>';
+    S.full = { ov: ov, home: stage.parentNode, next: stage.nextSibling, y: window.scrollY };
+    document.body.appendChild(ov); ov.appendChild(stage);
+    PG.classList.add('as-full-on'); document.documentElement.classList.add('as-noscroll');
+    $('as-full').textContent = '⛶ 전체보기 닫기';
+    fullHead();
+    try { if (ov.requestFullscreen && !document.fullscreenElement) ov.requestFullscreen().catch(function () {}); } catch (e) {}
+    setTimeout(makeChart, 30);
+    $('as-full-x').focus();
+  }
+  function closeFull() {
+    var f = S.full; if (!f) return;
+    S.full = null;
+    if (document.fullscreenElement) { try { document.exitFullscreen().catch(function () {}); } catch (e) {} }
+    var stage = f.ov.querySelector('.as-stage');
+    f.home.insertBefore(stage, f.next && f.next.parentNode === f.home ? f.next : null);
+    f.ov.remove();
+    PG.classList.remove('as-full-on'); document.documentElement.classList.remove('as-noscroll');
+    $('as-full').textContent = '⛶ 전체보기';
+    setTimeout(function () { makeChart(); window.scrollTo(0, f.y); }, 30);
+  }
+
+  /* ── 영상(MP4): 1920×1080 · 1080×1920 캔버스에 한 장씩 그려 H.264 로 ── */
+  var LAY = {
+    h: { W: 1920, H: 1080, fs: 22, efs: 24, lw: 2, head: [70, 60], chart: [60, 200, 1210, 780], rank: [1310, 210, 550, 770], foot: 1040 },
+    v: { W: 1080, H: 1920, fs: 24, efs: 26, lw: 2.4, head: [60, 80], chart: [40, 430, 1000, 820], rank: [60, 1300, 960, 480], foot: 1868 }
+  };
+  function theme() {
+    var light = document.documentElement.getAttribute('data-theme') === 'light';
+    return light ? { bg: '#f2f4f6', card: '#ffffff', text: '#191f28', text2: '#4e5968', text3: '#8b95a1', line: 'rgba(0,27,55,0.10)', acc: '#3182f6' }
+                 : { bg: '#101013', card: '#17171c', text: '#f2f3f5', text2: '#c3c6cc', text3: '#8a8f99', line: 'rgba(255,255,255,0.08)', acc: '#3182f6' };
+  }
+  function rr(ctx, x, y, w, h, r) { r = Math.max(0, Math.min(r, w / 2, h / 2)); ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+  function fitText(ctx, t, w) { if (ctx.measureText(t).width <= w) return t; while (t.length > 1 && ctx.measureText(t + '…').width > w) t = t.slice(0, -1); return t + '…'; }
+  function wrap(ctx, t, w) { var out = [], line = ''; String(t).split(' ').forEach(function (word) { var tryL = line ? line + ' ' + word : word; if (ctx.measureText(tryL).width > w && line) { out.push(line); line = word; } else line = tryL; }); if (line) out.push(line); return out; }
+  function videoMaker(kind) {                                 /* 영상 한 종류 그리기 도구 → {cv, frame(t)} */
+    var L = LAY[kind], sim = S.sim, T = theme(), F = cssVar('--font', 'sans-serif'), MONO = cssVar('--mono', 'monospace');
+    var cv = document.createElement('canvas'); cv.width = L.W; cv.height = L.H;
+    var ctx = cv.getContext('2d');
+    var ccv = document.createElement('canvas'); ccv.width = L.chart[2]; ccv.height = L.chart[3];
+    var ch = new Chart(ccv.getContext('2d'), chartConfig(sim, { fixed: true, fs: L.fs, efs: L.efs, lw: L.lw, padR: kind === 'h' ? 250 : 230, tick: T.text3 }));
+    var ypos = {};
+    function frame(t) {
+      var pos = setChartT(ch, sim, t), k = Math.min(sim.N - 1, Math.floor(pos)), f = pos - k;
+      ctx.fillStyle = T.bg; ctx.fillRect(0, 0, L.W, L.H);
+      /* 머리: 제목 · 조건 · 지금 날짜 · 넣은 돈 */
+      var hx = L.head[0], hy = L.head[1], cx = L.chart[0], cy = L.chart[1], cw = L.chart[2], chh = L.chart[3];
+      ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+      ctx.fillStyle = T.acc; ctx.font = '700 ' + (kind === 'h' ? 30 : 38) + 'px ' + F; ctx.fillText('자산 속도 시뮬레이터', hx, hy + 28);
+      ctx.fillStyle = T.text2; ctx.font = '500 ' + (kind === 'h' ? 26 : 30) + 'px ' + F;
+      var sc = scenario(sim);
+      if (kind === 'h') ctx.fillText(fitText(ctx, sc, 1150), hx, hy + 76);
+      else wrap(ctx, sc, L.W - 2 * hx).slice(0, 2).forEach(function (ln, i) { ctx.fillText(ln, hx, hy + 84 + i * 42); });
+      var kk = Math.min(sim.N - 1, Math.round(pos));
+      ctx.fillStyle = T.text; ctx.font = '700 ' + (kind === 'h' ? 76 : 104) + 'px ' + MONO;
+      if (kind === 'h') { ctx.textAlign = 'right'; ctx.fillText(dateText(sim, kk), L.W - 60, hy + 66); ctx.font = '500 26px ' + F; ctx.fillStyle = T.text3; ctx.fillText(invText(sim, kk), L.W - 60, hy + 108); ctx.textAlign = 'left'; }
+      else { ctx.fillText(dateText(sim, kk), hx, hy + 260); ctx.font = '500 30px ' + F; ctx.fillStyle = T.text3; ctx.fillText(invText(sim, kk), hx, hy + 312); }
+      /* 그래프 */
+      ctx.fillStyle = T.card; rr(ctx, cx - 20, cy - 20, cw + 40, chh + 40, 24); ctx.fill();
+      ctx.drawImage(ccv, cx, cy);
+      /* 순위 막대 (값 사이를 보간 · 자리는 부드럽게 옮겨 감) */
+      var rx = L.rank[0], ry = L.rank[1], rw = L.rank[2], rh = L.rank[3];
+      if (kind === 'h') { ctx.fillStyle = T.card; rr(ctx, rx - 20, cy - 20, rw + 40, chh + 40, 24); ctx.fill(); }
+      var rows = sim.list.map(function (x) { var a = x.v[k], b = k + 1 < sim.N ? x.v[k + 1] : a; return { key: x.key, v: a + (b - a) * f, pre: x.realK > k }; }).sort(function (a, b) { return b.v - a.v; });
+      var n = rows.length, rowH = Math.min(kind === 'h' ? 64 : 74, rh / Math.max(n, 1)), maxV = rows.length ? rows[0].v : 1, inv = sim.inv[k] + (k + 1 < sim.N ? (sim.inv[k + 1] - sim.inv[k]) * f : 0);
+      rows.forEach(function (r, i) {
+        var target = ry + i * rowH; ypos[r.key] = ypos[r.key] == null || Math.abs(target - ypos[r.key]) < 0.5 ? target : ypos[r.key] + (target - ypos[r.key]) * 0.38;
+      });
+      rows.slice().sort(function (a, b) { return ypos[a.key] - ypos[b.key]; }).forEach(function (r) {   /* 자리를 옮기는 줄은 바탕을 칠해 겹친 글자가 비치지 않게 */
+        var i = rows.indexOf(r), y = ypos[r.key], nameW = kind === 'h' ? 150 : 190, valW = kind === 'h' ? 150 : 190, bx = rx + 34 + nameW, bw = Math.max(4, (rw - 34 - nameW - valW - 10) * Math.max(0, r.v) / maxV);
+        ctx.fillStyle = kind === 'h' ? T.card : T.bg; ctx.fillRect(rx - 8, y, rw + 16, rowH);
+        ctx.font = '600 ' + Math.round(rowH * 0.36) + 'px ' + MONO; ctx.fillStyle = T.text3; ctx.textAlign = 'right'; ctx.fillText(String(i + 1), rx + 24, y + rowH * 0.62);
+        ctx.textAlign = 'left'; ctx.font = '600 ' + Math.round(rowH * 0.38) + 'px ' + F; ctx.fillStyle = T.text; ctx.fillText(fitText(ctx, short(r.key), nameW - 10), rx + 34, y + rowH * 0.62);
+        ctx.globalAlpha = r.pre ? 0.5 : 1; ctx.fillStyle = S.colors[r.key]; rr(ctx, bx, y + rowH * 0.2, bw, rowH * 0.6, Math.min(8, rowH * 0.2)); ctx.fill(); ctx.globalAlpha = 1;
+        ctx.font = '700 ' + Math.round(rowH * 0.36) + 'px ' + MONO; ctx.fillStyle = T.text; ctx.fillText(won(r.v), bx + bw + 10, y + rowH * 0.5);
+        ctx.font = '500 ' + Math.round(rowH * 0.26) + 'px ' + MONO; ctx.fillStyle = T.text3; ctx.fillText(mx(r.v / inv) + (r.pre ? ' · 가상' : ''), bx + bw + 10, y + rowH * 0.84);
+      });
+      /* 꼬리: 출처 · 진행 막대 */
+      ctx.font = '500 ' + (kind === 'h' ? 20 : 24) + 'px ' + F; ctx.fillStyle = T.text3; ctx.textAlign = 'left';
+      ctx.fillText('d-capitalism.com · 디코딩 자본주의', hx, L.foot);
+      var note = sim.list.some(function (x) { return x.preTo; }) ? '점선·흐린 막대 = 상장 전 가상 구간 · 세금·수수료 제외' : '세금·수수료 제외 · 과거 수익률은 미래를 보장하지 않음';
+      if (kind === 'h') { ctx.textAlign = 'right'; ctx.fillText(note, L.W - hx, L.foot); ctx.textAlign = 'left'; } else ctx.fillText(note, hx, L.foot - 40);   /* 세로 영상은 두 줄로 */
+      ctx.fillStyle = T.line; ctx.fillRect(0, L.H - 8, L.W, 8); ctx.fillStyle = T.acc; ctx.fillRect(0, L.H - 8, L.W * t, 8);
+    }
+    return { cv: cv, ctx: ctx, frame: frame, done: function () { ch.destroy(); } };
+  }
+  var MUX = null;
+  function loadMuxer() {
+    if (window.Mp4Muxer) return Promise.resolve(window.Mp4Muxer);
+    if (MUX) return MUX;
+    MUX = new Promise(function (res, rej) {
+      var s = document.createElement('script'); s.src = 'assets/vendor/mp4-muxer-5.2.2.min.js'; s.async = true;
+      s.onload = function () { window.Mp4Muxer ? res(window.Mp4Muxer) : rej(new Error('muxer')); }; s.onerror = function () { MUX = null; rej(new Error('muxer')); };
+      document.head.appendChild(s);
+    });
+    return MUX;
+  }
+  function pickCodec(W, H, list) {
+    var cands = list || ['avc1.640028', 'avc1.4d0028', 'avc1.42e028', 'avc1.640032', 'avc1.4d0032', 'avc1.42e032'];
+    var i = 0;
+    function next() {
+      if (i >= cands.length) return Promise.resolve(null);
+      var c = cands[i++], cfg = { codec: c, width: W, height: H, bitrate: 10e6, framerate: FPS };
+      if (/^avc1/.test(c)) cfg.avc = { format: 'avc' };
+      return VideoEncoder.isConfigSupported(cfg).then(function (r) { return r && r.supported ? cfg : next(); }, next);
+    }
+    return next();
+  }
+  function vstat(t, busy) { var el = $('as-vstat'); el.hidden = !t; el.innerHTML = t || ''; ['as-vid-h', 'as-vid-v'].forEach(function (id) { $(id).disabled = !!busy; }); }
+  function fname(kind, ext) { var d = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10).replace(/-/g, ''); return '자산속도_' + (kind === 'h' ? '16x9_1920x1080' : '9x16_1080x1920') + '_' + d + '.' + ext; }
+  function save(blob, name) {
+    var a = document.createElement('a'), url = URL.createObjectURL(blob); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+  }
+  function makeVideo(kind, test) {   /* test(회귀 검사용): {force:'wasm'} 내장 인코더로 · {codecs:['vp09.00.40.08']} 인코더 목록 바꾸기 (먹서·프레임 흐름 확인) */
+    var sim = S.sim;
+    if (!sim || sim.err || S.vbusy) return Promise.resolve(null);
+    if (S.playing) pause();
+    S.vbusy = { cancel: false };
+    var job = S.vbusy, L = LAY[kind], lead = Math.round(FPS * 0.6), hold = Math.round(FPS * 2.5), main = Math.max(2, Math.round(sim.o.sec * FPS)), total = lead + main + hold;
+    function tOf(i) { return i < lead ? 0 : Math.min(1, (i - lead) / (main - 1)); }
+    vstat('영상 준비 중… <button type="button" class="as-vx" id="as-vx">취소</button>', true);
+    test = test || {};
+    var p = !window.VideoEncoder || !window.VideoFrame || test.force === 'wasm' ? wasmEncode(kind, job, total, tOf) : Promise.all([loadMuxer(), pickCodec(L.W, L.H, test.codecs)]).then(function (r) {
+      var M = r[0], cfg = r[1];
+      if (!cfg) return wasmEncode(kind, job, total, tOf);   /* H.264 인코더가 없는 브라우저 */
+      var vm = videoMaker(kind), err = null;
+      var muxer = new M.Muxer({ target: new M.ArrayBufferTarget(), video: { codec: /^vp09/.test(cfg.codec) ? 'vp9' : 'avc', width: L.W, height: L.H, frameRate: FPS }, fastStart: 'in-memory', firstTimestampBehavior: 'offset' });
+      var enc = new VideoEncoder({ output: function (chunk, meta) { muxer.addVideoChunk(chunk, meta); }, error: function (e) { err = e; } });
+      enc.configure(cfg);
+      var i = 0;
+      return new Promise(function (res, rej) {
+        function step() {
+          if (job.cancel) { try { enc.close(); } catch (e) {} vm.done(); return rej(new Error('cancel')); }
+          if (err) { vm.done(); return rej(err); }
+          var until = Math.min(total, i + 6);
+          for (; i < until; i++) {
+            vm.frame(tOf(i));
+            var fr = new VideoFrame(vm.cv, { timestamp: Math.round(i * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
+            enc.encode(fr, { keyFrame: i % (FPS * 2) === 0 }); fr.close();
+          }
+          vstat('영상 만드는 중 ' + Math.round(i / total * 100) + '% <button type="button" class="as-vx" id="as-vx">취소</button>', true);
+          if (i < total) { setTimeout(step, enc.encodeQueueSize > 12 ? 15 : 0); return; }
+          enc.flush().then(function () {
+            enc.close(); vm.done(); muxer.finalize();
+            var blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
+            save(blob, fname(kind, 'mp4'));
+            res({ blob: blob, frames: total, codec: cfg.codec, w: L.W, h: L.H, how: 'webcodecs' });
+          }, function (e) { vm.done(); rej(e); });
+        }
+        step();
+      });
+    });
+    return p.then(function (r) { vstat('✓ ' + esc(fname(kind, 'mp4')) + ' 내려받음 (' + L.W + '×' + L.H + ' · ' + (total / FPS).toFixed(1) + '초)', false); S.vbusy = null; S.vlast = r; return r; },
+      function (e) { vstat(e && e.message === 'cancel' ? '영상 만들기를 취소했습니다.' : '영상을 만들지 못했습니다' + (e && e.message ? ' (' + esc(e.message) + ')' : '') + '. 잠시 후 다시 해 주세요.', false); S.vbusy = null; S.vlast = { err: String(e && e.message || e) }; return null; });
+  }
+  /* 브라우저에 H.264 인코더(WebCodecs)가 없을 때: WebAssembly H.264 인코더(assets/vendor/h264-mp4-encoder — minih264)로 한 장씩 → 언제나 H.264 MP4
+     (MediaRecorder 는 브라우저에 따라 VP9 를 MP4 에 담아 인스타그램 등에서 거부될 수 있어 쓰지 않음) */
+  var HMEP = null;
+  function loadHme() {
+    if (window.HME && window.HME.createH264MP4Encoder) return Promise.resolve(window.HME);
+    if (HMEP) return HMEP;
+    HMEP = new Promise(function (res, rej) {
+      var s = document.createElement('script'); s.src = 'assets/vendor/h264-mp4-encoder-1.0.12.web.js'; s.async = true;
+      s.onload = function () { window.HME && window.HME.createH264MP4Encoder ? res(window.HME) : rej(new Error('h264 인코더')); }; s.onerror = function () { HMEP = null; rej(new Error('h264 인코더')); };
+      document.head.appendChild(s);
+    });
+    return HMEP;
+  }
+  function wasmEncode(kind, job, total, tOf) {
+    var L = LAY[kind];
+    return loadHme().then(function (H) { return H.createH264MP4Encoder(); }).then(function (enc) {
+      enc.width = L.W; enc.height = L.H; enc.frameRate = FPS; enc.quantizationParameter = 23; enc.speed = 8; enc.groupOfPictures = FPS * 2;
+      enc.outputFilename = 'as_' + kind + '.mp4';
+      enc.initialize();
+      var vm = videoMaker(kind), i = 0;
+      return new Promise(function (res, rej) {
+        function step() {
+          try {
+            if (job.cancel) { enc.delete(); vm.done(); return rej(new Error('cancel')); }
+            var until = Math.min(total, i + 3);
+            for (; i < until; i++) { vm.frame(tOf(i)); enc.addFrameRgba(vm.ctx.getImageData(0, 0, L.W, L.H).data); }
+            vstat('영상 만드는 중 ' + Math.round(i / total * 100) + '% (이 브라우저는 내장 인코더로 만들어 조금 걸립니다) <button type="button" class="as-vx" id="as-vx">취소</button>', true);
+            if (i < total) { setTimeout(step, 0); return; }
+            enc.finalize();
+            var data = enc.FS.readFile(enc.outputFilename);
+            try { enc.FS.unlink(enc.outputFilename); } catch (e) {}
+            enc.delete(); vm.done();
+            var blob = new Blob([data], { type: 'video/mp4' });
+            save(blob, fname(kind, 'mp4'));
+            res({ blob: blob, frames: total, codec: 'h264(wasm)', w: L.W, h: L.H, how: 'wasm' });
+          } catch (e) { try { enc.delete(); } catch (x) {} vm.done(); rej(e); }
+        }
+        step();
+      });
+    });
+  }
+
   /* ── 시작 ── */
   function bind() {
     $('as-mode').addEventListener('click', function (e) {
       var b = e.target.closest('.mode-btn'); if (!b) return;
       S.mode = b.getAttribute('data-v');
-      $('as-mode').querySelectorAll('.mode-btn').forEach(function (x) { x.classList.toggle('active', x === b); });
-      $('as-amt-l').textContent = S.mode === 'dca' ? '매달 넣는 돈' : '처음에 넣는 돈';
-      $('as-amt').value = S.mode === 'dca' ? '100' : '1,000';   /* 방식을 바꾸면 그 방식의 기본 금액으로 (거치 1천만 · 적립 매달 100만) */
-      quickAmt();
-      recompute();
+      $('as-amt').value = S.mode !== 'dca' ? '1,000' : S.freq === 'd' ? '5' : '100';   /* 방식을 바꾸면 그 방식의 기본 금액으로 (거치 1천만 · 적립 매달 100만 · 매일 5만) */
+      modeUi(); recompute();
+    });
+    $('as-freq').addEventListener('click', function (e) {
+      var b = e.target.closest('.mode-btn'); if (!b) return;
+      S.freq = b.getAttribute('data-v'); S.Derr = {};   /* 매일 적립으로 다시 바꾸면 못 받았던 일봉도 다시 시도 */
+      $('as-amt').value = S.freq === 'd' ? '5' : '100';
+      modeUi(); recompute();
     });
     $('as-amt-q').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; $('as-amt').value = comma(+b.getAttribute('data-v')); recompute(); });
     $('as-sec-q').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; $('as-sec').value = b.getAttribute('data-v'); recompute(); play(); });
     $('as-start-q').addEventListener('click', function (e) {
       var b = e.target.closest('button'); if (!b) return;
       var a = b.getAttribute('data-ago'), now = lastMonth();
-      setStart(a === 'max' ? Math.max(mi('1986-01'), earliest()) : now - (+a) * 12);
-      recompute();
+      if (a !== 'max') { setStart(now - (+a) * 12); recompute(); return; }
+      var o = inputs();   /* 가장 처음부터: 매일 적립·상장 전 재현에 필요한 자료를 받은 뒤 고른 자산이 모두 있는 첫 달로 */
+      need(o).then(function () { setStart(Math.max(mi('1981-04'), earliest())); recompute(); });
     });
-    ['as-y', 'as-m', 'as-div', 'as-log'].forEach(function (id) { $(id).addEventListener('change', function () { recompute(); }); });
+    ['as-y', 'as-m', 'as-div', 'as-log', 'as-pre'].forEach(function (id) { $(id).addEventListener('change', function () { recompute(); }); });
     var tmr = null;
     ['as-amt', 'as-sec'].forEach(function (id) {
       $(id).addEventListener('input', function () { var el = $(id), n = num(el.value); if (id === 'as-amt') el.value = n ? comma(n) : ''; clearTimeout(tmr); tmr = setTimeout(function () { recompute(); }, 350); });
@@ -21106,6 +21659,11 @@ var WIF = (function () {
     $('as-play').addEventListener('click', play);
     $('as-reset').addEventListener('click', function () { pause(); S.t = 0; draw(0); play(); });
     $('as-end').addEventListener('click', function () { stop(); S.t = 1; draw(1); });
+    $('as-full').addEventListener('click', function () { if (S.full) closeFull(); else openFull(); });
+    document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('#as-full-x')) closeFull(); if (e.target.closest && e.target.closest('#as-vx') && S.vbusy) S.vbusy.cancel = true; });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && S.full) closeFull(); });
+    document.addEventListener('fullscreenchange', function () { if (!document.fullscreenElement && S.full && S.full.fs) closeFull(); if (document.fullscreenElement && S.full) S.full.fs = true; });
+    ['as-vid-h', 'as-vid-v'].forEach(function (id) { $(id).addEventListener('click', function () { makeVideo(this.getAttribute('data-r')); }); });
     $('as-chips').addEventListener('click', function (e) {
       var b = e.target.closest('[data-rm]'); if (!b) return;
       var key = b.getAttribute('data-rm');
@@ -21121,7 +21679,7 @@ var WIF = (function () {
     $('as-res').addEventListener('click', function (e) { var b = e.target.closest('button[data-i]'); if (!b) return; pick($('as-res')._items[+b.getAttribute('data-i')]); });
     document.addEventListener('click', function (e) { if (!e.target.closest('.as-find')) $('as-res').hidden = true; });
     var rz = null;
-    window.addEventListener('resize', function () { clearTimeout(rz); rz = setTimeout(function () { if (PG.classList.contains('active') && S.sim) makeChart(); }, 200); });
+    window.addEventListener('resize', function () { clearTimeout(rz); rz = setTimeout(function () { if ((PG.classList.contains('active') || S.full) && S.sim) makeChart(); }, 200); });
     new MutationObserver(function () { if (S.sim) makeChart(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   }
   function init() {
@@ -21134,14 +21692,17 @@ var WIF = (function () {
       var keep = cfg && cfg.sel ? cfg.sel.filter(function (k) { return k.indexOf(':') < 0 && (k === 'M2' || k === 'CPI' || wifAsset(k)); }) : null;
       S.sel = keep && keep.length ? keep : DEF.filter(function (k) { return k === 'M2' || k === 'CPI' ? !!S.M : !!wifAsset(k); });
       S.sel.forEach(color);
-      if (cfg && cfg.mode === 'dca') { S.mode = 'dca'; $('as-mode').querySelectorAll('.mode-btn').forEach(function (x) { x.classList.toggle('active', x.getAttribute('data-v') === 'dca'); }); $('as-amt-l').textContent = '매달 넣는 돈'; quickAmt(); }
-      if (cfg && cfg.amt) $('as-amt').value = cfg.amt;
+      if (cfg && cfg.mode === 'dca') S.mode = 'dca';
+      if (cfg && cfg.freq === 'd') S.freq = 'd';
+      modeUi();
+      if (cfg && cfg.amt) $('as-amt').value = cfg.amt; else if (S.mode === 'dca') $('as-amt').value = S.freq === 'd' ? '5' : '100';
       if (cfg && cfg.sec) $('as-sec').value = cfg.sec;
       if (cfg && typeof cfg.div === 'boolean') $('as-div').checked = cfg.div;
       if (cfg && typeof cfg.log === 'boolean') $('as-log').checked = cfg.log;
+      if (cfg && typeof cfg.pre === 'boolean') $('as-pre').checked = cfg.pre;
       if (cfg && cfg.y) { $('as-y').value = cfg.y; $('as-m').value = cfg.m; } else setStart(Math.max(earliest(), lastMonth() - 120));
       chips();
-      $('as-src').innerHTML = '자료: 네이버 금융·Yahoo Finance 월봉 · 국토교통부 실거래가(아파트 중위가격) · 한국은행 ECOS(M2·소비자물가·환율)' +
+      $('as-src').innerHTML = '자료: 네이버 금융·Yahoo Finance 월봉(매일 적립은 일봉) · 국토교통부 실거래가(아파트 중위가격) · 한국은행 ECOS(M2·소비자물가·환율·KB 아파트지수)' +
         (S.W.updated ? ' · 시세 ' + S.W.updated.slice(0, 10) + ' 갱신' : '') + (S.M && S.M.updated ? ' · 통계 ' + S.M.updated.slice(0, 10) + ' 갱신' : '') +
         (S.M ? '' : '<br>※ 통화량·물가 자료를 불러오지 못해 이번에는 빠졌습니다.');
       recompute();
@@ -21150,6 +21711,7 @@ var WIF = (function () {
       if (!reduce && !S.shown && window.IntersectionObserver) {
         var io = new IntersectionObserver(function (en) {
           if (!en[0].isIntersecting || S.shown) return;
+          if (S.busy || !S.sim) return;                         /* 자료를 받는 중이면 다음 기회에 */
           S.shown = true; io.disconnect();
           if (S.sim && !S.sim.err && !S.playing) { S.t = 0; draw(0); play(); }
         }, { threshold: 0.5 });
@@ -21157,8 +21719,8 @@ var WIF = (function () {
       }
     }).catch(function () { S.ready = false; $('as-src').textContent = '자료를 불러오지 못했습니다. 잠시 후 다시 열어 주세요.'; });
   }
-  window.asRender = function () { if (PG.classList.contains('active')) { if (!S.ready) init(); else if (S.sim) makeChart(); } else if (S.playing) pause(); };
-  window.ASPEED = { state: function () { return S; }, simulate: simulate, series: series };   /* 회귀 검사용 */
+  window.asRender = function () { if (PG.classList.contains('active')) { if (!window.dcAdmin.ok()) { window.dcAdmin.when(window.asRender); return; } if (!S.ready) init(); else if (S.sim) makeChart(); } else if (S.playing) pause(); };   /* [ADMIN] 관리자 확인 뒤에만 */
+  window.ASPEED = { state: function () { return S; }, simulate: simulate, series: series, mseries: mseries, need: function () { return need(inputs()); }, video: makeVideo, videoMaker: videoMaker, openFull: openFull, closeFull: closeFull };   /* 회귀 검사용 */
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.asRender); else setTimeout(window.asRender, 0);
 })();
 
@@ -23311,6 +23873,11 @@ var YE = (function () {
     el.classList.add('open');
     var f = el.querySelector('[data-prov]'); if (f) f.focus();
   }
+  function adminItem(a) {   /* [ADMIN] 관리자 계정이면 '내 저장함' 위에 '관리자 기능' (누르면 관리자 전용 화면 목록이 펼쳐짐) */
+    if (!(a && a.user && a.user.admin === true) || !window.dcAdmin) return '';
+    return '<button type="button" class="lang-opt dca-adm-btn" role="menuitem" data-act="admin" aria-expanded="false"><span class="lang-name">관리자 기능</span><span class="dca-adm-ar" aria-hidden="true">▸</span></button>' +
+      '<div class="dca-adm" id="dca-adm" hidden>' + window.dcAdmin.LINKS.map(function (l) { return '<a class="lang-opt" role="menuitem" href="/' + l[0] + '"><span class="lang-name">' + esc(l[1]) + '</span></a>'; }).join('') + '</div>';
+  }
   function paint() {
     var w = $('dc-auth'); if (!w) return;
     var a = getAuth();
@@ -23318,7 +23885,7 @@ var YE = (function () {
     w.hidden = false;
     w.innerHTML = a
       ? '<button type="button" class="lang-btn dca-me" id="dca-me" aria-haspopup="menu" aria-expanded="false"><span class="dca-av">' + esc((a.user && a.user.nick || '회')[0]) + '</span><span class="dca-nm">' + esc(a.user && a.user.nick || '회원') + '</span><span class="lang-arrow">▼</span></button>' +
-        '<div class="lang-menu dca-menu" id="dca-menu" role="menu"><a class="lang-opt" role="menuitem" href="/saved/"><span class="lang-name">내 저장함</span></a><button type="button" class="lang-opt" role="menuitem" data-act="logout"><span class="lang-name">로그아웃</span></button></div>'
+        '<div class="lang-menu dca-menu" id="dca-menu" role="menu">' + adminItem(a) + '<a class="lang-opt" role="menuitem" href="/saved/"><span class="lang-name">내 저장함</span></a><button type="button" class="lang-opt" role="menuitem" data-act="logout"><span class="lang-name">로그아웃</span></button></div>'
       : '<button type="button" class="lang-btn dca-login" id="dca-login">로그인</button>';
     saveBtn();
   }
@@ -23360,6 +23927,8 @@ var YE = (function () {
     if (e.target.closest('#dca-save')) { doSave(); return; }
     var me = e.target.closest('#dca-me'), menu = $('dca-menu');
     if (me && menu) { var o = !menu.classList.contains('open'); menu.classList.toggle('open', o); me.setAttribute('aria-expanded', o); return; }
+    var ab = e.target.closest('[data-act="admin"]'), ad = $('dca-adm');
+    if (ab && ad) { ad.hidden = !ad.hidden; ab.setAttribute('aria-expanded', String(!ad.hidden)); ab.classList.toggle('open', !ad.hidden); return; }
     if (e.target.closest('[data-act="logout"]')) { setAuth(null); paint(); toast('로그아웃했습니다'); return; }
     if (menu && !e.target.closest('#dc-auth')) { menu.classList.remove('open'); if ($('dca-me')) $('dca-me').setAttribute('aria-expanded', 'false'); }
   });
@@ -23368,14 +23937,16 @@ var YE = (function () {
     ready: function () { return window.dcConfig ? window.dcConfig().then(function (j) { EP = EP || (window.__counterEP || '').replace(/\/$/, ''); return !!(j && j.providers && Object.keys(j.providers).length); }) : Promise.resolve(false); } };
   function init() {
     endpoint().then(function (ep) {
-      if (!ep) return; EP = ep.replace(/\/$/, '');
+      if (!ep) { if (window.dcAdmin) window.dcAdmin.set(window.dcAdmin.cached()); return; } EP = ep.replace(/\/$/, '');
       return config().then(function (p) {
         PROV = p; paint();
-        if (getAuth()) { api('GET', '/auth/me').then(function (j) { var a = getAuth(); if (a && j.user) { a.user = j.user; setAuth(a); paint(); } }).catch(function () {}); }
+        if (getAuth()) { api('GET', '/auth/me').then(function (j) { var a = getAuth(); if (a && j.user) { a.user = j.user; setAuth(a); paint(); } if (window.dcAdmin) window.dcAdmin.set(!!(j.user && j.user.admin === true)); })
+          .catch(function (e) { if (window.dcAdmin) window.dcAdmin.set(e && e.status === 401 ? false : window.dcAdmin.cached()); }); }   /* [ADMIN] 서버 확인 (닿지 못하면 지난 결과) */
+        else if (window.dcAdmin) window.dcAdmin.set(false);
         loadParam();
         if (/[?&]login=1/.test(location.search) && PROV && Object.keys(PROV).length) { if (!getAuth()) modal(); try { history.replaceState(null, '', location.pathname); } catch (e) {} }
       });
-    }).catch(function () {});
+    }).catch(function () { if (window.dcAdmin) window.dcAdmin.set(window.dcAdmin.cached()); });
   }
   /* 탭 이동(pushState·뒤로가기) 후 새 화면에 저장 버튼 다시 달기 */
   (function () { var ps = history.pushState; history.pushState = function () { var r = ps.apply(this, arguments); setTimeout(saveBtn, 30); return r; }; window.addEventListener('popstate', function () { setTimeout(saveBtn, 30); }); })();

@@ -49,6 +49,7 @@ ROUTES = CFG['routes']
 ALL = [HOME] + ROUTES
 ARTS = BL.load()          # 투자 공부 글 (order 순)
 PATH_OF = {r['tab']: r['path'] for r in ROUTES}
+ADMIN = {r['tab'] for r in ROUTES if r.get('admin')}   # 관리자 전용 화면(routes.json "admin": true) — 상단 메뉴·허브·하단 사이트맵·sitemap.xml 에서 빼고 noindex (계정 메뉴 '관리자 기능'에서만 들어감)
 
 
 def esc(s):
@@ -79,6 +80,11 @@ def load_nav_labels(src):
         ic = re.search(r'<svg\b.*?</svg>', body, re.S)
         if ic:
             NAV_ICON[m.group(1)] = ic.group(0)
+    for x in ROUTES:   # 관리자 전용 화면은 상단 메뉴에 없음 → 이름은 routes.json 의 short
+        if x['tab'] in ADMIN:
+            if x['tab'] in NAV_LABEL:
+                sys.exit(f"관리자 전용 화면 drop-{x['tab']} 이 상단 메뉴에 있습니다 — 메뉴에서 빼 주세요")
+            NAV_LABEL[x['tab']] = x['short']
     missing = [x['tab'] for x in ALL if not NAV_LABEL.get(x['tab'])]
     if missing:
         sys.exit(f'메뉴에서 탭 이름을 찾지 못했습니다: {missing}')
@@ -152,6 +158,8 @@ def head_block(r, lang='ko'):
         f'<meta name="description" content="{esc(desc)}">',
         f'<link rel="canonical" href="{esc(url)}">',
     ]
+    if r.get('admin'):   # 관리자 전용 — 검색 결과에 나오지 않게
+        lines.append('<meta name="robots" content="noindex, nofollow">')
     if 'en' in r:   # 한국어·영어 두 판이 있는 도구: 검색엔진에 서로의 언어판을 알려 줌
         lines += [f'<link rel="alternate" hreflang="ko" href="{esc(url_of(r))}">',
                   f'<link rel="alternate" hreflang="en" href="{esc(url_of(r, "en"))}">',
@@ -207,10 +215,11 @@ def activate(src, r):
     if n != 1:
         sys.exit(f'page-{tab} 을 찾지 못했습니다')
     out = re.sub(r'(<button class="tab-group-btn) has-active(")', r'\1\2', out)
-    out = out.replace(f'<button class="tab-group-btn" id="grp-{grp}-btn"', f'<button class="tab-group-btn has-active" id="grp-{grp}-btn"', 1)
+    if tab not in ADMIN:
+        out = out.replace(f'<button class="tab-group-btn" id="grp-{grp}-btn"', f'<button class="tab-group-btn has-active" id="grp-{grp}-btn"', 1)
     out = re.sub(r'class="drop-item active"', 'class="drop-item"', out)
     out, n = re.subn(rf'class="drop-item"(\s+)id="drop-{tab}"', rf'class="drop-item active"\1id="drop-{tab}"', out, count=1)
-    if n != 1:
+    if n != 1 and tab not in ADMIN:   # 관리자 전용 화면은 상단 메뉴 버튼이 없음
         sys.exit(f'drop-{tab} 버튼을 찾지 못했습니다')
     hub = HUB.get(grp)
     if hub:   # 화면 위쪽 경로 표시: 홈 › 영역(허브) [› 도구] — 허브 페이지로 들어가는 내부 링크
@@ -256,7 +265,7 @@ def load_drop_tree(src):
                 secs.append((name, items))
         DROP[g] = secs
     listed = {t for g in DROP for _, ts in DROP[g] for t in ts}
-    lost = [x['tab'] for x in ROUTES if not x.get('hub') and x['tab'] not in listed]
+    lost = [x['tab'] for x in ROUTES if not x.get('hub') and x['tab'] not in listed and x['tab'] not in ADMIN]
     if lost:
         sys.exit(f'허브에 빠진 도구(메뉴에 없음): {lost}')
 
@@ -348,7 +357,7 @@ def idx_note(key):
         if not os.path.isfile(f):
             sys.exit(f'지수 해설 원본이 없습니다: content/index/{key}.html')
         text = open(f, encoding='utf-8').read().strip()
-        valid = {r['path'] for r in ROUTES} | {'learn/' + a['slug'] for a in ARTS}
+        valid = {r['path'] for r in ROUTES if not r.get('admin')} | {'learn/' + a['slug'] for a in ARTS}
         for h in re.findall(r'href="([^"#]*)"', text):   # 해설 안 링크는 상대 주소(<base href>) — 실제 페이지인지 확인
             if h.rstrip('/') not in valid:
                 sys.exit(f'content/index/{key}.html: 없는 주소 링크 {h}')
@@ -566,7 +575,7 @@ def main():
     today = datetime.date.today().isoformat()
     urls = ''.join(f'  <url><loc>{esc(SITE + (r["path"] + "/" if r["path"] else ""))}</loc><lastmod>{today}</lastmod>'
                    f'<changefreq>{"daily" if not r["path"] else "weekly"}</changefreq><priority>{"1.0" if not r["path"] else "0.9" if r.get("hub") else "0.8"}</priority></url>\n'
-                   for r in ALL)
+                   for r in ALL if not r.get('admin'))
     for u, lm in learn_urls:
         urls += f'  <url><loc>{esc(u)}</loc><lastmod>{lm}</lastmod><changefreq>monthly</changefreq><priority>{"0.9" if u.endswith("/learn/") else "0.8"}</priority></url>\n'
     for r in ROUTES:   # 영어판 페이지

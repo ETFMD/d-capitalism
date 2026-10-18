@@ -1064,6 +1064,47 @@ KCMP_SYMS = {'simulator': ('kodex', '498400.KS'), 'sol': ('sol', '0167B0.KS'), '
              'tigerdiv': ('tigerdiv', '472150.KS'), 'tigersemi': ('tigersemi', '0177R0.KS')}
 
 
+def admin_page(ctx, attach):
+    """관리자 전용 화면(자산 속도·72루틴) 검사용 탭 — 시작 스크립트로 window.__dcAdminTest = 1 → [ADMIN] 화면 잠금만 풂 (계정·서버는 건드리지 않음)"""
+    pg = ctx.new_page()
+    pg.add_init_script('window.__dcAdminTest = 1;')
+    attach(pg)
+    return pg
+
+
+def admin_lock_check(page, base, fail, routes):
+    """로그인하지 않은 방문자: 관리자 전용 화면은 잠김 안내만 · 시작 함수(자료 받기·계정 동기화)를 부르지 않음 · 홈·허브·하단 사이트맵·sitemap.xml 에 링크 없음"""
+    adm = [r for r in routes if r.get('admin')]
+    if not adm:
+        fail('admin', 'routes.json 에 관리자 전용 화면("admin": true)이 없음'); return
+    page.goto(base + 'robots.txt'); page.evaluate("() => { localStorage.removeItem('dc_auth'); }")
+    for r in adm:
+        page.goto(base + r['path'] + '/', wait_until='load'); page.wait_for_timeout(1200)
+        x = page.evaluate("""(id) => { const pg = document.getElementById(id), lk = pg && pg.querySelector(':scope > .adm-lock');
+            return { pg: !!pg, lock: !!lk && getComputedStyle(lk).display !== 'none', txt: lk ? lk.innerText : '',
+                     vis: pg ? [...pg.children].filter(c => c !== lk && getComputedStyle(c).display !== 'none').length : -1, ok: pg && pg.classList.contains('adm-ok'),
+                     as: !!(window.ASPEED && ASPEED.state().ready), t7: (document.getElementById('t7-root') || { innerHTML: '' }).innerHTML.length,
+                     robots: (document.querySelector('meta[name=robots]') || {}).content || '' }; }""", 'page-' + r['tab'])
+        if not x['pg'] or not x['lock'] or x['vis'] or x['ok'] or '관리자 전용' not in x['txt']:
+            fail(r['path'], '관리자 전용 화면이 잠기지 않음: %s' % x)
+        if x['as'] or x['t7']:
+            fail(r['path'], '잠긴 화면인데 시작 함수가 돌았음: %s' % x)
+        if 'noindex' not in x['robots']:
+            fail(r['path'], '관리자 전용 화면에 noindex 없음')
+    page.goto(base, wait_until='load'); page.wait_for_timeout(300)
+    hrefs = page.evaluate("() => [...document.querySelectorAll('a[href]')].map(a => a.getAttribute('href'))")
+    bad = [h for h in hrefs for r in adm if h.rstrip('/').split('/')[-1] == r['path'] and 'learn' not in h]
+    if bad:
+        fail('', '홈에 관리자 전용 화면 링크: %s' % bad[:3])
+    try:
+        sm = urllib.request.urlopen(urllib.request.Request(base + 'sitemap.xml', headers={'User-Agent': 'Mozilla/5.0'}), timeout=30).read().decode('utf-8')
+        for r in adm:
+            if '/' + r['path'] + '/</loc>' in sm:
+                fail('sitemap', '관리자 전용 화면이 sitemap.xml 에 있음: ' + r['path'])
+    except Exception as e:
+        fail('sitemap', 'sitemap.xml 을 읽지 못함: %s' % e)
+
+
 def aspeed_check(page, base, fail, local):
     """/asset-speed/ — 기본 10개 자산 · 거치식 결과 = 그때 샀더라면(WIF.calc)과 같은 값 · 적립식 넣은 돈 · 정한 초 동안 재생 · 검색
     · 배포 사이트에서는 검색한 종목(Worker 일봉)을 실제로 더해 계산되는지까지"""
@@ -1106,7 +1147,87 @@ def aspeed_check(page, base, fail, local):
             page.wait_for_function("ASPEED.state().sim && ASPEED.state().sim.list.some(x => x.key === 'k:069500')", timeout=30000)
         except Exception:
             fail('asset-speed', '검색한 KODEX 200(069500) 시세를 불러와 더하지 못함')
+    aspeed2_check(page, base, fail, local)
     page.evaluate("() => { try { localStorage.removeItem('as.cfg'); } catch (e) {} }")
+
+
+def aspeed2_check(page, base, fail, local):
+    """자산 속도 2차 — 검색 목록 불투명 · 매일 적립(영업일 수 × 금액) · 상장 전 가상 데이터 · 전체보기 · MP4(16:9) 내려받기"""
+    page.set_viewport_size({'width': 1280, 'height': 900})
+    page.goto(base + 'robots.txt'); page.evaluate("() => localStorage.removeItem('as.cfg')")
+    page.goto(base + 'asset-speed/', wait_until='load')
+    try:
+        page.wait_for_function("window.ASPEED && ASPEED.state().sim && !ASPEED.state().sim.err", timeout=30000)
+    except Exception:
+        fail('asset-speed', '(2차) 시뮬레이터가 계산되지 않음'); return
+    page.fill('#as-q', 'QQQ'); page.wait_for_timeout(1200)
+    r = page.evaluate("() => { const b = document.getElementById('as-res'), cs = getComputedStyle(b); return { bg: cs.backgroundColor, hidden: b.hidden, n: b.querySelectorAll('button').length }; }")
+    if r['hidden'] or not r['n'] or 'rgba' in r['bg'] or r['bg'] == 'transparent':
+        fail('asset-speed', '검색 목록이 불투명하지 않거나 보이지 않음: %s' % r)
+    page.keyboard.press('Escape'); page.fill('#as-q', '')
+    # 매일 적립: 넣은 돈 = 금액 × 영업일 수 · 매달과 연평균이 크게 다르지 않음
+    page.click('#as-mode [data-v="dca"]'); page.wait_for_timeout(300)
+    mon = page.evaluate("() => { const s = ASPEED.state().sim; return s.err ? {} : Object.fromEntries(s.list.map(x => [x.key, x.cagr])); }")
+    if page.evaluate("() => document.getElementById('as-freq-f').hidden"): fail('asset-speed', '적립식인데 적립 주기(매달·매일)가 보이지 않음')
+    page.click('#as-freq [data-v="d"]')
+    try:
+        page.wait_for_function("ASPEED.state().sim && ASPEED.state().sim.o.daily && !ASPEED.state().busy", timeout=120000)
+    except Exception:
+        fail('asset-speed', '매일 적립 계산이 끝나지 않음'); return
+    d = page.evaluate("""() => { const s = ASPEED.state().sim; if (s.err) return { err: s.err };
+        let wd = 0; for (let g = s.G0; g <= s.G1; g++) { const w = new Date(g * 864e5).getUTCDay(); if (w > 0 && w < 6) wd++; }
+        return { amt: s.o.amt, days: s.days, wd, inv: s.inv[s.N - 1], lost: s.lost, n: s.list.length, cagr: Object.fromEntries(s.list.map(x => [x.key, x.cagr])),
+                 lab: document.getElementById('as-amt-l').textContent }; }""")
+    if d.get('err'): fail('asset-speed', '매일 적립 오류: ' + d['err'])
+    else:
+        if d['amt'] != 50000 or '매일' not in d['lab']: fail('asset-speed', '매일 적립 기본 금액·이름 이상: %s' % {k: d[k] for k in ('amt', 'lab')})
+        if d['days'] != d['wd'] or abs(d['inv'] - d['amt'] * d['days']) > 1: fail('asset-speed', '매일 적립 넣은 돈 ≠ 금액 × 영업일 수: %s' % {k: d[k] for k in ('amt', 'days', 'wd', 'inv')})
+        if d['lost'] or d['n'] != 10: fail('asset-speed', '매일 적립에서 빠진 자산: %s (자산 %d개)' % (d['lost'], d['n']))
+        if not local:   # 실제 시세: 매일·매달 적립 연평균 차이가 작아야 (같은 자산·비슷한 기간)
+            far = ['%s %.3f/%.3f' % (k, v, mon[k]) for k, v in d['cagr'].items() if v is not None and mon.get(k) is not None and abs(v - mon[k]) > 0.03]
+            if far: fail('asset-speed', '매일·매달 적립 연평균 차이가 큼: %s' % far)
+    page.click('#as-mode [data-v="lump"]'); page.wait_for_timeout(300)
+    # 상장 전 가상 데이터: 비트코인·이더리움·금·은·아파트가 앞으로 이어지고, 실제 구간은 그대로
+    page.check('#as-pre')
+    try:
+        page.wait_for_function("ASPEED.state().sim && ASPEED.state().sim.o.pre && !ASPEED.state().busy", timeout=180000)
+    except Exception:
+        fail('asset-speed', '상장 전 가상 데이터 계산이 끝나지 않음'); return
+    r = page.evaluate("""() => { const out = {};
+        ['APT-seoul', 'APT-gangnam', 'GC=F', 'SI=F', 'BTC-USD', 'ETH-USD'].forEach(k => { const a = ASPEED.mseries(k, true, false), b = ASPEED.mseries(k, true, true);
+          if (!a || !b) { out[k] = null; return; } const R = b.real - b.start;
+          out[k] = { pre: R, same: a.v.length === b.v.length - R && a.v.every((v, i) => v === b.v[R + i]), jump: R > 0 ? b.v[R] / b.v[R - 1] : 1 }; });
+        return out; }""")
+    for k, v in r.items():
+        if not v or v['pre'] < 6 or not v['same'] or not 0.6 < v['jump'] < 1.7:
+            fail('asset-speed', '상장 전 가상 데이터 이상 %s: %s' % (k, v))
+    page.click('#as-start-q [data-ago="max"]'); page.wait_for_timeout(1500)
+    page.wait_for_function("ASPEED.state().sim && !ASPEED.state().busy", timeout=120000)
+    r = page.evaluate("() => { const s = ASPEED.state().sim; return { err: s.err, s0: s.s0, pre: s.list.filter(x => x.preTo).length, dash: !!(ASPEED.state().chart && ASPEED.state().chart.data.datasets.some(d => d.segment)) }; }")
+    if r['err'] or r['s0'] != 2015 * 12 + 7 or not r['pre'] or not r['dash']:
+        fail('asset-speed', "상장 전 포함 '가장 처음부터' 이상 (기대: 이더리움 Coin Metrics 2015.08부터 · 점선): %s" % r)
+    page.uncheck('#as-pre'); page.wait_for_timeout(300)
+    # 전체보기
+    page.click('#as-full'); page.wait_for_timeout(700)
+    r = page.evaluate("() => { const ov = document.getElementById('as-ov'), c = document.getElementById('as-chart'); return { ov: !!ov, inside: !!ov && ov.contains(c), h: c.clientHeight }; }")
+    if not r['ov'] or not r['inside'] or r['h'] < 300: fail('asset-speed', '전체보기 창 이상: %s' % r)
+    page.keyboard.press('Escape'); page.wait_for_timeout(500)
+    if page.evaluate("() => !!document.getElementById('as-ov') || !document.getElementById('page-aspeed').contains(document.getElementById('as-chart'))"):
+        fail('asset-speed', '전체보기를 닫아도 그래프가 제자리로 돌아오지 않음')
+    # MP4 16:9 (2초 · 이 브라우저에 H.264 인코더가 없으면 내장 인코더) — 파일이 H.264 MP4 이고 프레임 수가 맞는지
+    page.evaluate("() => { const s = document.getElementById('as-sec'); s.value = '2'; s.dispatchEvent(new Event('input', { bubbles: true })); }"); page.wait_for_timeout(600)
+    try:
+        with page.expect_download(timeout=300000) as dl:
+            page.click('#as-vid-h')
+        path = dl.value.path(); data = open(path, 'rb').read()
+        info = page.evaluate("() => ASPEED.state().vlast")
+        want = int(round(30 * 0.6)) + 60 + int(round(30 * 2.5))
+        if data[4:8] != b'ftyp' or b'avc1' not in data or not info or info.get('frames') != want or len(data) < 50000:
+            fail('asset-speed', 'MP4 16:9 이상: %d바이트 · ftyp=%s · avc1=%s · %s (기대 프레임 %d)' % (len(data), data[4:8], b'avc1' in data, info and {k: info.get(k) for k in ('frames', 'how', 'codec')}, want))
+        if not dl.value.suggested_filename.endswith('1920x1080_' + dl.value.suggested_filename[-12:-4] + '.mp4'):
+            fail('asset-speed', 'MP4 파일 이름 이상: ' + dl.value.suggested_filename)
+    except Exception as e:
+        fail('asset-speed', 'MP4 16:9 내려받기 실패: %s' % str(e)[:160])
 
 
 def kcmp_check(page, base, fail, local):
@@ -1524,7 +1645,11 @@ def main():
             ctx.route(re.compile(r'.*allorigins\.win/.*'), lambda r: r.fulfill(status=200, headers={'Access-Control-Allow-Origin': '*'}, body=''))
         page = ctx.new_page()
         errs = []
-        page.on('console', lambda m: errs.append((m.text, (m.location or {}).get('url', ''))) if m.type == 'error' else None)
+        def attach(pg):   # 콘솔 오류·페이지 오류·HTTP 오류 수집 (관리자 검사 탭도 같은 목록에)
+            pg.on('console', lambda m: errs.append((m.text, (m.location or {}).get('url', ''))) if m.type == 'error' else None)
+            pg.on('pageerror', page_err)
+            pg.on('response', bad_resp)
+            pg.on('requestfailed', req_failed)
         def page_err(e):
             st = getattr(e, 'stack', '') or ''
             urls = [u for u in __import__('re').findall(r'https?://[^\s)]+', st)]
@@ -1537,8 +1662,10 @@ def main():
             if r.status >= 400 and not any(d in u for d in THIRD) and not (local and 'workers.dev' in u):
                 errs.append(('HTTP %d %s' % (r.status, u[:160]), base))
         page.on('response', bad_resp)
-        page.on('requestfailed', lambda q: errs.append(('요청 실패 %s %s' % (q.failure, q.url[:160]), base))
-                if 'ERR_ABORTED' not in str(q.failure) and not any(d in q.url for d in THIRD) and not (local and ('workers.dev' in q.url or 'raw.githubusercontent' in q.url)) else None)
+        def req_failed(q):
+            if 'ERR_ABORTED' not in str(q.failure) and not any(d in q.url for d in THIRD) and not (local and ('workers.dev' in q.url or 'raw.githubusercontent' in q.url)):
+                errs.append(('요청 실패 %s %s' % (q.failure, q.url[:160]), base))
+        page.on('requestfailed', req_failed)
 
         if a.etf_audit:
             print('[ETF 실제 가격 점검] %s' % base, flush=True)
@@ -1585,12 +1712,16 @@ def main():
         print('[2] 메뉴 · 검색 · 허브 카드', flush=True)
         page.set_viewport_size({'width': 1440, 'height': 900})
         page.goto(base, wait_until='load'); page.wait_for_timeout(800)
+        pub = [r for r in routes if not r.get('admin')]          # 관리자 전용(자산 속도·72루틴)은 상단 메뉴에 없어야 함
         n = page.evaluate("document.querySelectorAll('[id^=\"drop-\"]').length")
-        if n != len(routes) + 1:
-            fail('', '메뉴 항목 %d개 (기대 %d = 홈 + 도구 %d)' % (n, len(routes) + 1, len(routes)))
-        missing = page.evaluate("tabs => tabs.filter(t => !document.getElementById('drop-' + t))", [r['tab'] for r in routes])
+        if n != len(pub) + 1:
+            fail('', '메뉴 항목 %d개 (기대 %d = 홈 + 도구 %d)' % (n, len(pub) + 1, len(pub)))
+        missing = page.evaluate("tabs => tabs.filter(t => !document.getElementById('drop-' + t))", [r['tab'] for r in pub])
         if missing:
             fail('', '메뉴에 없는 도구: ' + ', '.join(missing))
+        shown = page.evaluate("tabs => tabs.filter(t => document.getElementById('drop-' + t))", [r['tab'] for r in routes if r.get('admin')])
+        if shown:
+            fail('', '관리자 전용 화면이 상단 메뉴에 보임: ' + ', '.join(shown))
         for q, want in [('연봉', '연봉'), ('무한', '무한매수법'), ('취득세', '취득세'), ('배당', '배당')]:
             res = page.evaluate("""async q => { const i = document.getElementById('ss-input'); i.focus(); i.value = q;
                 i.dispatchEvent(new Event('input', { bubbles: true })); await new Promise(r => setTimeout(r, 300));
@@ -1598,7 +1729,7 @@ def main():
             if res['hidden'] or not any(want in t for t in res['items']):
                 fail('', '검색 "%s" 결과에 "%s" 없음 (%s)' % (q, want, res['items'][:5]))
         for hub in [r for r in routes if r.get('hub')]:
-            want = len([r for r in routes if r['group'] == hub['group'] and not r.get('hub')])
+            want = len([r for r in routes if r['group'] == hub['group'] and not r.get('hub') and not r.get('admin')])   # 관리자 전용은 허브에 없음
             page.goto(base + hub['path'] + '/', wait_until='load'); page.wait_for_timeout(500)
             got = page.evaluate("[...document.querySelectorAll('.app-page')].filter(p => getComputedStyle(p).display !== 'none').reduce((a, p) => a + p.querySelectorAll('.hub-card').length, 0)")
             if got != want:
@@ -1676,8 +1807,10 @@ def main():
             if not r: fail(k, '지수 해설(.idx-note)이 보이지 않음'); continue
             if r['txt'] < 500 or r['rows'] < 6 or r['raw'] or not r['auto']:
                 fail(k, '지수 해설 이상: %s' % r)
-        print('[2-3] 자산 속도 시뮬레이터', flush=True)
-        aspeed_check(page, base, fail, local)
+        print('[2-3] 관리자 전용 화면 잠금 · 자산 속도 시뮬레이터', flush=True)
+        admin_lock_check(page, base, fail, routes)
+        apage = admin_page(ctx, attach)
+        aspeed_check(apage, base, fail, local)
         print('[2-2] 커버드콜 코스피 비교 — 실제 종가(분배금 미반영)', flush=True)
         kcmp_check(page, base, fail, local)
         for pth in ['compound/', 'earnings-calendar/', 'fire/']:
@@ -2126,7 +2259,7 @@ def main():
         # 72루틴 — 무한매수법 기록 화면(mhApp) 고정 규칙 프로필: 시작 화면·수수료 기본값·용어·기록 그래프·실시간 · 카드 = 엔진·시뮬레이터 · 상장 전 · 크게 보기 · 중간 진입 · 계정 저장 (tests/t72_ui.py)
         if os.path.isdir(os.path.join(ROOT, '72')):
             import t72_ui
-            t72_ui.check(page, base, local, fail, errs, ignorable, widths, OVERFLOW_JS)
+            t72_ui.check(apage, base, local, fail, errs, ignorable, widths, OVERFLOW_JS)   # 관리자 전용 — 검사용 탭(잠금 해제)에서
         # 홈 첫 화면 — AI 시대, 노동자에서 자본가로: 두 힘·하나의 답 숫자 · 데이터 탭 · 직업 검색
         print('[홈] 첫 화면', flush=True)
         errs.clear()

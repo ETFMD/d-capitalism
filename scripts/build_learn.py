@@ -272,13 +272,15 @@ def _check_links(body, slug, valid):
 def write_all(arts, site, routes, analytics, write):
     """글·목록 페이지 쓰기 → [(주소, 수정일)]"""
     by_path = {r['path']: r for r in routes}
-    valid = set(by_path) | {'learn'} | {f'learn/{a["slug"]}' for a in arts} | {'', 'about', 'terms', 'disclaimer', 'privacy'}
+    valid = {k for k, r in by_path.items() if not r.get('admin')} | {'learn'} | {f'learn/{a["slug"]}' for a in arts} | {'', 'about', 'terms', 'disclaimer', 'privacy'}
     urls = []
     for a in arts:
         _check_links(a['body'], a['slug'], valid)
         for t in a['tools']:
             if t not in by_path:
                 sys.exit(f'글 {a["slug"]}: 관련 도구 주소 {t} 가 routes.json 에 없음')
+            if by_path[t].get('admin'):
+                sys.exit(f'글 {a["slug"]}: 관련 도구 {t} 는 관리자 전용 화면 — 공개 글에서 연결하지 않음')
         url = f'{site}learn/{a["slug"]}/'
         body, toc = _toc(a['body'])
         mins = max(3, round(a['chars'] / 600))
