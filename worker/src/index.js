@@ -31,6 +31,7 @@
  *
  * POST /hb · GET /hb → 72루틴 자동매매 PC 프로그램 생존 신호 · 주문 시각이 지났는데 신호가 없으면 15분 cron 이 텔레그램으로 알림 (worker/src/hb.js)
  * POST /grp · GET /grp → 72루틴 자동매매 PC 여러 대 — 주문 권한(한 대만)·이어받기·암호화한 공유 상태 (worker/src/grp.js)
+ * POST /license · GET /license → 72루틴 자동매매 배포판 라이선스 — 받는 사람 키 발급·확인(ed25519 서명)·차단 (worker/src/license.js)
  *
  * 15분마다(cron) GitHub Actions '시세 데이터 갱신'을 직접 실행시킴 (GitHub 자체 예약 실행은 자주 늦어지거나 누락됨)
  *   · 한국장과 공시 시간(평일 09~20시)·미국장(평일 22~07시, 한국 시간) 15분마다, 그 밖에는 3시간마다
@@ -39,6 +40,7 @@
 import { auth } from './auth.js';
 import { hb, hbScan } from './hb.js';   /* 72루틴 자동매매 PC 프로그램 생존 감시 (/hb) */
 import { grp, grpScan } from './grp.js';   /* 72루틴 자동매매 PC 여러 대 (/grp) */
+import { license, licenseScan } from './license.js';   /* 72루틴 자동매매 배포판 라이선스 (/license) */
 const REPO = 'ETFMD/d-capitalism';
 const WORKFLOW = 'update-market-data.yml';
 const APT_WORKFLOW = 'update-apt-rank.yml';   // 아파트 시세 순위 (2시간마다)
@@ -434,6 +436,7 @@ export default {
       if (url.pathname === '/geo' && req.method === 'GET') return json({ country: (req.cf && req.cf.country) || null });
       if (url.pathname === '/hb') return await hb(req, env, json);   /* 72루틴 PC 프로그램 생존 신호 (PC 프로그램이 부름 · 브라우저 아님) */
       if (url.pathname === '/grp') return await grp(req, env, json);   /* 72루틴 PC 여러 대 — 주문 권한·공유 상태 (PC 프로그램이 부름) */
+      if (url.pathname === '/license') return await license(req, env, json);   /* 72루틴 자동매매 배포판 라이선스 (PC 프로그램이 부름 · 브라우저 아님) */
       if (url.pathname === '/status' && req.method === 'GET') {
         const [row, ap] = await env.DB.batch([env.DB.prepare('SELECT t, v FROM cache WHERE k = ?').bind('dispatch'), env.DB.prepare('SELECT t, v FROM cache WHERE k = ?').bind('dispatch:' + APT_WORKFLOW)]);
         const one = (x) => { const r = x.results && x.results[0]; return r ? { ...JSON.parse(r.v), at: new Date(r.t * 1000).toISOString() } : null; };
@@ -474,6 +477,7 @@ export default {
       ctx.waitUntil(env.DB.prepare('DELETE FROM visits WHERE day < ?').bind(cut).run());
       ctx.waitUntil(env.DB.prepare("DELETE FROM cache WHERE k LIKE 'etf:%' AND t < ?").bind(Math.floor(Date.now() / 1000) - 7 * 86400).run());   // ETF 차트 보관본: 7일 넘게 안 쓴 것
       ctx.waitUntil(grpScan(env, Date.now()).catch(() => 0));          // 72루틴 PC 여러 대: 60일 넘게 조용한 묶음·PC 정리
+      ctx.waitUntil(licenseScan(env, Date.now()).catch(() => 0));      // 72루틴 배포판 라이선스: 400일 넘게 조용한 키 정리
     }
     ctx.waitUntil(hbScan(env, Date.now()).catch(() => 0));               // 72루틴 PC 생존 감시: 놓친 주문 시각·오래 조용함 (HB_KEY 있을 때만)
     if (!env.GH_TOKEN) return;
