@@ -325,7 +325,7 @@ def write_all(arts, site, routes, analytics, write):
         if not xs:
             continue
         cards = ''.join(f'<a class="card" href="/learn/{esc(a["slug"])}/"><b>{esc(a["title"])}</b><span>{esc(a["desc"])}</span>'
-                        f'<small>읽는 데 약 {max(3, round(a["chars"] / 600))}분 · {_ymd(a["updated"])}</small></a>' for a in xs)
+                        f'<small>읽는 데 약 {max(3, round(a["chars"] / 600))}분</small></a>' for a in xs)   # 목록에는 날짜를 넣지 않음(작성·수정일은 글 페이지에 그대로)
         secs += f'<h2 class="list-cat" id="{esc(c)}">{esc(name)}</h2>\n<div class="cards">{cards}</div>\n'
     ld = {'@context': 'https://schema.org', '@type': 'CollectionPage', 'name': '투자 공부', 'description': desc, 'url': url, 'inLanguage': 'ko-KR',
           'hasPart': [{'@type': 'Article', 'headline': a['title'], 'url': f'{site}learn/{a["slug"]}/'} for a in arts]}

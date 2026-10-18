@@ -1568,6 +1568,8 @@ def main():
             got = page.evaluate("new Set([...document.querySelectorAll('a[href^=\"/learn/\"]')].map(a => a.getAttribute('href')).filter(h => /^\\/learn\\/[a-z0-9-]+\\/$/.test(h))).size")
             if got != n_src:
                 fail('learn/', '목록의 글 링크 %d개 (기대 %d)' % (got, n_src))
+            if page.evaluate("/\\d{4}년 \\d{1,2}월 \\d{1,2}일/.test(document.querySelector('main') ? document.querySelector('main').innerText : document.body.innerText)"):
+                fail('learn/', '목록 카드에 날짜가 보임 (목록에서는 숨기기로 함)')
             seen = set()
             for d in learn:
                 page.goto(base + 'learn/' + d + '/', wait_until='load'); page.wait_for_timeout(150)
