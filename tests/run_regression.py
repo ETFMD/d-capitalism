@@ -2259,6 +2259,7 @@ def main():
         # 72루틴 — 무한매수법 기록 화면(mhApp) 고정 규칙 프로필: 시작 화면·수수료 기본값·용어·기록 그래프·실시간 · 카드 = 엔진·시뮬레이터 · 상장 전 · 크게 보기 · 중간 진입 · 계정 저장 (tests/t72_ui.py)
         if os.path.isdir(os.path.join(ROOT, '72')):
             import t72_ui
+            page.goto('about:blank')   # 같은 출처의 다른 탭(앞 검사의 VR 화면)이 가짜 로그인(localStorage 공유)에 반응해 실제 Worker 401 → 로그아웃시키지 않게
             t72_ui.check(apage, base, local, fail, errs, ignorable, widths, OVERFLOW_JS)   # 관리자 전용 — 검사용 탭(잠금 해제)에서
         # 홈 첫 화면 — AI 시대, 노동자에서 자본가로: 두 힘·하나의 답 숫자 · 데이터 탭 · 직업 검색
         print('[홈] 첫 화면', flush=True)
