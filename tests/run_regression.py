@@ -1064,6 +1064,51 @@ KCMP_SYMS = {'simulator': ('kodex', '498400.KS'), 'sol': ('sol', '0167B0.KS'), '
              'tigerdiv': ('tigerdiv', '472150.KS'), 'tigersemi': ('tigersemi', '0177R0.KS')}
 
 
+def aspeed_check(page, base, fail, local):
+    """/asset-speed/ — 기본 10개 자산 · 거치식 결과 = 그때 샀더라면(WIF.calc)과 같은 값 · 적립식 넣은 돈 · 정한 초 동안 재생 · 검색
+    · 배포 사이트에서는 검색한 종목(Worker 일봉)을 실제로 더해 계산되는지까지"""
+    page.set_viewport_size({'width': 1280, 'height': 900})
+    page.goto(base + 'asset-speed/', wait_until='load')
+    try:
+        page.wait_for_function("window.ASPEED && ASPEED.state().sim", timeout=20000)
+    except Exception:
+        fail('asset-speed', '시뮬레이터가 계산되지 않음'); return
+    r = page.evaluate("""() => { const S = ASPEED.state(), sim = S.sim, W = S.W, bad = [];
+        if (sim.err) return { err: sim.err };
+        sim.list.forEach(x => { const a = W.assets.find(z => z.id === x.key); if (!a || a.yearly) return;
+          const c = WIF.calc(a, W.fx, { start: sim.s0, amount: sim.o.amt, mode: 'lump', div: sim.o.div, krw: true });
+          const p = c.pts && c.pts.find(q => q[0] === sim.e0);
+          if (!p || Math.abs(p[1] / x.final - 1) > 1e-9) bad.push(x.key + ' ' + x.final + ' vs ' + (p && p[1])); });
+        return { n: sim.list.length, keys: sim.list.map(x => x.key), N: sim.N, bad, macro: sim.list.filter(x => x.key === 'M2' || x.key === 'CPI').length,
+                 rows: document.querySelectorAll('#as-tbody tr').length, rank: document.querySelectorAll('#as-rank li').length }; }""")
+    if r.get('err'): fail('asset-speed', '계산 오류: ' + r['err']); return
+    if r['n'] != 10 or r['macro'] != 2: fail('asset-speed', '기본 자산 %d개 (기대 10, M2·물가 %d)' % (r['n'], r['macro']))
+    if r['N'] < 24: fail('asset-speed', '비교 기간 %d개월 (너무 짧음)' % r['N'])
+    if r['bad']: fail('asset-speed', '거치식 결과가 그때 샀더라면 계산과 다름: %s' % r['bad'][:3])
+    if r['rows'] != r['n'] or r['rank'] != r['n']: fail('asset-speed', '결과표 %d줄 · 순위 %d줄 (기대 %d)' % (r['rows'], r['rank'], r['n']))
+    d = page.evaluate("""async () => { document.querySelector('#as-mode [data-v="dca"]').click(); await new Promise(r => setTimeout(r, 200));
+        const sim = ASPEED.state().sim; return { mode: sim.o.mode, inv: sim.inv[sim.N - 1], want: sim.o.amt * sim.N, err: sim.err }; }""")
+    if d['err'] or d['mode'] != 'dca' or abs(d['inv'] - d['want']) > 0.5: fail('asset-speed', '적립식 넣은 돈 이상: %s' % d)
+    a = page.evaluate("""async () => { const sec = document.getElementById('as-sec'); sec.value = '2'; sec.dispatchEvent(new Event('input', { bubbles: true }));
+        await new Promise(r => setTimeout(r, 500)); document.getElementById('as-reset').click();
+        await new Promise(r => setTimeout(r, 1000)); const mid = ASPEED.state().t;
+        await new Promise(r => setTimeout(r, 1700)); const S = ASPEED.state();
+        return { mid, end: S.t, playing: S.playing, date: document.getElementById('as-date').textContent }; }""")
+    if not (0.25 < a['mid'] < 0.8) or a['end'] != 1 or a['playing']: fail('asset-speed', '2초 재생 진행 이상: %s' % a)
+    page.fill('#as-q', '삼성')
+    page.wait_for_timeout(1500)
+    names = page.evaluate("[...document.querySelectorAll('#as-res button')].map(b => b.innerText)")
+    if not any('삼성전자' in n for n in names): fail('asset-speed', '검색 "삼성" 결과에 삼성전자 없음: %s' % names[:5])
+    if not local:   # 배포 사이트: 검색 종목을 Worker 에서 받아 더하기 (KODEX 200)
+        page.fill('#as-q', '069500'); page.wait_for_timeout(1500)
+        page.evaluate("""() => { const box = document.getElementById('as-res'), i = box._items.findIndex(x => x.s === '069500'); if (i >= 0) document.querySelector('#as-res button[data-i="' + i + '"]').click(); }""")
+        try:
+            page.wait_for_function("ASPEED.state().sim && ASPEED.state().sim.list.some(x => x.key === 'k:069500')", timeout=30000)
+        except Exception:
+            fail('asset-speed', '검색한 KODEX 200(069500) 시세를 불러와 더하지 못함')
+    page.evaluate("() => { try { localStorage.removeItem('as.cfg'); } catch (e) {} }")
+
+
 def kcmp_check(page, base, fail, local):
     """커버드콜 시뮬레이터 '코스피 대비 수익률 비교' — ETF 가격이 실제 거래 종가(분배금 미반영)인지
     · compare.json basis:'raw' · 상장일·마지막 종가 = 네이버 일별 시세(독립 출처) · 화면: 분배금 포함 > 주가(분배금 제외)"""
@@ -1631,6 +1676,8 @@ def main():
             if not r: fail(k, '지수 해설(.idx-note)이 보이지 않음'); continue
             if r['txt'] < 500 or r['rows'] < 6 or r['raw'] or not r['auto']:
                 fail(k, '지수 해설 이상: %s' % r)
+        print('[2-3] 자산 속도 시뮬레이터', flush=True)
+        aspeed_check(page, base, fail, local)
         print('[2-2] 커버드콜 코스피 비교 — 실제 종가(분배금 미반영)', flush=True)
         kcmp_check(page, base, fail, local)
         for pth in ['compound/', 'earnings-calendar/', 'fire/']:

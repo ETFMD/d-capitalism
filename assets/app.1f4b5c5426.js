@@ -9721,6 +9721,7 @@ function switchSubTab(tab, grpId, btn) {
   if (tab === 'fear') window._fearTimer = setInterval(function () { if (!document.hidden) fetchFearGreed(); }, 5 * 60 * 1000);
   if (tab === 'etfcagr' && window.ecRender) window.ecRender();
   if (tab === 'mcap' && window.mcRender) window.mcRender();
+  if (window.asRender) window.asRender();   /* [ASPEED] 자산 속도 시뮬레이터: 열리면 그리고, 다른 탭이면 재생 멈춤 */
   if (window.erRender) window.erRender();   /* [EARN] 실적발표 캘린더: 열리면 그리고, 다른 탭이면 자동 갱신 중지 */
   if (tab === 'aptrank' && window.apRender) window.apRender();
   if (window.dvRender) window.dvRender();   /* ETF 분배 달력: 열리면 그리고, 다른 탭이면 자동 갱신 중지 */
@@ -20663,6 +20664,502 @@ var WIF = (function () {
   document.addEventListener('input', pick, true);
   document.addEventListener('change', pick, true);
   window.fcRegister('wif', render, 'whatif');
+})();
+
+/* ════════════════════════════════════════
+   [ASPEED] 자산 속도 시뮬레이터 — 같은 돈을 여러 자산에 넣었을 때 시간에 따라 불어나는 속도를 '정한 초' 동안 그려 나감
+   · 기본 자산·월봉: data/whatif.json (그때 샀더라면 자료 — 국내·미국 주식·지수·코인·금·은·달러·아파트 연도별 중위가 · 원달러 월말 환율)
+   · 통화량(M2)·물가: data/assetspeed.json (scripts/update_assetspeed.py — 한국은행 ECOS 월별)
+   · 검색한 종목: Worker /etf?m=k(네이버 일봉)|u(야후 일봉) → 달마다 마지막 종가 (실패하면 공개 프록시)
+   · 모든 값은 원화 — 달러 자산은 그 달 환율로 원화 환산 · 아파트는 해마다 6월에 그해 중위가격을 두고 달마다 기하 보간
+   · 거치식: 첫 달 가격으로 전부 매수 · 적립식: 매달 같은 금액을 그 달 가격으로 매수 · 비교 기간 = 고른 자산이 모두 있는 기간
+   · 그리기: requestAnimationFrame 으로 진행률 t(0~1) → 달 위치 t×(N−1) (달 사이는 직선 보간해 부드럽게)
+════════════════════════════════════════ */
+(function () {
+  var PG = document.getElementById('page-aspeed');
+  if (!PG) return;
+  function $(id) { return document.getElementById(id); }
+  var COLORS = ['#f04452', '#3182f6', '#fe9800', '#16b47a', '#a35cff', '#e6b400', '#00a6c8', '#ff5fa2', '#7cb342', '#8d96a0', '#ff7043', '#5c6bc0'];
+  var MAXN = 12;
+  var DEF = ['^KS11', 'SPY', 'APT-seoul', 'APT-gangnam', 'GC=F', 'SI=F', 'BTC-USD', 'ETH-USD', 'M2', 'CPI'];
+  var SHORT = { '^KS11': '코스피', '^KQ11': '코스닥', 'SPY': 'S&P 500', 'QQQ': '나스닥 100', 'APT-seoul': '서울 아파트', 'APT-gangnam': '강남 아파트',
+    'GC=F': '금', 'SI=F': '은', 'BTC-USD': '비트코인', 'ETH-USD': '이더리움', 'M2': '통화량(M2)', 'CPI': '물가', 'USD': '달러' };
+  var EXTRA = [   /* 검색에 넣는 대표 지수 (whatif 에 없는 것) */
+    { k: 'u', s: '^GSPC', n: 'S&P 500 지수', t: '미국 지수' }, { k: 'u', s: '^IXIC', n: '나스닥 종합 지수', t: '미국 지수' },
+    { k: 'u', s: '^NDX', n: '나스닥 100 지수', t: '미국 지수' }, { k: 'u', s: '^DJI', n: '다우존스 지수', t: '미국 지수' },
+    { k: 'u', s: '^SOX', n: '필라델피아 반도체 지수', t: '미국 지수' }, { k: 'k', s: 'KPI200', n: '코스피 200 지수', t: '국내 지수' }
+  ];
+  var S = { W: null, M: null, built: {}, sel: [], colors: {}, mode: 'lump', t: 1, raf: 0, playing: false, chart: null, sim: null, list: null, listP: null, pend: {}, shown: false };
+  function mi(s) { s = String(s); return +s.slice(0, 4) * 12 + (s.length > 4 ? +s.slice(5, 7) - 1 : 0); }
+  function ym(k) { return Math.floor(k / 12) + '.' + String(k % 12 + 1).padStart(2, '0'); }
+  function num(v) { return +(String(v || '').replace(/[^\d.]/g, '')) || 0; }
+  function comma(n) { return Math.round(n).toLocaleString('ko-KR'); }
+  function won(v) {
+    var a = Math.abs(v), s = v < 0 ? '−' : '';
+    if (a >= 1e12) return s + (a / 1e12).toFixed(a >= 1e13 ? 1 : 2) + '조';
+    if (a >= 1e8) return s + (a / 1e8).toFixed(a >= 1e10 ? 0 : a >= 1e9 ? 1 : 2) + '억';
+    if (a >= 1e4) return s + comma(a / 1e4) + '만';
+    return s + comma(a) + '원';
+  }
+  function pct(v) { return v == null || !isFinite(v) ? '—' : (v >= 0 ? '+' : '−') + Math.abs(v * 100).toFixed(1) + '%'; }
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem('as.' + k)); localStorage.setItem('as.' + k, JSON.stringify(v)); } catch (e) { return null; } }
+
+  /* ── 자산 → 월별 원화 가격 {start, v[]} ── */
+  function lastMonth() { var e = 0; (S.W.assets || []).forEach(function (a) { if (!a.yearly && a.c) e = Math.max(e, mi(a.start) + a.c.length - 1); }); return e; }
+  function fxAt(k) { var fx = S.W.fx, i = k - mi(fx.start); if (i < 0) return null; return fx.v[Math.min(i, fx.v.length - 1)]; }
+  function trim(start, v) {
+    var a = 0, b = v.length - 1;
+    while (a <= b && !(v[a] > 0)) a++;
+    while (b >= a && !(v[b] > 0)) b--;
+    var out = v.slice(a, b + 1), last = null;
+    for (var i = 0; i < out.length; i++) { if (out[i] > 0) last = out[i]; else out[i] = last; }   /* 중간 빈 달은 직전 값 */
+    return out.length ? { start: start + a, v: out } : null;
+  }
+  function fromWif(as, div) {
+    var now = lastMonth();
+    if (as.yearly) {                                           /* 연도별 → 해마다 6월 기준 기하 보간, 첫해 6월부터 · 마지막 해 뒤는 그 값 유지 */
+      var y0 = mi(as.start) / 12, an = [];
+      as.c.forEach(function (p, i) { if (p > 0) an.push([(y0 + i) * 12 + 5, p]); });
+      if (!an.length) return null;
+      var v = [];
+      for (var k = an[0][0], j = 0; k <= now; k++) {
+        while (j < an.length - 1 && an[j + 1][0] <= k) j++;
+        if (j >= an.length - 1) { v.push(an[an.length - 1][1]); continue; }
+        var a = an[j], b = an[j + 1], f = (k - a[0]) / (b[0] - a[0]);
+        v.push(a[1] * Math.pow(b[1] / a[1], f));
+      }
+      return trim(an[0][0], v);
+    }
+    var arr = div && as.a ? as.a : as.c, s = mi(as.start), out = [];
+    for (var i = 0; i < arr.length; i++) {
+      var p = arr[i];
+      if (p > 0 && as.cur === 'USD') { var f = fxAt(s + i); p = f > 0 ? p * f : null; }
+      out.push(p > 0 ? p : null);
+    }
+    return trim(s, out);
+  }
+  function fromMacro(m) {
+    var v = m.v.slice(), now = lastMonth(), s = mi(m.start);
+    for (var k = s + v.length; k <= now && k < s + v.length + 3; k++) v.push(v[v.length - 1]);   /* 발표가 늦는 최근 1~3달은 마지막 값으로 */
+    return trim(s, v);
+  }
+  function wifAsset(id) { var r = null; (S.W.assets || []).forEach(function (a) { if (a.id === id) r = a; }); return r; }
+  function info(key) {                                        /* 이름·분류 */
+    if (key === 'M2') return { name: '통화량 (M2 광의통화)', tag: '거시' };
+    if (key === 'CPI') return { name: '물가 (소비자물가지수)', tag: '거시' };
+    var a = wifAsset(key);
+    if (a) return { name: a.name, tag: { kr: '국내 주식', idx: '지수', us: '미국 주식', coin: '코인', etc: '원자재·현금', apt: '아파트' }[a.g] || '' };
+    var x = S.built[key + '|meta'];
+    return x || { name: key, tag: '' };
+  }
+  function short(key) { return SHORT[key] || info(key).name.replace(/\s*\(.*\)$/, ''); }
+  function series(key, div) {                                 /* 월별 원화 가격 (없으면 null · 검색 종목은 받아 온 뒤) */
+    if (key === 'M2') return S.M && S.M.m2 ? fromMacro(S.M.m2) : null;
+    if (key === 'CPI') return S.M && S.M.cpi ? fromMacro(S.M.cpi) : null;
+    var a = wifAsset(key);
+    if (a) return fromWif(a, div);
+    var b = S.built[key];
+    return b ? (div && b.a ? b.a : b.c) : null;
+  }
+
+  /* ── 검색 종목: Worker 일봉 → 달마다 마지막 종가 ── */
+  var EP = null;
+  function endpoint() { if (EP !== null) return Promise.resolve(EP); return (window.mdLoad ? window.mdLoad('counter.json') : Promise.resolve(null)).then(function (c) { EP = (c && c.endpoint) || ''; return EP; }, function () { EP = ''; return ''; }); }
+  function get(url) { return fetch(url, { cache: 'no-store' }).then(function (r) { if (r.status === 404) { var e = new Error('nodata'); e.nodata = 1; throw e; } if (!r.ok) throw new Error('http ' + r.status); return r.text(); }); }
+  function upstream(m, s) {
+    var t = new Date(Date.now() + 9 * 3600e3 + 864e5).toISOString().slice(0, 10).replace(/-/g, '');
+    return m === 'k' ? 'https://api.finance.naver.com/siseJson.naver?symbol=' + encodeURIComponent(s) + '&requestType=1&startTime=19900101&endTime=' + t + '&timeframe=day'
+      : 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(s) + '?period1=315532800&period2=' + (Math.floor(Date.now() / 1000) + 86400) + '&interval=1d&includePrePost=false&events=div';
+  }
+  function monthly(rows) {   /* rows: [[월 번호, 값], ...] 날짜순 → {start, v} (달마다 마지막 값) */
+    var m = {}, lo = Infinity, hi = -Infinity;
+    rows.forEach(function (r) { if (r[1] > 0) { m[r[0]] = r[1]; lo = Math.min(lo, r[0]); hi = Math.max(hi, r[0]); } });
+    if (!isFinite(lo)) return null;
+    var v = []; for (var k = lo; k <= hi; k++) v.push(m[k] || null);
+    return trim(lo, v);
+  }
+  function parse(m, txt) {
+    if (m === 'k') {
+      var re = /\["(\d{4})(\d{2})(\d{2})",\s*(?:-?[\d.]+|null),\s*(?:-?[\d.]+|null),\s*(?:-?[\d.]+|null),\s*(-?[\d.]+)/g, x, rows = [];
+      while ((x = re.exec(String(txt || '')))) rows.push([(+x[1]) * 12 + (+x[2]) - 1, +x[4]]);
+      var c = monthly(rows); return c ? { c: c, a: null, cur: 'KRW' } : null;
+    }
+    var j = JSON.parse(txt), r = j && j.chart && j.chart.result && j.chart.result[0];
+    if (!r || !r.timestamp) return null;
+    var off = (r.meta && r.meta.gmtoffset) || 0, cur = (r.meta && r.meta.currency) || 'USD';
+    var cl = (r.indicators.quote[0] || {}).close || [], ad = ((r.indicators.adjclose || [])[0] || {}).adjclose || null, rc = [], ra = [];
+    r.timestamp.forEach(function (t, i) { var d = new Date((t + off) * 1000), k = d.getUTCFullYear() * 12 + d.getUTCMonth(); rc.push([k, cl[i]]); if (ad) ra.push([k, ad[i]]); });
+    return { c: monthly(rc), a: ad ? monthly(ra) : null, cur: cur };
+  }
+  function toKrw(s) {
+    if (!s) return null;
+    var v = s.v.map(function (p, i) { var f = fxAt(s.start + i); return p > 0 && f > 0 ? p * f : null; });
+    return trim(s.start, v);
+  }
+  function fetchItem(it) {   /* it: {k:'k'|'u', s, n, t} → S.built[key] */
+    var key = it.k + ':' + it.s;
+    if (S.built[key]) return Promise.resolve(key);
+    if (S.pend[key]) return S.pend[key];
+    S.built[key + '|meta'] = { name: it.n, tag: it.t };
+    var p = endpoint().then(function (ep) { if (!ep) throw new Error('no endpoint'); return get(ep + '/etf?m=' + it.k + '&s=' + encodeURIComponent(it.s)); })
+      .catch(function (e) { if (e && e.nodata) throw e; return get('https://api.allorigins.win/raw?url=' + encodeURIComponent(upstream(it.k, it.s))); })
+      .then(function (txt) {
+        var r = parse(it.k, txt);
+        if (!r || !r.c || r.c.v.length < 3) throw new Error('nodata');
+        if (r.cur !== 'KRW' && r.cur !== 'USD') throw new Error('통화 ' + r.cur + ' 는 지원하지 않음');
+        S.built[key] = r.cur === 'USD' ? { c: toKrw(r.c), a: toKrw(r.a) } : { c: r.c, a: r.a };
+        if (!S.built[key].c) throw new Error('nodata');
+        return key;
+      });
+    S.pend[key] = p;
+    p.then(function () { delete S.pend[key]; }, function () { delete S.pend[key]; delete S.built[key + '|meta']; });
+    return p;
+  }
+
+  /* ── 계산 ── */
+  function inputs() {
+    var amt = num($('as-amt').value) * 1e4, sec = Math.min(120, Math.max(2, num($('as-sec').value) || 15));
+    return { mode: S.mode, amt: amt, start: (+$('as-y').value) * 12 + (+$('as-m').value) - 1, sec: sec, div: $('as-div').checked, log: $('as-log').checked };
+  }
+  function irr(A, n, V) {   /* 매달 A씩 n번(0..n−1달째 매수) · n−1달째 가치 V → 연환산 */
+    function fv(g) { var v = 0; for (var k = 0; k < n; k++) v += A * Math.pow(g, n - 1 - k); return v; }
+    var lo = 0.5, hi = 1.5;
+    if (fv(lo) > V || fv(hi) < V) return null;
+    for (var i = 0; i < 100; i++) { var mid = (lo + hi) / 2; if (fv(mid) < V) lo = mid; else hi = mid; }
+    return Math.pow((lo + hi) / 2, 12) - 1;
+  }
+  function simulate() {
+    var o = inputs(), list = [], lim = null;
+    S.sel.forEach(function (key) { var s = series(key, o.div); if (s) list.push({ key: key, s: s }); });
+    if (!list.length) return { err: '비교할 자산을 하나 이상 고르세요.' };
+    var s0 = o.start, e0 = Infinity;
+    list.forEach(function (x) { if (x.s.start > s0) { s0 = x.s.start; lim = x.key; } e0 = Math.min(e0, x.s.start + x.s.v.length - 1); });
+    if (s0 > e0 - 1) return { err: '고른 자산이 함께 있는 기간이 너무 짧습니다. 늦게 시작하는 자산을 빼 보세요.' };
+    var N = e0 - s0 + 1, inv = [];
+    for (var i = 0; i < N; i++) inv.push(o.mode === 'dca' ? o.amt * (i + 1) : o.amt);
+    list.forEach(function (x) {
+      var v = [], u = 0, off = s0 - x.s.start;
+      for (var i = 0; i < N; i++) {
+        var p = x.s.v[off + i];
+        if (o.mode === 'dca') u += o.amt / p; else if (i === 0) u = o.amt / p;
+        v.push(u * p);
+      }
+      x.v = v; x.final = v[N - 1]; x.mult = x.final / inv[N - 1];
+      x.cagr = o.mode === 'dca' ? irr(o.amt, N, x.final) : (N > 1 ? Math.pow(x.final / o.amt, 12 / (N - 1)) - 1 : null);
+    });
+    return { o: o, list: list, s0: s0, e0: e0, N: N, inv: inv, lim: lim && s0 > o.start ? lim : null };
+  }
+
+  /* ── 그래프 ── */
+  function cssVar(n, f) { var v = getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return v || f; }
+  var endLabels = {
+    id: 'asEnd',
+    afterDatasetsDraw: function (ch) {
+      var ctx = ch.ctx, area = ch.chartArea, items = [], narrow = ch.width < 520;
+      ch.data.datasets.forEach(function (ds, i) {
+        var meta = ch.getDatasetMeta(i), pts = meta.data;
+        if (meta.hidden || !pts.length) return;
+        var p = pts[pts.length - 1], last = ds.data[ds.data.length - 1];
+        items.push({ x: p.x, y: p.y, y0: p.y, c: ds.borderColor, t: narrow ? ds.label : ds.label + ' ' + won(last.y) });
+      });
+      items.sort(function (a, b) { return a.y - b.y; });
+      for (var k = 1; k < items.length; k++) if (items[k].y - items[k - 1].y < 13) items[k].y = items[k - 1].y + 13;
+      var over = items.length ? items[items.length - 1].y - (area.bottom - 4) : 0;
+      if (over > 0) items.forEach(function (it) { it.y -= over; });
+      ctx.save();
+      ctx.font = '600 ' + (narrow ? 10 : 11) + 'px ' + cssVar('--font', 'sans-serif');
+      ctx.textBaseline = 'middle';
+      items.forEach(function (it) {
+        ctx.fillStyle = it.c; ctx.beginPath(); ctx.arc(it.x, it.y0, 3.2, 0, Math.PI * 2); ctx.fill();
+        var w = ctx.measureText(it.t).width, tx = it.x + 7;
+        if (tx + w > ch.width - 2) tx = Math.max(area.left, ch.width - 2 - w);
+        ctx.fillText(it.t, tx, it.y);
+      });
+      ctx.restore();
+    }
+  };
+  function makeChart() {
+    if (S.chart) { S.chart.destroy(); S.chart = null; }
+    var sim = S.sim, cv = $('as-chart');
+    if (!sim || sim.err || !window.Chart || !cv) return;
+    var tick = cssVar('--text3', '#888'), grid = 'rgba(128,128,128,0.12)', narrow = (cv.parentNode.clientWidth || 600) < 520;
+    var ds = sim.list.map(function (x) {
+      var c = S.colors[x.key];
+      return { label: short(x.key), data: [], borderColor: c, backgroundColor: c, borderWidth: x.key === 'M2' || x.key === 'CPI' ? 1.6 : 2, borderDash: x.key === 'M2' || x.key === 'CPI' ? [5, 4] : [], pointRadius: 0, tension: 0, fill: false };
+    });
+    ds.push({ label: '넣은 돈', data: [], borderColor: tick, backgroundColor: tick, borderWidth: 1.2, borderDash: [2, 3], pointRadius: 0, fill: false, _inv: true });
+    S.chart = new Chart(cv, {
+      type: 'line', data: { datasets: ds }, plugins: [endLabels],
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false, parsing: false, normalized: true,
+        layout: { padding: { right: narrow ? 70 : 128, top: 6 } },
+        interaction: { mode: 'nearest', intersect: false, axis: 'x' },
+        plugins: { legend: { display: false }, tooltip: { callbacks: {
+          title: function (it) { return it.length ? ym(sim.s0 + Math.round(it[0].parsed.x)) : ''; },
+          label: function (c) { return ' ' + c.dataset.label + '  ' + won(c.parsed.y); } } } },
+        scales: {
+          x: { type: 'linear', min: 0, max: 1, grid: { display: false }, border: { color: grid },
+               afterBuildTicks: function (ax) {                 /* 눈금은 해가 바뀌는 달(1월)에만 · 너무 많으면 몇 해씩 건너뜀 */
+                 var first = (12 - sim.s0 % 12) % 12, yrs = Math.max(1, Math.ceil((ax.max / 12) / (narrow ? 4 : 7))), t = [];
+                 for (var x = first; x <= ax.max + 1e-9; x += 12 * yrs) t.push({ value: x });
+                 if (!t.length) t.push({ value: 0 });
+                 ax.ticks = t;
+               },
+               ticks: { color: tick, maxRotation: 0, autoSkip: false, font: { size: narrow ? 10 : 11 },
+                        callback: function (v) { var k = sim.s0 + Math.round(v); return k % 12 === 0 ? String(k / 12) + (narrow ? '' : '년') : ym(k); } } },
+          y: { type: sim.o.log ? 'logarithmic' : 'linear', beginAtZero: !sim.o.log, position: 'left', grid: { color: grid }, border: { display: false },
+               ticks: { color: tick, maxTicksLimit: 6, font: { size: narrow ? 10 : 11 }, callback: function (v) { return won(v); } } }
+        }
+      }
+    });
+    draw(S.t);
+  }
+  function draw(t) {
+    var sim = S.sim, ch = S.chart;
+    if (!sim || sim.err || !ch) return;
+    var pos = t * (sim.N - 1), idx = Math.floor(pos), f = pos - idx;
+    function pts(v) {
+      var a = new Array(idx + 1);
+      for (var i = 0; i <= idx; i++) a[i] = { x: i, y: v[i] };
+      if (f > 0 && idx < sim.N - 1) a.push({ x: pos, y: v[idx] + (v[idx + 1] - v[idx]) * f });
+      return a;
+    }
+    sim.list.forEach(function (x, i) { ch.data.datasets[i].data = pts(x.v); });
+    ch.data.datasets[sim.list.length].data = pts(sim.inv);
+    ch.options.scales.x.max = Math.max(pos, Math.min(sim.N - 1, 6));
+    ch.update('none');
+    var k = Math.min(sim.N - 1, Math.round(pos));
+    $('as-date').textContent = Math.floor((sim.s0 + k) / 12) + '년 ' + ((sim.s0 + k) % 12 + 1) + '월';
+    $('as-inv').textContent = '넣은 돈 ' + won(sim.inv[k]) + '원' + (sim.o.mode === 'dca' ? ' (매달 ' + won(sim.o.amt) + '원)' : '');
+    $('as-prog').style.width = (t * 100).toFixed(1) + '%';
+    if (k !== S.rankK) { S.rankK = k; rank(k); }
+  }
+  function rank(k) {
+    var sim = S.sim, ol = $('as-rank');
+    var rows = sim.list.map(function (x) { return { key: x.key, v: x.v[k] }; }).sort(function (a, b) { return b.v - a.v; });
+    ol.innerHTML = rows.map(function (r, i) {
+      return '<li><span class="as-r">' + (i + 1) + '</span><i style="background:' + S.colors[r.key] + '"></i><span class="as-n">' + esc(short(r.key)) + '</span><b>' + won(r.v) + '</b><small>' + (r.v / sim.inv[k]).toFixed(2) + '배</small></li>';
+    }).join('');
+  }
+  function play() {
+    var sim = S.sim;
+    if (!sim || sim.err) return;
+    if (S.playing) { pause(); return; }
+    if (S.t >= 1) S.t = 0;
+    S.playing = true; $('as-play').textContent = '❚❚ 일시정지';
+    var dur = sim.o.sec * 1000, t0 = performance.now() - S.t * dur;
+    function frame(now) {
+      if (!S.playing) return;
+      S.t = Math.min(1, (now - t0) / dur);
+      draw(S.t);
+      if (S.t < 1) S.raf = requestAnimationFrame(frame); else stop();
+    }
+    S.raf = requestAnimationFrame(frame);
+  }
+  function pause() { S.playing = false; cancelAnimationFrame(S.raf); $('as-play').textContent = '▶ 이어서 재생'; }
+  function stop() { S.playing = false; cancelAnimationFrame(S.raf); $('as-play').textContent = '▶ 다시 재생'; }
+
+  /* ── 화면 ── */
+  function chips() {
+    $('as-chips').innerHTML = S.sel.map(function (key) {
+      var busy = !!S.pend[key];
+      return '<span class="as-chip' + (busy ? ' busy' : '') + '"><i style="background:' + S.colors[key] + '"></i>' + esc(short(key)) + (busy ? ' <small>불러오는 중…</small>' : '') +
+        '<button type="button" data-rm="' + esc(key) + '" aria-label="' + esc(short(key)) + ' 빼기">✕</button></span>';
+    }).join('');
+  }
+  function color(key) {
+    if (S.colors[key]) return;
+    var used = {}; Object.keys(S.colors).forEach(function (k) { if (S.sel.indexOf(k) >= 0) used[S.colors[k]] = 1; });
+    S.colors[key] = COLORS.filter(function (c) { return !used[c]; })[0] || COLORS[S.sel.length % COLORS.length];
+  }
+  function table() {
+    var sim = S.sim, tb = $('as-tbody');
+    if (sim.err) { tb.innerHTML = '<tr><td colspan="5">' + esc(sim.err) + '</td></tr>'; $('as-sum').textContent = sim.err; return; }
+    var rows = sim.list.slice().sort(function (a, b) { return b.final - a.final; });
+    tb.innerHTML = rows.map(function (x, i) {
+      var macro = x.key === 'M2' || x.key === 'CPI';
+      return '<tr' + (macro ? ' class="as-macro"' : '') + '><td>' + (i + 1) + '</td><td style="text-align:left;"><i class="as-dot" style="background:' + S.colors[x.key] + '"></i>' + esc(info(x.key).name) + '</td><td>' + won(x.final) + '원</td><td>' + x.mult.toFixed(2) + '배</td><td>' + pct(x.cagr) + '</td></tr>';
+    }).join('');
+    var inv = sim.inv[sim.N - 1];
+    $('as-sum').textContent = ym(sim.s0) + ' ~ ' + ym(sim.e0) + ' (' + (sim.N - 1) + '개월) · ' + (sim.o.mode === 'dca' ? '매달 ' + won(sim.o.amt) + '원씩 ' : '처음에 ') + '넣은 돈 합계 ' + won(inv) + '원 · ' + (sim.o.mode === 'dca' ? '연평균 = 내부수익률(IRR)' : '연평균 = 연복리 수익률');
+  }
+  function startNote(sim) {
+    var el = $('as-start-note');
+    el.textContent = sim && !sim.err && sim.lim ? '· ' + short(sim.lim) + ' 자료가 ' + ym(sim.s0) + '부터라 그때부터 비교' : '';
+  }
+  function recompute(keepT) {
+    pause(); $('as-play').textContent = '▶ 재생';
+    S.sim = simulate(); S.rankK = -1;
+    startNote(S.sim);
+    table();
+    S.t = keepT ? S.t : 1;
+    makeChart();
+    if (S.sim.err) { $('as-rank').innerHTML = ''; $('as-date').textContent = '—'; $('as-inv').textContent = S.sim.err; }
+    var o = inputs();
+    store('cfg', { sel: S.sel, mode: S.mode, amt: $('as-amt').value, y: $('as-y').value, m: $('as-m').value, sec: o.sec, div: o.div, log: o.log });
+  }
+  function addKey(key) {
+    if (S.sel.indexOf(key) >= 0) return;
+    if (S.sel.length >= MAXN) { alert('최대 ' + MAXN + '개까지 비교할 수 있습니다. 하나를 뺀 뒤 더해 주세요.'); return; }
+    S.sel.push(key); color(key); chips(); recompute();
+  }
+  function quickAmt() {   /* 빠른 금액 버튼: 거치식 100만~1억 · 적립식 매달 10만~300만 */
+    var v = S.mode === 'dca' ? [[10, '10만'], [50, '50만'], [100, '100만'], [300, '300만']] : [[100, '100만'], [1000, '1천만'], [5000, '5천만'], [10000, '1억']];
+    $('as-amt-q').innerHTML = v.map(function (x) { return '<button type="button" data-v="' + x[0] + '">' + x[1] + '</button>'; }).join('');
+  }
+  function fillYears() {
+    var ys = $('as-y'), now = lastMonth(), y1 = Math.floor(now / 12), html = '';
+    for (var y = y1; y >= 1986; y--) html += '<option value="' + y + '">' + y + '년</option>';
+    ys.innerHTML = html;
+    var ms = $('as-m'), mh = ''; for (var m = 1; m <= 12; m++) mh += '<option value="' + m + '">' + m + '월</option>'; ms.innerHTML = mh;
+  }
+  function setStart(k) { $('as-y').value = String(Math.floor(k / 12)); $('as-m').value = String(k % 12 + 1); }
+  function earliest() { var o = inputs(), s = -Infinity; S.sel.forEach(function (key) { var x = series(key, o.div); if (x) s = Math.max(s, x.start); }); return isFinite(s) ? s : lastMonth() - 120; }
+
+  /* ── 검색 ── */
+  function loadList() {
+    if (S.listP) return S.listP;
+    S.listP = Promise.all([window.mdLoad('etf_list.json').catch(function () { return null; }), window.mdLoad('earnings.json').catch(function () { return null; })]).then(function (r) {
+      var L = [], seen = {};
+      function add(x) { var id = x.key || (x.k + ':' + x.s); if (seen[id]) return; seen[id] = 1; x.q = (x.n + ' ' + (x.s || '') + ' ' + (x.al || '')).toLowerCase().replace(/\s+/g, ''); L.push(x); }
+      add({ key: 'M2', n: '통화량 (M2 광의통화)', t: '거시', al: '광의통화량 통화량 m2 돈' });
+      add({ key: 'CPI', n: '물가 (소비자물가지수)', t: '거시', al: '인플레이션 물가 cpi' });
+      (S.W.assets || []).forEach(function (a) {
+        add({ key: a.id, n: a.name, t: info(a.id).tag, s: a.id.replace(/\.(KS|KQ)$/, '') });
+        seen[(/\.(KS|KQ)$/.test(a.id) ? 'k:' : 'u:') + a.id.replace(/\.(KS|KQ)$/, '')] = 1;   /* 같은 종목이 검색 목록에 두 번 나오지 않게 */
+      });
+      EXTRA.forEach(function (x) { add({ k: x.k, s: x.s, n: x.n, t: x.t }); });
+      var e = r[1];
+      if (e && e.kr) e.kr.forEach(function (x) { add({ k: 'k', s: x.c, n: x.n, t: '국내 주식' }); });
+      if (e && e.us) e.us.forEach(function (x) { add({ k: 'u', s: x.s, n: x.ko || x.n, al: x.n, t: '미국 주식' }); });
+      var j = r[0];
+      if (j && j.kr) j.kr.forEach(function (x) { add({ k: 'k', s: x[0], n: x[1], t: '국내 ETF' }); });
+      if (j && j.us) j.us.forEach(function (x) { add({ k: 'u', s: x[0], n: x[1], al: x[3] || '', t: x[2] === 'P' ? '미국 ETF' : '미국 상장' }); });
+      S.list = L; return L;
+    });
+    return S.listP;
+  }
+  function search(q) {
+    var box = $('as-res');
+    q = String(q || '').trim();
+    if (!q) { box.hidden = true; box.innerHTML = ''; return; }
+    loadList().then(function (L) {
+      if ($('as-q').value.trim() !== q) return;
+      var qq = q.toLowerCase().replace(/\s+/g, ''), hit = [];
+      for (var i = 0; i < L.length && hit.length < 400; i++) {
+        var x = L[i], p = x.q.indexOf(qq);
+        if (p < 0) continue;
+        var sym = String(x.s || x.key || '').toLowerCase();
+        hit.push({ x: x, sc: (sym === qq ? 0 : x.n.toLowerCase().replace(/\s+/g, '') === qq ? 1 : p === 0 ? 2 : 3) * 100000 + i });
+      }
+      hit.sort(function (a, b) { return a.sc - b.sc; });
+      var items = hit.slice(0, 30).map(function (h) { return h.x; });
+      if (/^[0-9][0-9A-Z]{5}$/.test(q.toUpperCase()) && !items.some(function (x) { return x.s === q.toUpperCase(); })) items.unshift({ k: 'k', s: q.toUpperCase(), n: '국내 종목 코드 ' + q.toUpperCase(), t: '코드로 불러오기' });
+      box.innerHTML = items.length ? items.map(function (x, i) {
+        var id = x.key || (x.k + ':' + x.s), on = S.sel.indexOf(id) >= 0;
+        return '<button type="button" role="option" data-i="' + i + '"' + (on ? ' disabled' : '') + '><b>' + esc(x.n) + '</b><small>' + esc((x.s ? x.s + ' · ' : '') + x.t) + (on ? ' · 추가됨' : '') + '</small></button>';
+      }).join('') : '<p class="as-none">찾는 종목이 없습니다. 국내 종목은 6자리 코드로도 찾을 수 있습니다.</p>';
+      box._items = items; box.hidden = false;
+    });
+  }
+  function pick(x) {
+    $('as-res').hidden = true; $('as-q').value = '';
+    if (x.key) { addKey(x.key); return; }
+    var key = x.k + ':' + x.s;
+    if (S.sel.indexOf(key) >= 0) return;
+    if (S.sel.length >= MAXN) { alert('최대 ' + MAXN + '개까지 비교할 수 있습니다. 하나를 뺀 뒤 더해 주세요.'); return; }
+    S.built[key + '|meta'] = { name: x.n, tag: x.t };
+    S.sel.push(key); color(key);
+    var p = fetchItem({ k: x.k, s: x.s, n: x.n, t: x.t });
+    chips();
+    p.then(function () { chips(); recompute(); }, function (e) {
+      S.sel = S.sel.filter(function (k) { return k !== key; }); chips();
+      alert((x.n || x.s) + ' 의 시세를 불러오지 못했습니다' + (e && e.message && e.message.indexOf('통화') === 0 ? ' (' + e.message + ')' : '') + '. 잠시 후 다시 시도해 주세요.');
+    });
+  }
+
+  /* ── 시작 ── */
+  function bind() {
+    $('as-mode').addEventListener('click', function (e) {
+      var b = e.target.closest('.mode-btn'); if (!b) return;
+      S.mode = b.getAttribute('data-v');
+      $('as-mode').querySelectorAll('.mode-btn').forEach(function (x) { x.classList.toggle('active', x === b); });
+      $('as-amt-l').textContent = S.mode === 'dca' ? '매달 넣는 돈' : '처음에 넣는 돈';
+      $('as-amt').value = S.mode === 'dca' ? '100' : '1,000';   /* 방식을 바꾸면 그 방식의 기본 금액으로 (거치 1천만 · 적립 매달 100만) */
+      quickAmt();
+      recompute();
+    });
+    $('as-amt-q').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; $('as-amt').value = comma(+b.getAttribute('data-v')); recompute(); });
+    $('as-sec-q').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; $('as-sec').value = b.getAttribute('data-v'); recompute(); play(); });
+    $('as-start-q').addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      var a = b.getAttribute('data-ago'), now = lastMonth();
+      setStart(a === 'max' ? Math.max(mi('1986-01'), earliest()) : now - (+a) * 12);
+      recompute();
+    });
+    ['as-y', 'as-m', 'as-div', 'as-log'].forEach(function (id) { $(id).addEventListener('change', function () { recompute(); }); });
+    var tmr = null;
+    ['as-amt', 'as-sec'].forEach(function (id) {
+      $(id).addEventListener('input', function () { var el = $(id), n = num(el.value); if (id === 'as-amt') el.value = n ? comma(n) : ''; clearTimeout(tmr); tmr = setTimeout(function () { recompute(); }, 350); });
+    });
+    $('as-play').addEventListener('click', play);
+    $('as-reset').addEventListener('click', function () { pause(); S.t = 0; draw(0); play(); });
+    $('as-end').addEventListener('click', function () { stop(); S.t = 1; draw(1); });
+    $('as-chips').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-rm]'); if (!b) return;
+      var key = b.getAttribute('data-rm');
+      S.sel = S.sel.filter(function (k) { return k !== key; }); chips(); recompute();
+    });
+    var q = $('as-q'), st = null;
+    q.addEventListener('input', function () { clearTimeout(st); st = setTimeout(function () { search(q.value); }, 150); });
+    q.addEventListener('focus', function () { loadList(); if (q.value) search(q.value); });
+    q.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); var box = $('as-res'); if (!box.hidden && box._items && box._items.length) { var first = box._items.filter(function (x) { return S.sel.indexOf(x.key || (x.k + ':' + x.s)) < 0; })[0]; if (first) pick(first); } }
+      if (e.key === 'Escape') $('as-res').hidden = true;
+    });
+    $('as-res').addEventListener('click', function (e) { var b = e.target.closest('button[data-i]'); if (!b) return; pick($('as-res')._items[+b.getAttribute('data-i')]); });
+    document.addEventListener('click', function (e) { if (!e.target.closest('.as-find')) $('as-res').hidden = true; });
+    var rz = null;
+    window.addEventListener('resize', function () { clearTimeout(rz); rz = setTimeout(function () { if (PG.classList.contains('active') && S.sim) makeChart(); }, 200); });
+    new MutationObserver(function () { if (S.sim) makeChart(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  }
+  function init() {
+    if (S.ready) return; S.ready = true;
+    Promise.all([window.mdLoad('whatif.json'), window.mdLoad('assetspeed.json').catch(function () { return null; })]).then(function (r) {
+      S.W = r[0]; S.M = r[1];
+      if (!S.W || !S.W.assets) throw new Error('nodata');
+      fillYears(); if (!S.bound) { S.bound = true; bind(); }
+      var cfg = store('cfg');
+      var keep = cfg && cfg.sel ? cfg.sel.filter(function (k) { return k.indexOf(':') < 0 && (k === 'M2' || k === 'CPI' || wifAsset(k)); }) : null;
+      S.sel = keep && keep.length ? keep : DEF.filter(function (k) { return k === 'M2' || k === 'CPI' ? !!S.M : !!wifAsset(k); });
+      S.sel.forEach(color);
+      if (cfg && cfg.mode === 'dca') { S.mode = 'dca'; $('as-mode').querySelectorAll('.mode-btn').forEach(function (x) { x.classList.toggle('active', x.getAttribute('data-v') === 'dca'); }); $('as-amt-l').textContent = '매달 넣는 돈'; quickAmt(); }
+      if (cfg && cfg.amt) $('as-amt').value = cfg.amt;
+      if (cfg && cfg.sec) $('as-sec').value = cfg.sec;
+      if (cfg && typeof cfg.div === 'boolean') $('as-div').checked = cfg.div;
+      if (cfg && typeof cfg.log === 'boolean') $('as-log').checked = cfg.log;
+      if (cfg && cfg.y) { $('as-y').value = cfg.y; $('as-m').value = cfg.m; } else setStart(Math.max(earliest(), lastMonth() - 120));
+      chips();
+      $('as-src').innerHTML = '자료: 네이버 금융·Yahoo Finance 월봉 · 국토교통부 실거래가(아파트 중위가격) · 한국은행 ECOS(M2·소비자물가·환율)' +
+        (S.W.updated ? ' · 시세 ' + S.W.updated.slice(0, 10) + ' 갱신' : '') + (S.M && S.M.updated ? ' · 통계 ' + S.M.updated.slice(0, 10) + ' 갱신' : '') +
+        (S.M ? '' : '<br>※ 통화량·물가 자료를 불러오지 못해 이번에는 빠졌습니다.');
+      recompute();
+      /* 처음 한 번: 그래프가 화면에 절반 넘게 보일 때 자동 재생 (휴대폰은 입력칸 아래라 보일 때 시작) · 움직임 줄이기 설정이면 결과만 */
+      var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!reduce && !S.shown && window.IntersectionObserver) {
+        var io = new IntersectionObserver(function (en) {
+          if (!en[0].isIntersecting || S.shown) return;
+          S.shown = true; io.disconnect();
+          if (S.sim && !S.sim.err && !S.playing) { S.t = 0; draw(0); play(); }
+        }, { threshold: 0.5 });
+        io.observe($('as-chart'));
+      }
+    }).catch(function () { S.ready = false; $('as-src').textContent = '자료를 불러오지 못했습니다. 잠시 후 다시 열어 주세요.'; });
+  }
+  window.asRender = function () { if (PG.classList.contains('active')) { if (!S.ready) init(); else if (S.sim) makeChart(); } else if (S.playing) pause(); };
+  window.ASPEED = { state: function () { return S; }, simulate: simulate, series: series };   /* 회귀 검사용 */
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.asRender); else setTimeout(window.asRender, 0);
 })();
 
 /* ════════════════════════════════════════
