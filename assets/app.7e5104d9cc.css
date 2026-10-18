@@ -2160,6 +2160,9 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .as-dot { margin-right:7px; vertical-align:middle; }
   .as-chip button { border:0; background:transparent; color:var(--text3); cursor:pointer; font-size:12px; padding:0 4px; line-height:1; }
   .as-chip button:hover { color:var(--accent2); }
+  .as-qa { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; } .as-qa:empty { display:none; }
+  .as-qa button { font-family:var(--font); font-size:11.5px; color:var(--text2); background:transparent; border:1px dashed var(--card-border); border-radius:999px; padding:3px 9px; cursor:pointer; } .as-qa button:hover { color:var(--accent); border-color:rgba(49,130,246,.5); }
+  .as-bgm-row { display:flex; align-items:flex-start; gap:8px; } .as-bgm-row .as-check { flex:1; } .as-bgm-btn { padding:5px 10px !important; font-size:12px !important; white-space:nowrap; }
   .as-chip.busy { opacity:.6; } .as-chip small { font-size:10px; color:var(--text3); }
   .as-in { position:relative; z-index:3; }   /* 카드 등장 애니메이션(transform)이 쌓임 맥락을 만들어, 휴대폰에서 아래 그래프 카드가 검색 목록을 덮지 않게 */
   .as-find { position:relative; }
@@ -2198,7 +2201,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   /* 전체보기 창: 그래프 카드를 옮겨 와 화면을 꽉 채움 (넓으면 그래프 | 순위 · 좁으면 위아래) */
   html.as-noscroll, html.as-noscroll body { overflow:hidden; }
   .as-ov { position:fixed; inset:0; z-index:10040; background:var(--bg); display:flex; flex-direction:column; padding:14px 18px calc(14px + env(safe-area-inset-bottom)); gap:10px; }
-  .as-ov-top { display:flex; align-items:center; gap:12px; } .as-ov-h { flex:1; min-width:0; } .as-ov-h b { display:block; font-size:13px; color:var(--accent); } .as-ov-h span { display:block; font-size:14px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .as-ov-top { display:flex; align-items:center; gap:12px; } .as-ov-h { flex:1; min-width:0; } .as-ov-h b { display:block; font-size:13px; color:var(--accent); } .as-ov-h b.as-ov-t { font-size:22px; font-weight:800; color:var(--text); letter-spacing:-.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .as-ov-h span { display:block; font-size:14px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .as-ov .as-stage { flex:1; min-height:0; margin:0; display:grid; grid-template-columns:minmax(0, 1fr) 300px; grid-template-rows:auto auto auto auto minmax(0, 1fr); column-gap:20px; animation:none; }
   .as-ov .as-bar, .as-ov .as-vstat, .as-ov .as-prog { grid-column:1 / -1; } .as-ov .as-now { grid-column:1 / -1; } .as-ov .as-now b { font-size:40px; }
   .as-ov .as-chart { grid-column:1; grid-row:5; height:auto; min-height:0; }
@@ -2519,6 +2522,10 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .adm-btn { font-family:var(--font); font-size:14px; font-weight:600; color:#fff; background:var(--accent); border:0; border-radius:10px; padding:9px 22px; cursor:pointer; margin-right:8px; }
   .adm-home { font-size:13px; color:var(--text3); }
   .dca-adm-btn { justify-content:space-between; } .dca-adm-ar { color:var(--text3); font-size:11px; transition:transform .15s; } .dca-adm-btn.open .dca-adm-ar { transform:rotate(90deg); }
+  .dcm-box { width:min(860px, 100%) !important; text-align:left !important; } .dcm-box .dcl-h, .dcm-box .dcl-p { text-align:left; }
+  .dcm-scroll { max-height:min(62vh, 560px); overflow:auto; border:1px solid var(--card-border); border-radius:10px; }
+  .dcm-tbl { width:100%; border-collapse:collapse; font-size:12.5px; white-space:nowrap; } .dcm-tbl th, .dcm-tbl td { padding:8px 10px; border-bottom:1px solid var(--card-border); text-align:left; color:var(--text2); }
+  .dcm-tbl th { position:sticky; top:0; background:var(--bg3); color:var(--text3); font-weight:600; } .dcm-tbl td.dcm-n { color:var(--text); font-weight:600; } .dcm-tbl em { font-style:normal; font-size:10.5px; color:var(--accent); border:1px solid rgba(49,130,246,.4); border-radius:5px; padding:0 4px; }
   .dca-adm { display:flex; flex-direction:column; gap:2px; padding:0 0 4px 10px; margin:0 0 2px; border-bottom:1px solid rgba(var(--fg-rgb),0.08); } .dca-adm[hidden] { display:none; }
   .dca-save { display:inline-flex; align-items:center; gap:6px; margin-top:12px; padding:7px 12px; border-radius:9px; border:1px solid rgba(49,130,246,0.4); background:rgba(49,130,246,0.08); color:var(--accent); font-family:var(--font); font-size:12.5px; font-weight:600; cursor:pointer; }
   .dca-save:hover { background:rgba(49,130,246,0.15); }

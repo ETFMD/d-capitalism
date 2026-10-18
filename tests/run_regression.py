@@ -1105,10 +1105,22 @@ def admin_lock_check(page, base, fail, routes):
         fail('sitemap', 'sitemap.xml 을 읽지 못함: %s' % e)
 
 
+AS10 = "() => { localStorage.setItem('as.cfg2', JSON.stringify({ sel: ['^KS11', 'SPY', 'APT-seoul', 'APT-gangnam', 'GC=F', 'SI=F', 'BTC-USD', 'ETH-USD', 'M2', 'CPI'] })); }"
+
+
 def aspeed_check(page, base, fail, local):
-    """/asset-speed/ — 기본 10개 자산 · 거치식 결과 = 그때 샀더라면(WIF.calc)과 같은 값 · 적립식 넣은 돈 · 정한 초 동안 재생 · 검색
+    """/asset-speed/ — 처음 기본 = 코스피·S&P 500 + 바로 더하기 단추 · (10개 자산 저장값으로) 거치식 결과 = 그때 샀더라면(WIF.calc)과 같은 값 · 적립식 넣은 돈 · 정한 초 동안 재생 · 검색
     · 배포 사이트에서는 검색한 종목(Worker 일봉)을 실제로 더해 계산되는지까지"""
     page.set_viewport_size({'width': 1280, 'height': 900})
+    page.goto(base + 'robots.txt'); page.evaluate("() => { localStorage.removeItem('as.cfg2'); localStorage.removeItem('as.bgm'); }")
+    page.goto(base + 'asset-speed/', wait_until='load')
+    try:
+        page.wait_for_function("window.ASPEED && ASPEED.state().sim", timeout=20000)
+        d0 = page.evaluate("() => ({ sel: ASPEED.state().sel, qa: document.querySelectorAll('#as-qa button').length, bgm: document.getElementById('as-bgm').checked })")
+        if d0['sel'] != ['^KS11', 'SPY'] or d0['qa'] < 8 or not d0['bgm']: fail('asset-speed', '처음 기본값 이상 (기대: 코스피·S&P 500 · 바로 더하기 · 배경음악 켬): %s' % d0)
+    except Exception:
+        fail('asset-speed', '시뮬레이터가 계산되지 않음 (처음 기본값)'); return
+    page.evaluate(AS10)
     page.goto(base + 'asset-speed/', wait_until='load')
     try:
         page.wait_for_function("window.ASPEED && ASPEED.state().sim", timeout=20000)
@@ -1148,13 +1160,13 @@ def aspeed_check(page, base, fail, local):
         except Exception:
             fail('asset-speed', '검색한 KODEX 200(069500) 시세를 불러와 더하지 못함')
     aspeed2_check(page, base, fail, local)
-    page.evaluate("() => { try { localStorage.removeItem('as.cfg'); } catch (e) {} }")
+    page.evaluate("() => { try { localStorage.removeItem('as.cfg2'); } catch (e) {} }")
 
 
 def aspeed2_check(page, base, fail, local):
     """자산 속도 2차 — 검색 목록 불투명 · 매일 적립(영업일 수 × 금액) · 상장 전 가상 데이터 · 전체보기 · MP4(16:9) 내려받기"""
     page.set_viewport_size({'width': 1280, 'height': 900})
-    page.goto(base + 'robots.txt'); page.evaluate("() => localStorage.removeItem('as.cfg')")
+    page.goto(base + 'robots.txt'); page.evaluate(AS10)
     page.goto(base + 'asset-speed/', wait_until='load')
     try:
         page.wait_for_function("window.ASPEED && ASPEED.state().sim && !ASPEED.state().sim.err", timeout=30000)
@@ -1214,6 +1226,10 @@ def aspeed2_check(page, base, fail, local):
     page.keyboard.press('Escape'); page.wait_for_timeout(500)
     if page.evaluate("() => !!document.getElementById('as-ov') || !document.getElementById('page-aspeed').contains(document.getElementById('as-chart'))"):
         fail('asset-speed', '전체보기를 닫아도 그래프가 제자리로 돌아오지 않음')
+    # 세로 축이 한 장에 크게 튀지 않음 (예전: 눈금 단위로 2억 → 5억) · 긴 이름은 두 줄
+    ys = page.evaluate("() => { const vm = ASPEED.videoMaker('h'), M = Math.round(ASPEED.state().sim.o.sec * 30), out = []; for (let i = 0; i <= M + 75; i++) { vm.frame(Math.min(1, i / (M - 1)), i ? 1 / 30 : 0); out.push(vm.ymax()); } vm.done(); return out; }")   # 실제 영상과 같은 장 수
+    jm = max(abs(ys[i] / ys[i - 1] - 1) for i in range(1, len(ys)))
+    if jm > 0.10: fail('asset-speed', '영상 세로 축이 한 장에 %.1f%% 바뀜 (부드럽게 줄고 늘어야 함 · 미리 보기 0.8초 + 0.35초 완화면 한 장 10%% 안)' % (jm * 100))
     # MP4 16:9 (2초 · 이 브라우저에 H.264 인코더가 없으면 내장 인코더) — 파일이 H.264 MP4 이고 프레임 수가 맞는지
     page.evaluate("() => { const s = document.getElementById('as-sec'); s.value = '2'; s.dispatchEvent(new Event('input', { bubbles: true })); }"); page.wait_for_timeout(600)
     try:
@@ -1222,6 +1238,8 @@ def aspeed2_check(page, base, fail, local):
         path = dl.value.path(); data = open(path, 'rb').read()
         info = page.evaluate("() => ASPEED.state().vlast")
         want = int(round(30 * 0.6)) + 60 + int(round(30 * 2.5))
+        if not info or (b'Opus' not in data and b'mp4a' not in data) or info.get('audio') not in ('aac', 'opus'):
+            fail('asset-speed', 'MP4 에 배경음악(AAC·Opus) 없음: %s' % (info and info.get('audio')))
         if data[4:8] != b'ftyp' or b'avc1' not in data or not info or info.get('frames') != want or len(data) < 50000:
             fail('asset-speed', 'MP4 16:9 이상: %d바이트 · ftyp=%s · avc1=%s · %s (기대 프레임 %d)' % (len(data), data[4:8], b'avc1' in data, info and {k: info.get(k) for k in ('frames', 'how', 'codec')}, want))
         if not dl.value.suggested_filename.endswith('1920x1080_' + dl.value.suggested_filename[-12:-4] + '.mp4'):

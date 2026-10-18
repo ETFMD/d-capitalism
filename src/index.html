@@ -2412,6 +2412,9 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .as-dot { margin-right:7px; vertical-align:middle; }
   .as-chip button { border:0; background:transparent; color:var(--text3); cursor:pointer; font-size:12px; padding:0 4px; line-height:1; }
   .as-chip button:hover { color:var(--accent2); }
+  .as-qa { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; } .as-qa:empty { display:none; }
+  .as-qa button { font-family:var(--font); font-size:11.5px; color:var(--text2); background:transparent; border:1px dashed var(--card-border); border-radius:999px; padding:3px 9px; cursor:pointer; } .as-qa button:hover { color:var(--accent); border-color:rgba(49,130,246,.5); }
+  .as-bgm-row { display:flex; align-items:flex-start; gap:8px; } .as-bgm-row .as-check { flex:1; } .as-bgm-btn { padding:5px 10px !important; font-size:12px !important; white-space:nowrap; }
   .as-chip.busy { opacity:.6; } .as-chip small { font-size:10px; color:var(--text3); }
   .as-in { position:relative; z-index:3; }   /* 카드 등장 애니메이션(transform)이 쌓임 맥락을 만들어, 휴대폰에서 아래 그래프 카드가 검색 목록을 덮지 않게 */
   .as-find { position:relative; }
@@ -2450,7 +2453,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   /* 전체보기 창: 그래프 카드를 옮겨 와 화면을 꽉 채움 (넓으면 그래프 | 순위 · 좁으면 위아래) */
   html.as-noscroll, html.as-noscroll body { overflow:hidden; }
   .as-ov { position:fixed; inset:0; z-index:10040; background:var(--bg); display:flex; flex-direction:column; padding:14px 18px calc(14px + env(safe-area-inset-bottom)); gap:10px; }
-  .as-ov-top { display:flex; align-items:center; gap:12px; } .as-ov-h { flex:1; min-width:0; } .as-ov-h b { display:block; font-size:13px; color:var(--accent); } .as-ov-h span { display:block; font-size:14px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .as-ov-top { display:flex; align-items:center; gap:12px; } .as-ov-h { flex:1; min-width:0; } .as-ov-h b { display:block; font-size:13px; color:var(--accent); } .as-ov-h b.as-ov-t { font-size:22px; font-weight:800; color:var(--text); letter-spacing:-.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .as-ov-h span { display:block; font-size:14px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .as-ov .as-stage { flex:1; min-height:0; margin:0; display:grid; grid-template-columns:minmax(0, 1fr) 300px; grid-template-rows:auto auto auto auto minmax(0, 1fr); column-gap:20px; animation:none; }
   .as-ov .as-bar, .as-ov .as-vstat, .as-ov .as-prog { grid-column:1 / -1; } .as-ov .as-now { grid-column:1 / -1; } .as-ov .as-now b { font-size:40px; }
   .as-ov .as-chart { grid-column:1; grid-row:5; height:auto; min-height:0; }
@@ -2771,6 +2774,10 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .adm-btn { font-family:var(--font); font-size:14px; font-weight:600; color:#fff; background:var(--accent); border:0; border-radius:10px; padding:9px 22px; cursor:pointer; margin-right:8px; }
   .adm-home { font-size:13px; color:var(--text3); }
   .dca-adm-btn { justify-content:space-between; } .dca-adm-ar { color:var(--text3); font-size:11px; transition:transform .15s; } .dca-adm-btn.open .dca-adm-ar { transform:rotate(90deg); }
+  .dcm-box { width:min(860px, 100%) !important; text-align:left !important; } .dcm-box .dcl-h, .dcm-box .dcl-p { text-align:left; }
+  .dcm-scroll { max-height:min(62vh, 560px); overflow:auto; border:1px solid var(--card-border); border-radius:10px; }
+  .dcm-tbl { width:100%; border-collapse:collapse; font-size:12.5px; white-space:nowrap; } .dcm-tbl th, .dcm-tbl td { padding:8px 10px; border-bottom:1px solid var(--card-border); text-align:left; color:var(--text2); }
+  .dcm-tbl th { position:sticky; top:0; background:var(--bg3); color:var(--text3); font-weight:600; } .dcm-tbl td.dcm-n { color:var(--text); font-weight:600; } .dcm-tbl em { font-style:normal; font-size:10.5px; color:var(--accent); border:1px solid rgba(49,130,246,.4); border-radius:5px; padding:0 4px; }
   .dca-adm { display:flex; flex-direction:column; gap:2px; padding:0 0 4px 10px; margin:0 0 2px; border-bottom:1px solid rgba(var(--fg-rgb),0.08); } .dca-adm[hidden] { display:none; }
   .dca-save { display:inline-flex; align-items:center; gap:6px; margin-top:12px; padding:7px 12px; border-radius:9px; border:1px solid rgba(49,130,246,0.4); background:rgba(49,130,246,0.08); color:var(--accent); font-family:var(--font); font-size:12.5px; font-weight:600; cursor:pointer; }
   .dca-save:hover { background:rgba(49,130,246,0.15); }
@@ -7898,8 +7905,9 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
         <div class="fc-quick" id="as-sec-q"><button type="button" data-v="5">5초</button><button type="button" data-v="10">10초</button><button type="button" data-v="15">15초</button><button type="button" data-v="30">30초</button><button type="button" data-v="60">60초</button></div>
         <label class="fc-check as-check"><input type="checkbox" id="as-div" checked> <span>배당·분배금 재투자<small class="fc-hint">받은 배당금으로 같은 자산을 다시 산다고 계산 (세금 제외)</small></span></label>
         <label class="fc-check as-check"><input type="checkbox" id="as-log"> <span>로그 눈금<small class="fc-hint">몇 배씩 차이 나는 자산을 함께 볼 때</small></span></label>
+        <div class="as-bgm-row"><label class="fc-check as-check"><input type="checkbox" id="as-bgm" checked> <span>영상(MP4)에 배경음악 넣기<small class="fc-hint">이 화면이 직접 만드는 웅장한 곡 — 외부 음원이 없어 저작권 걱정 없음 · 영상 길이에 맞춰 끝나는 순간 크게 마무리</small></span></label><button type="button" class="as-btn as-bgm-btn" id="as-bgm-play">▶ 미리 듣기</button></div>
         <label class="fc-check as-check"><input type="checkbox" id="as-pre"> <span>상장 전 가상 데이터 포함<small class="fc-hint">시세가 시작되기 전 구간을 지수·옛 가격으로 재현해 앞에 이어 붙임 (그래프 점선 · 결과표에 기간 표시)</small></span></label>
-        <div class="fc-field"><span>비교하는 자산 <small>최대 12개 · ✕ 를 눌러 빼기</small></span><div class="as-chips" id="as-chips"></div></div>
+        <div class="fc-field"><span>비교하는 자산 <small>최대 12개 · ✕ 를 눌러 빼기</small></span><div class="as-chips" id="as-chips"></div><div class="as-qa" id="as-qa" aria-label="자주 쓰는 자산 바로 더하기"></div></div>
         <div class="fc-field as-find"><span>종목·지수 검색해서 더하기</span>
           <div class="fc-input"><input type="search" id="as-q" placeholder="예: 삼성전자, 엔비디아, QQQ, KODEX 200, 005930" autocomplete="off" aria-label="종목 검색" aria-controls="as-res"></div>
           <div class="as-res" id="as-res" role="listbox" hidden></div>
@@ -7954,7 +7962,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
         <details class="g-faq"><summary>통화량(M2)·물가 선은 무엇을 뜻하나요?</summary><div class="g-ans"><p>돈을 그 속도로 불렸다면의 값입니다. <b>물가 선</b>보다 아래에 있는 자산은 실제로는 구매력을 잃은 것이고, <b>통화량 선</b>보다 아래에 있는 자산은 시중에 풀린 돈이 늘어나는 속도를 따라가지 못한 것입니다. 현금을 그대로 들고 있었다면 금액은 처음 그대로(가로선)였을 것이므로, 두 선은 '가만히 있으면 잃는 것'을 보여 주는 기준선입니다.</p></div></details>
         <details class="g-faq"><summary>거치식과 적립식 중 어느 쪽이 유리한가요?</summary><div class="g-ans"><p>꾸준히 오른 자산은 처음에 전부 넣은 거치식이 더 크게 불어나는 경우가 많고, 중간에 크게 떨어졌다가 회복한 자산은 싼 가격에 더 많이 사게 되는 적립식이 유리할 수 있습니다. 같은 자산·같은 기간으로 두 방식을 바꿔 가며 비교해 보세요. 실제로는 대부분 월급에서 매달 넣게 되므로 적립식이 현실에 더 가깝습니다.</p></div></details>
         <details class="g-faq"><summary>왜 고른 시작 시점과 다른 때부터 그려지나요?</summary><div class="g-ans"><p>고른 자산 중 시세가 가장 늦게 시작하는 자산에 맞춰 모두 같은 때부터 비교하기 때문입니다. 시작 시점 옆에 어떤 자산 때문인지 표시되며, 그 자산을 빼면 더 오래전부터 비교할 수 있습니다.</p></div></details>
-        <details class="g-faq"><summary>영상(MP4)은 어떻게 만들어지나요?</summary><div class="g-ans"><p>그래프 위의 <b>MP4 16:9</b>(1920×1080, 유튜브 영상)·<b>9:16</b>(1080×1920, 쇼츠·릴스)을 누르면 지금 설정 그대로 '그리는 시간(초)'만큼의 영상을 초당 30장으로 한 장씩 그려 MP4(H.264)로 내려받습니다. 끝에 결과 화면을 2.5초 더 보여 줍니다. 브라우저 안에서 만들어 서버로 보내지 않으며, Chrome·Edge·Safari 최신판에서 됩니다. 소리는 넣지 않습니다.</p></div></details>
+        <details class="g-faq"><summary>영상(MP4)은 어떻게 만들어지나요?</summary><div class="g-ans"><p>그래프 위의 <b>MP4 16:9</b>(1920×1080, 유튜브 영상)·<b>9:16</b>(1080×1920, 쇼츠·릴스)을 누르면 지금 설정 그대로 '그리는 시간(초)'만큼의 영상을 초당 30장으로 한 장씩 그려 MP4(H.264)로 내려받습니다. 끝에 결과 화면을 2.5초 더 보여 줍니다. 제목은 비교하는 자산(예: 코스피 vs S&amp;P 500), 부제목은 투자 방식과 기간(예: 1,000만원 한 번에 투자 · 10년 6개월)입니다. '배경음악 넣기'를 켜 두면 이 화면이 직접 만드는 웅장한 곡(외부 음원 없음 — 저작권 걱정 없음)을 영상 길이에 맞춰 넣고, 그래프가 다 그려지는 순간 큰 화음으로 마무리합니다(▶ 미리 듣기로 먼저 들어 볼 수 있음). 브라우저 안에서 만들어 서버로 보내지 않으며, Chrome·Edge·Safari 최신판에서 됩니다(소리는 AAC — AAC 인코더가 없는 브라우저는 Opus).</p></div></details>
         <details class="g-faq"><summary>아파트 수익률은 실제 내 집과 같나요?</summary><div class="g-ans"><p>아닙니다. 해마다 거래된 아파트 전체의 중위가격이라, 그해에 어떤 크기·지역의 아파트가 많이 거래됐는지에 따라서도 움직입니다. 대출(레버리지)·전세·취득세·보유세도 반영하지 않았습니다. 집값 흐름의 대략적인 속도를 비교하는 용도로 보세요.</p></div></details>
         <details class="g-faq"><summary>세금이나 수수료는 반영되나요?</summary><div class="g-ans"><p>반영하지 않습니다. 해외 주식 양도소득세, 배당소득세, 매매·환전 수수료, 부동산 거래·보유 세금은 실제 결과를 줄이므로 따로 고려해야 합니다. 세금은 <a href="stocktax/">해외주식 양도소득세 계산기</a>, <a href="dividend/">배당소득세 계산기</a>에서 계산해 볼 수 있습니다.</p></div></details>
       </div>
@@ -33971,7 +33979,7 @@ var WIF = (function () {
   var DAY = 864e5, FPS = 30;
   var COLORS = ['#f04452', '#3182f6', '#fe9800', '#16b47a', '#a35cff', '#e6b400', '#00a6c8', '#ff5fa2', '#7cb342', '#8d96a0', '#ff7043', '#5c6bc0'];
   var MAXN = 12;
-  var DEF = ['^KS11', 'SPY', 'APT-seoul', 'APT-gangnam', 'GC=F', 'SI=F', 'BTC-USD', 'ETH-USD', 'M2', 'CPI'];
+  var DEF = ['^KS11', 'SPY'];   /* 처음 비교: 코스피 vs S&P 500 (아파트·금·은·코인·M2·물가는 검색·목록에서 더함) */
   var SHORT = { '^KS11': '코스피', '^KQ11': '코스닥', 'SPY': 'S&P 500', 'QQQ': '나스닥 100', 'APT-seoul': '서울 아파트', 'APT-gangnam': '강남 아파트',
     'GC=F': '금', 'SI=F': '은', 'BTC-USD': '비트코인', 'ETH-USD': '이더리움', 'M2': '통화량(M2)', 'CPI': '물가', 'USD': '달러' };
   var EXTRA = [   /* 검색에 넣는 대표 지수 (whatif 에 없는 것) */
@@ -34387,32 +34395,47 @@ var WIF = (function () {
   function cssVar(n, f) { var v = getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return v || f; }
   var endLabels = {
     id: 'asEnd',
-    afterDatasetsDraw: function (ch, args, opt) {
-      var ctx = ch.ctx, area = ch.chartArea, items = [], fs = (opt && opt.fs) || 11, narrow = opt && opt.narrow, gap = fs + 2;
+    afterDatasetsDraw: function (ch, args, opt) {   /* 선 끝 점 옆에 이름·금액 — 칸이 모자라면 두 줄(이름 / 금액), 이름이 그래도 길면 이름도 나눔 · 점과 겹치지 않게 왼쪽으로 밀지 않음 */
+      var ctx = ch.ctx, area = ch.chartArea, items = [], fs = (opt && opt.fs) || 11, narrow = opt && opt.narrow, lh = Math.round(fs * 1.18), pad = 2;
+      ctx.save();
+      ctx.font = '600 ' + fs + 'px ' + cssVar('--font', 'sans-serif');
       ch.data.datasets.forEach(function (ds, i) {
         var meta = ch.getDatasetMeta(i), pts = meta.data;
         if (meta.hidden || !pts.length) return;
-        var p = pts[pts.length - 1], last = ds.data[ds.data.length - 1];
-        items.push({ x: p.x, y: p.y, y0: p.y, c: ds.borderColor, t: narrow ? ds.label : ds.label + ' ' + won(last.y) });
+        var p = pts[pts.length - 1], last = ds.data[ds.data.length - 1], tx = p.x + fs * 0.65, avail = Math.max(fs * 3, ch.width - 2 - tx);
+        var name = ds.label, val = won(last.y), lines;
+        if (narrow) lines = wrapChars(ctx, name, avail, 2);
+        else if (ctx.measureText(name + ' ' + val).width <= avail) lines = [name + ' ' + val];
+        else lines = wrapChars(ctx, name, avail, 2).concat([fitText(ctx, val, avail)]);
+        items.push({ x: p.x, tx: tx, y: p.y, y0: p.y, c: ds.borderColor, lines: lines, h: lines.length * lh });
       });
       items.sort(function (a, b) { return a.y - b.y; });
-      for (var k = 1; k < items.length; k++) if (items[k].y - items[k - 1].y < gap) items[k].y = items[k - 1].y + gap;
-      /* 아래로 넘치면 아래에서부터 필요한 만큼만 위로 밀고(멀리 떨어진 이름은 제자리), 위로 넘치면 다시 아래로 (영상 9:16 에서 맨 위 이름이 잘리던 것) */
-      var bot = area.bottom - 4, top = area.top + gap / 2;
-      for (k = items.length - 1; k >= 0; k--) items[k].y = Math.min(items[k].y, k === items.length - 1 ? bot : items[k + 1].y - gap);
-      if (items.length && items[0].y < top) { items[0].y = top; for (k = 1; k < items.length; k++) if (items[k].y - items[k - 1].y < gap) items[k].y = items[k - 1].y + gap; }
-      ctx.save();
-      ctx.font = '600 ' + fs + 'px ' + cssVar('--font', 'sans-serif');
+      function sep(a, b) { return (a.h + b.h) / 2 + pad; }
+      var k;
+      for (k = 1; k < items.length; k++) items[k].y = Math.max(items[k].y, items[k - 1].y + sep(items[k - 1], items[k]));
+      /* 아래로 넘치면 아래에서부터 필요한 만큼만 위로 밀고(멀리 떨어진 이름은 제자리), 위로 넘치면 다시 아래로 */
+      for (k = items.length - 1; k >= 0; k--) items[k].y = Math.min(items[k].y, k === items.length - 1 ? area.bottom - items[k].h / 2 : items[k + 1].y - sep(items[k], items[k + 1]));
+      if (items.length && items[0].y < area.top + items[0].h / 2) { items[0].y = area.top + items[0].h / 2; for (k = 1; k < items.length; k++) items[k].y = Math.max(items[k].y, items[k - 1].y + sep(items[k - 1], items[k])); }
       ctx.textBaseline = 'middle';
       items.forEach(function (it) {
         ctx.fillStyle = it.c; ctx.beginPath(); ctx.arc(it.x, it.y0, fs * 0.3, 0, Math.PI * 2); ctx.fill();
-        var w = ctx.measureText(it.t).width, tx = it.x + fs * 0.65;
-        if (tx + w > ch.width - 2) tx = Math.max(area.left, ch.width - 2 - w);
-        ctx.fillText(it.t, tx, it.y);
+        var y = it.y - (it.lines.length - 1) * lh / 2;
+        it.lines.forEach(function (ln, j) { ctx.fillText(ln, it.tx, y + j * lh); });
       });
       ctx.restore();
     }
   };
+  function wrapChars(ctx, t, w, max) {   /* 글자 단위로 줄바꿈 (공백이 있으면 공백에서 먼저) · 마지막 줄은 넘치면 … */
+    t = String(t); if (ctx.measureText(t).width <= w) return [t];
+    var out = [], rest = t;
+    while (rest && out.length < max - 1) {
+      var cut = rest.length; while (cut > 1 && ctx.measureText(rest.slice(0, cut)).width > w) cut--;
+      var sp = rest.lastIndexOf(' ', cut); if (sp > 0 && cut < rest.length) cut = sp;
+      out.push(rest.slice(0, cut).trim()); rest = rest.slice(cut).trim();
+    }
+    if (rest) out.push(fitText(ctx, rest, w));
+    return out;
+  }
   /* 그래프 설정 — 화면용(반응형)·영상용(고정 크기 · fs 글자 크기) 공통 */
   function chartConfig(sim, opt) {
     var tick = opt.tick || cssVar('--text3', '#888'), grid = 'rgba(128,128,128,0.14)', narrow = !!opt.narrow, fs = opt.fs || 11;
@@ -34444,7 +34467,8 @@ var WIF = (function () {
                ticks: { color: tick, maxRotation: 0, autoSkip: false, font: { size: narrow ? Math.round(fs * 0.9) : fs },
                         callback: function (v) { var k = sim.s0 + Math.round(v); return k % 12 === 0 ? String(k / 12) + (narrow ? '' : '년') : ym(k); } } },
           y: { type: sim.o.log ? 'logarithmic' : 'linear', beginAtZero: !sim.o.log, position: 'left', grid: { color: grid }, border: { display: false },
-               ticks: { color: tick, maxTicksLimit: 6, font: { size: narrow ? Math.round(fs * 0.9) : fs }, callback: function (v) { return won(v); } } }
+               afterFit: function (ax) { ax.chart._yW = Math.max(ax.chart._yW || 0, ax.width); ax.width = ax.chart._yW; },
+               ticks: { includeBounds: false, color: tick, maxTicksLimit: 6, font: { size: narrow ? Math.round(fs * 0.9) : fs }, callback: function (v) { return won(v); } } }
         }
       }
     };
@@ -34458,7 +34482,7 @@ var WIF = (function () {
     S.chart = new Chart(cv, chartConfig(sim, { narrow: w < 520, fs: big ? 13 : 11, efs: big ? 14 : 11, padR: w < 520 ? 70 : big ? 160 : 128 }));
     draw(S.t);
   }
-  function setChartT(ch, sim, t) {                            /* 진행률 t 까지 그린 점들 → 그래프 */
+  function setChartT(ch, sim, t, dt) {                        /* 진행률 t 까지 그린 점들 → 그래프 (dt = 앞 장면과의 시간(초) — 있으면 축을 부드럽게) */
     var pos = t * (sim.N - 1), idx = Math.floor(pos), f = pos - idx;
     function pts(v) {
       var a = new Array(idx + 1);
@@ -34466,20 +34490,44 @@ var WIF = (function () {
       if (f > 0 && idx < sim.N - 1) a.push({ x: pos, y: v[idx] + (v[idx + 1] - v[idx]) * f });
       return a;
     }
-    sim.list.forEach(function (x, i) { ch.data.datasets[i].data = pts(x.v); });
-    ch.data.datasets[sim.list.length].data = pts(sim.inv);
+    var hi = 0, lo = Infinity;
+    function scan(a) { for (var i = 0; i < a.length; i++) { var y = a[i].y; if (y > hi) hi = y; if (y > 0 && y < lo) lo = y; } }
+    sim.list.forEach(function (x, i) { var a = pts(x.v); ch.data.datasets[i].data = a; scan(a); });
+    var ia = pts(sim.inv); ch.data.datasets[sim.list.length].data = ia; scan(ia);
+    /* 앞으로 0.8초 동안 그려질 값까지 미리 봄 → 급등하는 선이 오기 전에 축이 먼저 천천히 넓어짐 (선이 축에 부딪혀 축이 따라 튀지 않게) */
+    var la = Math.ceil((sim.N - 1) / Math.max(1, sim.o.sec) * 0.8), hiF = hi, loF = lo;
+    for (var j = idx + 1; j <= Math.min(sim.N - 1, idx + la); j++) {
+      sim.list.forEach(function (x) { var y = x.v[j]; if (y > hiF) hiF = y; if (y > 0 && y < loF) loF = y; });
+      if (sim.inv[j] > hiF) hiF = sim.inv[j];
+    }
     ch.options.scales.x.max = Math.max(pos, Math.min(sim.N - 1, 6));
+    yRange(ch, sim, hi, lo, dt, hiF, loF);
     ch.update('none');
     return pos;
+  }
+  /* 세로 축 범위를 부드럽게: 눈금 단위로 한 번에 튀지 않고(예: 2억 → 5억) 목표 범위로 서서히 따라감 — dt(초)가 없으면 바로 맞춤
+     · 선이 위·아래로 잘리지 않게 실제 값보다 늘 조금 넓게 (위 1% · 로그 아래 1%) · 눈금 글자 칸 너비는 커지기만 해서 그래프가 좌우로 흔들리지 않게 */
+  function yRange(ch, sim, hi, lo, dt, hiF, loF) {
+    var y = ch.options.scales.y, log = sim.o.log, k = dt ? 1 - Math.exp(-dt / 0.35) : 1;
+    if (!(hi > 0)) return;
+    var tMax = Math.max(hi, hiF || 0) * 1.07, fMax = hi * 1.01;
+    ch._yMax = ch._yMax == null || k >= 1 ? tMax : Math.max(fMax, ch._yMax + (tMax - ch._yMax) * k);
+    y.max = ch._yMax;
+    if (log) {
+      if (!isFinite(lo)) lo = hi / 10;
+      var tMin = Math.min(lo, loF || lo) / 1.12, fMin = lo / 1.01;
+      ch._yMin = ch._yMin == null || k >= 1 ? tMin : Math.min(fMin, ch._yMin + (tMin - ch._yMin) * k);
+      y.min = ch._yMin;
+    } else y.min = 0;
   }
   function invText(sim, k) {
     return '넣은 돈 ' + won(sim.inv[k]) + '원' + (sim.o.mode === 'dca' ? ' (' + (sim.o.daily ? '매일' : '매달') + ' ' + won(sim.o.amt) + '원)' : '');
   }
   function dateText(sim, k) { return Math.floor((sim.s0 + k) / 12) + '년 ' + ((sim.s0 + k) % 12 + 1) + '월'; }
-  function draw(t) {
+  function draw(t, dt) {
     var sim = S.sim, ch = S.chart;
     if (!sim || sim.err || !ch) return;
-    var pos = setChartT(ch, sim, t);
+    var pos = setChartT(ch, sim, t, dt);
     var k = Math.min(sim.N - 1, Math.round(pos));
     $('as-date').textContent = dateText(sim, k);
     $('as-inv').textContent = invText(sim, k);
@@ -34499,11 +34547,11 @@ var WIF = (function () {
     if (S.playing) { pause(); return; }
     if (S.t >= 1) S.t = 0;
     S.playing = true; $('as-play').textContent = '❚❚ 일시정지';
-    var dur = sim.o.sec * 1000, t0 = performance.now() - S.t * dur;
+    var dur = sim.o.sec * 1000, t0 = performance.now() - S.t * dur, prev = null;
     function frame(now) {
       if (!S.playing) return;
       S.t = Math.min(1, (now - t0) / dur);
-      draw(S.t);
+      draw(S.t, prev == null ? 1 / 60 : Math.min(0.1, (now - prev) / 1000)); prev = now;
       if (S.t < 1) S.raf = requestAnimationFrame(frame); else stop();
     }
     S.raf = requestAnimationFrame(frame);
@@ -34512,7 +34560,10 @@ var WIF = (function () {
   function stop() { S.playing = false; cancelAnimationFrame(S.raf); $('as-play').textContent = '▶ 다시 재생'; }
 
   /* ── 화면 ── */
+  var QA = ['^KS11', 'SPY', 'QQQ', 'APT-seoul', 'APT-gangnam', 'GC=F', 'SI=F', 'BTC-USD', 'ETH-USD', 'M2', 'CPI'];   /* 바로 더하기 (검색 없이) */
   function chips() {
+    $('as-qa').innerHTML = QA.filter(function (k) { return S.sel.indexOf(k) < 0 && ((k === 'M2' || k === 'CPI') ? !!S.M : !!wifAsset(k)); })
+      .map(function (k) { return '<button type="button" data-qa="' + esc(k) + '">＋ ' + esc(short(k)) + '</button>'; }).join('');
     $('as-chips').innerHTML = S.sel.map(function (key) {
       var busy = !!S.pend[key];
       return '<span class="as-chip' + (busy ? ' busy' : '') + '"><i style="background:' + S.colors[key] + '"></i>' + esc(short(key)) + (busy ? ' <small>불러오는 중…</small>' : '') +
@@ -34550,7 +34601,7 @@ var WIF = (function () {
   function recompute(keepT) {
     pause(); $('as-play').textContent = '▶ 재생';
     var o = inputs(), my = ++S.seq;
-    store('cfg', { sel: S.sel, mode: S.mode, freq: S.freq, amt: $('as-amt').value, y: $('as-y').value, m: $('as-m').value, sec: o.sec, div: o.div, log: o.log, pre: o.pre });
+    store('cfg2', { sel: S.sel, mode: S.mode, freq: S.freq, amt: $('as-amt').value, y: $('as-y').value, m: $('as-m').value, sec: o.sec, div: o.div, log: o.log, pre: o.pre });
     if (missing(o)) {
       S.busy = true; $('as-date').textContent = '…'; $('as-inv').textContent = o.daily ? '일봉 시세를 불러오는 중…' : '상장 전 재현 자료를 불러오는 중…';
       need(o).then(function () { if (my === S.seq) { S.busy = false; recompute(keepT); } });
@@ -34663,7 +34714,7 @@ var WIF = (function () {
   /* ── 전체보기: 그래프 카드를 화면 전체 창으로 옮김 ── */
   function fullHead() {
     var h = $('as-full-h'); if (!h || !S.sim) return;
-    h.innerHTML = '<b>자산 속도 시뮬레이터</b><span>' + esc(S.sim.err ? S.sim.err : scenario(S.sim)) + '</span>';
+    h.innerHTML = S.sim.err ? '<b>자산 속도 시뮬레이터</b><span>' + esc(S.sim.err) + '</span>' : '<b class="as-ov-t">' + esc(titleText(S.sim)) + '</b><span>' + esc(subText(S.sim) + ' · ' + periodText(S.sim)) + '</span>';
   }
   function openFull() {
     if (S.full) return;
@@ -34693,8 +34744,8 @@ var WIF = (function () {
 
   /* ── 영상(MP4): 1920×1080 · 1080×1920 캔버스에 한 장씩 그려 H.264 로 ── */
   var LAY = {
-    h: { W: 1920, H: 1080, fs: 22, efs: 24, lw: 2, head: [70, 60], chart: [60, 200, 1210, 780], rank: [1310, 210, 550, 770], foot: 1040 },
-    v: { W: 1080, H: 1920, fs: 24, efs: 26, lw: 2.4, head: [60, 80], chart: [40, 430, 1000, 820], rank: [60, 1300, 960, 480], foot: 1868 }
+    h: { W: 1920, H: 1080, fs: 22, efs: 24, lw: 2, head: [70, 60], chart: [60, 250, 1210, 730], rank: [1310, 260, 550, 720], foot: 1040 },
+    v: { W: 1080, H: 1920, fs: 24, efs: 26, lw: 2.4, head: [60, 80], chart: [40, 480, 1000, 770], rank: [60, 1320, 960, 460], foot: 1868 }
   };
   function theme() {
     var light = document.documentElement.getAttribute('data-theme') === 'light';
@@ -34704,28 +34755,59 @@ var WIF = (function () {
   function rr(ctx, x, y, w, h, r) { r = Math.max(0, Math.min(r, w / 2, h / 2)); ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
   function fitText(ctx, t, w) { if (ctx.measureText(t).width <= w) return t; while (t.length > 1 && ctx.measureText(t + '…').width > w) t = t.slice(0, -1); return t + '…'; }
   function wrap(ctx, t, w) { var out = [], line = ''; String(t).split(' ').forEach(function (word) { var tryL = line ? line + ' ' + word : word; if (ctx.measureText(tryL).width > w && line) { out.push(line); line = word; } else line = tryL; }); if (line) out.push(line); return out; }
+  /* 영상 제목 '코스피 vs S&P 500' (거시 선 M2·물가는 기준선이라 빼고 · 5개 이상이면 앞 3개 + 외 N개) · 부제목 '1,000만원 한 번에 투자 · 10년 6개월' */
+  function tagName(key) {   /* 제목·순위 막대용 짧은 이름: 검색한 미국 종목의 긴 영문 이름(예: Invesco NASDAQ 100 ETF)은 티커(QQQM)로 */
+    var n = short(key);
+    return n.length > 12 && /^u:/.test(key) ? key.slice(2) : n;
+  }
+  function titleText(sim) {
+    var xs = sim.list.filter(function (x) { return x.key !== 'M2' && x.key !== 'CPI'; }); if (!xs.length) xs = sim.list;
+    var ns = xs.map(function (x) { return tagName(x.key); });
+    return ns.length <= 4 ? ns.join(' vs ') : ns.slice(0, 3).join(' vs ') + ' 외 ' + (ns.length - 3) + '개';
+  }
+  function spanText(sim) {   /* 투자 기간 'N년 M개월' (매일 적립은 첫·마지막 영업일 날짜로) */
+    var m;
+    if (sim.o.daily) { var a = new Date(sim.G0 * DAY), b = new Date(sim.G1 * DAY); m = (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + b.getUTCMonth() - a.getUTCMonth() - (b.getUTCDate() < a.getUTCDate() ? 1 : 0); }
+    else m = sim.N - 1;
+    var y = Math.floor(m / 12), r = m % 12;
+    return (y ? y + '년' : '') + (y && r ? ' ' : '') + (r || !y ? r + '개월' : '');
+  }
+  function subText(sim) {
+    var o = sim.o;
+    return (o.mode === 'dca' ? (o.daily ? '매일 ' : '매달 ') + won(o.amt) + '원 적립' : won(o.amt) + '원 한 번에 투자') + ' · ' + spanText(sim);
+  }
+  function periodText(sim) { return sim.o.daily ? dStr(sim.G0).replace(/-/g, '.') + ' ~ ' + dStr(sim.G1).replace(/-/g, '.') : ym(sim.s0) + ' ~ ' + ym(sim.e0); }
   function videoMaker(kind) {                                 /* 영상 한 종류 그리기 도구 → {cv, frame(t)} */
     var L = LAY[kind], sim = S.sim, T = theme(), F = cssVar('--font', 'sans-serif'), MONO = cssVar('--mono', 'monospace');
     var cv = document.createElement('canvas'); cv.width = L.W; cv.height = L.H;
     var ctx = cv.getContext('2d');
     var ccv = document.createElement('canvas'); ccv.width = L.chart[2]; ccv.height = L.chart[3];
     var ch = new Chart(ccv.getContext('2d'), chartConfig(sim, { fixed: true, fs: L.fs, efs: L.efs, lw: L.lw, padR: kind === 'h' ? 250 : 230, tick: T.text3 }));
-    var ypos = {};
-    function frame(t) {
-      var pos = setChartT(ch, sim, t), k = Math.min(sim.N - 1, Math.floor(pos)), f = pos - k;
+    var ypos = {}, title = titleText(sim), sub = subText(sim);
+    function frame(t, dt) {
+      var pos = setChartT(ch, sim, t, dt), k = Math.min(sim.N - 1, Math.floor(pos)), f = pos - k;
       ctx.fillStyle = T.bg; ctx.fillRect(0, 0, L.W, L.H);
-      /* 머리: 제목 · 조건 · 지금 날짜 · 넣은 돈 */
+      /* 머리: 큰 제목(비교 자산) · 부제목(투자 방식·기간) · 작은 날짜·넣은 돈 */
       var hx = L.head[0], hy = L.head[1], cx = L.chart[0], cy = L.chart[1], cw = L.chart[2], chh = L.chart[3];
+      var kk = Math.min(sim.N - 1, Math.round(pos)), extra = (sim.o.div ? '' : ' · 배당 제외') + (sim.o.pre ? ' · 상장 전 가상 포함' : '');
       ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
-      ctx.fillStyle = T.acc; ctx.font = '700 ' + (kind === 'h' ? 30 : 38) + 'px ' + F; ctx.fillText('자산 속도 시뮬레이터', hx, hy + 28);
-      ctx.fillStyle = T.text2; ctx.font = '500 ' + (kind === 'h' ? 26 : 30) + 'px ' + F;
-      var sc = scenario(sim);
-      if (kind === 'h') ctx.fillText(fitText(ctx, sc, 1150), hx, hy + 76);
-      else wrap(ctx, sc, L.W - 2 * hx).slice(0, 2).forEach(function (ln, i) { ctx.fillText(ln, hx, hy + 84 + i * 42); });
-      var kk = Math.min(sim.N - 1, Math.round(pos));
-      ctx.fillStyle = T.text; ctx.font = '700 ' + (kind === 'h' ? 76 : 104) + 'px ' + MONO;
-      if (kind === 'h') { ctx.textAlign = 'right'; ctx.fillText(dateText(sim, kk), L.W - 60, hy + 66); ctx.font = '500 26px ' + F; ctx.fillStyle = T.text3; ctx.fillText(invText(sim, kk), L.W - 60, hy + 108); ctx.textAlign = 'left'; }
-      else { ctx.fillText(dateText(sim, kk), hx, hy + 260); ctx.font = '500 30px ' + F; ctx.fillStyle = T.text3; ctx.fillText(invText(sim, kk), hx, hy + 312); }
+      ctx.fillStyle = T.text3; ctx.font = '600 ' + (kind === 'h' ? 22 : 26) + 'px ' + F; ctx.fillText('자산 속도 시뮬레이터 · ' + periodText(sim) + extra, hx, hy - 6);
+      ctx.fillStyle = T.text;
+      if (kind === 'h') {
+        var tw = 1230, tf = 76; ctx.font = '800 ' + tf + 'px ' + F; while (tf > 44 && ctx.measureText(title).width > tw) { tf -= 2; ctx.font = '800 ' + tf + 'px ' + F; }
+        ctx.fillText(fitText(ctx, title, tw), hx, hy + 76);
+        ctx.fillStyle = T.acc; ctx.font = '700 38px ' + F; ctx.fillText(fitText(ctx, sub, tw), hx, hy + 136);
+        ctx.textAlign = 'right'; ctx.fillStyle = T.text; ctx.font = '700 52px ' + MONO; ctx.fillText(dateText(sim, kk), L.W - 60, hy + 70);
+        ctx.font = '500 26px ' + F; ctx.fillStyle = T.text3; ctx.fillText(invText(sim, kk), L.W - 60, hy + 114); ctx.textAlign = 'left';
+      } else {
+        var vw = L.W - 2 * hx, vf = 88, lines; ctx.font = '800 ' + vf + 'px ' + F;
+        while (true) { lines = wrap(ctx, title.replace(/ vs /g, ' vs\u00a0'), vw); if ((lines.length <= 2 && lines.every(function (l) { return ctx.measureText(l).width <= vw; })) || vf <= 52) break; vf -= 4; ctx.font = '800 ' + vf + 'px ' + F; }
+        lines.slice(0, 2).forEach(function (ln, i) { ctx.fillText(fitText(ctx, ln.replace(/\u00a0/g, ' '), vw), hx, hy + 76 + i * Math.round(vf * 1.12)); });
+        var ty = hy + 76 + (Math.min(2, lines.length) - 1) * Math.round(vf * 1.12);
+        ctx.fillStyle = T.acc; ctx.font = '700 44px ' + F; ctx.fillText(fitText(ctx, sub, vw), hx, ty + 70);
+        ctx.fillStyle = T.text; ctx.font = '700 54px ' + MONO; ctx.fillText(dateText(sim, kk), hx, cy - 44);
+        ctx.textAlign = 'right'; ctx.font = '500 30px ' + F; ctx.fillStyle = T.text3; ctx.fillText(invText(sim, kk), L.W - hx, cy - 46); ctx.textAlign = 'left';
+      }
       /* 그래프 */
       ctx.fillStyle = T.card; rr(ctx, cx - 20, cy - 20, cw + 40, chh + 40, 24); ctx.fill();
       ctx.drawImage(ccv, cx, cy);
@@ -34741,7 +34823,7 @@ var WIF = (function () {
         var i = rows.indexOf(r), y = ypos[r.key], nameW = kind === 'h' ? 150 : 190, valW = kind === 'h' ? 150 : 190, bx = rx + 34 + nameW, bw = Math.max(4, (rw - 34 - nameW - valW - 10) * Math.max(0, r.v) / maxV);
         ctx.fillStyle = kind === 'h' ? T.card : T.bg; ctx.fillRect(rx - 8, y, rw + 16, rowH);
         ctx.font = '600 ' + Math.round(rowH * 0.36) + 'px ' + MONO; ctx.fillStyle = T.text3; ctx.textAlign = 'right'; ctx.fillText(String(i + 1), rx + 24, y + rowH * 0.62);
-        ctx.textAlign = 'left'; ctx.font = '600 ' + Math.round(rowH * 0.38) + 'px ' + F; ctx.fillStyle = T.text; ctx.fillText(fitText(ctx, short(r.key), nameW - 10), rx + 34, y + rowH * 0.62);
+        ctx.textAlign = 'left'; ctx.font = '600 ' + Math.round(rowH * 0.38) + 'px ' + F; ctx.fillStyle = T.text; ctx.fillText(fitText(ctx, tagName(r.key), nameW - 10), rx + 34, y + rowH * 0.62);
         ctx.globalAlpha = r.pre ? 0.5 : 1; ctx.fillStyle = S.colors[r.key]; rr(ctx, bx, y + rowH * 0.2, bw, rowH * 0.6, Math.min(8, rowH * 0.2)); ctx.fill(); ctx.globalAlpha = 1;
         ctx.font = '700 ' + Math.round(rowH * 0.36) + 'px ' + MONO; ctx.fillStyle = T.text; ctx.fillText(won(r.v), bx + bw + 10, y + rowH * 0.5);
         ctx.font = '500 ' + Math.round(rowH * 0.26) + 'px ' + MONO; ctx.fillStyle = T.text3; ctx.fillText(mx(r.v / inv) + (r.pre ? ' · 가상' : ''), bx + bw + 10, y + rowH * 0.84);
@@ -34753,7 +34835,7 @@ var WIF = (function () {
       if (kind === 'h') { ctx.textAlign = 'right'; ctx.fillText(note, L.W - hx, L.foot); ctx.textAlign = 'left'; } else ctx.fillText(note, hx, L.foot - 40);   /* 세로 영상은 두 줄로 */
       ctx.fillStyle = T.line; ctx.fillRect(0, L.H - 8, L.W, 8); ctx.fillStyle = T.acc; ctx.fillRect(0, L.H - 8, L.W * t, 8);
     }
-    return { cv: cv, ctx: ctx, frame: frame, done: function () { ch.destroy(); } };
+    return { cv: cv, ctx: ctx, frame: frame, ymax: function () { return ch.scales.y.max; }, done: function () { ch.destroy(); } };
   }
   var MUX = null;
   function loadMuxer() {
@@ -34783,20 +34865,185 @@ var WIF = (function () {
     var a = document.createElement('a'), url = URL.createObjectURL(blob); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
   }
-  function makeVideo(kind, test) {   /* test(회귀 검사용): {force:'wasm'} 내장 인코더로 · {codecs:['vp09.00.40.08']} 인코더 목록 바꾸기 (먹서·프레임 흐름 확인) */
+  /* ── 배경음악(BGM): 이 화면이 직접 만드는 곡 (외부 음원 없음 → 저작권 문제 없음) ──
+     · 영상 길이(앞 0.6초 + 정한 초 + 끝 2.5초)에 맞춰 OfflineAudioContext 로 합성 — D단조 i–VI–III–VII(Dm–B♭–F–C) 96bpm
+     · 처음: 낮은 현악 패드·팀파니 → 중반(35%~): 현악 8분음 오스티나토·타이코 북·금관 패드가 점점 커짐 → 끝 2초: 상승 효과음·스네어 롤
+       → 그래프가 다 그려지는 순간: D장조 큰 화음 + 북 + 심벌 → 결과 화면 동안 울리다 사라짐 (잔향: 만든 잡음 임펄스) · 난수는 시드 고정(같은 길이 = 같은 곡) */
+  function makeBgm(D, mainStart, mainEnd) {
+    var SR = 48000, len = Math.max(1, Math.ceil(D * SR)), ac = new OfflineAudioContext(2, len, SR);
+    var seed = 20261018; function rnd() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
+    function noiseBuf(sec) { var b = ac.createBuffer(2, Math.ceil(sec * SR), SR); for (var c = 0; c < 2; c++) { var d = b.getChannelData(c); for (var i = 0; i < d.length; i++) d[i] = rnd() * 2 - 1; } return b; }
+    var comp = ac.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.attack.value = 0.01; comp.release.value = 0.25;
+    var master = ac.createGain(); master.gain.setValueAtTime(0, 0); master.gain.linearRampToValueAtTime(0.9, 0.25);
+    master.gain.setValueAtTime(0.9, Math.max(0.3, D - 1.0)); master.gain.linearRampToValueAtTime(0, D);
+    master.connect(comp); comp.connect(ac.destination);
+    var rev = ac.createConvolver(), ir = ac.createBuffer(2, Math.ceil(2.8 * SR), SR);
+    for (var c = 0; c < 2; c++) { var d = ir.getChannelData(c); for (var i = 0; i < d.length; i++) d[i] = (rnd() * 2 - 1) * Math.pow(1 - i / d.length, 3.2); }
+    rev.buffer = ir; var wet = ac.createGain(); wet.gain.value = 0.32; rev.connect(wet); wet.connect(master);
+    function out(node, send) { node.connect(master); var g = ac.createGain(); g.gain.value = send == null ? 0.6 : send; node.connect(g); g.connect(rev); }
+    function hz(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+    var beat = 60 / 96, bar = beat * 4, M = mainEnd - mainStart;
+    function prog(t) { return M > 0 ? Math.max(0, Math.min(1, (t - mainStart) / M)) : 1; }   /* 그래프 진행률 0~1 */
+    var CH = [[50, 57, 62, 65], [46, 53, 58, 62], [41, 53, 57, 60], [48, 55, 60, 64]];   /* Dm · B♭ · F · C (MIDI) */
+    function pad(t0, dur, notes, vol, cut0, cut1) {
+      notes.forEach(function (m) {
+        [-7, 7].forEach(function (det) {
+          var o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
+          o.type = 'sawtooth'; o.frequency.value = hz(m); o.detune.value = det;
+          f.type = 'lowpass'; f.Q.value = 0.7; f.frequency.setValueAtTime(cut0, t0); f.frequency.linearRampToValueAtTime(cut1, t0 + dur);
+          g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol, t0 + Math.min(0.5, dur * 0.4)); g.gain.setValueAtTime(vol, t0 + dur * 0.75); g.gain.linearRampToValueAtTime(0, t0 + dur + 0.35);
+          o.connect(f); f.connect(g); out(g, 0.7); o.start(t0); o.stop(t0 + dur + 0.4);
+        });
+      });
+    }
+    function pluck(t0, m, vol) {
+      var o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
+      o.type = 'sawtooth'; o.frequency.value = hz(m); f.type = 'lowpass'; f.frequency.value = 2200;
+      g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol, t0 + 0.008); g.gain.exponentialRampToValueAtTime(0.0008, t0 + 0.2);
+      o.connect(f); f.connect(g); out(g, 0.35); o.start(t0); o.stop(t0 + 0.22);
+    }
+    function drum(t0, vol, f0, f1, dec) {
+      var o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(f1, t0 + 0.35);
+      g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol, t0 + 0.005); g.gain.exponentialRampToValueAtTime(0.0008, t0 + dec);
+      o.connect(g); out(g, 0.5); o.start(t0); o.stop(t0 + dec + 0.05);
+      var n = ac.createBufferSource(), nf = ac.createBiquadFilter(), ng = ac.createGain(); n.buffer = noiseBuf(0.12);
+      nf.type = 'lowpass'; nf.frequency.value = 700; ng.gain.setValueAtTime(vol * 0.5, t0); ng.gain.exponentialRampToValueAtTime(0.0008, t0 + 0.1);
+      n.connect(nf); nf.connect(ng); out(ng, 0.4); n.start(t0);
+    }
+    function hiss(t0, dur, vol, type, f0, f1, up) {
+      var n = ac.createBufferSource(), nf = ac.createBiquadFilter(), ng = ac.createGain(); n.buffer = noiseBuf(dur + 0.05);
+      nf.type = type; nf.frequency.setValueAtTime(f0, t0); nf.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+      if (up) { ng.gain.setValueAtTime(0.0008, t0); ng.gain.exponentialRampToValueAtTime(vol, t0 + dur); }
+      else { ng.gain.setValueAtTime(vol, t0); ng.gain.exponentialRampToValueAtTime(0.0008, t0 + dur); }
+      n.connect(nf); nf.connect(ng); out(ng, 0.6); n.start(t0); n.stop(t0 + dur + 0.05);
+    }
+    var hitT = mainEnd, k = 0;
+    for (var t = 0; t < hitT - 0.05; t += bar, k++) {          /* 마디마다 화음 패드 · 북 · 오스티나토 (진행할수록 커짐) */
+      var ch = CH[k % 4], dur = Math.min(bar, hitT - t), p = prog(t + dur / 2);
+      pad(t, dur, [ch[0] - 12, ch[0]], 0.08 + 0.03 * p, 500, 1000 + 900 * p);                /* 낮은 현악 */
+      if (p > 0.15) pad(t, dur, ch.slice(1), 0.018 + 0.04 * p, 900, 1600 + 2600 * p);        /* 금관·현악 화음 */
+      for (var b = 0; b < 4; b++) {
+        var tb = t + b * beat; if (tb >= hitT - 0.05) break;
+        var pb = prog(tb);
+        if (b === 0 || (pb > 0.35 && b === 2)) drum(tb, 0.32 + 0.4 * pb, 110, 42, 0.9);       /* 팀파니·타이코 */
+        if (pb > 0.6 && (b === 1 || b === 3)) drum(tb + beat / 2, 0.18 + 0.2 * pb, 160, 70, 0.5);
+        if (pb > 0.35) for (var e = 0; e < 2; e++) { var te = tb + e * beat / 2; if (te < hitT - 0.05) pluck(te, ch[0] + (e ? 12 : 0) + (b === 3 && e ? 7 : 0), 0.05 + 0.07 * pb); }   /* 현악 8분음 */
+      }
+    }
+    var rs = Math.max(0, hitT - Math.min(2.2, Math.max(0.8, M * 0.2)));                          /* 끝 직전 상승 효과음 + 스네어 롤 */
+    if (hitT - rs > 0.3) {
+      hiss(rs, hitT - rs, 0.22, 'bandpass', 300, 7000, true);
+      for (var tr = rs, gap = 0.16; tr < hitT - 0.03; tr += gap, gap = Math.max(0.035, gap * 0.9)) {
+        var vr = 0.08 + 0.22 * (tr - rs) / (hitT - rs); hiss(tr, 0.08, vr, 'bandpass', 1900, 1500, false);
+      }
+    }
+    /* 끝 큰 화음: D장조 (승리감) + 북 + 심벌 → 결과 화면 동안 울림 */
+    var tail = Math.max(0.5, D - hitT);
+    pad(hitT, tail, [38, 50, 57, 62, 66, 69], 0.07, 3200, 700);
+    [62, 66, 69, 74].forEach(function (m) {
+      var o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
+      o.type = 'sawtooth'; o.frequency.value = hz(m); f.type = 'lowpass'; f.frequency.setValueAtTime(4200, hitT); f.frequency.exponentialRampToValueAtTime(900, hitT + tail);
+      g.gain.setValueAtTime(0, hitT); g.gain.linearRampToValueAtTime(0.06, hitT + 0.02); g.gain.exponentialRampToValueAtTime(0.001, hitT + tail);
+      o.connect(f); f.connect(g); out(g, 0.8); o.start(hitT); o.stop(hitT + tail + 0.05);
+    });
+    drum(hitT, 0.6, 90, 32, 2.2); drum(hitT + 0.012, 0.32, 140, 50, 1.2);
+    hiss(hitT, Math.min(2.6, tail), 0.3, 'highpass', 5000, 3000, false);
+    return ac.startRendering().then(function (buf) {   /* 가장 큰 소리를 약 −2 dBFS(0.8)에 맞춤 — 끝 큰 화음이 찢어지지(클리핑) 않게 · 손실 압축(AAC·Opus)이 조금 키우는 몫까지 남김 */
+      var pk = 0, c2, i2, d2;
+      for (c2 = 0; c2 < buf.numberOfChannels; c2++) { d2 = buf.getChannelData(c2); for (i2 = 0; i2 < d2.length; i2++) { var v = d2[i2] < 0 ? -d2[i2] : d2[i2]; if (v > pk) pk = v; } }
+      if (pk > 0) { var g = 0.8 / pk; for (c2 = 0; c2 < buf.numberOfChannels; c2++) { d2 = buf.getChannelData(c2); for (i2 = 0; i2 < d2.length; i2++) d2[i2] *= g; } }
+      return buf;
+    });
+  }
+  function pickAudio() {   /* AAC(Chrome·Edge·Safari) → 없으면 Opus (예: 리눅스 Chromium·파이어폭스 — 유튜브는 됨) */
+    if (!window.AudioEncoder || !window.AudioData) return Promise.resolve(null);
+    var c = [['mp4a.40.2', 'aac'], ['opus', 'opus']], i = 0;
+    function next() {
+      if (i >= c.length) return Promise.resolve(null);
+      var x = c[i++], cfg = { codec: x[0], sampleRate: 48000, numberOfChannels: 2, bitrate: 192000 };
+      return AudioEncoder.isConfigSupported(cfg).then(function (r) { return r && r.supported ? { cfg: cfg, mux: x[1] } : next(); }, next);
+    }
+    return next();
+  }
+  function encodeAudio(muxer, buf, ac) {   /* AudioBuffer → 인코더 → muxer (1024 샘플씩) */
+    return new Promise(function (res, rej) {
+      var err = null, enc = new AudioEncoder({ output: function (chunk, meta) { muxer.addAudioChunk(chunk, meta); }, error: function (e) { err = e; } });
+      enc.configure(ac.cfg);
+      var n = buf.length, L0 = buf.getChannelData(0), R0 = buf.getChannelData(1), F = 1024;
+      for (var i = 0; i < n; i += F) {
+        var m = Math.min(F, n - i), pl = new Float32Array(m * 2); pl.set(L0.subarray(i, i + m), 0); pl.set(R0.subarray(i, i + m), m);
+        var ad = new AudioData({ format: 'f32-planar', sampleRate: 48000, numberOfFrames: m, numberOfChannels: 2, timestamp: Math.round(i * 1e6 / 48000), data: pl });
+        enc.encode(ad); ad.close();
+      }
+      enc.flush().then(function () { enc.close(); err ? rej(err) : res(); }, rej);
+    });
+  }
+  /* 내장 H.264 인코더가 만든 MP4(libmp4v2) 에서 영상 표본을 꺼냄 → 소리와 함께 다시 담기 위해 (avcC · 표본 위치·크기·키프레임) */
+  function demuxAvc(u8) {
+    var dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+    function boxes(a, b) { var out = []; while (a + 8 <= b) { var sz = dv.getUint32(a), ty = String.fromCharCode(u8[a + 4], u8[a + 5], u8[a + 6], u8[a + 7]), h = 8; if (sz === 1) { sz = dv.getUint32(a + 8) * 4294967296 + dv.getUint32(a + 12); h = 16; } if (sz === 0) sz = b - a; if (sz < h) break; out.push({ t: ty, a: a, h: h, e: a + sz }); a += sz; } return out; }
+    function find(list, ty) { for (var i = 0; i < list.length; i++) if (list[i].t === ty) return list[i]; return null; }
+    function kids(bx, skip) { return boxes(bx.a + bx.h + (skip || 0), bx.e); }
+    var moov = find(boxes(0, u8.length), 'moov'); if (!moov) throw new Error('moov');
+    var trak = find(kids(moov), 'trak'), mdia = find(kids(trak), 'mdia'), minf = find(kids(mdia), 'minf'), stbl = find(kids(minf), 'stbl'), sb = kids(stbl);
+    var stsd = find(sb, 'stsd'), avc1 = kids(stsd, 8)[0], avcC = find(kids(avc1, 78), 'avcC');
+    var desc = u8.slice(avcC.a + avcC.h, avcC.e), W = dv.getUint16(avc1.a + avc1.h + 24), H = dv.getUint16(avc1.a + avc1.h + 26);
+    function full(bx) { return bx.a + bx.h + 4; }
+    var sz = find(sb, 'stsz'), p = full(sz), def = dv.getUint32(p), cnt = dv.getUint32(p + 4), sizes = [];
+    for (var i = 0; i < cnt; i++) sizes.push(def || dv.getUint32(p + 8 + i * 4));
+    var co = find(sb, 'stco') || find(sb, 'co64'), q = full(co), nc = dv.getUint32(q), offs = [];
+    for (i = 0; i < nc; i++) offs.push(co.t === 'co64' ? dv.getUint32(q + 4 + i * 8) * 4294967296 + dv.getUint32(q + 8 + i * 8) : dv.getUint32(q + 4 + i * 4));
+    var sc = find(sb, 'stsc'), r = full(sc), ns = dv.getUint32(r), runs = [];
+    for (i = 0; i < ns; i++) runs.push([dv.getUint32(r + 4 + i * 12), dv.getUint32(r + 8 + i * 12)]);
+    var ss = find(sb, 'stss'), keys = null;
+    if (ss) { var w = full(ss), nk = dv.getUint32(w); keys = {}; for (i = 0; i < nk; i++) keys[dv.getUint32(w + 4 + i * 4) - 1] = 1; }
+    var samples = [], si = 0;
+    for (var ci = 0; ci < offs.length; ci++) {
+      var per = 0; for (var j = 0; j < runs.length; j++) if (runs[j][0] <= ci + 1) per = runs[j][1];
+      var o = offs[ci];
+      for (var k = 0; k < per && si < sizes.length; k++, si++) { samples.push({ data: u8.subarray(o, o + sizes[si]), key: !keys || !!keys[si] }); o += sizes[si]; }
+    }
+    var codec = 'avc1.' + [desc[1], desc[2], desc[3]].map(function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+    return { samples: samples, desc: desc, codec: codec, W: W, H: H };
+  }
+  function makeVideo(kind, test) {   /* test(회귀 검사용): {force:'wasm'} 내장 인코더로 · {codecs:['vp09.00.40.08']} 인코더 목록 바꾸기 · {bgm:false} 소리 없이 */
     var sim = S.sim;
     if (!sim || sim.err || S.vbusy) return Promise.resolve(null);
     if (S.playing) pause();
     S.vbusy = { cancel: false };
+    test = test || {};
     var job = S.vbusy, L = LAY[kind], lead = Math.round(FPS * 0.6), hold = Math.round(FPS * 2.5), main = Math.max(2, Math.round(sim.o.sec * FPS)), total = lead + main + hold;
+    var withBgm = test.bgm != null ? !!test.bgm : $('as-bgm').checked, D = total / FPS;
     function tOf(i) { return i < lead ? 0 : Math.min(1, (i - lead) / (main - 1)); }
     vstat('영상 준비 중… <button type="button" class="as-vx" id="as-vx">취소</button>', true);
-    test = test || {};
-    var p = !window.VideoEncoder || !window.VideoFrame || test.force === 'wasm' ? wasmEncode(kind, job, total, tOf) : Promise.all([loadMuxer(), pickCodec(L.W, L.H, test.codecs)]).then(function (r) {
-      var M = r[0], cfg = r[1];
-      if (!cfg) return wasmEncode(kind, job, total, tOf);   /* H.264 인코더가 없는 브라우저 */
-      var vm = videoMaker(kind), err = null;
-      var muxer = new M.Muxer({ target: new M.ArrayBufferTarget(), video: { codec: /^vp09/.test(cfg.codec) ? 'vp9' : 'avc', width: L.W, height: L.H, frameRate: FPS }, fastStart: 'in-memory', firstTimestampBehavior: 'offset' });
+    var audioP = withBgm ? Promise.all([makeBgm(D, lead / FPS, (lead + main - 1) / FPS), pickAudio()]).then(function (r) { return r[1] ? { buf: r[0], ac: r[1] } : { none: 1 }; }) : Promise.resolve(null);
+    var useWc = window.VideoEncoder && window.VideoFrame && test.force !== 'wasm';
+    var p = Promise.all([loadMuxer(), useWc ? pickCodec(L.W, L.H, test.codecs) : null, audioP]).then(function (r) {
+      var M = r[0], cfg = r[1], au = r[2] && r[2].buf ? r[2] : null;
+      job.audio = au ? au.ac.mux : r[2] && r[2].none ? 'none' : null;
+      function newMuxer(vcodec) {
+        var o = { target: new M.ArrayBufferTarget(), video: { codec: vcodec, width: L.W, height: L.H, frameRate: FPS }, fastStart: 'in-memory', firstTimestampBehavior: 'offset' };
+        if (au) o.audio = { codec: au.ac.mux, numberOfChannels: 2, sampleRate: 48000 };
+        return new M.Muxer(o);
+      }
+      function finish(muxer, how, codec) {
+        return (au ? encodeAudio(muxer, au.buf, au.ac) : Promise.resolve()).then(function () {
+          muxer.finalize();
+          var blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
+          save(blob, fname(kind, 'mp4'));
+          return { blob: blob, frames: total, codec: codec, w: L.W, h: L.H, how: how, audio: job.audio };
+        });
+      }
+      if (!cfg) {   /* H.264 인코더가 없는 브라우저: 내장 인코더 → (소리가 있으면) 표본을 꺼내 소리와 함께 다시 담음 */
+        return wasmEncode(kind, job, total, tOf).then(function (u8) {
+          if (!au) { var blob = new Blob([u8], { type: 'video/mp4' }); save(blob, fname(kind, 'mp4')); return { blob: blob, frames: total, codec: 'h264(wasm)', w: L.W, h: L.H, how: 'wasm', audio: job.audio }; }
+          var dm = demuxAvc(u8), mx = newMuxer('avc'), meta = { decoderConfig: { codec: dm.codec, codedWidth: dm.W, codedHeight: dm.H, description: dm.desc } };
+          dm.samples.forEach(function (sm, i) { mx.addVideoChunkRaw(sm.data, sm.key ? 'key' : 'delta', Math.round(i * 1e6 / FPS), Math.round(1e6 / FPS), i ? undefined : meta); });
+          return finish(mx, 'wasm', 'h264(wasm)');
+        });
+      }
+      var vm = videoMaker(kind), err = null, muxer = newMuxer(/^vp09/.test(cfg.codec) ? 'vp9' : 'avc');
       var enc = new VideoEncoder({ output: function (chunk, meta) { muxer.addVideoChunk(chunk, meta); }, error: function (e) { err = e; } });
       enc.configure(cfg);
       var i = 0;
@@ -34806,26 +35053,35 @@ var WIF = (function () {
           if (err) { vm.done(); return rej(err); }
           var until = Math.min(total, i + 6);
           for (; i < until; i++) {
-            vm.frame(tOf(i));
+            vm.frame(tOf(i), i ? 1 / FPS : 0);
             var fr = new VideoFrame(vm.cv, { timestamp: Math.round(i * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
             enc.encode(fr, { keyFrame: i % (FPS * 2) === 0 }); fr.close();
           }
           vstat('영상 만드는 중 ' + Math.round(i / total * 100) + '% <button type="button" class="as-vx" id="as-vx">취소</button>', true);
           if (i < total) { setTimeout(step, enc.encodeQueueSize > 12 ? 15 : 0); return; }
-          enc.flush().then(function () {
-            enc.close(); vm.done(); muxer.finalize();
-            var blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
-            save(blob, fname(kind, 'mp4'));
-            res({ blob: blob, frames: total, codec: cfg.codec, w: L.W, h: L.H, how: 'webcodecs' });
-          }, function (e) { vm.done(); rej(e); });
+          enc.flush().then(function () { enc.close(); vm.done(); return finish(muxer, 'webcodecs', cfg.codec); }).then(res, function (e) { vm.done(); rej(e); });
         }
         step();
       });
     });
-    return p.then(function (r) { vstat('✓ ' + esc(fname(kind, 'mp4')) + ' 내려받음 (' + L.W + '×' + L.H + ' · ' + (total / FPS).toFixed(1) + '초)', false); S.vbusy = null; S.vlast = r; return r; },
+    return p.then(function (r) {
+      var an = r.audio === 'aac' ? ' · 배경음악 AAC' : r.audio === 'opus' ? ' · 배경음악 Opus(이 브라우저는 AAC 인코더가 없음 — 인스타그램용은 Chrome·Edge·Safari 에서 만들어 주세요)' : r.audio === 'none' ? ' · 이 브라우저는 소리 인코더가 없어 배경음악 없이 만들었습니다' : '';
+      vstat('✓ ' + esc(fname(kind, 'mp4')) + ' 내려받음 (' + L.W + '×' + L.H + ' · ' + (total / FPS).toFixed(1) + '초' + an + ')', false); S.vbusy = null; S.vlast = r; return r; },
       function (e) { vstat(e && e.message === 'cancel' ? '영상 만들기를 취소했습니다.' : '영상을 만들지 못했습니다' + (e && e.message ? ' (' + esc(e.message) + ')' : '') + '. 잠시 후 다시 해 주세요.', false); S.vbusy = null; S.vlast = { err: String(e && e.message || e) }; return null; });
   }
-  /* 브라우저에 H.264 인코더(WebCodecs)가 없을 때: WebAssembly H.264 인코더(assets/vendor/h264-mp4-encoder — minih264)로 한 장씩 → 언제나 H.264 MP4
+  /* BGM 미리 듣기 — 지금 '그리는 시간'에 맞춘 곡을 만들어 바로 재생 (다시 누르면 멈춤) */
+  var BGMP = null;
+  function previewBgm() {
+    var btn = $('as-bgm-play');
+    if (BGMP) { try { BGMP.src.stop(); BGMP.ctx.close(); } catch (e) {} BGMP = null; btn.textContent = '▶ 미리 듣기'; return; }
+    var sec = inputs().sec, D = 0.6 + sec + 2.5; btn.textContent = '만드는 중…';
+    makeBgm(D, 0.6, 0.6 + sec - 1 / FPS).then(function (buf) {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)(), src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination); src.start();
+      BGMP = { ctx: ctx, src: src }; btn.textContent = '■ 멈춤';
+      src.onended = function () { if (BGMP && BGMP.src === src) { try { ctx.close(); } catch (e) {} BGMP = null; btn.textContent = '▶ 미리 듣기'; } };
+    }, function () { btn.textContent = '▶ 미리 듣기'; });
+  }
+  /* 브라우저에 H.264 인코더(WebCodecs)가 없을 때: WebAssembly H.264 인코더(assets/vendor/h264-mp4-encoder — minih264)로 한 장씩 → 언제나 H.264
      (MediaRecorder 는 브라우저에 따라 VP9 를 MP4 에 담아 인스타그램 등에서 거부될 수 있어 쓰지 않음) */
   var HMEP = null;
   function loadHme() {
@@ -34838,7 +35094,7 @@ var WIF = (function () {
     });
     return HMEP;
   }
-  function wasmEncode(kind, job, total, tOf) {
+  function wasmEncode(kind, job, total, tOf) {   /* → MP4 바이트(Uint8Array, 영상만) */
     var L = LAY[kind];
     return loadHme().then(function (H) { return H.createH264MP4Encoder(); }).then(function (enc) {
       enc.width = L.W; enc.height = L.H; enc.frameRate = FPS; enc.quantizationParameter = 23; enc.speed = 8; enc.groupOfPictures = FPS * 2;
@@ -34850,16 +35106,14 @@ var WIF = (function () {
           try {
             if (job.cancel) { enc.delete(); vm.done(); return rej(new Error('cancel')); }
             var until = Math.min(total, i + 3);
-            for (; i < until; i++) { vm.frame(tOf(i)); enc.addFrameRgba(vm.ctx.getImageData(0, 0, L.W, L.H).data); }
+            for (; i < until; i++) { vm.frame(tOf(i), i ? 1 / FPS : 0); enc.addFrameRgba(vm.ctx.getImageData(0, 0, L.W, L.H).data); }
             vstat('영상 만드는 중 ' + Math.round(i / total * 100) + '% (이 브라우저는 내장 인코더로 만들어 조금 걸립니다) <button type="button" class="as-vx" id="as-vx">취소</button>', true);
             if (i < total) { setTimeout(step, 0); return; }
             enc.finalize();
             var data = enc.FS.readFile(enc.outputFilename);
             try { enc.FS.unlink(enc.outputFilename); } catch (e) {}
             enc.delete(); vm.done();
-            var blob = new Blob([data], { type: 'video/mp4' });
-            save(blob, fname(kind, 'mp4'));
-            res({ blob: blob, frames: total, codec: 'h264(wasm)', w: L.W, h: L.H, how: 'wasm' });
+            res(data);
           } catch (e) { try { enc.delete(); } catch (x) {} vm.done(); rej(e); }
         }
         step();
@@ -34903,6 +35157,9 @@ var WIF = (function () {
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && S.full) closeFull(); });
     document.addEventListener('fullscreenchange', function () { if (!document.fullscreenElement && S.full && S.full.fs) closeFull(); if (document.fullscreenElement && S.full) S.full.fs = true; });
     ['as-vid-h', 'as-vid-v'].forEach(function (id) { $(id).addEventListener('click', function () { makeVideo(this.getAttribute('data-r')); }); });
+    $('as-qa').addEventListener('click', function (e) { var b = e.target.closest('[data-qa]'); if (b) addKey(b.getAttribute('data-qa')); });
+    $('as-bgm-play').addEventListener('click', previewBgm);
+    $('as-bgm').addEventListener('change', function () { store('bgm', this.checked); });
     $('as-chips').addEventListener('click', function (e) {
       var b = e.target.closest('[data-rm]'); if (!b) return;
       var key = b.getAttribute('data-rm');
@@ -34927,7 +35184,7 @@ var WIF = (function () {
       S.W = r[0]; S.M = r[1];
       if (!S.W || !S.W.assets) throw new Error('nodata');
       fillYears(); if (!S.bound) { S.bound = true; bind(); }
-      var cfg = store('cfg');
+      var cfg = store('cfg2');   /* cfg2: 기본 자산을 코스피·S&P 500 으로 바꾼 뒤의 저장값 (예전 'cfg' 10개 선택은 쓰지 않음) */
       var keep = cfg && cfg.sel ? cfg.sel.filter(function (k) { return k.indexOf(':') < 0 && (k === 'M2' || k === 'CPI' || wifAsset(k)); }) : null;
       S.sel = keep && keep.length ? keep : DEF.filter(function (k) { return k === 'M2' || k === 'CPI' ? !!S.M : !!wifAsset(k); });
       S.sel.forEach(color);
@@ -34939,6 +35196,7 @@ var WIF = (function () {
       if (cfg && typeof cfg.div === 'boolean') $('as-div').checked = cfg.div;
       if (cfg && typeof cfg.log === 'boolean') $('as-log').checked = cfg.log;
       if (cfg && typeof cfg.pre === 'boolean') $('as-pre').checked = cfg.pre;
+      var bg = store('bgm'); if (typeof bg === 'boolean') $('as-bgm').checked = bg;
       if (cfg && cfg.y) { $('as-y').value = cfg.y; $('as-m').value = cfg.m; } else setStart(Math.max(earliest(), lastMonth() - 120));
       chips();
       $('as-src').innerHTML = '자료: 네이버 금융·Yahoo Finance 월봉(매일 적립은 일봉) · 국토교통부 실거래가(아파트 중위가격) · 한국은행 ECOS(M2·소비자물가·환율·KB 아파트지수)' +
@@ -37115,7 +37373,31 @@ var YE = (function () {
   function adminItem(a) {   /* [ADMIN] 관리자 계정이면 '내 저장함' 위에 '관리자 기능' (누르면 관리자 전용 화면 목록이 펼쳐짐) */
     if (!(a && a.user && a.user.admin === true) || !window.dcAdmin) return '';
     return '<button type="button" class="lang-opt dca-adm-btn" role="menuitem" data-act="admin" aria-expanded="false"><span class="lang-name">관리자 기능</span><span class="dca-adm-ar" aria-hidden="true">▸</span></button>' +
-      '<div class="dca-adm" id="dca-adm" hidden>' + window.dcAdmin.LINKS.map(function (l) { return '<a class="lang-opt" role="menuitem" href="/' + l[0] + '"><span class="lang-name">' + esc(l[1]) + '</span></a>'; }).join('') + '</div>';
+      '<div class="dca-adm" id="dca-adm" hidden>' + window.dcAdmin.LINKS.map(function (l) { return '<a class="lang-opt" role="menuitem" href="/' + l[0] + '"><span class="lang-name">' + esc(l[1]) + '</span></a>'; }).join('') +
+      '<button type="button" class="lang-opt" role="menuitem" data-act="members"><span class="lang-name">회원 명단</span></button></div>';
+  }
+  /* [ADMIN] 회원 명단 — Worker GET /auth/admin/users (관리자만 · 닉네임·로그인 수단·가입·최근 로그인·저장함 수·계정 기록 종류) */
+  function members() {
+    var el = $('dc-members');
+    if (!el) {
+      el = document.createElement('div'); el.id = 'dc-members'; el.className = 'dcl-ov dcm-ov'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', '회원 명단');
+      document.body.appendChild(el);
+      el.addEventListener('click', function (e) { if (e.target === el || e.target.closest('.dcl-x')) el.classList.remove('open'); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') el.classList.remove('open'); });
+    }
+    var head = '<div class="dcl-box dcm-box"><button type="button" class="dcl-x" aria-label="닫기">✕</button><h2 class="dcl-h">회원 명단</h2>';
+    el.innerHTML = head + '<p class="dcl-p">불러오는 중…</p></div>'; el.classList.add('open');
+    var KEY = { muhan: '무한매수법', vr: '밸류리밸런싱', r72: '72루틴' };
+    function day(t) { if (!t) return '—'; var d = new Date(t * 1000 + 9 * 3600e3); return d.toISOString().slice(0, 16).replace('T', ' '); }
+    api('GET', '/auth/admin/users').then(function (j) {
+      var us = j.users || [];
+      el.innerHTML = head + '<p class="dcl-p">모두 <b>' + us.length + '명</b> · 시각은 한국 시간 · 이메일·전화번호는 받지 않아 없음</p>' +
+        '<div class="dcm-scroll"><table class="dcm-tbl"><thead><tr><th>번호</th><th>닉네임</th><th>로그인</th><th>가입</th><th>최근 로그인</th><th>저장함</th><th>계정 기록</th></tr></thead><tbody>' +
+        us.map(function (u) {
+          return '<tr><td>' + u.id + '</td><td class="dcm-n">' + esc(u.nick || '') + (u.admin ? ' <em>관리자</em>' : '') + '</td><td>' + esc(NAME[u.provider] || u.provider) + '</td><td>' + day(u.created) + '</td><td>' + day(u.last) +
+            '</td><td>' + (u.saves || 0) + '</td><td>' + esc((u.udata || []).map(function (k) { return KEY[k] || k; }).join(', ') || '—') + '</td></tr>';
+        }).join('') + '</tbody></table></div></div>';
+    }).catch(function (e) { el.innerHTML = head + '<p class="dcl-p">' + (e.status === 403 ? '관리자만 볼 수 있습니다.' : e.status === 401 ? '다시 로그인해 주세요.' : '회원 명단을 불러오지 못했습니다.') + '</p></div>'; });
   }
   function paint() {
     var w = $('dc-auth'); if (!w) return;
@@ -37168,6 +37450,7 @@ var YE = (function () {
     if (me && menu) { var o = !menu.classList.contains('open'); menu.classList.toggle('open', o); me.setAttribute('aria-expanded', o); return; }
     var ab = e.target.closest('[data-act="admin"]'), ad = $('dca-adm');
     if (ab && ad) { ad.hidden = !ad.hidden; ab.setAttribute('aria-expanded', String(!ad.hidden)); ab.classList.toggle('open', !ad.hidden); return; }
+    if (e.target.closest('[data-act="members"]')) { if (menu) menu.classList.remove('open'); members(); return; }
     if (e.target.closest('[data-act="logout"]')) { setAuth(null); paint(); toast('로그아웃했습니다'); return; }
     if (menu && !e.target.closest('#dc-auth')) { menu.classList.remove('open'); if ($('dca-me')) $('dca-me').setAttribute('aria-expanded', 'false'); }
   });

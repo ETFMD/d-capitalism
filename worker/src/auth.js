@@ -146,6 +146,13 @@ export async function auth(req, env, url, json) {
     const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM saves WHERE uid = ?').bind(u.id).first();
     return json({ user: pub(u), saves: c ? c.n : 0, max: MAX_SAVES });
   }
+  if (path === '/auth/admin/users' && req.method === 'GET') {    /* 관리자 기능 '회원 명단' — 관리자만 · 이메일·전화번호는 원래 없음 (닉네임·로그인 수단·가입·최근 로그인·저장함 수·계정 자료 키) */
+    if (!isAdmin(u)) return json({ error: 'admin only' }, 403);
+    const r = await env.DB.prepare('SELECT u.id, u.provider, u.nick, u.created, u.last, u.terms_ver, (SELECT COUNT(*) FROM saves s WHERE s.uid = u.id) AS saves, ' +
+      "(SELECT GROUP_CONCAT(k, ',') FROM udata d WHERE d.uid = u.id) AS udata FROM users u ORDER BY u.id").all();
+    const users = (r.results || []).map((x) => ({ ...x, admin: isAdmin(x), udata: x.udata ? String(x.udata).split(',').sort() : [] }));
+    return json({ users, n: users.length, now });
+  }
   if (path === '/auth/logout-all' && req.method === 'POST') {   /* 모든 기기에서 로그아웃 (토큰 무효화) */
     await env.DB.prepare('UPDATE users SET ver = COALESCE(ver, 0) + 1 WHERE id = ?').bind(u.id).run();
     return json({ ok: true });
