@@ -1230,6 +1230,30 @@ def aspeed2_check(page, base, fail, local):
     ys = page.evaluate("() => { const vm = ASPEED.videoMaker('h'), M = Math.round(ASPEED.state().sim.o.sec * 30), out = []; for (let i = 0; i <= M + 75; i++) { vm.frame(Math.min(1, i / (M - 1)), i ? 1 / 30 : 0); out.push(vm.ymax()); } vm.done(); return out; }")   # 실제 영상과 같은 장 수
     jm = max(abs(ys[i] / ys[i - 1] - 1) for i in range(1, len(ys)))
     if jm > 0.10: fail('asset-speed', '영상 세로 축이 한 장에 %.1f%% 바뀜 (부드럽게 줄고 늘어야 함 · 미리 보기 0.8초 + 0.35초 완화면 한 장 10%% 안)' % (jm * 100))
+    # 영상 가장자리 여백(살짝 안쪽): 16:9 가장자리 5% · 9:16 좌우 64·위 128·아래 160 — 그 밖은 배경색뿐 · 선 끝 이름은 그래프 칸 안 · 순위는 9:16 도 8줄(5위 이상 늘 보임)
+    # · 그래프 선 끝 이름도 5개 이상 · 기간·조건 줄: '과거 수익률은 미래를 보장하지 않음' 이 잘리지 않고 들어감 · 점선 안내는 실제 상장 전 가상 구간이 있을 때만
+    for kind in ('h', 'v'):
+        r = page.evaluate("""(k) => { const out = []; for (const frac of [0.45, 1]) { const vm = ASPEED.videoMaker(k), S = vm.safe, W = vm.cv.width, H = vm.cv.height, M = Math.round(ASPEED.state().sim.o.sec * 30), n = Math.round((18 + M + 75) * frac);
+              for (let i = 0; i < n; i++) vm.frame(i < 18 ? 0 : Math.min(1, (i - 18) / (M - 1)), i ? 1 / 30 : 0);
+              const d = vm.ctx.getImageData(0, 0, W, H).data, bg = vm.bg.match(/[0-9a-f]{2}/gi).map(h => parseInt(h, 16)); let bad = 0;
+              for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { if (x >= S.x0 && x < S.x1 && y >= S.y0 && y < S.y1) continue; const o = (y * W + x) * 4; if (d[o] !== bg[0] || d[o + 1] !== bg[1] || d[o + 2] !== bg[2]) bad++; }
+              const lb = vm.labels(); out.push({ frac, bad, lbad: lb.lab.filter(b => b[0] < -0.5 || b[1] > lb.h + 0.5).length, S, n: lb.lab.length, ranks: vm.ranks, assets: ASPEED.state().sim.list.length, meta: vm.meta, pre: ASPEED.state().sim.list.some(x => x.preTo) }); vm.done(); } return out; }""", kind)
+        for x in r:
+            mt = ' / '.join(x['meta'])
+            if '과거 수익률은 미래를 보장하지 않음' not in mt or '세금·수수료 제외' not in mt:   # 잘리면(…) 여기서 걸림
+                fail('asset-speed', '영상 %s 기간·조건 줄에 경고 문구가 없거나 잘림: %s' % (kind, mt))
+            if ('점선 = 상장 전 가상' in mt) != bool(x['pre']):
+                fail('asset-speed', '영상 %s 점선 안내가 실제 상장 전 구간 유무(%s)와 다름: %s' % (kind, x['pre'], mt))
+            if x['ranks'] < min(5, x['assets']):
+                fail('asset-speed', '영상 %s 순위가 %d위까지만 보임 (자산 %d개 · 5위 이상 보여야 함)' % (kind, x['ranks'], x['assets']))
+            if x['n'] < min(5, x['assets']):
+                fail('asset-speed', '영상 %s 그래프 선 끝 이름이 %d개만 보임 (자산 %d개 · 5개 이상 보여야 함)' % (kind, x['n'], x['assets']))
+            if x['bad'] or x['lbad']:
+                fail('asset-speed', '영상 %s 안전 여백 이상 (장면 %d%%): 안전 영역 밖 그림 %d점 · 칸 밖 이름 %d개 · 안전 영역 %s' % (kind, x['frac'] * 100, x['bad'], x['lbad'], x['S']))
+        sf = r[0]['S']
+        want = {'h': (96, 60, 1824, 1020), 'v': (64, 128, 1016, 1760)}[kind]
+        if (sf['x0'], sf['y0'], sf['x1'], sf['y1']) != want:
+            fail('asset-speed', '영상 %s 안전 영역이 바뀜: %s (기대 %s)' % (kind, sf, want))
     # MP4 16:9 (2초 · 이 브라우저에 H.264 인코더가 없으면 내장 인코더) — 파일이 H.264 MP4 이고 프레임 수가 맞는지
     page.evaluate("() => { const s = document.getElementById('as-sec'); s.value = '2'; s.dispatchEvent(new Event('input', { bubbles: true })); }"); page.wait_for_timeout(600)
     try:
