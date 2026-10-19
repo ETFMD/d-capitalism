@@ -26,7 +26,7 @@
   python tests/run_regression.py --base https://d-capitalism.com/ --etf-audit   # ETF 차트 비교 실제 가격 점검만
 실패가 하나라도 있으면 종료 코드 1
 """
-import re, argparse, functools, http.server, json, os, shutil, socketserver, subprocess, sys, threading, time, urllib.parse, urllib.request
+import re, argparse, functools, http.server, json, os, shutil, socketserver, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
 
 from playwright.sync_api import sync_playwright
 
@@ -1481,6 +1481,159 @@ def etf_audit(page, base, fail):
     return n
 
 
+BOARD_OV_JS = OVERFLOW_JS
+
+
+def board_check(ctx, base, fail, local, attach):
+    """[COMMUNITY] 건의 게시판 /suggest/ — 실제 Worker 코드(worker/src/*.js)를 node:sqlite 로 띄운 가짜 서버(tests/worker_board_test.mjs --serve)에
+    이 검사 탭의 workers.dev 요청을 모두 보냄 → 실제 회원 자료·게시판·방문자 수는 건드리지 않음 (실사이트 검사도 같음)
+    · 손님 목록 · 회원 글쓰기(바로 전 화면 미리 고름·임시 저장·검사 문구·HTML 글자 그대로·주소 링크·기기 정보) · 댓글 · 공감(다른 회원) · 비밀글 · 관리자(상태·운영자 답변·답변 대기)
+    · 휴대폰 폭에서 목록·글·글쓰기 화면 넘침 없음 · 실사이트는 먼저 진짜 Worker 로 목록이 열리는지(D1 표 배포 확인)"""
+    if not shutil.which('node'):
+        fail('suggest', 'node 가 없어 건의 게시판 화면 검사를 못 함'); return
+    if not local:   # 진짜 Worker(배포본)로 손님 목록이 열리는지 — 읽기만
+        pg = ctx.new_page(); errs0 = []
+        pg.on('pageerror', lambda e: errs0.append(str(e)))
+        try:
+            pg.goto(base + 'suggest/', wait_until='load', timeout=60000)
+            pg.wait_for_function("document.querySelector('#sg-items .sg-list, #sg-root .sg-empty b') && !document.querySelector('#sg-items .sg-loading')", timeout=30000)
+            t = pg.evaluate("document.getElementById('sg-root').innerText")
+            if '불러오지 못했습니다' in t: fail('suggest', '실제 Worker 로 게시판 목록을 불러오지 못함: ' + t[:120])
+            if errs0: fail('suggest', '스크립트 오류(실제 Worker): ' + errs0[0][:160])
+        except Exception as e:
+            fail('suggest', '실제 Worker 목록 확인 오류: ' + str(e)[:160])
+        finally:
+            pg.close()
+    origin = re.match(r'^(https?://[^/]+)', base).group(1)
+    node = subprocess.Popen(['node', os.path.join(ROOT, 'tests', 'worker_board_test.mjs'), '--serve', '0', origin], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        line = node.stdout.readline()
+        if not line.startswith('{'):
+            fail('suggest', '게시판 가짜 서버를 못 띄움 (node:sqlite — Node 22.13+ 필요): ' + (line + node.stderr.read(300))[:200]); return
+        info = json.loads(line); npt = info['port']; TK = info['tokens']
+        calls = []
+
+        def wk(route):
+            q = route.request
+            path = re.sub(r'^https?://[^/]+', '', q.url)
+            h = {k: v for k, v in q.headers.items() if k.lower() in ('origin', 'authorization', 'content-type', 'user-agent')}
+            body = q.post_data_buffer if q.method not in ('GET', 'HEAD', 'OPTIONS') else None
+            rq = urllib.request.Request('http://127.0.0.1:%d' % npt + path, data=body, method=q.method, headers=h)
+            try:
+                r = urllib.request.urlopen(rq, timeout=20); st, hd, bd = r.status, dict(r.headers), r.read()
+            except urllib.error.HTTPError as e:
+                st, hd, bd = e.code, dict(e.headers), e.read()
+            calls.append((q.method, path.split('?')[0], st))
+            route.fulfill(status=st, headers=hd, body=bd)
+        pg = ctx.new_page(); perr = []
+        pg.on('pageerror', lambda e: perr.append(str(e)))
+        pg.on('console', lambda m: perr.append(m.text) if m.type == 'error' and not m.text.startswith('Failed to load resource') else None)   # 손님 비밀글 403 처럼 일부러 받는 오류 응답의 브라우저 알림은 뺌(응답 코드는 calls 로 따로 확인)
+        pg.route(re.compile(r'^https://[^/]*workers\.dev/.*'), wk)
+
+        def login(who, uid, nick, admin=False):
+            pg.evaluate("a => localStorage.setItem('dc_auth', JSON.stringify({ token: a[0], exp: 4102444800, user: { id: a[1], nick: a[2], admin: a[3] } }))", [TK[who], uid, nick, admin])
+
+        def ready(sel, ms=20000):
+            pg.wait_for_selector(sel, timeout=ms)
+            pg.wait_for_timeout(200)
+
+        def wide(where):
+            for w in (320, 390):
+                pg.set_viewport_size({'width': w, 'height': 900}); pg.wait_for_timeout(150)
+                r = pg.evaluate(BOARD_OV_JS)
+                if r['sw'] > r['vw'] + 1 or r['out']: fail('suggest', '%s %dpx 넘침 (문서 %d) %s' % (where, w, r['sw'], r['out'][:3]))
+            pg.set_viewport_size({'width': 1280, 'height': 900})
+        pg.set_viewport_size({'width': 1280, 'height': 900})
+        pg.goto(base + 'suggest/', wait_until='load'); pg.evaluate("() => { localStorage.removeItem('dc_auth'); localStorage.removeItem('dc_sg_draft'); }")
+        # ── 손님 목록
+        pg.goto(base + 'suggest/', wait_until='load'); ready('#sg-items .sg-empty')
+        g = pg.evaluate("""() => ({ empty: document.querySelector('#sg-items .sg-empty').innerText, write: document.getElementById('sg-write').innerText,
+            stats: document.querySelectorAll('#sg-stats .sg-stat').length, cats: document.querySelectorAll('#sg-cats .sg-chip').length,
+            nav: [...document.querySelectorAll('#mainNav > .tab-group')].map(x => x.id).slice(-2).join(','), drop: !!document.querySelector('#grp-community-drop #drop-suggest'),
+            act: document.getElementById('grp-community-btn').classList.contains('has-active'), save: !!document.getElementById('dca-save') })""")
+        if '아직 올라온 글이 없습니다' not in g['empty']: fail('suggest', '빈 목록 안내 이상: ' + g['empty'][:60])
+        if g['write'].strip() != '로그인하고 글쓰기': fail('suggest', '손님 글쓰기 단추 글자 이상: ' + g['write'])
+        if g['stats'] != 4 or g['cats'] != 4: fail('suggest', '처리 상태 %d개·분류 %d개 (기대 4·4 — 손님은 내 글 없음)' % (g['stats'], g['cats']))
+        if g['nav'] != 'grp-passive,grp-community' or not g['drop'] or not g['act']: fail('suggest', "상단 메뉴 '커뮤니티'(불로소득 바로 뒤 · 건의 게시판 · 선택 표시) 이상: %s" % g)
+        if g['save']: fail('suggest', "게시판에 '내 저장함에 저장' 단추가 붙음")
+        wide('손님 목록')
+        # ── 회원 5(홍길동): 글쓰기 — 바로 전 화면(연봉 계산기) 미리 고름 · 검사 문구 · 임시 저장
+        login('a', 5, '홍길동')
+        pg.goto(base + 'suggest/?w=new', wait_until='load', referer=base + 'salary/'); ready('#sg-wform')
+        if pg.evaluate("document.getElementById('sg-page').value") != 'salary': fail('suggest', "글쓰기 '관련 화면'에 바로 전 화면(salary)이 미리 골라지지 않음: %r" % pg.evaluate("document.getElementById('sg-page').value"))
+        wide('글쓰기')
+        pg.click('#sg-wsend'); pg.wait_for_timeout(200)
+        if '분류를 골라' not in pg.evaluate("document.getElementById('sg-wmsg').innerText"): fail('suggest', '분류 없이 올리기 → 안내가 없음')
+        TITLE = '<img src=x onerror=window.__xss=1>연봉 계산기 0원'
+        pg.click('[data-wcat="bug"]'); pg.fill('#sg-title', TITLE); pg.fill('#sg-body', '연봉 5,000만원을 넣으면\n실수령액이 0원입니다. https://d-capitalism.com/salary/ 참고')
+        pg.wait_for_timeout(500)
+        d = pg.evaluate("JSON.parse(localStorage.getItem('dc_sg_draft') || 'null')")
+        if not d or d.get('title') != TITLE or d.get('cat') != 'bug': fail('suggest', '쓰던 글 임시 저장이 안 됨: %r' % d)
+        pg.reload(wait_until='load'); ready('#sg-wform')
+        if pg.evaluate("document.getElementById('sg-title').value") != TITLE: fail('suggest', '새로 고친 뒤 쓰던 글이 돌아오지 않음')
+        pg.click('#sg-wsend'); pg.wait_for_function("/[?&]p=\\d+/.test(location.search) && document.querySelector('#sg-pv')", timeout=20000); pg.wait_for_timeout(300)
+        v = pg.evaluate("""() => ({ url: location.search, ttl: document.querySelector('.sg-v-ttl').textContent, img: document.querySelectorAll('#sg-pv img').length, xss: !!window.__xss,
+            a: [...document.querySelectorAll('#sg-pv .sg-body a')].map(a => [a.getAttribute('href'), a.rel, a.target]), info: !!document.querySelector('#sg-pv .sg-info'),
+            page: (document.querySelector('.sg-v-meta a') || {}).textContent || '', vote: document.getElementById('sg-vote').disabled, draft: localStorage.getItem('dc_sg_draft') })""")
+        if v['ttl'] != TITLE or v['img'] or v['xss']: fail('suggest', '제목의 HTML 이 글자 그대로가 아님(스크립트 끼워 넣기 위험): %r' % v)
+        if v['a'] != [['https://d-capitalism.com/salary/', 'nofollow ugc noopener noreferrer', '_blank']]: fail('suggest', '본문 주소 링크 이상: %r' % v['a'])
+        if not v['info'] or '연봉' not in v['page'] or not v['vote'] or v['draft']: fail('suggest', '글 보기(기기 정보·관련 화면·내 글 공감 막음·임시 저장 지움) 이상: %r' % v)
+        pid = re.search(r'p=(\d+)', v['url']).group(1)
+        pg.fill('#sg-cbody', '크롬에서도 같습니다'); pg.click('#sg-csend')
+        pg.wait_for_function("document.querySelectorAll('.sg-cmt').length === 1", timeout=20000)
+        wide('글 보기')
+        pg.click('[data-act="list"]'); ready('#sg-items .sg-item')
+        L = pg.evaluate("""() => ({ n: document.querySelectorAll('#sg-items .sg-item').length, t: document.querySelector('#sg-items .sg-item').innerText,
+            open: document.querySelector('[data-st="open"] b').textContent, mine: !!document.querySelector('[data-mine]'), w: document.getElementById('sg-write').innerText.trim() })""")
+        if L['n'] != 1 or '[1]' not in L['t'] or '내 글' not in L['t'] or '홍*동' not in L['t'] or L['open'] != '1' or not L['mine'] or L['w'] != '글쓰기':
+            fail('suggest', '회원 목록 이상(댓글 수·내 글·가린 닉네임·접수 1): %r' % L)
+        wide('회원 목록')
+        # ── 회원 6(김철수): 공감 · 비밀글
+        login('b', 6, '김철수')
+        pg.goto(base + 'suggest/?p=' + pid, wait_until='load'); ready('#sg-vote')
+        if pg.evaluate("!!document.querySelector('#sg-pv .sg-info')"): fail('suggest', '다른 회원에게 기기 정보가 보임')
+        pg.click('#sg-vote'); pg.wait_for_timeout(1200)
+        pg.reload(wait_until='load'); ready('#sg-vote')
+        r = pg.evaluate("[document.getElementById('sg-vote').getAttribute('aria-pressed'), document.getElementById('sg-vn').textContent]")
+        if r != ['true', '1']: fail('suggest', '공감 누른 뒤 다시 열면 공감 1·눌림 표시 기대: %r' % r)
+        pg.goto(base + 'suggest/?w=new', wait_until='load'); ready('#sg-wform')
+        pg.click('[data-wcat="etc"]'); pg.fill('#sg-title', '내 계정 기록 문의'); pg.fill('#sg-body', '비밀 내용입니다 12345'); pg.check('#sg-secret')
+        pg.click('#sg-wsend'); pg.wait_for_function("document.querySelector('#sg-pv')", timeout=20000)
+        sid = re.search(r'p=(\d+)', pg.evaluate('location.search')).group(1)
+        # ── 손님: 비밀글은 목록에서 제목 숨김 · 열면 안내
+        pg.evaluate("localStorage.removeItem('dc_auth')")
+        pg.goto(base + 'suggest/', wait_until='load'); ready('#sg-items .sg-item')
+        t = pg.evaluate("document.getElementById('sg-items').innerText")
+        if '비밀글입니다' not in t or '내 계정 기록 문의' in t: fail('suggest', '손님 목록에 비밀글 제목이 보임')
+        pg.goto(base + 'suggest/?p=' + sid, wait_until='load'); ready('#sg-root .sg-empty b')
+        if '글쓴이와 운영자만' not in pg.evaluate("document.querySelector('#sg-root .sg-empty b').textContent"): fail('suggest', '손님이 비밀글을 열 때 안내 이상')
+        # ── 관리자: 처리 상태 · 운영자 답변 · 답변 대기
+        login('admin', 2, '현경흠', True)
+        pg.goto(base + 'suggest/?p=' + pid, wait_until='load'); ready('#sg-st')
+        pg.evaluate("() => { const s = document.getElementById('sg-st'); s.value = 'done'; s.dispatchEvent(new Event('change', { bubbles: true })); }")
+        pg.wait_for_function("document.querySelector('#sg-pv .sg-tag.s-done')", timeout=20000)
+        pg.fill('#sg-cbody', '확인했습니다. 고쳐서 반영했어요.'); pg.click('#sg-csend')
+        pg.wait_for_function("document.querySelectorAll('.sg-cmt.admin').length === 1", timeout=20000)
+        a = pg.evaluate("""() => ({ tag: document.querySelector('.sg-cmt.admin .sg-tag.staff').textContent, nick: document.querySelector('.sg-v-meta').innerText })""")
+        if a['tag'] != '운영자 답변' or '홍길동' not in a['nick'] or '회원 5' not in a['nick']: fail('suggest', '관리자 글 보기(운영자 답변·전체 닉네임·회원 번호) 이상: %r' % a)
+        pg.click('[data-act="list"]'); ready('#sg-items .sg-item')
+        a = pg.evaluate("""() => ({ wait: (document.querySelector('[data-wait] em') || {}).textContent, done: document.querySelector('[data-st="done"] b').textContent,
+            ans: document.getElementById('sg-items').innerText.includes('운영자 답변') })""")
+        if a != {'wait': '1', 'done': '1', 'ans': True}: fail('suggest', '관리자 목록(답변 대기 1 = 비밀글 · 완료 1 · 운영자 답변 표시) 이상: %r' % a)
+        if perr: fail('suggest', '게시판 화면 스크립트 오류: ' + perr[0][:160])
+        bad = [c for c in calls if c[2] >= 400 and not (c[0] == 'GET' and c[1] == '/board/' + sid and c[2] == 403)]
+        if bad: fail('suggest', '게시판 서버 오류 응답(손님 비밀글 403 말고): %r' % bad[:4])
+        print('    건의 게시판: %s' % ' → '.join('%s %s %d' % c for c in calls if c[1].startswith('/board'))[:300], flush=True)
+    except Exception as e:
+        fail('suggest', '건의 게시판 화면 검사 오류: %s' % str(e)[:200])
+    finally:
+        try:
+            pg.evaluate("() => { localStorage.removeItem('dc_auth'); localStorage.removeItem('dc_sg_draft'); }"); pg.close()
+        except Exception:
+            pass
+        node.terminate()
+
+
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -1851,6 +2004,13 @@ def main():
         if _r.returncode != 0:
             fail('worker', 'SNS 자동 게시(/sns) 검사 실패: ' + (' | '.join(l.strip() for l in _r.stdout.splitlines() if '✗' in l) or _r.stderr.strip())[:300])
 
+    # Worker 건의 게시판(/board · 읽기·쓰기·고치기·지우기·공감·댓글·처리 상태·비밀글·닉네임 가림·횟수 제한·탈퇴 삭제) 단독 확인 — 진짜 SQLite(node:sqlite)
+    if not a.etf_audit and shutil.which('node'):
+        _r = subprocess.run(['node', os.path.join(ROOT, 'tests', 'worker_board_test.mjs')], capture_output=True, text=True, timeout=120)
+        print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'worker_board_test: 출력 없음', flush=True)
+        if _r.returncode != 0:
+            fail('worker', '건의 게시판(/board) 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stdout.strip()[-200:] or _r.stderr.strip())[:300])
+
     # 외부 광고·방문 분석 서버(일시 오류가 잦고 사이트 기능과 무관) — 실패해도 사이트 오류로 보지 않음
     THIRD = ('clarity.ms', 'bing.com', 'naver.com', 'naver.net', 'pstatic.net', 'googlesyndication', 'doubleclick',
              'google-analytics', 'googletagmanager', 'adtrafficquality', 'googleadservices', 'gstatic.com', 'kakao', 'withgoogle.com')
@@ -2023,23 +2183,39 @@ def main():
                 if d in ('index-investing', 'leveraged-etf', 'reading-earnings', 'market-cap-world') and not r['auto']:
                     fail('learn/' + d, '자동 갱신 기준일 표시(.meta .auto) 없음')
         # 상단 메뉴 '투자 공부' · 좁은 화면에서도 메뉴 한 줄에 다 들어가는지 · 영어판에는 없음
+        # 메뉴 9개(홈·투자 공부·영역 6개·커뮤니티)가 가로로 넘치지 않는지 — 320~1300px 를 10px 마다 + 줄바꿈 기준 바로 위·아래 (460px 아래는 두 줄)
+        NAV_W = sorted(set(list(range(320, 1301, 10)) + [361, 461, 601, 871, 1141, 1251]))
+        NAV_JS = """() => { const n = document.getElementById('mainNav'), a = document.getElementById('grp-learn-btn'), c = document.getElementById('grp-community-btn');
+                const nr = n.getBoundingClientRect(), cr = c ? c.getBoundingClientRect() : null, tops = new Set([...n.querySelectorAll(':scope > .tab-group')].map(g => Math.round(g.getBoundingClientRect().top)));
+                return { sw: n.scrollWidth, cw: n.clientWidth, href: a ? a.getAttribute('href') : null, rows: tops.size,
+                         cin: !!cr && cr.width > 0 && cr.left >= nr.left - 1 && cr.right <= nr.right + 1,
+                         order: [...n.querySelectorAll(':scope > .tab-group')].map(g => g.id).slice(0, 3).join(',') }; }"""
         page.goto(base + 'compound/', wait_until='load'); page.wait_for_timeout(300)
-        for w in (320, 360, 390, 768, 1440):
-            page.set_viewport_size({'width': w, 'height': 900}); page.wait_for_timeout(120)
-            r = page.evaluate("""() => { const n = document.getElementById('mainNav'), a = document.getElementById('grp-learn-btn');
-                return { sw: n.scrollWidth, cw: n.clientWidth, href: a ? a.getAttribute('href') : null,
-                         order: [...n.querySelectorAll(':scope > .tab-group')].map(g => g.id).slice(0, 3).join(',') }; }""")
-            if r['order'] != 'grp-home,grp-learn,grp-me': fail('compound/', "상단 메뉴 순서 이상 (홈 → 투자 공부 → 내 위치 기대): " + r['order'])
-            if r['href'] != 'learn/': fail('compound/', "상단 메뉴 '투자 공부' 링크 이상: %s" % r['href'])
-            if w >= 360 and r['sw'] > r['cw'] + 1: fail('compound/', '%dpx 상단 메뉴가 한 줄에 안 들어감 (%d > %d)' % (w, r['sw'], r['cw']))
+        bad = []
+        for w in NAV_W:
+            page.set_viewport_size({'width': w, 'height': 900}); page.wait_for_timeout(60)
+            r = page.evaluate(NAV_JS)
+            if w in (320, 1440) and r['order'] != 'grp-home,grp-learn,grp-me': fail('compound/', "상단 메뉴 순서 이상 (홈 → 투자 공부 → 내 위치 기대): " + r['order'])
+            if w == 320 and r['href'] != 'learn/': fail('compound/', "상단 메뉴 '투자 공부' 링크 이상: %s" % r['href'])
+            if r['sw'] > r['cw'] + 1 or not r['cin'] or r['rows'] != (2 if w <= 460 else 1): bad.append('%d(%d>%d·커뮤니티 %s·%d줄)' % (w, r['sw'], r['cw'], r['cin'], r['rows']))
+        if bad: fail('compound/', '상단 메뉴가 넘치거나 줄 수가 다름 (460px 이하 2줄 · 그 위 1줄 기대): ' + ', '.join(bad[:8]))
+        if en:   # 영어판(메뉴 8개 · 750px 아래 두 줄) — 360px 이상 넘침 없음
+            page.goto(base + 'en/' + en[0] + '/', wait_until='load'); page.wait_for_timeout(300)
+            bad = []
+            for w in [x for x in NAV_W if x >= 360]:
+                page.set_viewport_size({'width': w, 'height': 900}); page.wait_for_timeout(60)
+                r = page.evaluate(NAV_JS)
+                if r['sw'] > r['cw'] + 1 or not r['cin']: bad.append('%d(%d>%d)' % (w, r['sw'], r['cw']))
+            if bad: fail('en/' + en[0], '영어판 상단 메뉴 넘침: ' + ', '.join(bad[:8]))
+            page.goto(base + 'compound/', wait_until='load'); page.wait_for_timeout(300)
         page.set_viewport_size({'width': 1440, 'height': 900})
         r = page.evaluate("""() => ({ cols: [...document.querySelectorAll('.sf-map .sf-cols > .sf-col')].length,
             first: ((document.querySelector('.sf-map .sf-cols > .sf-col .sf-h') || {}).textContent || '').trim(),
             band: document.querySelectorAll('.sf-map .sf-band .sf-grp a').length })""")
         n_idx = sum(1 for x in routes if x['group'] == 'invest' and x['tab'] in IDX_KEYS)
         if r['first'] != '투자 공부': fail('compound/', "하단 사이트맵 첫 열이 '투자 공부'가 아님: " + r['first'])
-        if r['cols'] != 7 or r['band'] != n_idx:
-            fail('compound/', '하단 사이트맵 열 %d개(기대 7) · 지수 묶음 %d개(기대 %d)' % (r['cols'], r['band'], n_idx))
+        if r['cols'] != 8 or r['band'] != n_idx:   # 투자 공부 + 영역 6개 + 커뮤니티
+            fail('compound/', '하단 사이트맵 열 %d개(기대 8) · 지수 묶음 %d개(기대 %d)' % (r['cols'], r['band'], n_idx))
         if en:
             page.goto(base + 'en/' + en[0] + '/', wait_until='load'); page.wait_for_timeout(200)
             if page.evaluate("!!document.getElementById('grp-learn')"): fail('en/' + en[0], "영어판 상단 메뉴에 '투자 공부'가 남음")
@@ -2817,6 +2993,10 @@ def main():
         if 'earnings-calendar/' in paths:
             print('[5] 실적발표 캘린더', flush=True)
             earn_check(page, base, fail, errs, ignorable)
+        # [COMMUNITY] 건의 게시판 — 실제 Worker 코드를 가짜 서버로 띄워 손님·회원·관리자 흐름 (실제 계정·게시판 안 건드림)
+        if 'suggest/' in paths:
+            print('[6] 건의 게시판', flush=True)
+            board_check(ctx, base, fail, local, attach)
         # 영어판 무한매수법 — 가이드북·3-6·자동 숫자가 영어로, 일부러 남긴 원어(translate=no) 밖에는 한글 없음
         if os.path.isdir(os.path.join(ROOT, 'en', 'muhan')):
             errs.clear()

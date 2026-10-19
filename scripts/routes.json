@@ -698,6 +698,14 @@
       "title": "TIGER 반도체TOP10커버드콜액티브 분배금 시뮬레이터 (0177R0)",
       "short": "TIGER 반도체TOP10커버드콜액티브 분배 시뮬레이터",
       "desc": "TIGER 반도체TOP10커버드콜액티브(0177R0)의 월 분배금·세후 수령액을 계산하고 코스피와 비교합니다."
+    },
+    {
+      "path": "suggest",
+      "tab": "suggest",
+      "group": "community",
+      "title": "건의 게시판 — 버그 신고·기능 제안 | 회원 커뮤니티",
+      "short": "건의 게시판",
+      "desc": "사이트를 쓰다가 만난 오류와 바라는 기능을 남기면 운영자가 직접 확인하고 처리 상태와 답변으로 알려 드립니다."
     }
   ],
   "brand_en": "Decoding Capitalism"

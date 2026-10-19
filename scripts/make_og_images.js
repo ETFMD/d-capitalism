@@ -5,8 +5,8 @@ const fs = require('fs'), path = require('path');
 const { chromium } = require(process.env.PW_CORE || 'playwright-core');
 const ROOT = path.join(__dirname, '..');
 const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts/routes.json'), 'utf8'));
-const GROUP = { me: '내 위치', pay: '노동자', invest: '투자', realty: '부동산', capital: '자본가', passive: '불로소득' };   /* 상단 메뉴 영역 (build_pages.py 의 AREA 와 같게) */
-const TOOLS = cfg.routes.filter(r => !r.hub).length;
+const GROUP = { me: '내 위치', pay: '노동자', invest: '투자', realty: '부동산', capital: '자본가', passive: '불로소득', community: '커뮤니티' };   /* 상단 메뉴 영역 (build_pages.py 의 AREA 와 같게) */
+const TOOLS = cfg.routes.filter(r => !r.hub && r.group !== 'community').length;   /* 건의 게시판(커뮤니티)은 계산 도구가 아님 */
 const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 /* 로고: assets/favicon.svg 와 같은 계단 마크 */
 const MARK = (n) => `<svg width="${n}" height="${n}" viewBox="0 0 30 30"><rect width="30" height="30" rx="8" fill="#3182f6"/><path d="M7.5 22h4.5v-4.5h4.5V13h4.5V8.5" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M17.8 8.5h3.2v3.2" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;

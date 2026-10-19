@@ -24611,7 +24611,7 @@ var YE = (function () {
   }
   function saveBtn() {
     var key = pageKey(), pg = activePage(), old = document.getElementById('dca-save');
-    if (!key || !pg || key === 'saved' || key === 'muhan' || key === 'vr' || key === '72' || !PROV || !Object.keys(PROV).length) { if (old) old.remove(); return; }   /* 무한매수법·밸류리밸런싱·72루틴은 기록 전체가 계정에 자동 저장 */
+    if (!key || !pg || key === 'saved' || key === 'muhan' || key === 'vr' || key === '72' || key === 'suggest' || !PROV || !Object.keys(PROV).length) { if (old) old.remove(); return; }   /* 무한매수법·밸류리밸런싱·72루틴은 기록 전체가 계정에 자동 저장 · 건의 게시판은 저장할 계산이 없음 */
     var host = pg.querySelector('.header-left'); if (!host) return;
     if (!old) { old = document.createElement('button'); old.type = 'button'; old.id = 'dca-save'; old.className = 'dca-save'; host.appendChild(old); }
     old.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 2h8a1 1 0 0 1 1 1v11l-5-3-5 3V3a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>' + (getAuth() ? '이 계산 내 저장함에 저장' : '로그인하고 이 계산 저장');
@@ -24664,4 +24664,420 @@ var YE = (function () {
   /* 탭 이동(pushState·뒤로가기) 후 새 화면에 저장 버튼 다시 달기 */
   (function () { var ps = history.pushState; history.pushState = function () { var r = ps.apply(this, arguments); setTimeout(saveBtn, 30); return r; }; window.addEventListener('popstate', function () { setTimeout(saveBtn, 30); }); })();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+
+/* ════════════════════════════════════════
+   [COMMUNITY] 건의 게시판 (/suggest/ · 상단 메뉴 '커뮤니티') — 서버: 방문자 카운터 Worker 의 /board (worker/src/board.js · D1)
+   · 보기 3가지 — 목록(처리 상태·분류·찾기·최신/공감순·내 글·답변 대기(관리자)·쪽) · 글(?p=번호) · 글쓰기(?w=new)·고치기(?w=번호)
+     주소가 바뀌어 뒤로 가기·링크 공유가 됨 (목록 거르기는 replaceState, 글·글쓰기 열기는 pushState)
+   · 읽기 누구나 · 쓰기·댓글·공감은 로그인 회원(window.dcAuth — [AUTH]) · 관리자 화면 요소는 서버 응답 viewer.admin 일 때만(서버가 매번 다시 확인)
+   · 남이 쓴 글자는 모두 esc() 로 글자 그대로 그림(HTML 로 해석 안 함) · http(s) 주소만 링크(nofollow) · 줄바꿈은 CSS pre-wrap
+   · 쓰던 새 글은 이 기기에만 임시 저장(localStorage 'dc_sg_draft' · 14일 · 올리면 지움) · 관련 화면은 상단 메뉴의 도구 목록(바로 전에 보던 도구를 미리 골라 둠)
+════════════════════════════════════════ */
+(function () {
+  var root = document.getElementById('sg-root');
+  if (!root) return;
+  var CAT = { bug: '버그 신고', feat: '기능 제안', etc: '기타 의견', notice: '공지' }, ST = { open: '접수', plan: '검토 중', done: '완료', hold: '보류' };
+  var LIM = { title: 80, body: 5000, cmt: 2000 }, DRAFT = 'dc_sg_draft', TITLE0 = document.title;
+  var S = { viewer: { login: false, admin: false }, list: null, post: null, cmts: [], loginOk: null, seq: 0, view: '', last: {}, wasLogin: null, readyP: null };
+  var IC = {
+    pen: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10.8 2.6l2.6 2.6L6 12.6l-3.3.7.7-3.3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>',
+    lock: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="vertical-align:-1px;margin-right:3px"><rect x="3" y="7" width="10" height="7.5" rx="1.6" stroke="currentColor" stroke-width="1.5"/><path d="M5.3 7V5.2a2.7 2.7 0 0 1 5.4 0V7" stroke="currentColor" stroke-width="1.5"/></svg>',
+    up: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 7.2V14H2.6V7.2zM5 7.2 7.8 2.2c1.3 0 2 .9 1.7 2.2L9 6.4h3.9c.9 0 1.5.8 1.3 1.6l-1.2 4.8c-.2.7-.8 1.2-1.5 1.2H5" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+    link: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6.6 9.4a2.6 2.6 0 0 0 3.7 0l2.4-2.4a2.6 2.6 0 0 0-3.7-3.7l-.9.9M9.4 6.6a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.9-.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    find: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.6" stroke="currentColor" stroke-width="1.5"/><path d="M10.4 10.4 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'
+  };
+  function $(id) { return document.getElementById(id); }
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function linkify(t) {                                             /* 글자 그대로 + http(s) 주소만 링크 */
+    var out = '', i = 0, re = /https?:\/\/[^\s<>"'`]+/g, m, u;
+    t = String(t == null ? '' : t);
+    while ((m = re.exec(t))) {
+      u = m[0].replace(/[).,!?;:\]'"]+$/, '');
+      if (u.length < 9) continue;
+      out += esc(t.slice(i, m.index)) + '<a href="' + esc(u) + '" target="_blank" rel="nofollow ugc noopener noreferrer">' + esc(u) + '</a>';
+      i = m.index + u.length; re.lastIndex = i;
+    }
+    return out + esc(t.slice(i));
+  }
+  function p2(n) { return (n < 10 ? '0' : '') + n; }
+  function kst(t) { var d = new Date(t * 1000 + 9 * 3600e3); return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate(), h: d.getUTCHours(), mi: d.getUTCMinutes() }; }
+  function when(t, full) {                                          /* 한국 시간 · 목록은 짧게(방금·N분 전·오늘 시각·날짜) */
+    if (!t) return '';
+    var a = kst(t), n = kst(Date.now() / 1000), sec = Date.now() / 1000 - t;
+    if (full) return a.y + '.' + p2(a.m) + '.' + p2(a.d) + ' ' + p2(a.h) + ':' + p2(a.mi);
+    if (sec < 60) return '방금';
+    if (sec < 3600) return Math.floor(sec / 60) + '분 전';
+    if (a.y === n.y && a.m === n.m && a.d === n.d) return p2(a.h) + ':' + p2(a.mi);
+    return (a.y === n.y ? '' : a.y + '.') + p2(a.m) + '.' + p2(a.d);
+  }
+  function toast(t) { if (window.dcAuth && window.dcAuth.toast) window.dcAuth.toast(t); }
+  function isLogin() { return !!(window.dcAuth && window.dcAuth.get()); }
+  function ready() {
+    if (!window.dcAuth) return Promise.reject(new Error('auth'));
+    if (!S.readyP) S.readyP = window.dcAuth.ready().then(function (ok) { S.loginOk = ok; return ok; }, function (e) { S.readyP = null; throw e; });
+    return S.readyP;
+  }
+  function api(m, p, b) { return ready().then(function () { return window.dcAuth.api(m, p, b); }); }
+  function login() {
+    if (S.loginOk === false) { toast('로그인 기능을 준비하고 있습니다. 잠시 뒤 다시 시도해 주세요'); return; }
+    if (window.dcAuth) window.dcAuth.open();
+  }
+  function errText(e) {
+    var s = e && e.status, b = (e && e.body) || {};
+    if (!s) return '서버에 연결하지 못했습니다. 인터넷 연결을 확인하고 잠시 뒤 다시 시도해 주세요.';
+    if (s === 401) return '로그인이 필요합니다. 로그인한 뒤 다시 시도해 주세요.';
+    if (s === 403) return b.error === 'secret' ? '비밀글은 글쓴이와 운영자만 볼 수 있습니다.' : b.error === 'own' ? '내 글에는 공감할 수 없습니다.' : '이 작업을 할 권한이 없습니다.';
+    if (s === 404) return '글이 없거나 지워졌습니다.';
+    if (s === 429) return b.error === 'slow' ? '조금 전에 올렸습니다. ' + (b.wait || 10) + '초 뒤에 다시 올려 주세요.' : '올릴 수 있는 횟수를 넘었습니다. (글은 1시간에 5개·하루 20개, 댓글은 하루 60개까지)';
+    if (s === 409) return '댓글이 너무 많아 더 달 수 없습니다.';
+    if (s === 400) return { cat: '분류를 골라 주세요.', title: '제목을 2글자 이상 적어 주세요.', body: '내용을 5글자 이상 적어 주세요.', 'too long': '글자 수가 너무 많습니다.', page: '관련 화면을 다시 골라 주세요.', st: '처리 상태가 올바르지 않습니다.' }[b.field] || '입력한 내용을 확인해 주세요.';
+    return '잠시 문제가 생겼습니다. 다시 시도해 주세요. (' + s + ')';
+  }
+  /* ── 관련 화면: 상단 메뉴의 도구(드롭다운 버튼) 그대로 — 관리자 화면·허브·이 게시판은 빼고 · 홈·투자 공부·사이트 전체 추가 ── */
+  var PAGES = null;
+  function pages() {
+    if (PAGES) return PAGES;
+    var reg = {}; try { JSON.parse(($('etfmd-routes') || {}).textContent || '[]').forEach(function (r) { reg[r.tab] = r; }); } catch (e) {}
+    PAGES = [{ v: 'site', name: '사이트 전체 · 여러 화면', grp: '' }, { v: 'home', name: '홈', grp: '' }, { v: 'learn', name: '투자 공부 (글)', grp: '' }];
+    document.querySelectorAll('.tab-dropdown').forEach(function (dd) {
+      var g = dd.id.replace(/^grp-|-drop$/g, ''), gb = $('grp-' + g + '-btn'), gname = gb ? gb.textContent.replace('▼', '').trim() : '';
+      dd.querySelectorAll('.drop-item[id^="drop-"]').forEach(function (b) {
+        var tab = b.id.slice(5), r = reg[tab];
+        if (!r || !r.path || b.hasAttribute('data-hub') || tab === 'suggest') return;
+        PAGES.push({ v: r.path, name: b.textContent.trim(), grp: gname });
+      });
+    });
+    return PAGES;
+  }
+  function pageOf(v) { var ps = pages(); for (var i = 0; i < ps.length; i++) if (ps[i].v === v) return ps[i]; return null; }
+  function pageHref(v) { return v === 'home' ? '/' : v === 'learn' ? '/learn/' : v === 'site' ? '' : '/' + v + '/'; }
+  function refPage() {                                              /* 바로 전에 보던 도구 (같은 사이트에서 왔을 때) */
+    try {
+      var r = document.referrer ? new URL(document.referrer) : null;
+      if (!r || r.origin !== location.origin) return '';
+      var seg = r.pathname.replace(/^\/|\/$/g, '').split('/')[0] || 'home';
+      return pageOf(seg) ? seg : '';
+    } catch (e) { return ''; }
+  }
+  /* ── 주소 ↔ 보기 ── */
+  function readUrl() {
+    var q = new URLSearchParams(location.search);
+    return { p: parseInt(q.get('p'), 10) || 0, w: q.get('w') || '', from: q.get('from') || '', c: q.get('c') || '', s: q.get('s') || '', q: q.get('q') || '',
+      sort: q.get('sort') === 'vote' ? 'vote' : 'new', pg: Math.max(1, parseInt(q.get('pg'), 10) || 1), mine: q.get('mine') === '1', wait: q.get('wait') === '1' };
+  }
+  function urlOf(o) {
+    var q = new URLSearchParams();
+    if (o.p) q.set('p', o.p);
+    else if (o.w) q.set('w', o.w);
+    else {
+      if (o.c) q.set('c', o.c); if (o.s) q.set('s', o.s); if (o.q) q.set('q', o.q); if (o.sort === 'vote') q.set('sort', 'vote');
+      if (o.pg > 1) q.set('pg', o.pg); if (o.mine) q.set('mine', '1'); if (o.wait) q.set('wait', '1');
+    }
+    var s = q.toString();
+    return location.pathname + (s ? '?' + s : '');
+  }
+  function nav(o, push) {
+    try { history[push ? 'pushState' : 'replaceState']({ sg: 1 }, '', urlOf(o)); } catch (e) {}
+    route(push);
+  }
+  function toTop() { var y = root.getBoundingClientRect().top + window.pageYOffset - 90; if (window.pageYOffset > y) window.scrollTo(0, Math.max(0, y)); }
+  function back() { return '<div class="sg-back"><button type="button" class="sg-btn sm" data-act="list">‹ 목록으로</button></div>'; }
+  function catTag(c) { return '<span class="sg-tag c-' + esc(c) + '">' + esc(CAT[c] || c) + '</span>'; }
+  function stTag(s) { return '<span class="sg-tag s-' + esc(s) + '">' + esc(ST[s] || s) + '</span>'; }
+  function fail(e, retry) {
+    root.innerHTML = '<div class="sg-list"><div class="sg-empty"><b>게시판을 불러오지 못했습니다</b>' + esc(errText(e)) + '<br><br><button type="button" class="sg-btn" data-act="retry">다시 시도</button></div></div>';
+    S.retry = retry;
+  }
+  /* ── 목록 ── */
+  function listShell(o) {
+    root.innerHTML = '<div id="sg-lv"><div class="sg-stats" id="sg-stats" role="group" aria-label="처리 상태로 거르기"></div>' +
+      '<div class="sg-bar"><div class="sg-cats" id="sg-cats" role="group" aria-label="분류"></div><div class="sg-tools">' +
+      '<label class="sg-search">' + IC.find + '<input type="search" id="sg-q" maxlength="40" placeholder="제목·내용 찾기" aria-label="제목·내용 찾기" enterkeyhint="search"></label>' +
+      '<div class="sg-seg" role="group" aria-label="정렬"><button type="button" data-sort="new">최신순</button><button type="button" data-sort="vote">공감순</button></div>' +
+      '<button type="button" class="sg-btn pri" data-act="write" id="sg-write"></button></div></div>' +
+      '<div id="sg-items"><div class="sg-list"><div class="sg-loading">글 목록을 불러오는 중…</div></div></div>' +
+      '<p class="sg-note">읽기는 누구나 · 글쓰기·댓글·공감은 로그인 회원만 · 닉네임은 가운데를 가려 보여 줍니다(예: 홍*동) · 비밀글은 글쓴이와 운영자만 봅니다</p></div>';
+    $('sg-q').value = o.q;
+  }
+  function paintList(o) {
+    if (!$('sg-lv')) listShell(o);
+    var L = S.list, v = S.viewer, st = (L && L.stat) || {}, login = isLogin();
+    $('sg-stats').innerHTML = ['open', 'plan', 'done', 'hold'].map(function (k) {
+      return '<button type="button" class="sg-stat' + (o.s === k ? ' active' : '') + '" data-st="' + k + '" aria-pressed="' + (o.s === k) + '"><span>' + ST[k] + '</span><b>' + (L ? st[k] || 0 : '–') + '</b></button>';
+    }).join('');
+    $('sg-cats').innerHTML = [['', '전체'], ['bug', '버그 신고'], ['feat', '기능 제안'], ['etc', '기타 의견']].map(function (c) {
+      var on = o.c === c[0] && !o.mine && !o.wait;
+      return '<button type="button" class="sg-chip' + (on ? ' active' : '') + '" data-cat="' + c[0] + '" aria-pressed="' + on + '">' + c[1] + '</button>';
+    }).join('') + (login ? '<button type="button" class="sg-chip' + (o.mine ? ' active' : '') + '" data-mine aria-pressed="' + o.mine + '">내 글' + (st.mine != null ? '<em>' + st.mine + '</em>' : '') + '</button>' : '') +
+      (v.admin ? '<button type="button" class="sg-chip' + (o.wait ? ' active' : '') + '" data-wait aria-pressed="' + o.wait + '">답변 대기<em>' + (st.wait || 0) + '</em></button>' : '');
+    root.querySelectorAll('[data-sort]').forEach(function (b) { var on = b.getAttribute('data-sort') === o.sort; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
+    $('sg-write').innerHTML = IC.pen + (login ? '글쓰기' : '로그인하고 글쓰기');
+    if (document.activeElement !== $('sg-q')) $('sg-q').value = o.q;
+    if (!L) return;
+    var any = o.c || o.s || o.q || o.mine || o.wait;
+    $('sg-items').innerHTML = !L.posts.length
+      ? '<div class="sg-list"><div class="sg-empty">' + (any ? '<b>조건에 맞는 글이 없습니다</b>다른 분류·처리 상태를 고르거나 찾는 말을 바꿔 보세요.' : '<b>아직 올라온 글이 없습니다</b>첫 건의를 남겨 주세요 — 고쳐야 할 오류도, 있었으면 하는 기능도 좋습니다.') + '</div></div>'
+      : '<ul class="sg-list">' + L.posts.map(item).join('') + '</ul>' + pager(L);
+  }
+  function item(x) {
+    var pg = x.page && pageOf(x.page), notice = x.cat === 'notice';
+    return '<li class="sg-item' + (notice ? ' notice' : '') + '"><a class="sg-row" href="' + esc(urlOf({ p: x.id })) + '" data-p="' + x.id + '">' +
+      '<span class="sg-line">' + catTag(x.cat) + (notice ? '' : stTag(x.st)) +
+      '<span class="sg-ttl' + (x.locked ? ' locked' : '') + '">' + (x.secret ? IC.lock : '') + (x.locked ? '비밀글입니다' : esc(x.title)) + '</span>' +
+      (x.cmts ? '<span class="sg-cnt" aria-label="댓글 ' + x.cmts + '개">[' + x.cmts + ']</span>' : '') + '</span>' +
+      '<span class="sg-meta"><span>' + esc(x.nick) + '</span><span>' + when(x.created) + '</span>' + (notice ? '' : '<span>공감 ' + x.votes + '</span>') +
+      (x.ans && !notice ? '<span class="sg-ans">운영자 답변 ✓</span>' : '') + (x.me ? '<span class="sg-mine">내 글</span>' : '') + (pg ? '<span>' + esc(pg.name) + '</span>' : '') + '</span></a></li>';
+  }
+  function pager(L) {
+    if (L.pages <= 1) return '';
+    var b = Math.min(L.pages, Math.max(1, L.page - 3) + 6), a = Math.max(1, b - 6), h = '<div class="sg-pager" role="navigation" aria-label="쪽 이동">';
+    h += '<button type="button" data-pg="' + (L.page - 1) + '"' + (L.page <= 1 ? ' disabled' : '') + ' aria-label="이전 쪽">‹</button>';
+    for (var i = a; i <= b; i++) h += '<button type="button" data-pg="' + i + '"' + (i === L.page ? ' class="active" aria-current="page"' : '') + '>' + i + '</button>';
+    return h + '<button type="button" data-pg="' + (L.page + 1) + '"' + (L.page >= L.pages ? ' disabled' : '') + ' aria-label="다음 쪽">›</button></div>';
+  }
+  function loadList(o) {
+    var my = ++S.seq, q = new URLSearchParams();
+    if (o.c) q.set('c', o.c); if (o.s) q.set('s', o.s); if (o.q) q.set('q', o.q); if (o.sort === 'vote') q.set('sort', 'vote');
+    if (o.pg > 1) q.set('p', o.pg); if (o.mine) q.set('mine', '1'); if (o.wait) q.set('wait', '1');
+    paintList(o);
+    if (S.list && $('sg-items')) $('sg-items').style.opacity = '.55';     /* 거르기를 바꾸는 동안 지난 목록은 흐리게 */
+    api('GET', '/board' + (q.toString() ? '?' + q.toString() : '')).then(function (j) {
+      if (my !== S.seq) return;
+      S.list = j; S.viewer = j.viewer || S.viewer; paintList(o);
+      if ($('sg-items')) $('sg-items').style.opacity = '';
+    }).catch(function (e) { if (my === S.seq) fail(e, function () { route(); }); });
+  }
+  /* ── 글 보기 ── */
+  function infoText(i) {
+    return [i.ua, i.w && i.h ? '화면 ' + i.w + '×' + i.h : '', i.dpr ? '배율 ' + i.dpr : '', i.theme ? '테마 ' + i.theme : '', i.lang ? '언어 ' + i.lang : ''].filter(Boolean).join(' · ');
+  }
+  function loadPost(id) {
+    var my = ++S.seq;
+    if (!(S.post && S.post.id === id && $('sg-pv'))) root.innerHTML = back() + '<div class="sg-view"><div class="sg-loading">글을 불러오는 중…</div></div>';
+    return api('GET', '/board/' + id).then(function (j) {
+      if (my !== S.seq) return;
+      S.post = j.post; S.cmts = j.cmts || []; S.viewer = j.viewer || S.viewer; paintPost();
+    }).catch(function (e) {
+      if (my !== S.seq) return;
+      root.innerHTML = back() + '<div class="sg-view"><div class="sg-empty"><b>' + esc(errText(e)) + '</b>' +
+        (e && e.status === 403 && !isLogin() ? '<br><button type="button" class="sg-btn pri" data-act="login">로그인</button>' : !e || !e.status ? '<br><button type="button" class="sg-btn" data-act="retry">다시 시도</button>' : '') + '</div></div>';
+      S.retry = function () { loadPost(id); };
+    });
+  }
+  function paintPost() {
+    var x = S.post, v = S.viewer, pg = x.page && pageOf(x.page), notice = x.cat === 'notice', href = pg ? pageHref(x.page) : '';
+    document.title = '건의 게시판 | ' + (x.title || '비밀글');
+    var h = back() + '<article class="sg-view" id="sg-pv"><div class="sg-line">' + catTag(x.cat) + (notice ? '' : stTag(x.st)) + (x.secret ? '<span class="sg-tag s-hold">' + IC.lock + '비밀글</span>' : '') + '</div>' +
+      '<h2 class="sg-v-ttl">' + esc(x.title) + '</h2>' +
+      '<div class="sg-v-meta"><span>' + (x.staff ? '<span class="sg-tag staff">운영자</span>' : esc(x.nick)) + (v.admin && x.uid != null && !x.staff ? ' (회원 ' + x.uid + ')' : '') + '</span>' +
+      '<span>' + when(x.created, true) + (x.upd ? ' · 고침 ' + when(x.upd, true) : '') + '</span>' +
+      (pg ? '<span>관련 화면: ' + (href ? '<a href="' + esc(href) + '">' + esc(pg.name) + '</a>' : esc(pg.name)) + '</span>' : '') +
+      (x.sat && !notice ? '<span>상태 바뀐 때 ' + when(x.sat, true) + '</span>' : '') + '</div>' +
+      '<div class="sg-body">' + linkify(x.body) + '</div><div class="sg-acts">' +
+      (notice ? '' : '<button type="button" class="sg-btn sg-vote' + (x.voted ? ' on' : '') + '" id="sg-vote" data-act="vote" aria-pressed="' + !!x.voted + '"' + (x.me ? ' disabled title="내 글에는 공감할 수 없습니다"' : '') + '>' + IC.up + '공감 <b id="sg-vn">' + x.votes + '</b></button>') +
+      '<button type="button" class="sg-btn" data-act="copy">' + IC.link + '링크 복사</button><span class="sg-gap"></span>' +
+      (x.me ? '<button type="button" class="sg-btn sm" data-act="edit">고치기</button>' : '') + (x.me || v.admin ? '<button type="button" class="sg-btn sm bad" data-act="del">지우기</button>' : '') + '</div>' +
+      (x.info ? '<div class="sg-info">기기 정보(글쓴이·운영자만 보임) — ' + esc(infoText(x.info)) + '</div>' : '') +
+      (v.admin && !notice ? '<div class="sg-adm"><b>관리자</b><span>처리 상태</span><select id="sg-st" aria-label="처리 상태 바꾸기">' +
+        ['open', 'plan', 'done', 'hold'].map(function (k) { return '<option value="' + k + '"' + (k === x.st ? ' selected' : '') + '>' + ST[k] + '</option>'; }).join('') + '</select><span>답변은 아래 댓글로 달면 \'운영자 답변\'으로 표시됩니다</span></div>' : '') +
+      '</article>' + cmtsHtml();
+    var ta = $('sg-cbody'), keep = ta ? ta.value : '';                 /* 다시 그려도 쓰던 댓글은 그대로 */
+    root.innerHTML = h;
+    if (keep && $('sg-cbody')) $('sg-cbody').value = keep;
+  }
+  function cmtsHtml() {
+    var v = S.viewer, login = isLogin();
+    return '<section class="sg-cmts" aria-labelledby="sg-ch"><h3 id="sg-ch">댓글 ' + S.cmts.length + '</h3>' + S.cmts.map(function (c) {
+      return '<div class="sg-cmt' + (c.admin ? ' admin' : '') + '"><div class="sg-cmt-h">' + (c.admin ? '<span class="sg-tag staff">운영자 답변</span>' : '<b>' + esc(c.nick) + '</b>') +
+        (v.admin && c.uid != null && !c.admin ? '<span>회원 ' + c.uid + '</span>' : '') + '<span>' + when(c.created, true) + '</span><span class="sg-gap"></span>' +
+        (c.me || v.admin ? '<button type="button" class="sg-cmt-x" data-cdel="' + c.id + '">지우기</button>' : '') + '</div><div class="sg-body">' + linkify(c.body) + '</div></div>';
+    }).join('') + (login
+      ? '<form class="sg-cform" id="sg-cform"><textarea class="sg-ta" id="sg-cbody" maxlength="' + LIM.cmt + '" placeholder="' + (v.admin ? '운영자 답변을 적어 주세요' : '같은 증상이나 덧붙일 내용을 적어 주세요') + '" aria-label="댓글 내용"></textarea>' +
+        '<div class="sg-msg" id="sg-cmsg" role="alert" hidden></div><div class="sg-fbtns"><button type="submit" class="sg-btn pri" id="sg-csend">' + (v.admin ? '운영자 답변 달기' : '댓글 달기') + '</button></div></form>'
+      : '<div class="sg-cform"><div><button type="button" class="sg-btn" data-act="login">로그인하고 댓글 달기</button></div></div>') + '</section>';
+  }
+  /* ── 글쓰기 · 고치기 ── */
+  function getDraft() { try { var d = JSON.parse(localStorage.getItem(DRAFT) || 'null'); return d && Date.now() - (d.t || 0) < 14 * 864e5 ? d : null; } catch (e) { return null; } }
+  function setDraft(d) { try { if (d) localStorage.setItem(DRAFT, JSON.stringify(d)); else localStorage.removeItem(DRAFT); } catch (e) {} }
+  var HINT = {
+    bug: '어느 화면에서 무엇을 넣고 어떤 버튼을 눌렀을 때 어떤 문제가 생겼는지 적어 주세요.\n예) 연봉 실수령액 계산기에서 연봉 5,000만원을 넣고 계산하면 실수령액이 0원으로 나옵니다. (휴대폰 · 크롬)',
+    feat: '있었으면 하는 계산기·기능과 그 기능이 필요한 이유를 적어 주세요.\n예) 배당금 계산기에 매달 적립하는 금액이 해마다 늘어나는 설정을 넣어 주세요.',
+    etc: '사이트에 대한 의견을 자유롭게 적어 주세요.', notice: '공지 내용을 적어 주세요.', '': '먼저 위에서 분류를 골라 주세요.'
+  };
+  function writeForm(editId, o) {
+    var v = S.viewer;
+    if (!isLogin()) {
+      root.innerHTML = back() + '<div class="sg-form"><h2>글쓰기</h2><p class="sg-hint">글을 쓰려면 로그인해 주세요. 카카오·네이버·구글 계정으로 바로 가입하고 로그인할 수 있습니다. 로그인하면 이 화면으로 돌아옵니다.</p>' +
+        '<div class="sg-fbtns"><button type="button" class="sg-btn pri" data-act="login">로그인</button></div></div>';
+      return;
+    }
+    var d;
+    if (editId) {
+      if (!(S.post && S.post.id === editId)) { var my = ++S.seq; root.innerHTML = back() + '<div class="sg-form"><div class="sg-loading">불러오는 중…</div></div>';
+        api('GET', '/board/' + editId).then(function (j) { if (my !== S.seq) return; S.post = j.post; S.cmts = j.cmts || []; S.viewer = j.viewer || S.viewer; writeForm(editId, o); })
+          .catch(function (e) { if (my === S.seq) root.innerHTML = back() + '<div class="sg-form"><div class="sg-empty"><b>' + esc(errText(e)) + '</b></div></div>'; });
+        return; }
+      if (!S.post.me) { root.innerHTML = back() + '<div class="sg-form"><div class="sg-empty"><b>내가 쓴 글만 고칠 수 있습니다.</b></div></div>'; return; }
+      d = { cat: S.post.cat, title: S.post.title, body: S.post.body, page: S.post.page || '', secret: S.post.secret };
+    } else {
+      d = getDraft() || { cat: '', title: '', body: '', page: '', secret: false, info: true };
+      if (!d.page) d.page = (o.from && pageOf(o.from) ? o.from : '') || refPage();
+    }
+    var cats = ['bug', 'feat', 'etc'].concat(v.admin ? ['notice'] : []);
+    var opts = '<option value="">선택 안 함</option>', grp = null;
+    pages().forEach(function (p) {
+      if (p.grp !== grp) { if (grp) opts += '</optgroup>'; grp = p.grp; if (grp) opts += '<optgroup label="' + esc(grp) + '">'; }
+      opts += '<option value="' + esc(p.v) + '"' + (p.v === d.page ? ' selected' : '') + '>' + esc(p.name) + '</option>';
+    });
+    if (grp) opts += '</optgroup>';
+    root.innerHTML = back() + '<form class="sg-form" id="sg-wform" novalidate><h2>' + (editId ? '글 고치기' : '글쓰기') + '</h2>' +
+      '<div class="sg-f"><span>분류</span><div class="sg-pick" id="sg-cat" role="radiogroup" aria-label="분류">' + cats.map(function (c) {
+        return '<button type="button" class="sg-chip' + (d.cat === c ? ' active' : '') + '" role="radio" aria-checked="' + (d.cat === c) + '" data-wcat="' + c + '">' + CAT[c] + '</button>'; }).join('') + '</div></div>' +
+      '<label class="sg-f"><span>관련 화면 <small>선택</small></span><select id="sg-page">' + opts + '</select></label>' +
+      '<label class="sg-f"><span>제목 <small id="sg-tn">0 / ' + LIM.title + '</small></span><input class="sg-in" id="sg-title" maxlength="' + LIM.title + '" placeholder="한 줄로 요약해 주세요" autocomplete="off"></label>' +
+      '<label class="sg-f"><span>내용 <small id="sg-bn">0 / ' + LIM.body + '</small></span><textarea class="sg-ta" id="sg-body" maxlength="' + LIM.body + '"></textarea></label>' +
+      '<div class="sg-checks"><label class="sg-check"><input type="checkbox" id="sg-secret"' + (d.secret ? ' checked' : '') + '><span>비밀글로 쓰기<small>나와 운영자만 볼 수 있습니다 (계정 문제 등 공개하기 어려운 내용)</small></span></label>' +
+      (editId ? '' : '<label class="sg-check"><input type="checkbox" id="sg-info"' + (d.info !== false ? ' checked' : '') + '><span>오류 확인용 기기 정보 함께 보내기<small>브라우저 종류·화면 크기·테마 — 나와 운영자만 봅니다</small></span></label>') + '</div>' +
+      '<p class="sg-hint">전화번호·계좌번호·주민등록번호 같은 <b>개인정보는 적지 마세요</b>. 광고·욕설·개인정보가 담긴 글은 운영자가 지울 수 있습니다. 글을 올리면 <a href="/terms/" target="_blank" rel="noopener">이용약관</a>의 게시판 조항에 동의한 것으로 봅니다.</p>' +
+      '<div class="sg-msg" id="sg-wmsg" role="alert" hidden></div>' +
+      '<div class="sg-fbtns"><button type="button" class="sg-btn" data-act="cancel">취소</button><button type="submit" class="sg-btn pri" id="sg-wsend">' + (editId ? '고친 내용 올리기' : '올리기') + '</button></div></form>';
+    $('sg-title').value = d.title || ''; $('sg-body').value = d.body || '';
+    S.wcat = d.cat || ''; S.edit = editId || 0;
+    hintFor(); counts();
+  }
+  function hintFor() { var b = $('sg-body'); if (b) b.placeholder = HINT[S.wcat] || HINT['']; }
+  function counts() {
+    var t = $('sg-title'), b = $('sg-body');
+    if (t) $('sg-tn').textContent = t.value.length + ' / ' + LIM.title;
+    if (b) $('sg-bn').textContent = b.value.length + ' / ' + LIM.body;
+  }
+  var draftT = 0;
+  function saveDraft() {
+    if (S.edit || !$('sg-wform')) return;
+    clearTimeout(draftT);
+    draftT = setTimeout(function () {
+      var d = { cat: S.wcat, title: $('sg-title').value, body: $('sg-body').value, page: $('sg-page').value, secret: $('sg-secret').checked, info: $('sg-info') ? $('sg-info').checked : true, t: Date.now() };
+      setDraft(d.title.trim() || d.body.trim() ? d : null);
+    }, 300);
+  }
+  function wmsg(t) { var m = $('sg-wmsg'); if (!m) return; m.textContent = t || ''; m.hidden = !t; }
+  function submitPost() {
+    var title = $('sg-title').value.trim(), body = $('sg-body').value.trim(), btn = $('sg-wsend'), editId = S.edit;
+    if (!S.wcat) return wmsg('분류를 골라 주세요. (버그 신고 · 기능 제안 · 기타 의견)');
+    if (Array.from(title).length < 2) { $('sg-title').focus(); return wmsg('제목을 2글자 이상 적어 주세요.'); }
+    if (Array.from(body).length < 5) { $('sg-body').focus(); return wmsg('내용을 5글자 이상 적어 주세요.'); }
+    wmsg(''); btn.disabled = true; var label = btn.textContent; btn.textContent = '올리는 중…';
+    var b = { cat: S.wcat, title: title, body: body, page: $('sg-page').value, secret: $('sg-secret').checked };
+    if (!editId && $('sg-info') && $('sg-info').checked) b.info = { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio || 1, lang: navigator.language || '', theme: document.documentElement.getAttribute('data-theme') || '' };
+    api('POST', editId ? '/board/' + editId : '/board', b).then(function (j) {
+      if (!editId) { clearTimeout(draftT); setDraft(null); }
+      S.list = null; S.post = null;
+      toast(editId ? '고친 내용을 올렸습니다' : '올렸습니다 — 운영자가 확인하면 처리 상태와 답변으로 알려 드립니다');
+      nav({ p: editId || j.id }, false);
+    }).catch(function (e) {
+      btn.disabled = false; btn.textContent = label; wmsg(errText(e));
+      if (e && e.status === 401) login();
+    });
+  }
+  /* ── 공감 · 댓글 · 상태 · 지우기 · 링크 ── */
+  function paintVote() { var b = $('sg-vote'), x = S.post; if (!b || !x) return; b.classList.toggle('on', !!x.voted); b.setAttribute('aria-pressed', String(!!x.voted)); $('sg-vn').textContent = x.votes; }
+  function vote() {
+    if (!isLogin()) { login(); return; }
+    var x = S.post;
+    if (!x || x.me || S.voting) return;
+    var on = !x.voted;
+    S.voting = true; x.voted = on; x.votes += on ? 1 : -1; paintVote();
+    api('POST', '/board/' + x.id + '/vote', { on: on }).then(function (j) { x.voted = j.voted; x.votes = j.votes; S.list = null; })
+      .catch(function (e) { x.voted = !on; x.votes += on ? -1 : 1; toast(errText(e)); if (e && e.status === 401) login(); })
+      .then(function () { S.voting = false; paintVote(); });
+  }
+  function sendCmt() {
+    var ta = $('sg-cbody'), btn = $('sg-csend'), m = $('sg-cmsg'), body = ta.value.trim(), x = S.post;
+    var say = function (t) { m.textContent = t || ''; m.hidden = !t; };
+    if (!body) { ta.focus(); return say('댓글 내용을 적어 주세요.'); }
+    say(''); btn.disabled = true;
+    api('POST', '/board/' + x.id + '/cmt', { body: body }).then(function () { ta.value = ''; S.list = null; toast('댓글을 달았습니다'); return loadPost(x.id); })
+      .catch(function (e) { btn.disabled = false; say(errText(e)); if (e && e.status === 401) login(); });
+  }
+  function copyLink() {
+    var u = location.origin + location.pathname + '?p=' + S.post.id;
+    var done = function () { toast('링크를 복사했습니다'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(u).then(done, function () { window.prompt('이 주소를 복사하세요', u); });
+    else window.prompt('이 주소를 복사하세요', u);
+  }
+  function delPost() {
+    if (!window.confirm('이 글을 지울까요? 달린 댓글과 공감도 함께 지워지고 되돌릴 수 없습니다.')) return;
+    api('DELETE', '/board/' + S.post.id).then(function () { S.list = null; S.post = null; toast('글을 지웠습니다'); nav(S.last || {}, false); }).catch(function (e) { toast(errText(e)); });
+  }
+  function delCmt(id) {
+    if (!window.confirm('이 댓글을 지울까요?')) return;
+    api('DELETE', '/board/cmt/' + id).then(function () { S.list = null; toast('댓글을 지웠습니다'); loadPost(S.post.id); }).catch(function (e) { toast(errText(e)); });
+  }
+  function setSt(st) {
+    var x = S.post;
+    api('POST', '/board/' + x.id + '/st', { st: st }).then(function () { x.st = st; x.sat = Math.floor(Date.now() / 1000); S.list = null; toast('처리 상태: ' + ST[st]); paintPost(); })
+      .catch(function (e) { toast(errText(e)); paintPost(); });
+  }
+  /* ── 보기 고르기 ── */
+  function route(moved) {
+    var o = readUrl(), was = S.view;
+    S.wasLogin = isLogin();
+    if (o.p) { S.view = 'post'; loadPost(o.p); }
+    else if (o.w) { S.view = 'write'; document.title = TITLE0; writeForm(o.w === 'new' ? 0 : parseInt(o.w, 10) || 0, o); }
+    else { S.view = 'list'; S.last = o; document.title = TITLE0; if (was !== 'list') { root.innerHTML = ''; } loadList(o); }
+    if (moved || was !== S.view) toTop();
+  }
+  var qT = 0;
+  function search(now) {
+    clearTimeout(qT);
+    qT = setTimeout(function () { var o = readUrl(), q = ($('sg-q') || {}).value || ''; q = q.trim().slice(0, 40); if (q === o.q) return; o.q = q; o.pg = 1; nav(o, false); }, now ? 0 : 450);
+  }
+  root.addEventListener('click', function (e) {
+    var t = e.target.closest ? e.target.closest('[data-act],[data-p],[data-st],[data-cat],[data-mine],[data-wait],[data-sort],[data-pg],[data-wcat],[data-cdel]') : null;
+    if (!t || !root.contains(t)) return;
+    var o = readUrl(), act = t.getAttribute('data-act');
+    if (t.hasAttribute('data-p')) { if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button) return; e.preventDefault(); nav({ p: +t.getAttribute('data-p') }, true); return; }
+    if (t.hasAttribute('data-st')) { var s = t.getAttribute('data-st'); o.s = o.s === s ? '' : s; o.pg = 1; nav(o, false); return; }
+    if (t.hasAttribute('data-cat')) { o.c = t.getAttribute('data-cat'); o.mine = false; o.wait = false; o.pg = 1; nav(o, false); return; }
+    if (t.hasAttribute('data-mine')) { o.mine = !o.mine; o.wait = false; o.pg = 1; nav(o, false); return; }
+    if (t.hasAttribute('data-wait')) { o.wait = !o.wait; o.mine = false; o.pg = 1; nav(o, false); return; }
+    if (t.hasAttribute('data-sort')) { o.sort = t.getAttribute('data-sort'); o.pg = 1; nav(o, false); return; }
+    if (t.hasAttribute('data-pg')) { if (t.disabled) return; o.pg = +t.getAttribute('data-pg'); nav(o, true); return; }
+    if (t.hasAttribute('data-wcat')) { S.wcat = t.getAttribute('data-wcat'); root.querySelectorAll('[data-wcat]').forEach(function (b) { var on = b === t; b.classList.toggle('active', on); b.setAttribute('aria-checked', String(on)); }); hintFor(); saveDraft(); wmsg(''); return; }
+    if (t.hasAttribute('data-cdel')) { delCmt(+t.getAttribute('data-cdel')); return; }
+    if (act === 'list') { nav(S.last || {}, true); return; }
+    if (act === 'write') { if (!isLogin()) { try { history.pushState({ sg: 1 }, '', urlOf({ w: 'new' })); } catch (e2) {} route(true); login(); return; } nav({ w: 'new' }, true); return; }
+    if (act === 'login') { login(); return; }
+    if (act === 'retry') { if (S.retry) S.retry(); else route(); return; }
+    if (act === 'cancel') { if (window.history.length > 1 && history.state && history.state.sg) history.back(); else nav(S.edit ? { p: S.edit } : (S.last || {}), false); return; }
+    if (act === 'vote') { vote(); return; }
+    if (act === 'copy') { copyLink(); return; }
+    if (act === 'edit') { nav({ w: String(S.post.id) }, true); return; }
+    if (act === 'del') { delPost(); return; }
+  });
+  root.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (e.target.id === 'sg-wform') submitPost();
+    else if (e.target.id === 'sg-cform') sendCmt();
+  });
+  root.addEventListener('input', function (e) {
+    var id = e.target.id;
+    if (id === 'sg-q') { if (!e.isComposing) search(false); return; }
+    if (id === 'sg-title' || id === 'sg-body') counts();
+    if (/^sg-(title|body|page|secret|info)$/.test(id)) saveDraft();
+  });
+  root.addEventListener('change', function (e) {
+    if (e.target.id === 'sg-st') setSt(e.target.value);
+    else if (/^sg-(page|secret|info)$/.test(e.target.id)) saveDraft();
+  });
+  root.addEventListener('compositionend', function (e) { if (e.target.id === 'sg-q') search(false); });
+  root.addEventListener('keydown', function (e) {
+    if (e.target.id === 'sg-q' && e.key === 'Enter' && !e.isComposing) { e.preventDefault(); search(true); }
+    if (e.target.id === 'sg-cbody' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendCmt(); }
+  });
+  window.addEventListener('popstate', function () { var pg = document.getElementById('page-suggest'); if (pg && pg.classList.contains('active')) route(true); });
+  window.addEventListener('dc-auth', function () { if (S.wasLogin !== null && isLogin() !== S.wasLogin) { S.list = null; S.post = null; route(); } });   /* 로그인·로그아웃하면 다시 그림 */
+  window.sgDebug = { state: function () { return S; }, route: route };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { route(); }); else route();
 })();

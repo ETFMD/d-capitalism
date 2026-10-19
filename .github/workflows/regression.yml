@@ -21,6 +21,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v5   # node:sqlite(Node 22.5+) — Worker 단독 검사(worker_board_test·worker_grp_test·worker_sns_test)가 진짜 SQLite 로 SQL 을 그대로 실행
+        with:
+          node-version: '22'
       - name: Playwright · 한글 글꼴 설치
         run: |
           pip install playwright==1.63.0 numpy

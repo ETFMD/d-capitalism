@@ -1,5 +1,5 @@
 // Worker 건의 게시판(/board · worker/src/board.js) 단독 확인 (node tests/worker_board_test.mjs · run_regression.py 가 부름)
-//  · 진짜 SQLite(node:sqlite — Node 22.5+)에 worker/schema.sql 전체를 만들고, Worker 의 fetch(worker/src/index.js)를 그대로 불러 확인 — 허용 출처·로그인 토큰(auth.js)·관리자 판단까지 실제 코드
+//  · 진짜 SQLite(node:sqlite — Node 22.13+)에 worker/schema.sql 전체를 만들고, Worker 의 fetch(worker/src/index.js)를 그대로 불러 확인 — 허용 출처·로그인 토큰(auth.js)·관리자 판단까지 실제 코드
 //  · 읽기(누구나)·쓰기(회원만)·고치기(글쓴이만)·지우기(글쓴이·관리자)·공감(한 번 · 내 글 제외 · 바라는 상태로)·댓글(운영자 답변 표시)·처리 상태(관리자)
 //  · 비밀글(목록에서 제목 숨김 · 찾기에서도 뺌 · 글쓴이·관리자만 열기) · 닉네임 가림(홍*동) · 기기 정보(글쓴이·관리자만) · 공지(관리자만 · 맨 위 · 공감 없음)
 //  · 입력 검사(분류·길이·화면 주소·제어 문자) · 두 번 눌림(같은 글 → 앞 글) · 횟수 제한(30초·1시간 5개·하루 20개 · 댓글 10초·하루 60개) · 찾기 % 글자 그대로
@@ -18,7 +18,7 @@ try {
   const ew = process.emitWarning; process.emitWarning = (w, ...a) => (/SQLite/.test(String(w)) ? undefined : ew.call(process, w, ...a));
   ({ DatabaseSync } = await import('node:sqlite').finally(() => { process.emitWarning = ew; }));
 } catch (e) {
-  console.log((SERVE ? 'SERVE-FAIL ' : '') + 'worker_board_test: node:sqlite 없음 (Node 22.5+ 필요 · 지금 ' + process.version + ')');
+  console.log((SERVE ? 'SERVE-FAIL ' : '') + 'worker_board_test: node:sqlite 없음 (Node 22.13+ 필요 · 지금 ' + process.version + ')');
   process.exit(SERVE ? 3 : 1);
 }
 /* Worker 원본을 임시 폴더로 복사 (package.json type=module — 저장소 worker/ 에는 package.json 이 없음) */
