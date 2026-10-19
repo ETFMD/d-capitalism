@@ -21,6 +21,6 @@ CREATE TABLE IF NOT EXISTS hb (id TEXT PRIMARY KEY, tgh TEXT, mid TEXT, cred TEX
 CREATE TABLE IF NOT EXISTS grp (id TEXT PRIMARY KEY, owner TEXT, epoch INTEGER NOT NULL DEFAULT 0, seen INTEGER, done INTEGER, fz TEXT, want TEXT, req TEXT, ver INTEGER NOT NULL DEFAULT 0, state TEXT, st_at INTEGER, st_by TEXT, sec TEXT, sec_at INTEGER, created INTEGER NOT NULL, upd INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS grp_pc (gid TEXT NOT NULL, mid TEXT NOT NULL, name TEXT, rank INTEGER, seen INTEGER, ver TEXT, rd TEXT, PRIMARY KEY (gid, mid));
 CREATE TABLE IF NOT EXISTS grp_tok (gid TEXT NOT NULL, b TEXT NOT NULL, s TEXT, exp INTEGER, at INTEGER, by_mid TEXT, PRIMARY KEY (gid, b));
--- 72루틴 자동매매 배포판 라이선스 (/license · worker/src/license.js): 키 해시(id) · 받는 사람 이름 · 상태(active|revoked) · 허용 기기 수 · 메모 · 발급/마지막 확인 시각 · 기기별 지문 해시(400일 조용하면 삭제)
-CREATE TABLE IF NOT EXISTS lic (id TEXT PRIMARY KEY, name TEXT, status TEXT NOT NULL DEFAULT 'active', maxm INTEGER NOT NULL DEFAULT 3, note TEXT, issued INTEGER NOT NULL, upd INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS lic_pc (id TEXT NOT NULL, mid TEXT NOT NULL, first INTEGER NOT NULL, last INTEGER NOT NULL, PRIMARY KEY (id, mid));
+-- (뺌 2026-10-19) 72루틴 배포판 라이선스(/license) — 사용자 결정으로 기능 삭제 · 발급 0건(비밀값을 넣기 전)이라 빈 표만 정리
+DROP TABLE IF EXISTS lic_pc;
+DROP TABLE IF EXISTS lic;

@@ -1675,12 +1675,6 @@ def main():
         print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'worker_grp_test: 출력 없음', flush=True)
         if _r.returncode != 0:
             fail('worker', 'PC 여러 대(/grp) 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:300])
-    # Worker 72루틴 자동매매 배포판 라이선스(/license · 발급·확인·차단·ed25519 서명·기기 수·정리) 단독 확인 — node 가 있으면
-    if not a.etf_audit and shutil.which('node'):
-        _r = subprocess.run(['node', os.path.join(ROOT, 'tests', 'worker_license_test.mjs')], capture_output=True, text=True, timeout=120)
-        print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'worker_license_test: 출력 없음', flush=True)
-        if _r.returncode != 0:
-            fail('worker', '배포판 라이선스(/license) 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:300])
 
     # 외부 광고·방문 분석 서버(일시 오류가 잦고 사이트 기능과 무관) — 실패해도 사이트 오류로 보지 않음
     THIRD = ('clarity.ms', 'bing.com', 'naver.com', 'naver.net', 'pstatic.net', 'googlesyndication', 'doubleclick',
