@@ -2163,6 +2163,9 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .as-qa { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; } .as-qa:empty { display:none; }
   .as-qa button { font-family:var(--font); font-size:11.5px; color:var(--text2); background:transparent; border:1px dashed var(--card-border); border-radius:999px; padding:3px 9px; cursor:pointer; } .as-qa button:hover { color:var(--accent); border-color:rgba(49,130,246,.5); }
   .as-bgm-row { display:flex; align-items:flex-start; gap:8px; } .as-bgm-row .as-check { flex:1; } .as-bgm-btn { padding:5px 10px !important; font-size:12px !important; white-space:nowrap; }
+  .as-bgm-now-row[hidden] { display:none; } .as-bgm-now-row { display:flex; align-items:center; gap:8px; margin:-2px 0 4px 26px; } .as-bgm-now { flex:1; min-width:0; font-size:12px; color:var(--text2); line-height:1.5; overflow-wrap:anywhere; } .as-bgm-now small { color:var(--text3); }
+  .as-bgm-list { margin:6px 0 0; padding-left:18px; font-size:13px; line-height:1.7; } .as-bgm-list small { color:var(--text3); }
+  :root { --as-cpi:#ffffff; } html[data-theme="light"] { --as-cpi:#191f28; }   /* 물가 선 색 (영상·그래프 캔버스는 colOf) */
   .as-chip.busy { opacity:.6; } .as-chip small { font-size:10px; color:var(--text3); }
   .as-in { position:relative; z-index:3; }   /* 카드 등장 애니메이션(transform)이 쌓임 맥락을 만들어, 휴대폰에서 아래 그래프 카드가 검색 목록을 덮지 않게 */
   .as-find { position:relative; }

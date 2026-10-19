@@ -21212,7 +21212,7 @@ var WIF = (function () {
   function chartConfig(sim, opt) {
     var tick = opt.tick || cssVar('--text3', '#888'), grid = 'rgba(128,128,128,0.14)', narrow = !!opt.narrow, fs = opt.fs || 11;
     var ds = sim.list.map(function (x) {
-      var c = S.colors[x.key], macro = x.key === 'M2' || x.key === 'CPI', rk = x.realK;
+      var c = colOf(x.key), macro = x.key === 'M2' || x.key === 'CPI', rk = x.realK;
       var d = { label: short(x.key), data: [], borderColor: c, backgroundColor: c, borderWidth: (macro ? 1.6 : 2) * (opt.lw || 1), borderDash: macro ? [5, 4] : [], pointRadius: 0, tension: 0, fill: false };
       if (rk > 0) d.segment = { borderDash: function (cx) { return cx.p1.parsed.x <= rk ? [2 * (opt.lw || 1), 3 * (opt.lw || 1)] : undefined; } };   /* 상장 전 가상 구간 = 잘게 끊긴 점선 */
       return d;
@@ -21310,7 +21310,7 @@ var WIF = (function () {
     var sim = S.sim, ol = $('as-rank');
     var rows = sim.list.map(function (x) { return { key: x.key, v: x.v[k], pre: x.realK > k }; }).sort(function (a, b) { return b.v - a.v; });
     ol.innerHTML = rows.map(function (r, i) {
-      return '<li><span class="as-r">' + (i + 1) + '</span><i style="background:' + S.colors[r.key] + '"></i><span class="as-n">' + esc(short(r.key)) + (r.pre ? ' <em class="as-v">가상</em>' : '') + '</span><b>' + won(r.v) + '</b><small>' + mx(r.v / sim.inv[k]) + '</small></li>';
+      return '<li><span class="as-r">' + (i + 1) + '</span><i style="background:' + colOf(r.key, 1) + '"></i><span class="as-n">' + esc(short(r.key)) + (r.pre ? ' <em class="as-v">가상</em>' : '') + '</span><b>' + won(r.v) + '</b><small>' + mx(r.v / sim.inv[k]) + '</small></li>';
     }).join('');
   }
   function play() {
@@ -21338,11 +21338,19 @@ var WIF = (function () {
       .map(function (k) { return '<button type="button" data-qa="' + esc(k) + '">＋ ' + esc(short(k)) + '</button>'; }).join('');
     $('as-chips').innerHTML = S.sel.map(function (key) {
       var busy = !!S.pend[key];
-      return '<span class="as-chip' + (busy ? ' busy' : '') + '"><i style="background:' + S.colors[key] + '"></i>' + esc(short(key)) + (busy ? ' <small>불러오는 중…</small>' : '') +
+      return '<span class="as-chip' + (busy ? ' busy' : '') + '"><i style="background:' + colOf(key, 1) + '"></i>' + esc(short(key)) + (busy ? ' <small>불러오는 중…</small>' : '') +
         '<button type="button" data-rm="' + esc(key) + '" aria-label="' + esc(short(key)) + ' 빼기">✕</button></span>';
     }).join('');
   }
+  /* 물가(CPI) 선은 늘 흰색 — 다른 자산 색(빨강 등)과 헷갈리지 않게 (사용자 지정 2026-10-19) · 밝은 테마는 바탕이 희어 거의 검정 */
+  var CPI_C = { dark: '#ffffff', light: '#191f28' };
+  function colOf(key, dom) {
+    if (key !== 'CPI') return S.colors[key];
+    if (dom) return 'var(--as-cpi)';                            /* 화면 글 속 점: 테마가 바뀌면 CSS 가 따라감 */
+    return document.documentElement.getAttribute('data-theme') === 'light' ? CPI_C.light : CPI_C.dark;
+  }
   function color(key) {
+    if (key === 'CPI') { S.colors[key] = CPI_C.dark; return; }  /* 팔레트 색을 쓰지 않음 */
     if (S.colors[key]) return;
     var used = {}; Object.keys(S.colors).forEach(function (k) { if (S.sel.indexOf(k) >= 0) used[S.colors[k]] = 1; });
     S.colors[key] = COLORS.filter(function (c) { return !used[c]; })[0] || COLORS[S.sel.length % COLORS.length];
@@ -21357,7 +21365,7 @@ var WIF = (function () {
     var rows = sim.list.slice().sort(function (a, b) { return b.final - a.final; });
     tb.innerHTML = rows.map(function (x, i) {
       var macro = x.key === 'M2' || x.key === 'CPI';
-      return '<tr' + (macro ? ' class="as-macro"' : '') + '><td>' + (i + 1) + '</td><td style="text-align:left;"><i class="as-dot" style="background:' + S.colors[x.key] + '"></i>' + esc(info(x.key).name) +
+      return '<tr' + (macro ? ' class="as-macro"' : '') + '><td>' + (i + 1) + '</td><td style="text-align:left;"><i class="as-dot" style="background:' + colOf(x.key, 1) + '"></i>' + esc(info(x.key).name) +
         (x.preTo ? '<small class="as-vnote">~' + esc(x.preTo) + ' 가상 · ' + esc(x.s.src || '') + '</small>' : '') + '</td><td>' + won(x.final) + '원</td><td>' + mx(x.mult) + '</td><td>' + pct(x.cagr) + '</td></tr>';
     }).join('');
     var inv = sim.inv[sim.N - 1], o = sim.o;
@@ -21374,6 +21382,7 @@ var WIF = (function () {
     pause(); $('as-play').textContent = '▶ 재생';
     var o = inputs(), my = ++S.seq;
     store('cfg2', { sel: S.sel, mode: S.mode, freq: S.freq, amt: $('as-amt').value, y: $('as-y').value, m: $('as-m').value, sec: o.sec, div: o.div, log: o.log, pre: o.pre });
+    if (BGM.list) bgmEnsure().catch(function () {});   /* 그리는 시간이 바뀌면 그 길이에 맞는 곡인지 다시 봄 */
     if (missing(o)) {
       S.busy = true; $('as-date').textContent = '…'; $('as-inv').textContent = o.daily ? '일봉 시세를 불러오는 중…' : '상장 전 재현 자료를 불러오는 중…';
       need(o).then(function () { if (my === S.seq) { S.busy = false; recompute(keepT); } });
@@ -21553,7 +21562,7 @@ var WIF = (function () {
     return (o.mode === 'dca' ? (o.daily ? '매일 ' : '매달 ') + won(o.amt) + '원 적립' : won(o.amt) + '원 한 번에 투자') + ' · ' + spanText(sim);
   }
   function periodText(sim) { return sim.o.daily ? dStr(sim.G0).replace(/-/g, '.') + ' ~ ' + dStr(sim.G1).replace(/-/g, '.') : ym(sim.s0) + ' ~ ' + ym(sim.e0); }
-  function videoMaker(kind) {                                 /* 영상 한 종류 그리기 도구 → {cv, frame(t, dt)} */
+  function videoMaker(kind, credit) {                         /* 영상 한 종류 그리기 도구 → {cv, frame(t, dt)} · credit = 배경음악 출처 줄(곡을 넣을 때만) */
     var L = LAY[kind], sim = S.sim, T = theme(), F = cssVar('--font', 'sans-serif'), MONO = cssVar('--mono', 'monospace');
     var cv = document.createElement('canvas'); cv.width = L.W; cv.height = L.H;
     var ctx = cv.getContext('2d');
@@ -21592,10 +21601,16 @@ var WIF = (function () {
       G.title = G.brand + 18 + Math.round(vf * 0.92); G.sub = G.title + (G.tl.length - 1) * lh + 62; G.meta = G.sub + 44;
       ctx.font = '500 26px ' + F; G.ml = packLines(metaP, CW, 2); G.mlh = 34;
       var rowH = L.rowMax, rk = (cap + (more ? 1 : 0)) * rowH;
-      G.bar = Y1 - 6; G.rank = { x: X0, y: G.bar - 18 - rk, w: CW, h: rk }; G.rowH = rowH;
+      G.cred = credit ? 36 : 0;                                /* 진행 막대 위 한 줄: 배경음악 출처 */
+      G.bar = Y1 - 6; G.rank = { x: X0, y: G.bar - 18 - G.cred - rk, w: CW, h: rk }; G.rowH = rowH;
       G.cardY = G.meta + (G.ml.length - 1) * G.mlh + 26; G.cardB = G.rank.y - 18;
       G.chart = { x: X0, y: G.cardY, w: CW, h: G.cardB - G.cardY };
       G.head = 64;                                             /* 그래프 칸 위쪽 줄: 날짜 · 넣은 돈 */
+    }
+    if (credit) {                                              /* 출처 줄 글자 크기: 칸에 들어갈 때까지 줄임 (16:9 는 위 오른쪽 · 9:16 은 진행 막대 위) */
+      ctx.font = '600 ' + (kind === 'h' ? 22 : 28) + 'px ' + F; var brandW = ctx.measureText('d-capitalism.com · 자산 속도 시뮬레이터').width;
+      G.cw = kind === 'h' ? CW - brandW - 60 : CW; G.cf = kind === 'h' ? 18 : 22;
+      ctx.font = '500 ' + G.cf + 'px ' + F; while (G.cf > 14 && ctx.measureText(credit).width > G.cw) { G.cf--; ctx.font = '500 ' + G.cf + 'px ' + F; }
     }
     var pad = 16, cx = G.chart.x + pad, cy = G.chart.y + pad + (G.head || 0), cw = G.chart.w - 2 * pad, chh = G.chart.h - 2 * pad - (G.head || 0);
     var ccv = document.createElement('canvas'); ccv.width = cw; ccv.height = Math.max(120, chh);
@@ -21638,17 +21653,22 @@ var WIF = (function () {
         ctx.fillStyle = bg; ctx.fillRect(rx, y, rw, rowH);
         ctx.font = '600 ' + Math.round(rowH * 0.36) + 'px ' + MONO; ctx.fillStyle = T.text3; ctx.textAlign = 'right'; ctx.fillText(String(i + 1), rx + 24, y + rowH * 0.62);
         ctx.textAlign = 'left'; ctx.font = '600 ' + Math.round(rowH * 0.4) + 'px ' + F; ctx.fillStyle = T.text; ctx.fillText(fitText(ctx, tagName(r.key), nameW - 10), rx + 34, y + rowH * 0.62);
-        ctx.globalAlpha = r.pre ? 0.5 : 1; ctx.fillStyle = S.colors[r.key]; rr(ctx, bx, y + rowH * 0.2, bw, rowH * 0.6, Math.min(8, rowH * 0.2)); ctx.fill(); ctx.globalAlpha = 1;
+        ctx.globalAlpha = r.pre ? 0.5 : 1; ctx.fillStyle = colOf(r.key); rr(ctx, bx, y + rowH * 0.2, bw, rowH * 0.6, Math.min(8, rowH * 0.2)); ctx.fill(); ctx.globalAlpha = 1;
         ctx.font = '700 ' + Math.round(rowH * 0.36) + 'px ' + MONO; ctx.fillStyle = T.text; ctx.fillText(fitText(ctx, won(r.v), valW), bx + bw + 10, y + rowH * 0.5);
         ctx.font = '500 ' + Math.round(rowH * 0.26) + 'px ' + MONO; ctx.fillStyle = T.text3; ctx.fillText(fitText(ctx, mx(r.v / inv) + (r.pre ? ' · 가상' : ''), valW), bx + bw + 10, y + rowH * 0.84);
       });
       ctx.restore();
       if (more) { ctx.font = '500 ' + Math.round(rowH * 0.34) + 'px ' + F; ctx.fillStyle = T.text3; ctx.fillText('외 ' + more + '개는 그래프에서', rx + 34, ry + cap * rowH + rowH * 0.62); }
+      if (credit) {                                            /* 배경음악 출처 (CC BY 4.0 곡은 표시가 이용 조건) */
+        ctx.font = '500 ' + G.cf + 'px ' + F; ctx.fillStyle = T.text3;
+        if (kind === 'h') { ctx.textAlign = 'right'; ctx.fillText(fitText(ctx, credit, G.cw), X1, G.brand); ctx.textAlign = 'left'; }
+        else ctx.fillText(fitText(ctx, credit, G.cw), X0, G.bar - 14);
+      }
       /* 진행 막대 (안전 영역 맨 아래 안쪽) */
       ctx.fillStyle = T.line; rr(ctx, X0, G.bar, CW, 6, 3); ctx.fill();
       if (t > 0) { ctx.fillStyle = T.acc; rr(ctx, X0, G.bar, Math.max(6, CW * t), 6, 3); ctx.fill(); }
     }
-    return { cv: cv, ctx: ctx, frame: frame, ymax: function () { return ch.scales.y.max; }, labels: function () { return { lab: ch._lab || [], top: ch.chartArea.top, bottom: ch.chartArea.bottom, h: ch.height }; }, safe: { x0: X0, y0: Y0, x1: X1, y1: Y1 }, ranks: cap, meta: G.ml.slice(), bg: T.bg, done: function () { ch.destroy(); } };
+    return { cv: cv, ctx: ctx, frame: frame, ymax: function () { return ch.scales.y.max; }, labels: function () { return { lab: ch._lab || [], top: ch.chartArea.top, bottom: ch.chartArea.bottom, h: ch.height }; }, safe: { x0: X0, y0: Y0, x1: X1, y1: Y1 }, ranks: cap, meta: G.ml.slice(), credit: credit || '', creditPx: G.cf || 0, bg: T.bg, done: function () { ch.destroy(); } };
   }
   var MUX = null;
   function loadMuxer() {
@@ -21678,95 +21698,82 @@ var WIF = (function () {
     var a = document.createElement('a'), url = URL.createObjectURL(blob); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
   }
-  /* ── 배경음악(BGM): 이 화면이 직접 만드는 곡 (외부 음원 없음 → 저작권 문제 없음) ──
-     · 영상 길이(앞 0.6초 + 정한 초 + 끝 2.5초)에 맞춰 OfflineAudioContext 로 합성 — D단조 i–VI–III–VII(Dm–B♭–F–C) 96bpm
-     · 처음: 낮은 현악 패드·팀파니 → 중반(35%~): 현악 8분음 오스티나토·타이코 북·금관 패드가 점점 커짐 → 끝 2초: 상승 효과음·스네어 롤
-       → 그래프가 다 그려지는 순간: D장조 큰 화음 + 북 + 심벌 → 결과 화면 동안 울리다 사라짐 (잔향: 만든 잡음 임펄스) · 난수는 시드 고정(같은 길이 = 같은 곡) */
-  function makeBgm(D, mainStart, mainEnd) {
-    var SR = 48000, len = Math.max(1, Math.ceil(D * SR)), ac = new OfflineAudioContext(2, len, SR);
-    var seed = 20261018; function rnd() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
-    function noiseBuf(sec) { var b = ac.createBuffer(2, Math.ceil(sec * SR), SR); for (var c = 0; c < 2; c++) { var d = b.getChannelData(c); for (var i = 0; i < d.length; i++) d[i] = rnd() * 2 - 1; } return b; }
-    var comp = ac.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.attack.value = 0.01; comp.release.value = 0.25;
-    var master = ac.createGain(); master.gain.setValueAtTime(0, 0); master.gain.linearRampToValueAtTime(0.9, 0.25);
-    master.gain.setValueAtTime(0.9, Math.max(0.3, D - 1.0)); master.gain.linearRampToValueAtTime(0, D);
-    master.connect(comp); comp.connect(ac.destination);
-    var rev = ac.createConvolver(), ir = ac.createBuffer(2, Math.ceil(2.8 * SR), SR);
-    for (var c = 0; c < 2; c++) { var d = ir.getChannelData(c); for (var i = 0; i < d.length; i++) d[i] = (rnd() * 2 - 1) * Math.pow(1 - i / d.length, 3.2); }
-    rev.buffer = ir; var wet = ac.createGain(); wet.gain.value = 0.32; rev.connect(wet); wet.connect(master);
-    function out(node, send) { node.connect(master); var g = ac.createGain(); g.gain.value = send == null ? 0.6 : send; node.connect(g); g.connect(rev); }
-    function hz(m) { return 440 * Math.pow(2, (m - 69) / 12); }
-    var beat = 60 / 96, bar = beat * 4, M = mainEnd - mainStart;
-    function prog(t) { return M > 0 ? Math.max(0, Math.min(1, (t - mainStart) / M)) : 1; }   /* 그래프 진행률 0~1 */
-    var CH = [[50, 57, 62, 65], [46, 53, 58, 62], [41, 53, 57, 60], [48, 55, 60, 64]];   /* Dm · B♭ · F · C (MIDI) */
-    function pad(t0, dur, notes, vol, cut0, cut1) {
-      notes.forEach(function (m) {
-        [-7, 7].forEach(function (det) {
-          var o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
-          o.type = 'sawtooth'; o.frequency.value = hz(m); o.detune.value = det;
-          f.type = 'lowpass'; f.Q.value = 0.7; f.frequency.setValueAtTime(cut0, t0); f.frequency.linearRampToValueAtTime(cut1, t0 + dur);
-          g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol, t0 + Math.min(0.5, dur * 0.4)); g.gain.setValueAtTime(vol, t0 + dur * 0.75); g.gain.linearRampToValueAtTime(0, t0 + dur + 0.35);
-          o.connect(f); f.connect(g); out(g, 0.7); o.start(t0); o.stop(t0 + dur + 0.4);
-        });
-      });
-    }
-    function pluck(t0, m, vol) {
-      var o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
-      o.type = 'sawtooth'; o.frequency.value = hz(m); f.type = 'lowpass'; f.frequency.value = 2200;
-      g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol, t0 + 0.008); g.gain.exponentialRampToValueAtTime(0.0008, t0 + 0.2);
-      o.connect(f); f.connect(g); out(g, 0.35); o.start(t0); o.stop(t0 + 0.22);
-    }
-    function drum(t0, vol, f0, f1, dec) {
-      var o = ac.createOscillator(), g = ac.createGain();
-      o.type = 'sine'; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(f1, t0 + 0.35);
-      g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol, t0 + 0.005); g.gain.exponentialRampToValueAtTime(0.0008, t0 + dec);
-      o.connect(g); out(g, 0.5); o.start(t0); o.stop(t0 + dec + 0.05);
-      var n = ac.createBufferSource(), nf = ac.createBiquadFilter(), ng = ac.createGain(); n.buffer = noiseBuf(0.12);
-      nf.type = 'lowpass'; nf.frequency.value = 700; ng.gain.setValueAtTime(vol * 0.5, t0); ng.gain.exponentialRampToValueAtTime(0.0008, t0 + 0.1);
-      n.connect(nf); nf.connect(ng); out(ng, 0.4); n.start(t0);
-    }
-    function hiss(t0, dur, vol, type, f0, f1, up) {
-      var n = ac.createBufferSource(), nf = ac.createBiquadFilter(), ng = ac.createGain(); n.buffer = noiseBuf(dur + 0.05);
-      nf.type = type; nf.frequency.setValueAtTime(f0, t0); nf.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
-      if (up) { ng.gain.setValueAtTime(0.0008, t0); ng.gain.exponentialRampToValueAtTime(vol, t0 + dur); }
-      else { ng.gain.setValueAtTime(vol, t0); ng.gain.exponentialRampToValueAtTime(0.0008, t0 + dur); }
-      n.connect(nf); nf.connect(ng); out(ng, 0.6); n.start(t0); n.stop(t0 + dur + 0.05);
-    }
-    var hitT = mainEnd, k = 0;
-    for (var t = 0; t < hitT - 0.05; t += bar, k++) {          /* 마디마다 화음 패드 · 북 · 오스티나토 (진행할수록 커짐) */
-      var ch = CH[k % 4], dur = Math.min(bar, hitT - t), p = prog(t + dur / 2);
-      pad(t, dur, [ch[0] - 12, ch[0]], 0.08 + 0.03 * p, 500, 1000 + 900 * p);                /* 낮은 현악 */
-      if (p > 0.15) pad(t, dur, ch.slice(1), 0.018 + 0.04 * p, 900, 1600 + 2600 * p);        /* 금관·현악 화음 */
-      for (var b = 0; b < 4; b++) {
-        var tb = t + b * beat; if (tb >= hitT - 0.05) break;
-        var pb = prog(tb);
-        if (b === 0 || (pb > 0.35 && b === 2)) drum(tb, 0.32 + 0.4 * pb, 110, 42, 0.9);       /* 팀파니·타이코 */
-        if (pb > 0.6 && (b === 1 || b === 3)) drum(tb + beat / 2, 0.18 + 0.2 * pb, 160, 70, 0.5);
-        if (pb > 0.35) for (var e = 0; e < 2; e++) { var te = tb + e * beat / 2; if (te < hitT - 0.05) pluck(te, ch[0] + (e ? 12 : 0) + (b === 3 && e ? 7 : 0), 0.05 + 0.07 * pb); }   /* 현악 8분음 */
-      }
-    }
-    var rs = Math.max(0, hitT - Math.min(2.2, Math.max(0.8, M * 0.2)));                          /* 끝 직전 상승 효과음 + 스네어 롤 */
-    if (hitT - rs > 0.3) {
-      hiss(rs, hitT - rs, 0.22, 'bandpass', 300, 7000, true);
-      for (var tr = rs, gap = 0.16; tr < hitT - 0.03; tr += gap, gap = Math.max(0.035, gap * 0.9)) {
-        var vr = 0.08 + 0.22 * (tr - rs) / (hitT - rs); hiss(tr, 0.08, vr, 'bandpass', 1900, 1500, false);
-      }
-    }
-    /* 끝 큰 화음: D장조 (승리감) + 북 + 심벌 → 결과 화면 동안 울림 */
-    var tail = Math.max(0.5, D - hitT);
-    pad(hitT, tail, [38, 50, 57, 62, 66, 69], 0.07, 3200, 700);
-    [62, 66, 69, 74].forEach(function (m) {
-      var o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
-      o.type = 'sawtooth'; o.frequency.value = hz(m); f.type = 'lowpass'; f.frequency.setValueAtTime(4200, hitT); f.frequency.exponentialRampToValueAtTime(900, hitT + tail);
-      g.gain.setValueAtTime(0, hitT); g.gain.linearRampToValueAtTime(0.06, hitT + 0.02); g.gain.exponentialRampToValueAtTime(0.001, hitT + tail);
-      o.connect(f); f.connect(g); out(g, 0.8); o.start(hitT); o.stop(hitT + tail + 0.05);
+  /* ── 배경음악(BGM): 무료 곡 모음(assets/bgm — scripts/fetch_bgm.py 가 만듦) 중 영상마다 무작위 ──
+     · 곡: 퍼블릭 도메인(CC0 · FreePD) + CC BY 4.0(Kevin MacLeod·incompetech 등 — 출처 표시가 이용 조건 → 영상 안에 '♪ 곡 — 작곡가 · 라이선스' 자동 표시
+       + 내려받은 뒤 '설명란용 출처 복사') · 웅장하고 기대감 있는 곡만 골라 담음 · 곡마다 음량을 −14 LUFS 로 맞춰 둠
+     · 영상 길이에 맞춰 곡을 편집하지 않음: 곡 처음부터 그대로 흐르다가 영상이 끝나는 곳에서 끊김 — 끝 1.2초만 살짝 줄여 '뚝' 끊기는 소리 없이
+     · 고르는 조건(bgmOk): 곡 길이 ≥ 영상 길이 + 0.3초 · 크게 울리기 시작하는 때(full)가 영상 길이의 35% 안(짧은 영상에 조용한 도입부만 나오지 않게)
+       · 최근에 쓴 곡(최대 8곡)은 피함 → 만들 때마다 다른 곡 · 🔀 로 바로 다른 곡 · ▶ 미리 듣기 = 영상에 들어갈 그대로(처음부터 영상 길이만큼) */
+  var BGM = { list: null, p: null, next: null, buf: null, err: false }, BGM_FADE = 1.2;
+  function bgmUrl(f) { return 'assets/bgm/' + f; }
+  function xget(url, type) {   /* 사이트의 fetch 가로채기(캐시)와 상관없이 그대로 받음 */
+    return new Promise(function (res, rej) {
+      var q = new XMLHttpRequest(); q.open('GET', url); q.responseType = type;
+      q.onload = function () { q.status >= 200 && q.status < 300 && q.response ? res(q.response) : rej(new Error('HTTP ' + q.status)); };
+      q.onerror = function () { rej(new Error('network')); }; q.send();
     });
-    drum(hitT, 0.6, 90, 32, 2.2); drum(hitT + 0.012, 0.32, 140, 50, 1.2);
-    hiss(hitT, Math.min(2.6, tail), 0.3, 'highpass', 5000, 3000, false);
-    return ac.startRendering().then(function (buf) {   /* 가장 큰 소리를 약 −2 dBFS(0.8)에 맞춤 — 끝 큰 화음이 찢어지지(클리핑) 않게 · 손실 압축(AAC·Opus)이 조금 키우는 몫까지 남김 */
-      var pk = 0, c2, i2, d2;
-      for (c2 = 0; c2 < buf.numberOfChannels; c2++) { d2 = buf.getChannelData(c2); for (i2 = 0; i2 < d2.length; i2++) { var v = d2[i2] < 0 ? -d2[i2] : d2[i2]; if (v > pk) pk = v; } }
-      if (pk > 0) { var g = 0.8 / pk; for (c2 = 0; c2 < buf.numberOfChannels; c2++) { d2 = buf.getChannelData(c2); for (i2 = 0; i2 < d2.length; i2++) d2[i2] *= g; } }
-      return buf;
+  }
+  function bgmList() {
+    if (BGM.list) return Promise.resolve(BGM.list);
+    if (!BGM.p) BGM.p = xget(bgmUrl('bgm.json'), 'json').then(function (j) {
+      BGM.list = ((j && j.list) || []).filter(function (t) { return t && t.f && t.d > 0; }); BGM.err = false; bgmCredits(); return BGM.list;
+    }, function (e) { BGM.p = null; BGM.err = true; throw e; });
+    return BGM.p;
+  }
+  function videoSec(sec) { return (Math.round(FPS * 0.6) + Math.max(2, Math.round(sec * FPS)) + Math.round(FPS * 2.5)) / FPS; }   /* 영상 전체 길이(초) — makeVideo 와 같은 식 */
+  function bgmD() { return videoSec(inputs().sec); }
+  function bgmOk(t, D) { return t.d >= D + 0.3 && t.full <= Math.max(3, D * 0.35); }
+  function bgmRecent() { var r = store('bgmRecent'); return Array.isArray(r) ? r : []; }
+  function bgmPick(D, avoid) {
+    var L = BGM.list || [], ok = L.filter(function (t) { return bgmOk(t, D); });
+    if (!ok.length) ok = L.slice().sort(function (a, b) { return b.d - a.d; }).slice(0, 1);   /* (목록상 없음) 가장 긴 곡 */
+    var rec = bgmRecent(), fresh = ok.filter(function (t) { return rec.indexOf(t.id) < 0 && t.id !== avoid; });
+    var pool = fresh.length ? fresh : ok.filter(function (t) { return t.id !== avoid; });
+    if (!pool.length) pool = ok;
+    return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+  }
+  function bgmLic(t) { return t.lic === 'CC0' ? '퍼블릭 도메인' : t.lic; }
+  function bgmCredit(t) { return '♪ ' + t.t + ' — ' + t.a + (t.site === 'incompetech.com' ? ' (incompetech.com)' : '') + ' · ' + bgmLic(t); }   /* 영상 안 출처 줄 */
+  function bgmShow() {
+    var el = $('as-bgm-now'); if (!el) return;
+    var t = BGM.next;
+    el.innerHTML = BGM.err ? '배경음악 목록을 불러오지 못했습니다 (영상은 소리 없이 만들어짐)' : !BGM.list ? '곡 목록 불러오는 중…' :
+      t ? '다음 영상 곡 <b>♪ ' + esc(t.t) + '</b> — ' + esc(t.a) + ' <small>· ' + esc(bgmLic(t)) + ' · ' + BGM.list.length + '곡 중 무작위</small>' : '';
+  }
+  function bgmCredits() {   /* 자주 묻는 질문의 곡 목록·출처 (bgm.json 이 바뀌면 그대로 따라감) */
+    var el = $('as-bgm-list'); if (!el || !BGM.list) return;
+    var by = BGM.list.filter(function (t) { return t.lic !== 'CC0'; }).length;
+    $('as-bgm-n').textContent = BGM.list.length + '곡 (퍼블릭 도메인 ' + (BGM.list.length - by) + ' · CC BY 4.0 ' + by + ')';
+    el.innerHTML = BGM.list.map(function (t) { return '<li><b>' + esc(t.t) + '</b> — ' + esc(t.a) + ' <small>(' + esc(t.site) + ' · ' + esc(t.lic === 'CC0' ? '퍼블릭 도메인 CC0' : t.lic) + ' · ' + Math.round(t.d) + '초)</small></li>'; }).join('');
+  }
+  function bgmEnsure() {   /* 지금 '그리는 시간'에 맞는 다음 곡 (맞지 않으면 다시 고름) */
+    return bgmList().then(function () { var D = bgmD(); if (!BGM.next || !bgmOk(BGM.next, D)) BGM.next = bgmPick(D); bgmShow(); return BGM.next; },
+      function (e) { bgmShow(); throw e; });
+  }
+  function bgmShuffle() {
+    var was = !!BGMP; previewStop();
+    bgmList().then(function () { BGM.next = bgmPick(bgmD(), BGM.next && BGM.next.id); bgmShow(); if (was) previewBgm(); }, bgmShow);
+  }
+  function bgmUsed(t) {   /* 영상에 쓴 곡 → 최근 목록 · 다음 곡은 다른 곡으로 */
+    var r = bgmRecent().filter(function (x) { return x !== t.id; }); r.unshift(t.id);
+    store('bgmRecent', r.slice(0, Math.max(1, Math.min(8, Math.floor((BGM.list || []).length / 2)))));
+    BGM.next = bgmPick(bgmD(), t.id); bgmShow();
+  }
+  function bgmDecode(t) {   /* 곡 파일 → AudioBuffer(48kHz 스테레오) · 마지막 곡은 기억해 미리 듣기·영상에 같이 씀 */
+    if (BGM.buf && BGM.buf.id === t.id) return Promise.resolve(BGM.buf.b);
+    return xget(bgmUrl(t.f), 'arraybuffer').then(function (ab) {
+      var oc = new OfflineAudioContext(2, 48000, 48000);
+      return new Promise(function (res, rej) { var p = oc.decodeAudioData(ab, res, rej); if (p && p.then) p.then(res, rej); });
+    }).then(function (b) { BGM.buf = { id: t.id, b: b }; return b; });
+  }
+  function bgmRender(t, D) {   /* 곡 처음부터 D초 그대로 (편집 없음) · 끝 BGM_FADE 초만 줄임 → AudioBuffer */
+    return bgmDecode(t).then(function (src) {
+      var SR = 48000, ac = new OfflineAudioContext(2, Math.max(1, Math.ceil(D * SR)), SR), g = ac.createGain(), s = ac.createBufferSource();
+      g.gain.setValueAtTime(0, 0); g.gain.linearRampToValueAtTime(1, 0.02);
+      g.gain.setValueAtTime(1, Math.max(0.03, D - BGM_FADE)); g.gain.linearRampToValueAtTime(0, D);
+      s.buffer = src; s.loop = src.duration < D;   /* 곡이 영상보다 짧은 경우는 고르지 않지만(bgmOk) 혹시 모를 때 처음부터 다시 */
+      s.connect(g); g.connect(ac.destination); s.start(0);
+      return ac.startRendering();
     });
   }
   function pickAudio() {   /* AAC(Chrome·Edge·Safari) → 없으면 Opus (예: 리눅스 Chromium·파이어폭스 — 유튜브는 됨) */
@@ -21820,7 +21827,7 @@ var WIF = (function () {
     var codec = 'avc1.' + [desc[1], desc[2], desc[3]].map(function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
     return { samples: samples, desc: desc, codec: codec, W: W, H: H };
   }
-  function makeVideo(kind, test) {   /* test(회귀 검사용): {force:'wasm'} 내장 인코더로 · {codecs:['vp09.00.40.08']} 인코더 목록 바꾸기 · {bgm:false} 소리 없이 */
+  function makeVideo(kind, test) {   /* test(회귀 검사용): {force:'wasm'} 내장 인코더로 · {codecs:['vp09.00.40.08']} 인코더 목록 바꾸기 · {bgm:false} 소리 없이 · {track:'id'} 이 곡으로 */
     var sim = S.sim;
     if (!sim || sim.err || S.vbusy) return Promise.resolve(null);
     if (S.playing) pause();
@@ -21830,11 +21837,20 @@ var WIF = (function () {
     var withBgm = test.bgm != null ? !!test.bgm : $('as-bgm').checked, D = total / FPS;
     function tOf(i) { return i < lead ? 0 : Math.min(1, (i - lead) / (main - 1)); }
     vstat('영상 준비 중… <button type="button" class="as-vx" id="as-vx">취소</button>', true);
-    var audioP = withBgm ? Promise.all([makeBgm(D, lead / FPS, (lead + main - 1) / FPS), pickAudio()]).then(function (r) { return r[1] ? { buf: r[0], ac: r[1] } : { none: 1 }; }) : Promise.resolve(null);
+    previewStop();
+    var audioP = withBgm ? bgmList().then(function () {   /* 곡 고르기(이 영상 길이 D 에 맞는 곡) → 처음부터 D초 (못 받으면 소리 없이 만들고 알림) */
+      var t = BGM.next && bgmOk(BGM.next, D) ? BGM.next : (BGM.next = bgmPick(D)); bgmShow();
+      if (test.track) t = BGM.list.filter(function (x) { return x.id === test.track; })[0] || t;
+      if (!t) throw new Error('곡 없음');
+      job.bgm = t;
+      return Promise.all([bgmRender(t, D), pickAudio()]);
+    }).then(function (r) { return r[1] ? { buf: r[0], ac: r[1] } : { none: 1 }; }, function () { job.bgm = null; return { fail: 1 }; }) : Promise.resolve(null);
     var useWc = window.VideoEncoder && window.VideoFrame && test.force !== 'wasm';
     var p = Promise.all([loadMuxer(), useWc ? pickCodec(L.W, L.H, test.codecs) : null, audioP]).then(function (r) {
       var M = r[0], cfg = r[1], au = r[2] && r[2].buf ? r[2] : null;
-      job.audio = au ? au.ac.mux : r[2] && r[2].none ? 'none' : null;
+      job.audio = au ? au.ac.mux : r[2] && r[2].none ? 'none' : r[2] && r[2].fail ? 'fail' : null;
+      if (!au) job.bgm = null;
+      job.credit = job.bgm ? bgmCredit(job.bgm) : '';   /* 곡을 넣을 때만 영상 안에 출처 줄 */
       function newMuxer(vcodec) {
         var o = { target: new M.ArrayBufferTarget(), video: { codec: vcodec, width: L.W, height: L.H, frameRate: FPS }, fastStart: 'in-memory', firstTimestampBehavior: 'offset' };
         if (au) o.audio = { codec: au.ac.mux, numberOfChannels: 2, sampleRate: 48000 };
@@ -21845,18 +21861,18 @@ var WIF = (function () {
           muxer.finalize();
           var blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
           save(blob, fname(kind, 'mp4'));
-          return { blob: blob, frames: total, codec: codec, w: L.W, h: L.H, how: how, audio: job.audio };
+          return { blob: blob, frames: total, codec: codec, w: L.W, h: L.H, how: how, audio: job.audio, bgm: job.bgm, credit: job.credit, D: D };
         });
       }
       if (!cfg) {   /* H.264 인코더가 없는 브라우저: 내장 인코더 → (소리가 있으면) 표본을 꺼내 소리와 함께 다시 담음 */
         return wasmEncode(kind, job, total, tOf).then(function (u8) {
-          if (!au) { var blob = new Blob([u8], { type: 'video/mp4' }); save(blob, fname(kind, 'mp4')); return { blob: blob, frames: total, codec: 'h264(wasm)', w: L.W, h: L.H, how: 'wasm', audio: job.audio }; }
+          if (!au) { var blob = new Blob([u8], { type: 'video/mp4' }); save(blob, fname(kind, 'mp4')); return { blob: blob, frames: total, codec: 'h264(wasm)', w: L.W, h: L.H, how: 'wasm', audio: job.audio, bgm: null, credit: '', D: D }; }
           var dm = demuxAvc(u8), mx = newMuxer('avc'), meta = { decoderConfig: { codec: dm.codec, codedWidth: dm.W, codedHeight: dm.H, description: dm.desc } };
           dm.samples.forEach(function (sm, i) { mx.addVideoChunkRaw(sm.data, sm.key ? 'key' : 'delta', Math.round(i * 1e6 / FPS), Math.round(1e6 / FPS), i ? undefined : meta); });
           return finish(mx, 'wasm', 'h264(wasm)');
         });
       }
-      var vm = videoMaker(kind), err = null, muxer = newMuxer(/^vp09/.test(cfg.codec) ? 'vp9' : 'avc');
+      var vm = videoMaker(kind, job.credit), err = null, muxer = newMuxer(/^vp09/.test(cfg.codec) ? 'vp9' : 'avc');
       var enc = new VideoEncoder({ output: function (chunk, meta) { muxer.addVideoChunk(chunk, meta); }, error: function (e) { err = e; } });
       enc.configure(cfg);
       var i = 0;
@@ -21878,21 +21894,36 @@ var WIF = (function () {
       });
     });
     return p.then(function (r) {
-      var an = r.audio === 'aac' ? ' · 배경음악 AAC' : r.audio === 'opus' ? ' · 배경음악 Opus(이 브라우저는 AAC 인코더가 없음 — 인스타그램용은 Chrome·Edge·Safari 에서 만들어 주세요)' : r.audio === 'none' ? ' · 이 브라우저는 소리 인코더가 없어 배경음악 없이 만들었습니다' : '';
-      vstat('✓ ' + esc(fname(kind, 'mp4')) + ' 내려받음 (' + L.W + '×' + L.H + ' · ' + (total / FPS).toFixed(1) + '초' + an + ')', false); S.vbusy = null; S.vlast = r; return r; },
+      var an = r.audio === 'aac' ? ' · 배경음악 AAC' : r.audio === 'opus' ? ' · 배경음악 Opus(이 브라우저는 AAC 인코더가 없음 — 인스타그램용은 Chrome·Edge·Safari 에서 만들어 주세요)' : r.audio === 'none' ? ' · 이 브라우저는 소리 인코더가 없어 배경음악 없이 만들었습니다' : r.audio === 'fail' ? ' · 배경음악 곡을 불러오지 못해 소리 없이 만들었습니다' : '';
+      var bg = r.bgm ? '<br>♪ 이번 곡: <b>' + esc(r.bgm.t) + '</b> — ' + esc(r.bgm.a) + ' (' + esc(bgmLic(r.bgm)) + ')' + (r.bgm.lic !== 'CC0' ? ' · 올릴 때 설명란에도 출처를 적어 주세요' : '') + ' <button type="button" class="as-vx" id="as-bgm-copy">설명란용 출처 복사</button>' : '';
+      vstat('✓ ' + esc(fname(kind, 'mp4')) + ' 내려받음 (' + L.W + '×' + L.H + ' · ' + (total / FPS).toFixed(1) + '초' + an + ')' + bg, false); S.vbusy = null; S.vlast = r;
+      if (r.bgm) bgmUsed(r.bgm);   /* 다음 영상은 다른 곡 */
+      return r; },
       function (e) { vstat(e && e.message === 'cancel' ? '영상 만들기를 취소했습니다.' : '영상을 만들지 못했습니다' + (e && e.message ? ' (' + esc(e.message) + ')' : '') + '. 잠시 후 다시 해 주세요.', false); S.vbusy = null; S.vlast = { err: String(e && e.message || e) }; return null; });
   }
-  /* BGM 미리 듣기 — 지금 '그리는 시간'에 맞춘 곡을 만들어 바로 재생 (다시 누르면 멈춤) */
+  /* BGM 미리 듣기 — 다음 영상 곡을 영상에 들어갈 그대로(처음부터 영상 길이만큼 · 끝 1.2초 줄임) 재생 · 다시 누르면 멈춤 */
   var BGMP = null;
+  function previewStop() {
+    if (!BGMP) return;
+    var p = BGMP; BGMP = null;
+    try { if (p.src) p.src.stop(); } catch (e) {} try { if (p.ctx) p.ctx.close(); } catch (e) {}
+    var b = $('as-bgm-play'); if (b) b.textContent = '▶ 미리 듣기';
+  }
   function previewBgm() {
     var btn = $('as-bgm-play');
-    if (BGMP) { try { BGMP.src.stop(); BGMP.ctx.close(); } catch (e) {} BGMP = null; btn.textContent = '▶ 미리 듣기'; return; }
-    var sec = inputs().sec, D = 0.6 + sec + 2.5; btn.textContent = '만드는 중…';
-    makeBgm(D, 0.6, 0.6 + sec - 1 / FPS).then(function (buf) {
-      var ctx = new (window.AudioContext || window.webkitAudioContext)(), src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination); src.start();
+    if (BGMP) { previewStop(); return; }
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();   /* 누른 순간 만들어 둠 — 곡을 받는 동안 '사용자 동작' 시간이 지나도 소리가 막히지 않게 */
+    var tok = BGMP = { ctx: ctx }; btn.textContent = '불러오는 중…';
+    bgmEnsure().then(function (t) { if (!t) throw new Error('곡 없음'); return bgmDecode(t); }).then(function (buf) {
+      if (BGMP !== tok) return;
+      if (ctx.state === 'suspended' && ctx.resume) ctx.resume();
+      var D = bgmD(), g = ctx.createGain(), src = ctx.createBufferSource(), t0 = ctx.currentTime + 0.05;
+      src.buffer = buf; src.loop = buf.duration < D; src.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(1, t0 + Math.max(0.03, D - BGM_FADE)); g.gain.linearRampToValueAtTime(0, t0 + D);
+      src.start(t0); src.stop(t0 + D);
       BGMP = { ctx: ctx, src: src }; btn.textContent = '■ 멈춤';
-      src.onended = function () { if (BGMP && BGMP.src === src) { try { ctx.close(); } catch (e) {} BGMP = null; btn.textContent = '▶ 미리 듣기'; } };
-    }, function () { btn.textContent = '▶ 미리 듣기'; });
+      src.onended = function () { if (BGMP && BGMP.src === src) previewStop(); };
+    }).catch(function () { if (BGMP === tok) previewStop(); else { try { ctx.close(); } catch (e) {} } });
   }
   /* 브라우저에 H.264 인코더(WebCodecs)가 없을 때: WebAssembly H.264 인코더(assets/vendor/h264-mp4-encoder — minih264)로 한 장씩 → 언제나 H.264
      (MediaRecorder 는 브라우저에 따라 VP9 를 MP4 에 담아 인스타그램 등에서 거부될 수 있어 쓰지 않음) */
@@ -21913,7 +21944,7 @@ var WIF = (function () {
       enc.width = L.W; enc.height = L.H; enc.frameRate = FPS; enc.quantizationParameter = 23; enc.speed = 8; enc.groupOfPictures = FPS * 2;
       enc.outputFilename = 'as_' + kind + '.mp4';
       enc.initialize();
-      var vm = videoMaker(kind), i = 0;
+      var vm = videoMaker(kind, job.credit), i = 0;
       return new Promise(function (res, rej) {
         function step() {
           try {
@@ -21972,7 +22003,15 @@ var WIF = (function () {
     ['as-vid-h', 'as-vid-v'].forEach(function (id) { $(id).addEventListener('click', function () { makeVideo(this.getAttribute('data-r')); }); });
     $('as-qa').addEventListener('click', function (e) { var b = e.target.closest('[data-qa]'); if (b) addKey(b.getAttribute('data-qa')); });
     $('as-bgm-play').addEventListener('click', previewBgm);
-    $('as-bgm').addEventListener('change', function () { store('bgm', this.checked); });
+    $('as-bgm-next').addEventListener('click', bgmShuffle);
+    $('as-bgm').addEventListener('change', function () { store('bgm', this.checked); if (!this.checked) previewStop(); $('as-bgm-nowrow').hidden = !this.checked; });
+    $('as-vstat').addEventListener('click', function (e) {   /* 설명란용 출처 복사 (CC BY 4.0 곡은 올릴 때 출처 표시가 조건) */
+      var b = e.target.closest && e.target.closest('#as-bgm-copy'); if (!b || !S.vlast || !S.vlast.bgm) return;
+      var txt = S.vlast.bgm.credit || bgmCredit(S.vlast.bgm);
+      function done() { b.textContent = '복사됨 ✓'; }
+      function old() { var ta = document.createElement('textarea'); ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (x) { window.prompt('아래 출처를 복사해 주세요', txt); } ta.remove(); }
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, old); else old();
+    });
     $('as-chips').addEventListener('click', function (e) {
       var b = e.target.closest('[data-rm]'); if (!b) return;
       var key = b.getAttribute('data-rm');
@@ -22010,6 +22049,8 @@ var WIF = (function () {
       if (cfg && typeof cfg.log === 'boolean') $('as-log').checked = cfg.log;
       if (cfg && typeof cfg.pre === 'boolean') $('as-pre').checked = cfg.pre;
       var bg = store('bgm'); if (typeof bg === 'boolean') $('as-bgm').checked = bg;
+      $('as-bgm-nowrow').hidden = !$('as-bgm').checked;
+      bgmEnsure().catch(function () {});   /* 배경음악 목록 → '다음 영상 곡' 표시 · 자주 묻는 질문의 곡 목록 */
       if (cfg && cfg.y) { $('as-y').value = cfg.y; $('as-m').value = cfg.m; } else setStart(Math.max(earliest(), lastMonth() - 120));
       chips();
       $('as-src').innerHTML = '자료: 네이버 금융·Yahoo Finance 월봉(매일 적립은 일봉) · 국토교통부 실거래가(아파트 중위가격) · 한국은행 ECOS(M2·소비자물가·환율·KB 아파트지수)' +
@@ -22030,7 +22071,8 @@ var WIF = (function () {
     }).catch(function () { S.ready = false; $('as-src').textContent = '자료를 불러오지 못했습니다. 잠시 후 다시 열어 주세요.'; });
   }
   window.asRender = function () { if (PG.classList.contains('active')) { if (!window.dcAdmin.ok()) { window.dcAdmin.when(window.asRender); return; } if (!S.ready) init(); else if (S.sim) makeChart(); } else if (S.playing) pause(); };   /* [ADMIN] 관리자 확인 뒤에만 */
-  window.ASPEED = { state: function () { return S; }, simulate: simulate, series: series, mseries: mseries, need: function () { return need(inputs()); }, video: makeVideo, videoMaker: videoMaker, openFull: openFull, closeFull: closeFull };   /* 회귀 검사용 */
+  window.ASPEED = { state: function () { return S; }, simulate: simulate, series: series, mseries: mseries, need: function () { return need(inputs()); }, video: makeVideo, videoMaker: videoMaker, openFull: openFull, closeFull: closeFull,
+    bgm: { list: function () { return BGM.list; }, load: bgmList, pick: bgmPick, ok: bgmOk, sec: videoSec, credit: bgmCredit, decode: bgmDecode, render: bgmRender, next: function () { return BGM.next; } } };   /* 회귀 검사용 */
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.asRender); else setTimeout(window.asRender, 0);
 })();
 

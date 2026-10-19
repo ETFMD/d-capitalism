@@ -1231,19 +1231,22 @@ def aspeed2_check(page, base, fail, local):
     jm = max(abs(ys[i] / ys[i - 1] - 1) for i in range(1, len(ys)))
     if jm > 0.10: fail('asset-speed', '영상 세로 축이 한 장에 %.1f%% 바뀜 (부드럽게 줄고 늘어야 함 · 미리 보기 0.8초 + 0.35초 완화면 한 장 10%% 안)' % (jm * 100))
     # 영상 가장자리 여백(살짝 안쪽): 16:9 가장자리 5% · 9:16 좌우 64·위 128·아래 160 — 그 밖은 배경색뿐 · 선 끝 이름은 그래프 칸 안 · 순위는 9:16 도 8줄(5위 이상 늘 보임)
+    # · 마지막 장면은 배경음악 출처 줄(긴 출처)까지 넣고 같은 검사
     # · 그래프 선 끝 이름도 5개 이상 · 기간·조건 줄: '과거 수익률은 미래를 보장하지 않음' 이 잘리지 않고 들어감 · 점선 안내는 실제 상장 전 가상 구간이 있을 때만
     for kind in ('h', 'v'):
-        r = page.evaluate("""(k) => { const out = []; for (const frac of [0.45, 1]) { const vm = ASPEED.videoMaker(k), S = vm.safe, W = vm.cv.width, H = vm.cv.height, M = Math.round(ASPEED.state().sim.o.sec * 30), n = Math.round((18 + M + 75) * frac);
+        r = page.evaluate("""(k) => { const out = []; for (const frac of [0.45, 1]) { const vm = ASPEED.videoMaker(k, frac === 1 ? '♪ Adventures of Flying Jack — Alexander Nakarada (incompetech.com) · CC BY 4.0' : ''), S = vm.safe, W = vm.cv.width, H = vm.cv.height, M = Math.round(ASPEED.state().sim.o.sec * 30), n = Math.round((18 + M + 75) * frac);
               for (let i = 0; i < n; i++) vm.frame(i < 18 ? 0 : Math.min(1, (i - 18) / (M - 1)), i ? 1 / 30 : 0);
               const d = vm.ctx.getImageData(0, 0, W, H).data, bg = vm.bg.match(/[0-9a-f]{2}/gi).map(h => parseInt(h, 16)); let bad = 0;
               for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { if (x >= S.x0 && x < S.x1 && y >= S.y0 && y < S.y1) continue; const o = (y * W + x) * 4; if (d[o] !== bg[0] || d[o + 1] !== bg[1] || d[o + 2] !== bg[2]) bad++; }
-              const lb = vm.labels(); out.push({ frac, bad, lbad: lb.lab.filter(b => b[0] < -0.5 || b[1] > lb.h + 0.5).length, S, n: lb.lab.length, ranks: vm.ranks, assets: ASPEED.state().sim.list.length, meta: vm.meta, pre: ASPEED.state().sim.list.some(x => x.preTo) }); vm.done(); } return out; }""", kind)
+              const lb = vm.labels(); out.push({ frac, bad, lbad: lb.lab.filter(b => b[0] < -0.5 || b[1] > lb.h + 0.5).length, S, n: lb.lab.length, ranks: vm.ranks, assets: ASPEED.state().sim.list.length, meta: vm.meta, pre: ASPEED.state().sim.list.some(x => x.preTo), credit: vm.credit, cpx: vm.creditPx }); vm.done(); } return out; }""", kind)
         for x in r:
             mt = ' / '.join(x['meta'])
             if '과거 수익률은 미래를 보장하지 않음' not in mt or '세금·수수료 제외' not in mt:   # 잘리면(…) 여기서 걸림
                 fail('asset-speed', '영상 %s 기간·조건 줄에 경고 문구가 없거나 잘림: %s' % (kind, mt))
             if ('점선 = 상장 전 가상' in mt) != bool(x['pre']):
                 fail('asset-speed', '영상 %s 점선 안내가 실제 상장 전 구간 유무(%s)와 다름: %s' % (kind, x['pre'], mt))
+            if x['frac'] == 1 and (not x['credit'] or x['cpx'] < 14):   # 배경음악 출처 줄 (긴 출처도 글자 14px 이상으로 여백 안)
+                fail('asset-speed', '영상 %s 배경음악 출처 줄 이상: %s %spx' % (kind, x['credit'], x['cpx']))
             if x['ranks'] < min(5, x['assets']):
                 fail('asset-speed', '영상 %s 순위가 %d위까지만 보임 (자산 %d개 · 5위 이상 보여야 함)' % (kind, x['ranks'], x['assets']))
             if x['n'] < min(5, x['assets']):
@@ -1270,6 +1273,31 @@ def aspeed2_check(page, base, fail, local):
             fail('asset-speed', 'MP4 파일 이름 이상: ' + dl.value.suggested_filename)
     except Exception as e:
         fail('asset-speed', 'MP4 16:9 내려받기 실패: %s' % str(e)[:160])
+    # 배경음악(assets/bgm · scripts/fetch_bgm.py): 무료 곡 목록(CC0·CC BY 4.0 · 출처 문구 · 파일) · 곡 처음부터 그대로(편집 없음) · 끝 1.2초만 줄임
+    #  · 영상에 쓴 곡 = 출처 줄 · 다음 영상은 다른 곡 · 물가 선은 흰색(밝은 테마는 거의 검정)
+    try:
+        r = page.evaluate("""async () => { const B = ASPEED.bgm, L = await B.load(), bad = [];
+            for (const t of L) {
+              if (!['CC0', 'CC BY 4.0'].includes(t.lic) || !t.credit || t.credit.indexOf(t.t) < 0 || (t.lic !== 'CC0' && t.credit.indexOf('Creative Commons') < 0)) bad.push('라이선스·출처 ' + t.id);
+              const st = await new Promise(res => { const q = new XMLHttpRequest(); q.open('HEAD', 'assets/bgm/' + t.f); q.onload = () => res([q.status, +q.getResponseHeader('content-length')]); q.onerror = () => res([0, 0]); q.send(); });
+              if (st[0] !== 200 || !(st[1] > 100000)) bad.push('파일 ' + t.f + ' ' + st); }
+            const t = L.find(x => x.d >= 30 && x.full <= 1), D = 12.1, SR = 48000, src = await B.decode(t), out = await B.render(t, D), a = src.getChannelData(0), b = out.getChannelData(0);
+            let diff = 0, tail = 0, mid = 0;
+            for (let i = Math.round(0.05 * SR); i < Math.round((D - 1.3) * SR); i++) diff = Math.max(diff, Math.abs(a[i] - b[i]));
+            for (let i = b.length - Math.round(0.01 * SR); i < b.length; i++) tail = Math.max(tail, Math.abs(b[i]));
+            for (let i = SR; i < 3 * SR; i++) mid = Math.max(mid, Math.abs(b[i]));
+            const v = ASPEED.state().vlast || {}, ds = ASPEED.state().chart.data.datasets.find(d => d.label === '물가');
+            return { n: L.length, bad, id: t.id, diff, tail, mid, len: out.length / SR, used: v.bgm && v.bgm.id, usedT: v.bgm && v.bgm.t, credit: v.credit, next: B.next() && B.next().id,
+                     cpi: ds && ds.borderColor, light: document.documentElement.getAttribute('data-theme') === 'light' }; }""")
+        if r['n'] < 30 or r['bad']: fail('asset-speed', '배경음악 목록 이상: %d곡 · %s' % (r['n'], r['bad'][:5]))
+        if r['diff'] > 1e-6 or abs(r['len'] - 12.1) > 1 / 48000 or r['tail'] > r['mid'] * 0.02 + 1e-4 or r['mid'] < 0.05:
+            fail('asset-speed', '배경음악이 곡 처음부터 그대로가 아니거나 끝이 줄지 않음: %s' % {k: r[k] for k in ('id', 'diff', 'len', 'tail', 'mid')})
+        if not r['used'] or not r['credit'] or r['usedT'] not in r['credit'] or r['next'] == r['used']:
+            fail('asset-speed', '영상 배경음악 기록 이상 (쓴 곡·출처 줄·다음 곡): %s' % {k: r[k] for k in ('used', 'credit', 'next')})
+        if r['cpi'] != ('#191f28' if r['light'] else '#ffffff'):
+            fail('asset-speed', '물가 선 색이 흰색(밝은 테마는 #191f28)이 아님: %s' % r['cpi'])
+    except Exception as e:
+        fail('asset-speed', '배경음악 검사 실패: %s' % str(e)[:160])
 
 
 def kcmp_check(page, base, fail, local):
