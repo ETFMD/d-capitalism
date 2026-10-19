@@ -1340,7 +1340,10 @@ def sns_ui_check(page, fail):
         page.evaluate("() => { window.__snsGet = dcAuth.get; dcAuth.get = () => ({ token: 'regression' }); return ASPEED.sns.load(); }")
         page.wait_for_function("document.querySelectorAll('#as-sns-acc .as-sns-a').length === 4", timeout=15000)
         r = page.evaluate("""() => { const v = ASPEED.state().vlast, g = document.getElementById('as-sns-guide').textContent, out = { blob: !!(v && v.blob), go0: document.getElementById('as-sns-go').disabled,
-              cb: ['yt', 'ig', 'th', 'fb'].every(p => g.indexOf('W/sns/cb/' + p) >= 0) && g.indexOf('W/sns/meta/delete') >= 0 };
+              cb: ['yt', 'ig', 'th', 'fb'].every(p => g.indexOf('W/sns/cb/' + p) >= 0) && g.indexOf('W/sns/meta/delete') >= 0,
+              gmiss: ['YouTube Data API v3', '데이터 액세스', '프로덕션', 'instagram_business_content_publish', 'Instagram 테스터', 'pages_manage_posts', '사용자 액세스 토큰',
+                      'threads_content_publish', 'Threads 테스터', 'IG_APP_ID', 'IG_APP_SECRET', 'FB_APP_ID', 'FB_APP_SECRET', 'FB_CONFIG_ID', 'TH_APP_ID', 'TH_APP_SECRET'].filter(k => g.indexOf(k) < 0),
+              gsec: document.querySelectorAll('#as-sns-guide details.as-sns-g').length, gok: (g.match(/✓ 연결됨/g) || []).length };
             if (!out.blob) return out;
             ASPEED.sns.video(Object.assign({}, v, { w: 1080, h: 1920, audio: 'opus' }));
             out.opus = [...document.querySelectorAll('[data-sns-use]')].filter(c => !c.disabled).map(c => c.dataset.snsUse);
@@ -1354,6 +1357,8 @@ def sns_ui_check(page, fail):
         if not r['blob']: fail('asset-speed', 'SNS 자동 게시 검사: 앞에서 만든 영상이 없음'); return
         if not r['go0']: fail('asset-speed', 'SNS 자동 게시: 9:16 영상이 없는데 올리기 단추가 켜져 있음 (16:9 영상은 올리지 않음)')
         if not r['cb']: fail('asset-speed', "SNS 자동 게시 '처음 한 번' 안내에 콜백·삭제 주소가 없음")
+        if r['gmiss'] or r['gsec'] != 5 or r['gok'] != 4:   # SNS 별 접기 4칸 + GitHub 1칸 · 연결 상태 표시(가짜 응답 = 4곳 모두 연결)
+            fail('asset-speed', "SNS '처음 한 번' 안내 이상: 빠진 항목 %s · 접기 칸 %d개(기대 5) · '✓ 연결됨' %d개(기대 4)" % (r['gmiss'], r['gsec'], r['gok']))
         if r['opus'] != ['yt']: fail('asset-speed', 'SNS 자동 게시: 소리가 Opus 인 영상은 유튜브만 골라져야 함 (인스타·스레드·페이스북은 AAC 만): %s' % r['opus'])
         if r['aac'] != ['yt', 'ig', 'th', 'fb']: fail('asset-speed', 'SNS 자동 게시: 연결된 4곳이 골라지지 않음: %s' % r['aac'])
         if r['go1'] or not r['go2']: fail('asset-speed', 'SNS 올리기 단추: 고른 곳이 있으면 켜지고 모두 끄면 꺼져야 함 (켜짐 %s · 모두 끔 %s)' % (not r['go1'], not r['go2']))

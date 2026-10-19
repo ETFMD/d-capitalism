@@ -21997,29 +21997,69 @@ var WIF = (function () {
     });
     $('as-sns-acc').innerHTML = h;
   }
-  function snsGuide() {   /* 처음 한 번 — 콜백 주소는 Worker 가 알려 준 실제 주소 */
-    var st = SNS.st || {}, w = st.worker || '(Worker 주소)', cb = function (p) { return '<code>' + esc(((st.p || {})[p] || {}).cb || (w + '/sns/cb/' + p)) + '</code>'; };
-    var de = '<code>' + esc((st.meta || {}).deauth || (w + '/sns/meta/deauth')) + '</code>', dd = '<code>' + esc((st.meta || {}).del || (w + '/sns/meta/delete')) + '</code>';
-    $('as-sns-guide').innerHTML =
-      '<p>비밀번호는 여기 넣지 않습니다. SNS 마다 <b>개발자 앱</b>을 만들어 앱 ID·비밀값을 GitHub 저장소 <b>Settings → Secrets and variables → Actions</b> 에 아래 이름으로 넣고, ' +
-      'Actions 의 <b>\'방문자 수 카운터 배포\'</b>를 한 번 실행하면 Worker 로 옮겨집니다. 그다음 위의 <b>연결하기</b>를 누르면 됩니다. 앱은 \'개발 모드\' 그대로 두어도 <b>본인 계정</b>에는 올라갑니다(앱 검수 불필요). 화면 이름은 Meta·Google 이 바꿀 수 있습니다.</p>' +
-      '<h4>유튜브 쇼츠</h4><ol><li>Google Cloud 콘솔 → 간편 로그인에 쓰는 프로젝트(또는 새 프로젝트) → <b>API 및 서비스 → 라이브러리 → YouTube Data API v3 → 사용</b></li>' +
-      '<li><b>OAuth 동의 화면</b>: 게시 상태를 <b>프로덕션</b>으로(테스트 상태면 7일마다 연결이 끊김) · 범위에 <code>youtube.upload</code>, <code>youtube.readonly</code> 추가</li>' +
-      '<li><b>사용자 인증 정보 → OAuth 클라이언트(웹)</b> → 승인된 리디렉션 URI 에 ' + cb('yt') + ' 추가 — 간편 로그인과 같은 클라이언트면 비밀값은 더 넣지 않아도 됨(새로 만들었으면 <code>YT_CLIENT_ID</code>·<code>YT_CLIENT_SECRET</code>)</li>' +
-      '<li>처음 연결할 때 \'Google 에서 확인하지 않은 앱\' 화면이 나오면 <b>고급 → (앱 이름)(으)로 이동</b> → 채널 고르기 → 허용</li></ol>' +
-      '<h4>인스타그램 릴스</h4><ol><li>인스타그램 앱에서 계정을 <b>프로페셔널(크리에이터 또는 비즈니스) · 공개</b>로 바꿈</li>' +
-      '<li><a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">developers.facebook.com/apps</a> → 앱 만들기 → 사용 사례 <b>기타</b> → 유형 <b>비즈니스</b> → 제품 <b>Instagram</b> 설정 → <b>Instagram 로그인을 사용한 API 설정</b></li>' +
-      '<li>\'액세스 토큰 생성\'에서 본인 인스타그램 계정 추가 · \'비즈니스 로그인 설정\'에 리디렉션 URL ' + cb('ig') + ', 연결 해제 콜백 ' + de + ', 데이터 삭제 요청 URL ' + dd + '</li>' +
-      '<li>같은 화면의 <b>Instagram 앱 ID / 앱 시크릿</b> → <code>IG_APP_ID</code>·<code>IG_APP_SECRET</code></li></ol>' +
-      '<h4>페이스북 릴스</h4><ol><li><b>페이스북 페이지</b>가 필요합니다(개인 프로필에는 API 로 올릴 수 없음)</li>' +
-      '<li>같은 Meta 앱 → 제품 <b>Facebook 로그인</b>(또는 비즈니스용 Facebook 로그인) 추가 → 유효한 OAuth 리디렉션 URI 에 ' + cb('fb') + '</li>' +
-      '<li>권한 <code>pages_show_list</code>·<code>pages_read_engagement</code>·<code>pages_manage_posts</code> · 비즈니스용 로그인이면 이 권한으로 \'구성\'을 만들고 그 ID 를 <code>FB_CONFIG_ID</code></li>' +
-      '<li><b>앱 설정 → 기본 설정</b>의 앱 ID / 앱 시크릿 → <code>FB_APP_ID</code>·<code>FB_APP_SECRET</code> · 연결할 때 올릴 페이지를 꼭 선택</li></ol>' +
-      '<h4>스레드</h4><ol><li>Meta 개발자에서 새 앱 → 사용 사례 <b>Threads API 액세스</b> → 권한 <code>threads_basic</code>, <code>threads_content_publish</code></li>' +
-      '<li>설정: 리디렉션 콜백 URL ' + cb('th') + ', 연결 해제 ' + de + ', 삭제 ' + dd + '</li>' +
-      '<li>앱 역할 → <b>Threads 테스터</b>에 본인 계정 추가 → 스레드 앱 <b>설정 → 계정 → 웹사이트 권한 → 초대</b>에서 수락</li>' +
-      '<li><b>Threads 앱 ID / Threads 앱 시크릿</b> → <code>TH_APP_ID</code>·<code>TH_APP_SECRET</code></li></ol>' +
-      '<p class="no">※ 올리는 영상은 Worker 의 임시 보관함에 하루만 두었다가 자동으로 지웁니다. 인스타그램은 하루 100개, 페이스북 릴스는 하루 30개, 스레드는 하루 250개까지 API 로 올릴 수 있습니다.</p>';
+  function snsGuide() {   /* 처음 한 번 — 콜백 주소는 Worker 가 알려 준 실제 주소 · 2026-10 실제 화면 순서(Google 인증 플랫폼 · Meta 이용 사례 대시보드) · SNS 마다 접기 + 준비 상태 */
+    var st = SNS.st || {}, w = st.worker || (window.__counterEP ? String(window.__counterEP).replace(/\/$/, '') : '(Worker 주소)'), sp = st.p || {};
+    var C = function (t) { return '<code>' + esc(t) + '</code>'; };
+    var cb = function (p) { return C((sp[p] || {}).cb || (w + '/sns/cb/' + p)); };
+    var de = C((st.meta || {}).deauth || (w + '/sns/meta/deauth')), dd = C((st.meta || {}).del || (w + '/sns/meta/delete'));
+    var A = function (u, t) { return '<a href="' + u + '" target="_blank" rel="noopener">' + t + '</a>'; };
+    var mark = function (p) { var o = sp[p]; if (!o) return ''; return o.conn ? ' <span class="ok">✓ 연결됨</span>' : o.ready ? ' <span class="ok">비밀값 들어감 — 위에서 [연결하기]</span>' : ' <span class="wn">준비 필요</span>'; };
+    var S = function (t, p, body) { return '<details class="as-sns-g"><summary>' + t + mark(p) + '</summary>' + body + '</details>'; };
+    var GH = 'https://github.com/ETFMD/d-capitalism', host = String(w).replace(/^https?:\/\//, '');
+    var el = $('as-sns-guide'), op = [].map.call(el.querySelectorAll('details.as-sns-g'), function (d) { return d.open; });   /* 다시 그려도 펼쳐 둔 칸은 그대로 */
+    el.innerHTML =
+      '<p>비밀번호는 여기 넣지 않습니다. SNS 마다 <b>개발자 앱</b>의 ID·비밀값을 GitHub 저장소 시크릿에 넣고, Actions ‘방문자 수 카운터 배포’를 한 번 실행한 뒤 위의 <b>[연결하기]</b>를 누르면 됩니다. 순서: ①~④ SNS 별 준비 → ⑤ GitHub 에 넣고 연결.</p>' +
+      '<ul class="g-note"><li>앱은 ‘개발 모드(게시되지 않음)’ 그대로 두어도 <b>본인 계정</b>에는 올라갑니다 — 앱 검수·앱 게시·웹훅은 모두 건너뜁니다.</li>' +
+      '<li>🔒 시크릿 값은 캡처·채팅·메신저에 올리지 마세요. 노출됐으면 그 화면의 <b>[재설정]</b>으로 새로 받고 GitHub 값도 바꿉니다.</li>' +
+      '<li>메뉴 이름은 Google·Meta 가 바꿀 수 있습니다 (2026년 10월 화면 기준).</li></ul>' +
+      '<div class="g-meta"><b>GitHub 에 넣을 시크릿 한눈에</b><ul>' +
+        '<li><b>유튜브</b> — 더 넣을 것 없음 (간편 로그인 구글 앱을 같이 씀 · 새 OAuth 클라이언트를 만들었을 때만 ' + C('YT_CLIENT_ID') + ' ' + C('YT_CLIENT_SECRET') + ')</li>' +
+        '<li><b>인스타그램</b> — ' + C('IG_APP_ID') + ' ' + C('IG_APP_SECRET') + ' : 인스타그램 이용 사례 → ‘Instagram 로그인이 포함된 API 설정’ 맨 위의 <b>Instagram</b> 앱 ID·시크릿</li>' +
+        '<li><b>페이스북</b> — ' + C('FB_APP_ID') + ' ' + C('FB_APP_SECRET') + ' ' + C('FB_CONFIG_ID') + ' : 앱 설정 → 기본 설정의 앱 ID·시크릿 · 비즈니스용 Facebook 로그인 → 구성의 구성 ID</li>' +
+        '<li><b>스레드</b> — ' + C('TH_APP_ID') + ' ' + C('TH_APP_SECRET') + ' : Threads 이용 사례 → 설정의 <b>Threads</b> 앱 ID·시크릿</li></ul></div>' +
+      '<p class="no">⚠️ Meta 앱 하나에 ID 가 세 가지(Instagram 앱 ID · 앱 ID · Threads 앱 ID)라 서로 다릅니다. 위 목록에 적힌 화면에서 정확히 가져오세요.</p>' +
+      S('① 유튜브 쇼츠 — Google Cloud', 'yt', '<ol>' +
+        '<li>' + A('https://console.cloud.google.com/', 'Google Cloud 콘솔') + ' 위쪽 프로젝트 고르기에서 <b>간편 로그인에 쓰는 프로젝트</b>를 고릅니다.</li>' +
+        '<li>맨 위 검색창에 ' + C('YouTube Data API v3') + ' → 검색 결과 → <b>[사용]</b> (이걸 켜야 아래 범위 목록에 유튜브가 나옵니다)</li>' +
+        '<li>왼쪽 ☰ → <b>Google 인증 플랫폼</b>(예전 ‘OAuth 동의 화면’) → <b>대상</b>: 사용자 유형 <b>외부</b> · 게시 상태가 ‘테스트 중’이면 <b>[앱 게시]</b> → ‘<b>프로덕션</b> 단계’로 (테스트 상태면 7일마다 연결이 끊김). 심사 안내가 나와도 본인만 쓰므로 그대로 둡니다.</li>' +
+        '<li><b>데이터 액세스</b> → <b>[범위 추가 또는 삭제]</b> → 필터에 ' + C('youtube.upload') + ' 입력 → 체크 · ' + C('youtube.readonly') + ' 도 체크 (목록에 없으면 창 아래 ‘수동으로 범위 추가’ 칸에 ' + C('https://www.googleapis.com/auth/youtube.upload') + ' ' + C('https://www.googleapis.com/auth/youtube.readonly') + ' 를 한 줄씩 붙여 넣고 [표에 추가]) → <b>[업데이트]</b> → 페이지 맨 아래 <b>[Save]</b>. ‘범위가 어떤 방식으로 사용되나요?’·‘YouTube 링크’ 칸은 심사용이라 비워 둡니다(저장할 때 이유를 꼭 적으라고 하면 ' + C('Used only by the site owner to upload our own Shorts to our own YouTube channel.') + '). 범위 옆 노란 ⚠ 는 ‘심사 전’ 표시라 그대로 둡니다.</li>' +
+        '<li><b>클라이언트</b> → 간편 로그인에 쓰는 웹 클라이언트 → 승인된 리디렉션 URI <b>[+ URI 추가]</b> → ' + cb('yt') + ' → <b>[저장]</b> (반영에 몇 분 걸릴 수 있음)</li>' +
+        '<li>비밀값: 이 클라이언트를 그대로 쓰면 더 넣을 것이 없습니다. 새 OAuth 클라이언트를 만들었다면 그 ID·비밀번호를 ' + C('YT_CLIENT_ID') + ' ' + C('YT_CLIENT_SECRET') + ' 로.</li>' +
+        '<li>처음 연결할 때 ‘Google 에서 확인하지 않은 앱’이 나오면 <b>고급 → (앱 이름)(으)로 이동</b> → 채널 고르기 → 허용</li></ol>') +
+      '<div class="g-meta"><b>Meta(인스타그램·페이스북·스레드) 공통</b><ul>' +
+        '<li>' + A('https://developers.facebook.com/apps', 'developers.facebook.com/apps') + ' → 내 앱 (없으면 <b>[앱 만들기]</b> → 앱 유형 <b>비즈니스</b>). 세 SNS 를 <b>같은 앱 하나</b>에 넣어도 됩니다.</li>' +
+        '<li>대시보드에는 ‘제품 목록’이 없습니다 — 오른쪽 위 <b>[이용 사례 추가]</b>로 넣고, 대시보드 목록의 그 줄 <b>&gt;</b> 를 눌러 맞춤 설정합니다.</li>' +
+        '<li>테스터 역할: <b>앱 역할 → 역할 → [사람 추가]</b> 창에서 위쪽 ‘테스터’(페이스북 계정용)가 아니라 아래쪽 <b>‘Instagram 테스터’ / ‘Threads 테스터’</b>를 고릅니다. 앱을 만든 본인 페이스북 계정은 이미 관리자라 추가하지 않습니다.</li></ul></div>' +
+      S('② 인스타그램 릴스', 'ig', '<ol>' +
+        '<li>인스타그램 앱 → 프로필 ☰ → <b>계정 유형 및 도구 → 프로페셔널 계정으로 전환</b>(크리에이터 또는 비즈니스) · ☰ → <b>계정 공개 범위</b>에서 비공개 끄기</li>' +
+        '<li>Meta 앱 대시보드 <b>[이용 사례 추가]</b> → <b>‘Instagram API 로 메시지 및 콘텐츠 관리’</b> → 대시보드의 그 줄 <b>&gt;</b></li>' +
+        '<li>왼쪽 <b>권한 및 기능</b>: ' + C('instagram_business_basic') + ' ' + C('instagram_business_content_publish') + ' 가 ‘추가됨’인지 확인 — 아니면 <b>[추가]</b> (게시 권한이 없으면 못 올림). ‘1. 필수 메시지 권한 추가’([Add all required permissions])는 메시지·댓글용이라 누르지 않아도 됩니다.</li>' +
+        '<li>왼쪽 <b>Instagram 로그인이 포함된 API 설정</b> → ‘2. 액세스 토큰 생성’ 문장의 파란 <b>역할</b> → <b>[사람 추가] → Instagram 테스터</b> → 인스타그램 사용자 이름(@ 없이) → [추가] → 그 계정으로 ' + A('https://www.instagram.com/accounts/manage_access/', 'instagram.com/accounts/manage_access') + ' → <b>테스터 초대</b> 탭 → [수락]</li>' +
+        '<li>다시 ‘2. 액세스 토큰 생성’ → <b>[계정 추가]</b> → 인스타그램 로그인·허용 (여기서 나오는 토큰은 쓰지 않음 — 계정 등록만)</li>' +
+        '<li>‘3. Webhooks 구성’은 건너뜁니다.</li>' +
+        '<li><b>Instagram 비즈니스 로그인 설정 → [설정]</b> → 리디렉션 URL ' + cb('ig') + ' → 저장 → 이어서 <b>[비즈니스 로그인 설정]</b> → 연결 해제 콜백 URL ' + de + ' · 데이터 삭제 요청 URL ' + dd + ' → 저장. ‘앱 검수’는 건너뜁니다.</li>' +
+        '<li>같은 화면 맨 위 <b>Instagram 앱 ID</b> → ' + C('IG_APP_ID') + ' · <b>Instagram 앱 시크릿 코드</b>([표시]) → ' + C('IG_APP_SECRET') + '</li></ol>') +
+      S('③ 페이스북 릴스', 'fb', '<ol>' +
+        '<li><b>페이스북 페이지</b>가 필요합니다(개인 프로필에는 API 로 올릴 수 없음) — 없으면 ' + A('https://www.facebook.com/pages/create', 'facebook.com/pages/create') + ' · 본인 계정이 그 페이지 관리자</li>' +
+        '<li>대시보드 <b>[이용 사례 추가]</b> → <b>‘페이지 모든 항목 관리’</b> → 그 줄 &gt; → <b>권한 및 기능</b>: ' + C('pages_show_list') + ' ' + C('pages_read_engagement') + ' ' + C('pages_manage_posts') + ' 모두 ‘추가됨’</li>' +
+        '<li>왼쪽 <b>비즈니스용 Facebook 로그인 → 설정</b>: ‘유효한 OAuth 리디렉션 URI’ ' + cb('fb') + ' · 아래 ‘승인 취소 → 콜백 URL 승인 취소’ ' + de + ' → <b>[변경 내용 저장]</b> (‘Strict 모드’는 켜 둔 채 주소를 글자 그대로)</li>' +
+        '<li><b>비즈니스용 Facebook 로그인 → 구성 → [구성 만들기]</b>: 로그인 종류 <b>일반</b> · 액세스 토큰 <b>사용자 액세스 토큰</b>(‘시스템 사용자’ 아님) · 토큰 만료는 고를 수 있으면 <b>만료되지 않음</b> · 자산 <b>페이지</b> · 권한은 위 3개 → [만들기] → 목록의 <b>구성 ID</b>(숫자) → ' + C('FB_CONFIG_ID') + ' (비즈니스용 로그인 앱은 이 값이 없으면 연결되지 않음 · 일반 ‘Facebook 로그인’ 제품만 쓰는 앱이면 필요 없음)</li>' +
+        '<li>왼쪽 아래 <b>앱 설정 → 기본 설정</b>의 <b>앱 ID</b> → ' + C('FB_APP_ID') + ' · <b>앱 시크릿 코드</b>([표시]) → ' + C('FB_APP_SECRET') + ' (인스타그램 화면의 ‘Instagram 앱 ID’와 다른 값)</li>' +
+        '<li>연결할 때 페이스북 창의 <b>페이지 고르기</b> 단계에서 올릴 페이지를 꼭 체크 — 빠뜨리면 ‘글을 올릴 수 있는 페이스북 페이지가 없습니다’ → [다시 연결]. ‘앱 도메인에 포함되지 않음’ 오류가 나면 기본 설정 → 앱 도메인에 ' + C(host) + ' 추가</li></ol>') +
+      S('④ 스레드', 'th', '<ol>' +
+        '<li>스레드 계정이 필요합니다(인스타그램으로 스레드 앱에 한 번 로그인하면 생김) · 공개 계정</li>' +
+        '<li>대시보드의 <b>‘Threads API 액세스’</b> 이용 사례 줄 &gt; (없으면 [이용 사례 추가] → ‘Threads API 액세스’ · 같은 앱에 넣을 수 없다고 나오면 앱을 새로 만들어 이 이용 사례만)</li>' +
+        '<li><b>권한 및 기능</b>: ' + C('threads_basic') + '(기본) · ' + C('threads_content_publish') + ' <b>[추가]</b> (없으면 게시 못 함 — 다른 권한은 필요 없음)</li>' +
+        '<li>왼쪽 <b>설정</b>: 리디렉션 콜백 URL ' + cb('th') + ' · 연결 해제 콜백 URL ' + de + ' · 데이터 삭제 요청 URL ' + dd + ' → [저장]</li>' +
+        '<li>같은 화면 <b>[Threads 테스트 사용자 추가 또는 삭제]</b> → [사람 추가] → <b>Threads 테스터</b> → 스레드 사용자 이름(@ 없이) → [추가] → 스레드 앱 프로필 ☰ → <b>설정 → 계정 → 웹사이트 권한 → 초대</b> → [수락] (PC 는 threads.com 설정의 같은 메뉴)</li>' +
+        '<li>같은 설정 화면 <b>Threads 앱 ID</b> → ' + C('TH_APP_ID') + ' · <b>Threads 앱 시크릿</b> → ' + C('TH_APP_SECRET') + '</li></ol>') +
+      '<details class="as-sns-g"><summary>⑤ GitHub 에 넣고 연결하기</summary><ol>' +
+        '<li>' + A(GH + '/settings/secrets/actions', 'GitHub 저장소 → Settings → Secrets and variables → Actions') + ' → <b>[New repository secret]</b> → Name 에 위 표의 이름, Secret 에 값 → [Add secret] (값만 — 앞뒤 공백·따옴표 없이)</li>' +
+        '<li>' + A(GH + '/actions/workflows/deploy-counter.yml', 'Actions → ‘방문자 수 카운터 배포’') + ' → <b>[Run workflow]</b> → 초록 체크까지 2~3분 (시크릿을 넣거나 바꿀 때마다 한 번)</li>' +
+        '<li>이 화면을 새로고침 → 위 연결 상태가 <b>[연결하기]</b>로 바뀜 (계속 ‘준비 필요’면 그 SNS 시크릿 이름 오타 확인) → 하나씩 연결: 새 창에서 로그인·허용 → 창이 닫히며 ‘연결했습니다’</li>' +
+        '<li><b>실제 Chrome·Edge</b>에서 9:16 영상 만들기 → 글 확인·수정 → <b>[지금 올리기]</b>. 실패하면 SNS 가 준 이유가 그대로 뜹니다 → [다시 시도]</li></ol></details>' +
+      '<p class="no">※ 인스타그램·스레드·페이스북은 소리가 AAC 인 영상만 받습니다(Chrome·Edge·Safari 에서 만든 영상) · 페이스북 릴스는 90초까지. 올리는 영상은 Worker 의 임시 보관함에 하루만 두었다가 자동으로 지웁니다. 인스타그램은 하루 100개, 페이스북 릴스는 하루 30개, 스레드는 하루 250개까지 API 로 올릴 수 있습니다.</p>';
+    [].forEach.call(el.querySelectorAll('details.as-sns-g'), function (d, i) { if (op[i]) d.open = true; });
   }
   function snsTags(xs) {
     var out = ['재테크'];
