@@ -1,0 +1,215 @@
+{
+ "_comment": "scripts/fetch_book_covers.py 가 만드는 파일 — 손으로 고치지 않음. check: same = 예스24·교보문고 표지가 같음 · diff = 서로 다름(사람이 확인) · one = 한 곳에서만 받음",
+ "covers": {
+  "ai-and-workers": {
+   "w": 320,
+   "h": 457,
+   "from": "yes24:152389113",
+   "v": "9de03389",
+   "check": "same"
+  },
+  "ai-superpowers": {
+   "w": 320,
+   "h": 447,
+   "from": "yes24:71838727",
+   "v": "eb8c3924",
+   "check": "same"
+  },
+  "second-machine-age": {
+   "w": 320,
+   "h": 472,
+   "from": "yes24:14830557",
+   "v": "cc81d22b",
+   "check": "diff"
+  },
+  "homo-deus": {
+   "w": 320,
+   "h": 450,
+   "from": "yes24:39404092",
+   "v": "6fa7c67c",
+   "check": "same"
+  },
+  "power-and-progress": {
+   "w": 320,
+   "h": 470,
+   "from": "yes24:119809159",
+   "v": "85b33448",
+   "check": "same"
+  },
+  "capital-21c": {
+   "w": 320,
+   "h": 475,
+   "from": "yes24:14156539",
+   "v": "9409e105",
+   "check": "same"
+  },
+  "rich-dad-poor-dad": {
+   "w": 320,
+   "h": 459,
+   "from": "yes24:58774995",
+   "v": "57191b28",
+   "check": "same"
+  },
+  "nature-of-money": {
+   "w": 320,
+   "h": 453,
+   "from": "yes24:90428162",
+   "v": "9a2cd869",
+   "check": "same"
+  },
+  "psychology-of-money": {
+   "w": 320,
+   "h": 480,
+   "from": "yes24:172574653",
+   "v": "f7851faf",
+   "check": "same"
+  },
+  "millionaire-fastlane": {
+   "w": 320,
+   "h": 474,
+   "from": "yes24:106369008",
+   "v": "8a72d496",
+   "check": "same"
+  },
+  "humanities-of-wealth": {
+   "w": 320,
+   "h": 473,
+   "from": "yes24:107666677",
+   "v": "30d5b379",
+   "check": "same"
+  },
+  "great-wealth-shift": {
+   "w": 320,
+   "h": 472,
+   "from": "yes24:91165853",
+   "v": "7c0a9dbe",
+   "check": "same"
+  },
+  "own-all-the-stocks": {
+   "w": 320,
+   "h": 466,
+   "from": "yes24:154746251",
+   "v": "e1a14f05",
+   "check": "same"
+  },
+  "giants-portfolio": {
+   "w": 320,
+   "h": 472,
+   "from": "yes24:104988500",
+   "v": "71538442",
+   "check": "same"
+  },
+  "random-walk": {
+   "w": 320,
+   "h": 475,
+   "from": "yes24:119021191",
+   "v": "b70981d9",
+   "check": "same"
+  },
+  "one-up-on-wall-street": {
+   "w": 320,
+   "h": 465,
+   "from": "yes24:192518589",
+   "v": "8bee22a2",
+   "check": "same"
+  },
+  "laoer-infinite-buying": {
+   "w": 320,
+   "h": 471,
+   "from": "yes24:101875887",
+   "v": "246dad3e",
+   "check": "same"
+  },
+  "intelligent-investor": {
+   "w": 320,
+   "h": 472,
+   "from": "yes24:147069298",
+   "v": "9883a534",
+   "check": "same"
+  },
+  "salaryman-retire-rich": {
+   "w": 320,
+   "h": 475,
+   "from": "yes24:110050359",
+   "v": "50e5d73c",
+   "check": "same"
+  },
+  "remgun-real-estate-school": {
+   "w": 320,
+   "h": 474,
+   "from": "yes24:64367255",
+   "v": "c96b5958",
+   "check": "same"
+  },
+  "korea-real-estate-manual": {
+   "w": 320,
+   "h": 453,
+   "from": "yes24:153840309",
+   "v": "42ad1a84",
+   "check": "same"
+  },
+  "auction-step-by-step": {
+   "w": 320,
+   "h": 414,
+   "from": "yes24:174642283",
+   "v": "f31594b1",
+   "check": "same"
+  },
+  "single-mom-auction": {
+   "w": 320,
+   "h": 422,
+   "from": "yes24:89429762",
+   "v": "9c037239",
+   "check": "same"
+  },
+  "auction-rights-analysis": {
+   "w": 320,
+   "h": 478,
+   "from": "yes24:68724647",
+   "v": "851c5242",
+   "check": "same"
+  },
+  "pension-rich-class": {
+   "w": 320,
+   "h": 470,
+   "from": "yes24:148032819",
+   "v": "8eb0fca5",
+   "check": "same"
+  },
+  "my-first-monthly-etf": {
+   "w": 320,
+   "h": 474,
+   "from": "yes24:176234240",
+   "v": "85595fcf",
+   "check": "same"
+  },
+  "starbucks-dividend": {
+   "w": 320,
+   "h": 442,
+   "from": "yes24:123876440",
+   "v": "97faaef9",
+   "check": "same"
+  },
+  "magic-pension": {
+   "w": 320,
+   "h": 454,
+   "from": "yes24:122769876",
+   "v": "ce7969f3",
+   "check": "same"
+  },
+  "your-money-or-your-life": {
+   "w": 320,
+   "h": 474,
+   "from": "yes24:177187691",
+   "v": "648f31d0",
+   "check": "same"
+  },
+  "simple-path-to-wealth": {
+   "w": 320,
+   "h": 473,
+   "from": "yes24:167644862",
+   "v": "f9dfc1b5",
+   "check": "same"
+  }
+ }
+}

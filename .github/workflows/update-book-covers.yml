@@ -1,0 +1,55 @@
+name: 자본가 서재 책 표지 갱신
+
+# content/books/books.json 에 책이 늘거나(또는 판이 바뀌어 src·isbn 이 바뀌면) 표지를 받아 books/cover/<id>.webp + content/books/covers.json 커밋
+#  → '도구별 주소 페이지 생성'이 workflow_run 으로 이어서 돌아 /books/·투자 공부 글에 표지가 들어감
+# 이미 받은 표지는 다시 받지 않음 · 주 1회는 받지 못한 표지만 다시 시도(서점 서버 일시 오류 대비)
+# 받지 못한 책이 있으면 이 실행이 실패로 끝나 GitHub 알림으로 알 수 있음 (그동안 페이지는 순위 숫자 상자로 대신 그림)
+on:
+  workflow_dispatch:
+    inputs:
+      refresh:
+        description: '이미 받은 표지도 모두 다시 받아 비교 (그림이 같으면 커밋 없음)'
+        type: boolean
+        default: false
+  schedule:
+    - cron: '50 21 * * 0'   # 매주 월요일 06:50 KST
+  push:
+    branches: [main]
+    paths: ['content/books/books.json', 'scripts/fetch_book_covers.py', '.github/workflows/update-book-covers.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: book-covers
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Pillow 설치
+        run: pip install --quiet pillow
+      - name: 표지 받기 (예스24 상품 번호 → 실패하면 교보문고 ISBN · 두 서점 표지 비교)
+        id: fetch
+        run: python3 scripts/fetch_book_covers.py ${{ inputs.refresh && '--refresh' || '' }}
+        continue-on-error: true
+      - name: 변경된 경우에만 커밋 (받은 표지만이라도)
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898099+github-actions[bot]@users.noreply.github.com'
+          git add -A -- books/cover content/books/covers.json
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git commit -m "chore: 자본가 서재 책 표지 갱신"
+          for i in 1 2 3; do git pull --rebase --autostash && git push && exit 0; sleep 5; done
+          exit 1
+      - name: 받지 못한 표지가 있으면 실패로 알림
+        if: steps.fetch.outcome == 'failure'
+        run: |
+          echo "::error::받지 못한 책 표지가 있습니다 — 위 '표지 받기' 기록의 ✗ 줄을 확인하세요"
+          exit 1
