@@ -2415,6 +2415,24 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .as-qa { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; } .as-qa:empty { display:none; }
   .as-qa button { font-family:var(--font); font-size:11.5px; color:var(--text2); background:transparent; border:1px dashed var(--card-border); border-radius:999px; padding:3px 9px; cursor:pointer; } .as-qa button:hover { color:var(--accent); border-color:rgba(49,130,246,.5); }
   .as-bgm-row { display:flex; align-items:flex-start; gap:8px; } .as-bgm-row .as-check { flex:1; } .as-bgm-btn { padding:5px 10px !important; font-size:12px !important; white-space:nowrap; }
+  .as-sns { margin-top:16px; } .as-sns-h { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 10px; margin-bottom:10px; } .as-sns-h .card-title { margin:0; } .as-sns-h small { color:var(--text3); font-size:12px; }
+  .as-sns-acc { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:8px; margin-bottom:12px; font-size:13px; }
+  .as-sns-a { border:1px solid var(--card-border); border-radius:10px; padding:8px 10px; display:flex; flex-direction:column; gap:4px; min-width:0; }
+  .as-sns-a b { font-size:13px; } .as-sns-a .nm { color:var(--text2); overflow-wrap:anywhere; } .as-sns-a .wn { color:#e5a50a; font-size:12px; } .as-sns-a .no { color:var(--text3); font-size:12px; }
+  .as-sns-a .row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; } .as-sns-a select { max-width:100%; font-size:12px; }
+  .as-sns-a button { padding:4px 10px !important; font-size:12px !important; }
+  .as-sns-vid { font-size:13px; color:var(--text2); margin-bottom:10px; line-height:1.6; } .as-sns-vid .bad { color:#f04452; }
+  .as-sns-ed[hidden] { display:none; } .as-sns-ed { display:grid; gap:10px; margin-bottom:12px; }
+  .as-sns-f { border:1px solid var(--card-border); border-radius:10px; padding:8px 10px; } .as-sns-f.off { opacity:.55; }
+  .as-sns-f > label { display:flex; align-items:center; gap:6px; font-weight:700; font-size:13px; } .as-sns-f > label small { font-weight:400; color:var(--text3); margin-left:auto; }
+  .as-sns-f input[type=text], .as-sns-f textarea { width:100%; box-sizing:border-box; margin-top:6px; font:inherit; font-size:13px; line-height:1.5; padding:6px 8px; border-radius:8px; border:1px solid var(--card-border); background:var(--bg); color:var(--text); }
+  .as-sns-f textarea { min-height:120px; resize:vertical; } .as-sns-f .why { font-size:12px; color:#e5a50a; margin-top:4px; }
+  .as-sns-go { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; } .as-sns-st { font-size:13px; color:var(--text2); }
+  .as-sns-prog { list-style:none; margin:10px 0 0; padding:0; display:grid; gap:6px; font-size:13px; } .as-sns-prog:empty { display:none; }
+  .as-sns-prog li { display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; border-left:3px solid var(--card-border); padding:2px 0 2px 10px; overflow-wrap:anywhere; }
+  .as-sns-prog li.ok { border-color:#16b47a; } .as-sns-prog li.err { border-color:#f04452; } .as-sns-prog li a { color:var(--accent); }
+  .as-sns-help { margin-top:14px; font-size:13px; } .as-sns-help summary { cursor:pointer; color:var(--text2); } .as-sns-help ol { padding-left:20px; line-height:1.7; } .as-sns-help li { margin:4px 0; }
+  .as-sns-help code { font-size:12px; overflow-wrap:anywhere; background:var(--bg); padding:1px 4px; border-radius:4px; } .as-sns-help h4 { margin:12px 0 4px; font-size:14px; }
   .as-bgm-now-row[hidden] { display:none; } .as-bgm-now-row { display:flex; align-items:center; gap:8px; margin:-2px 0 4px 26px; } .as-bgm-now { flex:1; min-width:0; font-size:12px; color:var(--text2); line-height:1.5; overflow-wrap:anywhere; } .as-bgm-now small { color:var(--text3); }
   .as-bgm-list { margin:6px 0 0; padding-left:18px; font-size:13px; line-height:1.7; } .as-bgm-list small { color:var(--text3); }
   :root { --as-cpi:#ffffff; } html[data-theme="light"] { --as-cpi:#191f28; }   /* 물가 선 색 (영상·그래프 캔버스는 colOf) */
@@ -7937,6 +7955,15 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
           <p class="card-title" style="margin-bottom:4px;">최종 결과</p>
           <p class="fc-note" id="as-sum" style="margin:0 0 10px;">—</p>
           <div class="table-scroll"><table class="cagr-table fc-table as-tbl"><thead><tr><th>순위</th><th style="text-align:left;">자산</th><th>최종 금액</th><th>넣은 돈의</th><th>연평균</th></tr></thead><tbody id="as-tbody"><tr><td colspan="5">—</td></tr></tbody></table></div>
+        </div>
+        <div class="card as-sns" id="as-sns">   <!-- SNS 자동 게시 (관리자 전용 화면 안 · worker/src/sns.js) -->
+          <div class="as-sns-h"><p class="card-title">📣 SNS 자동 게시</p><small>9:16 영상을 유튜브 쇼츠 · 인스타그램 릴스 · 스레드 · 페이스북 릴스에 한 번에</small></div>
+          <div class="as-sns-acc" id="as-sns-acc">연결 상태를 불러오는 중…</div>
+          <div class="as-sns-vid" id="as-sns-vid">먼저 위의 <b>MP4 9:16</b> 단추로 영상을 만들어 주세요. 그 영상과 결과 숫자로 SNS 글이 자동으로 채워집니다.</div>
+          <div class="as-sns-ed" id="as-sns-ed" hidden></div>
+          <div class="as-sns-go"><button type="button" class="as-btn as-primary" id="as-sns-go" disabled>선택한 SNS에 올리기</button><span class="as-sns-st" id="as-sns-st" role="status"></span></div>
+          <ul class="as-sns-prog" id="as-sns-prog" aria-live="polite"></ul>
+          <details class="as-sns-help"><summary>처음 한 번: SNS 연결 준비 (개발자 앱 만들기 · 비밀값 넣기)</summary><div id="as-sns-guide"></div></details>
         </div>
         <div class="notice fc-notice">※ 과거 수익률이 미래 수익을 보장하지 않습니다. 세금·매매 수수료·환전 수수료·아파트 취득세와 보유세는 넣지 않았습니다.<br>※ 모든 금액은 원화 기준입니다. 달러 자산은 매달(매일 적립은 그날) 원·달러 환율로 바꿔 사고 평가합니다. 매일 적립은 영업일(월~금)마다 그날 종가로 사며, 장이 쉬는 날은 직전 종가로 계산합니다. 매일 적립의 국내 개별 주식은 배당이 빠진 가격입니다.<br>※ 상장 전 가상 데이터는 실제 거래 가격이 아닙니다(그래프 점선). ETF는 ETF 차트 비교와 같은 재현 식, 비트코인·이더리움은 Coin Metrics 일별 가격, 금·은은 세계은행 월평균 가격, 아파트는 KB 서울 아파트 매매지수(강남도 서울 지수로 근사)를 첫 실제 값에 비율로 맞춰 이어 붙였습니다. 아파트는 국토교통부 실거래 매매 중위가격(연도별)을 달마다 이어 그린 값이고, 통화량(M2)·물가 선은 그 돈이 통화량·소비자물가와 같은 속도로 불어났다면의 값입니다.<br>※ 검색해서 더한 국내 주식은 배당이 빠진 가격(액면분할 등만 반영)이고, 국내 ETF는 분배금이 반영된 가격입니다. 미국 종목은 배당 재투자를 켜면 배당 반영 종가를 씁니다.</div>
       </div>
@@ -35150,6 +35177,7 @@ var WIF = (function () {
       var bg = r.bgm ? '<br>♪ 이번 곡: <b>' + esc(r.bgm.t) + '</b> — ' + esc(r.bgm.a) + ' (' + esc(bgmLic(r.bgm)) + ')' + (r.bgm.lic !== 'CC0' ? ' · 올릴 때 설명란에도 출처를 적어 주세요' : '') + ' <button type="button" class="as-vx" id="as-bgm-copy">설명란용 출처 복사</button>' : '';
       vstat('✓ ' + esc(fname(kind, 'mp4')) + ' 내려받음 (' + L.W + '×' + L.H + ' · ' + (total / FPS).toFixed(1) + '초' + an + ')' + bg, false); S.vbusy = null; S.vlast = r;
       if (r.bgm) bgmUsed(r.bgm);   /* 다음 영상은 다른 곡 */
+      if (kind === 'v') snsVideo(r);   /* SNS 자동 게시 칸에 이 영상·글 채우기 */
       return r; },
       function (e) { vstat(e && e.message === 'cancel' ? '영상 만들기를 취소했습니다.' : '영상을 만들지 못했습니다' + (e && e.message ? ' (' + esc(e.message) + ')' : '') + '. 잠시 후 다시 해 주세요.', false); S.vbusy = null; S.vlast = { err: String(e && e.message || e) }; return null; });
   }
@@ -35176,6 +35204,285 @@ var WIF = (function () {
       BGMP = { ctx: ctx, src: src }; btn.textContent = '■ 멈춤';
       src.onended = function () { if (BGMP && BGMP.src === src) previewStop(); };
     }).catch(function () { if (BGMP === tok) previewStop(); else { try { ctx.close(); } catch (e) {} } });
+  }
+  /* ── SNS 자동 게시 (worker/src/sns.js) — 만든 9:16 영상을 유튜브 쇼츠·인스타그램 릴스·스레드·페이스북 릴스에 한 번에 ──
+     · 연결: [연결하기] → 새 창에 각 SNS 공식 로그인 창(비밀번호는 그 SNS 에만 입력) → 허용 → Worker 가 게시 권한(토큰)만 암호화해 보관 → 창이 닫히며 이 화면에 알림
+     · 글: 영상을 만들 때의 결과(자산별 최종 금액·배수·넣은 돈·기간)로 SNS 마다 글을 자동으로 채움(고칠 수 있음) · 링크는 메인 홈 · 과거 수익률 경고 · 곡 출처
+     · 올리기: 영상 SHA-256 = 작업 번호 → 24 MiB 조각으로 Worker(KV) 에 올림 → SNS 마다 시작 → 단계 진행을 반복해 '게시됨(링크)'·'실패(이유·다시 시도)'
+       · 같은 영상·같은 SNS 는 Worker 가 한 번만 올림(이미 올렸으면 그 링크) · 인스타·스레드·페이스북은 AAC 소리만 · 페이스북 릴스는 90초까지 */
+  var SNS = { st: null, vid: null, tx: null, busy: false, ret: null };
+  var SNS_P = [['yt', '유튜브 쇼츠'], ['ig', '인스타그램 릴스'], ['th', '스레드'], ['fb', '페이스북 릴스']];
+  var SNS_TAG = { '^KS11': '코스피', '^KQ11': '코스닥', 'SPY': '미국주식', 'QQQ': '나스닥', 'BTC-USD': '비트코인', 'ETH-USD': '이더리움', 'GC=F': '금투자', 'SI=F': '은투자',
+    'APT-seoul': '부동산', 'APT-gangnam': '부동산', 'USD': '달러' };
+  var HOME = 'https://d-capitalism.com/';
+  (function () {   /* OAuth 연결을 마치고 돌아온 창(#sns=유튜브:ok) — 연 창에 알리고 닫힘 · 새 창이 아니면 이 화면에서 알림 */
+    var m = /#sns=(yt|ig|th|fb):(ok|err)(?::(.*))?$/.exec(location.hash || '');
+    if (!m) return;
+    var msg = { p: m[1], ok: m[2] === 'ok', err: m[3] ? decodeURIComponent(m[3]) : '' };
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    try { if (window.opener && window.opener !== window && window.opener.location.origin === location.origin) { window.opener.postMessage({ dcSns: msg }, location.origin); window.close(); return; } } catch (e) {}
+    SNS.ret = msg;
+  })();
+  function snsName(p) { for (var i = 0; i < SNS_P.length; i++) if (SNS_P[i][0] === p) return SNS_P[i][1]; return p; }
+  function snsEP() {
+    return (window.__counterEP ? Promise.resolve(window.__counterEP) : (window.mdLoad ? window.mdLoad('counter.json') : Promise.resolve(null)).then(function (c) { window.__counterEP = c && c.endpoint; return window.__counterEP; }))
+      .then(function (e) { if (!e) throw new Error('Worker 주소(data/counter.json)가 없습니다'); return String(e).replace(/\/$/, ''); });
+  }
+  function snsApi(m, path, body) {
+    var a = window.dcAuth && window.dcAuth.get();
+    if (!a) return Promise.reject(new Error('로그인이 필요합니다'));
+    return snsEP().then(function (ep) {
+      var h = { Authorization: 'Bearer ' + a.token };
+      if (body) h['Content-Type'] = 'application/json';
+      return fetch(ep + path, { method: m, headers: h, body: body ? JSON.stringify(body) : undefined }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok) { var e = new Error(j.error || ('HTTP ' + r.status)); e.status = r.status; throw e; } return j; });
+      });
+    });
+  }
+  function snsPart(id, k, blob, onp) {   /* 조각 하나 (XHR — 올라가는 정도를 받으려고) */
+    var a = window.dcAuth && window.dcAuth.get();
+    return snsEP().then(function (ep) {
+      return new Promise(function (res, rej) {
+        var q = new XMLHttpRequest(); q.open('POST', ep + '/sns/part/' + id + '/' + k);
+        q.setRequestHeader('Authorization', 'Bearer ' + (a ? a.token : '')); q.setRequestHeader('Content-Type', 'application/octet-stream');
+        q.upload.onprogress = function (e) { if (e.lengthComputable && onp) onp(e.loaded); };
+        q.onload = function () { var j = {}; try { j = JSON.parse(q.responseText); } catch (e) {} if (q.status >= 200 && q.status < 300) res(j); else rej(new Error(j.error || ('HTTP ' + q.status))); };
+        q.onerror = function () { rej(new Error('네트워크 오류')); };
+        q.send(blob);
+      });
+    });
+  }
+  function snsSt(t) { $('as-sns-st').textContent = t || ''; }
+  function snsLoad() {
+    return snsApi('GET', '/sns/status').then(function (j) { SNS.st = j; snsAcc(); snsGuide(); snsEd(); },
+      function (e) { $('as-sns-acc').textContent = '연결 상태를 불러오지 못했습니다 (' + e.message + ')'; snsGuide(); });
+  }
+  function snsAcc() {
+    var st = SNS.st, h = '';
+    if (!st.key || !st.kv) h += '<div class="as-sns-a"><b>서버 준비</b><span class="wn">' + (!st.key ? '토큰 암호화 열쇠(SNS_KEY)가 없습니다 — Actions \'방문자 수 카운터 배포\'를 다시 실행해 주세요. ' : '') +
+      (!st.kv ? '영상 임시 보관함(KV)이 연결되지 않았습니다 — 배포 기록의 KV 경고를 확인해 주세요.' : '') + '</span></div>';
+    SNS_P.forEach(function (x) {
+      var p = x[0], o = st.p[p] || {};
+      h += '<div class="as-sns-a" data-p="' + p + '"><b>' + x[1] + '</b>';
+      if (!o.ready) h += '<span class="no">준비 필요 — 아래 \'처음 한 번\' 안내대로 앱 비밀값을 넣어 주세요</span>';
+      else if (!o.conn) h += '<div class="row"><button type="button" class="as-btn" data-sns-con="' + p + '">연결하기</button></div>';
+      else {
+        h += '<span class="nm">✓ ' + esc(o.name || '연결됨') + (o.exp ? ' <small class="no">(' + new Date(o.exp * 1000).toLocaleDateString('ko-KR') + '까지 · 쓰면 자동 연장)</small>' : '') + '</span>';
+        if (p === 'fb' && o.pages && o.pages.length > 1) h += '<select data-sns-page aria-label="올릴 페이스북 페이지">' + o.pages.map(function (g) { return '<option value="' + esc(g.id) + '"' + (g.id === o.sel ? ' selected' : '') + '>' + esc(g.name) + '</option>'; }).join('') + '</select>';
+        h += '<div class="row"><button type="button" class="as-btn" data-sns-con="' + p + '">다시 연결</button><button type="button" class="as-btn" data-sns-off="' + p + '">끊기</button></div>';
+      }
+      if (o.warn) h += '<span class="wn">' + esc(o.warn) + '</span>';
+      h += '</div>';
+    });
+    $('as-sns-acc').innerHTML = h;
+  }
+  function snsGuide() {   /* 처음 한 번 — 콜백 주소는 Worker 가 알려 준 실제 주소 */
+    var st = SNS.st || {}, w = st.worker || '(Worker 주소)', cb = function (p) { return '<code>' + esc(((st.p || {})[p] || {}).cb || (w + '/sns/cb/' + p)) + '</code>'; };
+    var de = '<code>' + esc((st.meta || {}).deauth || (w + '/sns/meta/deauth')) + '</code>', dd = '<code>' + esc((st.meta || {}).del || (w + '/sns/meta/delete')) + '</code>';
+    $('as-sns-guide').innerHTML =
+      '<p>비밀번호는 여기 넣지 않습니다. SNS 마다 <b>개발자 앱</b>을 만들어 앱 ID·비밀값을 GitHub 저장소 <b>Settings → Secrets and variables → Actions</b> 에 아래 이름으로 넣고, ' +
+      'Actions 의 <b>\'방문자 수 카운터 배포\'</b>를 한 번 실행하면 Worker 로 옮겨집니다. 그다음 위의 <b>연결하기</b>를 누르면 됩니다. 앱은 \'개발 모드\' 그대로 두어도 <b>본인 계정</b>에는 올라갑니다(앱 검수 불필요). 화면 이름은 Meta·Google 이 바꿀 수 있습니다.</p>' +
+      '<h4>유튜브 쇼츠</h4><ol><li>Google Cloud 콘솔 → 간편 로그인에 쓰는 프로젝트(또는 새 프로젝트) → <b>API 및 서비스 → 라이브러리 → YouTube Data API v3 → 사용</b></li>' +
+      '<li><b>OAuth 동의 화면</b>: 게시 상태를 <b>프로덕션</b>으로(테스트 상태면 7일마다 연결이 끊김) · 범위에 <code>youtube.upload</code>, <code>youtube.readonly</code> 추가</li>' +
+      '<li><b>사용자 인증 정보 → OAuth 클라이언트(웹)</b> → 승인된 리디렉션 URI 에 ' + cb('yt') + ' 추가 — 간편 로그인과 같은 클라이언트면 비밀값은 더 넣지 않아도 됨(새로 만들었으면 <code>YT_CLIENT_ID</code>·<code>YT_CLIENT_SECRET</code>)</li>' +
+      '<li>처음 연결할 때 \'Google 에서 확인하지 않은 앱\' 화면이 나오면 <b>고급 → (앱 이름)(으)로 이동</b> → 채널 고르기 → 허용</li></ol>' +
+      '<h4>인스타그램 릴스</h4><ol><li>인스타그램 앱에서 계정을 <b>프로페셔널(크리에이터 또는 비즈니스) · 공개</b>로 바꿈</li>' +
+      '<li><a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">developers.facebook.com/apps</a> → 앱 만들기 → 사용 사례 <b>기타</b> → 유형 <b>비즈니스</b> → 제품 <b>Instagram</b> 설정 → <b>Instagram 로그인을 사용한 API 설정</b></li>' +
+      '<li>\'액세스 토큰 생성\'에서 본인 인스타그램 계정 추가 · \'비즈니스 로그인 설정\'에 리디렉션 URL ' + cb('ig') + ', 연결 해제 콜백 ' + de + ', 데이터 삭제 요청 URL ' + dd + '</li>' +
+      '<li>같은 화면의 <b>Instagram 앱 ID / 앱 시크릿</b> → <code>IG_APP_ID</code>·<code>IG_APP_SECRET</code></li></ol>' +
+      '<h4>페이스북 릴스</h4><ol><li><b>페이스북 페이지</b>가 필요합니다(개인 프로필에는 API 로 올릴 수 없음)</li>' +
+      '<li>같은 Meta 앱 → 제품 <b>Facebook 로그인</b>(또는 비즈니스용 Facebook 로그인) 추가 → 유효한 OAuth 리디렉션 URI 에 ' + cb('fb') + '</li>' +
+      '<li>권한 <code>pages_show_list</code>·<code>pages_read_engagement</code>·<code>pages_manage_posts</code> · 비즈니스용 로그인이면 이 권한으로 \'구성\'을 만들고 그 ID 를 <code>FB_CONFIG_ID</code></li>' +
+      '<li><b>앱 설정 → 기본 설정</b>의 앱 ID / 앱 시크릿 → <code>FB_APP_ID</code>·<code>FB_APP_SECRET</code> · 연결할 때 올릴 페이지를 꼭 선택</li></ol>' +
+      '<h4>스레드</h4><ol><li>Meta 개발자에서 새 앱 → 사용 사례 <b>Threads API 액세스</b> → 권한 <code>threads_basic</code>, <code>threads_content_publish</code></li>' +
+      '<li>설정: 리디렉션 콜백 URL ' + cb('th') + ', 연결 해제 ' + de + ', 삭제 ' + dd + '</li>' +
+      '<li>앱 역할 → <b>Threads 테스터</b>에 본인 계정 추가 → 스레드 앱 <b>설정 → 계정 → 웹사이트 권한 → 초대</b>에서 수락</li>' +
+      '<li><b>Threads 앱 ID / Threads 앱 시크릿</b> → <code>TH_APP_ID</code>·<code>TH_APP_SECRET</code></li></ol>' +
+      '<p class="no">※ 올리는 영상은 Worker 의 임시 보관함에 하루만 두었다가 자동으로 지웁니다. 인스타그램은 하루 100개, 페이스북 릴스는 하루 30개, 스레드는 하루 250개까지 API 로 올릴 수 있습니다.</p>';
+  }
+  function snsTags(xs) {
+    var out = ['재테크'];
+    xs.forEach(function (x) { var t = SNS_TAG[x.key] || tagName(x.key).replace(/[^0-9A-Za-z가-힣]/g, ''); if (t && out.indexOf(t) < 0) out.push(t); });
+    ['투자', '디코딩자본주의'].forEach(function (t) { if (out.indexOf(t) < 0) out.push(t); });
+    return out;
+  }
+  function snsTexts(sim, v) {   /* 결과 → SNS 마다 글 (링크 = 메인 홈) */
+    var xs = sim.list.filter(function (x) { return x.key !== 'M2' && x.key !== 'CPI'; }).slice().sort(function (a, b) { return b.final - a.final; });
+    if (!xs.length) xs = sim.list.slice();
+    var title = titleText(sim), span = spanText(sim), inv = won(sim.inv[sim.N - 1]) + '원', o = sim.o;
+    var how = o.mode === 'dca' ? (o.daily ? '매일 ' : '매달 ') + won(o.amt) + '원씩' : won(o.amt) + '원을 한 번에';
+    var lines = xs.slice(0, 3).map(function (x) { return tagName(x.key) + ' → ' + won(x.final) + '원 (' + mx(x.mult) + ')'; });
+    var idx = /(^|:)\^|KPI200$/, mixed = o.div && xs.some(function (x) { return idx.test(x.key); }) && xs.some(function (x) { return !idx.test(x.key); });
+    var note = '※ ' + periodText(sim) + (mixed ? ' · 지수는 배당 제외, 그 밖은 배당 재투자' : o.div ? ' · 배당 재투자' : ' · 배당 제외') + (sim.list.some(function (x) { return x.preTo; }) ? ' · 점선 = 상장 전 가상' : '') + ' · 세금·수수료 제외';
+    var warn = '※ 과거 수익률은 미래를 보장하지 않습니다 · 투자 권유 아님';
+    var hooks = [how + ' 넣었다면, ' + span + ' 뒤 결과는?', '같은 돈, 다른 속도 — ' + title, span + ' 동안 돈이 가장 빨리 불어난 곳은?', '월급 vs 자본: ' + title, title + ', 끝까지 보면 차이가 보입니다'];
+    var hook = hooks[Math.floor(Math.random() * hooks.length)], tags = snsTags(xs), bg = v.bgm;
+    var cs = bg ? '🎵 ' + bgmCredit(bg).replace(/^♪\s*/, '') : '', cf = bg ? '🎵 ' + (bg.credit || bgmCredit(bg).replace(/^♪\s*/, '')) : '';
+    var join = function (a) { return a.filter(function (x) { return x != null; }).join('\n').replace(/\n{3,}/g, '\n\n').trim(); };
+    var ytTitle = title + ' — ' + how.replace('을 한 번에', ' 한 번에') + ' ' + span + ' 뒤 #shorts';
+    if (ytTitle.length > 100) ytTitle = (title.length > 60 ? title.slice(0, 59) + '…' : title) + ' — ' + span + ' 뒤 #shorts';
+    var th = join([hook, '', lines.join('\n'), '', '월급 오르는 속도로는 따라가기 어려운 차이예요. 다음엔 뭘 붙여 볼까요?', '디코딩 자본주의 → ' + HOME, '※ 과거 수익률은 미래를 보장하지 않음 · 투자 권유 아님', bg ? '♪ ' + bgmCredit(bg).replace(/^♪\s*/, '') : null, '#재테크']);
+    if (th.length > 490) th = th.slice(0, 489);
+    return {
+      yt: { title: ytTitle.slice(0, 100), tags: tags.slice(0, 10),
+        text: join([hook, '', lines.join('\n'), '넣은 돈 ' + inv, '', '▶ 무료 금융 계산기 · 디코딩 자본주의: ' + HOME, '▶ 다음에 비교해 볼 자산을 댓글로 추천해 주세요', '', note, warn, cf || null, '', tags.slice(0, 3).map(function (t) { return '#' + t; }).join(' ')]) },
+      ig: { text: join([hook + ' 🤔', '', lines.map(function (l) { return '▸ ' + l; }).join('\n'), '넣은 돈 ' + inv, '', '같은 돈인데 불어나는 속도가 이만큼 다릅니다.', '👉 내 종목으로 직접 계산: 프로필 링크 (디코딩 자본주의)', '💬 다음엔 어떤 자산끼리 붙여 볼까요?', '', note, warn, cs || null, '', tags.slice(0, 5).map(function (t) { return '#' + t; }).join(' ')]) },
+      th: { text: th },
+      fb: { text: join(['💸 ' + hook, '', lines.join('\n'), '넣은 돈 ' + inv, '', '노동소득만으로는 따라잡기 어려운 \'자본의 속도\', 내 종목으로 직접 계산해 보세요.', '👉 ' + HOME, '', note, warn, cf || null, '', tags.slice(0, 3).map(function (t) { return '#' + t; }).join(' ')]) }
+    };
+  }
+  function snsWhy(p) {   /* 이 영상을 그 SNS 에 못 올리는 이유 (없으면 '') */
+    var v = SNS.vid, o = SNS.st && SNS.st.p ? SNS.st.p[p] : null;
+    if (!o || !o.ready) return '준비 필요';
+    if (!o.conn) return '연결 안 됨';
+    if (!v) return '';
+    if (p !== 'yt' && v.audio === 'opus') return '소리가 Opus 라 올릴 수 없음 (AAC 만 받음 — Chrome·Edge·Safari 에서 영상을 만들어 주세요)';
+    if (p === 'fb' && v.D > 90) return '페이스북 릴스는 90초까지 (이 영상 ' + v.D.toFixed(1) + '초)';
+    return '';
+  }
+  function snsEd() {
+    var v = SNS.vid, ed = $('as-sns-ed');
+    if (!v) { ed.hidden = true; $('as-sns-go').disabled = true; return; }
+    var mb = (v.blob.size / 1048576).toFixed(1);
+    $('as-sns-vid').innerHTML = '방금 만든 <b>9:16 영상</b> · ' + v.D.toFixed(1) + '초 · ' + mb + 'MB · 소리 ' + (v.audio === 'aac' ? 'AAC' : v.audio === 'opus' ? '<span class="bad">Opus</span>' : '없음') +
+      (v.bgm ? ' · ♪ ' + esc(v.bgm.t) + ' — ' + esc(v.bgm.a) : '') + ' <small class="no">(글은 결과 숫자로 채웠고 고칠 수 있습니다)</small>';
+    var tx = SNS.tx, h = '';
+    SNS_P.forEach(function (x) {
+      var p = x[0], why = snsWhy(p), t = tx[p];
+      h += '<div class="as-sns-f' + (why ? ' off' : '') + '"><label><input type="checkbox" data-sns-use="' + p + '"' + (why ? ' disabled' : ' checked') + '> ' + x[1] +
+        (p === 'th' ? ' <small data-sns-n="th"></small>' : p === 'ig' ? ' <small data-sns-n="ig"></small>' : '') + '</label>' +
+        (p === 'yt' ? '<input type="text" maxlength="100" data-sns-t="yt" aria-label="유튜브 제목" value="' + esc(t.title) + '">' : '') +
+        '<textarea data-sns-x="' + p + '" aria-label="' + x[1] + ' 글"' + (p === 'th' ? ' maxlength="500"' : p === 'ig' ? ' maxlength="2200"' : '') + '>' + esc(t.text) + '</textarea>' +
+        (why ? '<div class="why">' + esc(why) + '</div>' : '') + '</div>';
+    });
+    h += '<div><button type="button" class="as-btn" id="as-sns-re">↻ 글 다시 만들기</button></div>';
+    ed.innerHTML = h; ed.hidden = false;
+    snsCount(); snsGoState();
+  }
+  function snsCount() {
+    [['th', 500], ['ig', 2200]].forEach(function (a) { var t = document.querySelector('[data-sns-x="' + a[0] + '"]'), n = document.querySelector('[data-sns-n="' + a[0] + '"]'); if (t && n) n.textContent = t.value.length + ' / ' + a[1] + '자'; });
+  }
+  function snsGoState() {
+    var any = SNS_P.some(function (x) { var c = document.querySelector('[data-sns-use="' + x[0] + '"]'); return c && c.checked && !c.disabled; });
+    $('as-sns-go').disabled = SNS.busy || !SNS.vid || !any;
+  }
+  function snsVideo(r) {   /* 9:16 영상을 만든 직후 (makeVideo) */
+    if (!r || !r.blob || r.h <= r.w) return;
+    SNS.vid = { blob: r.blob, D: r.D || r.frames / FPS, audio: r.audio || '', w: r.w, h: r.h, bgm: r.bgm || null };
+    SNS.tx = snsTexts(S.sim, SNS.vid);
+    $('as-sns-prog').innerHTML = ''; snsSt('');
+    snsEd();
+  }
+  function snsRow(p, o) {
+    var li = document.querySelector('#as-sns-prog [data-p="' + p + '"]');
+    if (!li) { li = document.createElement('li'); li.setAttribute('data-p', p); $('as-sns-prog').appendChild(li); }
+    var t = o.st === 'done' ? '✓ ' + (o.dup ? '이미 올린 영상입니다' : '게시됨') + (o.url ? ' <a href="' + esc(o.url) + '" target="_blank" rel="noopener">보기</a>' : '')
+      : o.st === 'err' ? '✗ ' + esc(o.err || '실패') + ' <button type="button" class="as-vx" data-sns-retry="' + p + '">다시 시도</button>'
+      : o.st === 'up' ? '올리는 중 ' + (o.pct || 0) + '%' : o.st === 'wait' ? (p === 'yt' ? '처리 중…' : snsName(p) + ' 서버가 영상을 처리하는 중… (' + (o.sec || 0) + '초)') : '시작하는 중…';
+    li.className = o.st === 'done' ? 'ok' : o.st === 'err' ? 'err' : '';
+    li.innerHTML = '<b>' + snsName(p) + '</b> ' + t;
+  }
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function snsSha(blob) {
+    return blob.arrayBuffer().then(function (b) { return crypto.subtle.digest('SHA-256', b); })
+      .then(function (h) { return Array.prototype.map.call(new Uint8Array(h), function (x) { return ('0' + x.toString(16)).slice(-2); }).join(''); });
+  }
+  function snsUpload(v, id) {   /* 빠진 조각만 차례로 (조각마다 3번까지 다시) */
+    return snsApi('POST', '/sns/job', { id: id, size: v.blob.size, dur: v.D, w: v.w, h: v.h, audio: v.audio }).then(function (j) {
+      var ks = []; for (var k = 0; k < j.parts; k++) if (j.have.charAt(k) !== '1') ks.push(k);
+      var done = (j.parts - ks.length) * j.part;
+      function one(i, tryN) {
+        if (i >= ks.length) return Promise.resolve(j);
+        var k = ks[i], a = k * j.part, b = Math.min(v.blob.size, a + j.part);
+        return snsPart(id, k, v.blob.slice(a, b), function (n) { snsSt('영상 올리는 중 ' + Math.min(100, Math.round((done + n) / v.blob.size * 100)) + '%'); })
+          .then(function () { done += b - a; return one(i + 1, 0); }, function (e) { if (tryN < 2) return wait(1500).then(function () { return one(i, tryN + 1); }); throw e; });
+      }
+      snsSt(ks.length ? '영상 올리는 중 0%' : '영상은 이미 올라가 있습니다');
+      return one(0, 0);
+    });
+  }
+  function snsGo() {
+    if (SNS.busy || !SNS.vid) return;
+    var sel = SNS_P.map(function (x) { return x[0]; }).filter(function (p) { var c = document.querySelector('[data-sns-use="' + p + '"]'); return c && c.checked && !c.disabled; });
+    if (!sel.length) { snsSt('올릴 SNS 를 하나 이상 고르세요'); return; }
+    if (!window.confirm(sel.map(snsName).join(' · ') + '에 지금 올립니다. 올리면 바로 공개됩니다. 계속할까요?')) return;
+    var v = SNS.vid, body = {};
+    sel.forEach(function (p) {
+      var x = document.querySelector('[data-sns-x="' + p + '"]'), t = document.querySelector('[data-sns-t="' + p + '"]');
+      body[p] = { text: x ? x.value : '', title: t ? t.value : undefined, tags: p === 'yt' ? SNS.tx.yt.tags : undefined };
+    });
+    SNS.busy = true; snsGoState(); $('as-sns-prog').innerHTML = ''; snsSt('영상 확인 중…');
+    var id;
+    snsSha(v.blob).then(function (h) { id = h; return snsUpload(v, id); }).then(function () {
+      snsSt('SNS 마다 올리는 중…');
+      return snsRun(id, sel, body);
+    }).then(function (st) {
+      var ok = sel.filter(function (p) { return st[p].st === 'done'; }).length;
+      snsSt(ok === sel.length ? '✓ ' + ok + '곳 모두 게시했습니다' : ok + '곳 게시 · ' + (sel.length - ok) + '곳 실패 — 실패한 곳은 \'다시 시도\'를 눌러 주세요');
+    }).catch(function (e) { snsSt('올리지 못했습니다: ' + e.message); })
+      .then(function () { SNS.busy = false; SNS.job = id; snsGoState(); });
+  }
+  function snsRun(id, sel, body) {   /* 시작 → 단계 반복 (유튜브 조각은 바로바로 · 다른 SNS 처리 확인은 8초마다) */
+    var st = {}, last = {}, warn = {}, t0 = Date.now();
+    SNS.run = { id: id, body: body, st: st };
+    function pub(p) {
+      snsRow(p, { st: 'start' });
+      return snsApi('POST', '/sns/pub', Object.assign({ job: id, p: p }, body[p])).then(function (r) { st[p] = r; last[p] = Date.now(); snsRow(p, r); },
+        function (e) { st[p] = { st: 'err', err: e.message }; snsRow(p, st[p]); });
+    }
+    function step(p) {
+      last[p] = Date.now();
+      return snsApi('POST', '/sns/step', { job: id, p: p }).then(function (r) {
+        if (r.warn) { warn[p] = (warn[p] || 0) + 1; if (warn[p] > 10) r = { st: 'err', err: '일시 오류가 계속됩니다: ' + r.warn }; else return; }
+        warn[p] = 0; r.sec = Math.round((Date.now() - t0) / 1000); st[p] = r; snsRow(p, r);
+      }, function (e) { warn[p] = (warn[p] || 0) + 1; if (warn[p] > 10) { st[p] = { st: 'err', err: e.message }; snsRow(p, st[p]); } });
+    }
+    function loop() {
+      var act = sel.filter(function (p) { return st[p] && (st[p].st === 'up' || st[p].st === 'wait'); });
+      if (!act.length) return st;
+      var now = Date.now(), due = act.filter(function (p) { return (p === 'yt' && st[p].st === 'up') || now - (last[p] || 0) >= 8000; });
+      return Promise.all(due.map(step)).then(function () { return wait(due.some(function (p) { return p === 'yt' && st.yt && st.yt.st === 'up'; }) ? 0 : 1000); }).then(loop);
+    }
+    SNS.retry = function (p) {
+      if (SNS.busy) return;
+      SNS.busy = true; snsGoState();
+      pub(p).then(loop).then(function () { snsSt(st[p].st === 'done' ? '✓ ' + snsName(p) + ' 게시했습니다' : snsName(p) + ' 다시 실패했습니다'); }).then(function () { SNS.busy = false; snsGoState(); });
+    };
+    return Promise.all(sel.map(pub)).then(loop);
+  }
+  function snsInit() {
+    if (SNS.inited) return; SNS.inited = true;
+    $('as-sns').addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      var con = b.getAttribute('data-sns-con'), off = b.getAttribute('data-sns-off'), rt = b.getAttribute('data-sns-retry');
+      if (b.id === 'as-sns-go') { snsGo(); return; }
+      if (b.id === 'as-sns-re' && SNS.vid) { SNS.tx = snsTexts(S.sim, SNS.vid); snsEd(); return; }
+      if (rt && SNS.retry) { SNS.retry(rt); return; }
+      if (off) { if (!window.confirm(snsName(off) + ' 연결을 끊을까요? (다시 연결할 수 있습니다)')) return; snsApi('POST', '/sns/disconnect/' + off, {}).then(snsLoad, function (er) { snsSt(er.message); }); return; }
+      if (con) {   /* 새 창을 바로 열어 둔 뒤(팝업 차단 방지) 로그인 주소를 받아 옮김 */
+        var w = window.open('', 'dc_sns', 'width=560,height=760');
+        snsApi('POST', '/sns/connect/' + con, { back: location.origin + location.pathname }).then(function (j) {
+          if (w && !w.closed) w.location.href = j.url;
+          else if (window.confirm('새 창이 막혀 이 창에서 연결합니다. 만든 영상은 다시 만들어야 합니다. 계속할까요?')) location.href = j.url;
+        }, function (er) { if (w) w.close(); snsSt(er.message); });
+      }
+    });
+    $('as-sns').addEventListener('change', function (e) {
+      if (e.target.matches('[data-sns-use]')) snsGoState();
+      if (e.target.matches('[data-sns-page]')) snsApi('POST', '/sns/fb/page', { id: e.target.value }).then(snsLoad, function (er) { snsSt(er.message); });
+    });
+    $('as-sns').addEventListener('input', function (e) { if (e.target.matches('[data-sns-x]')) snsCount(); });
+    window.addEventListener('message', function (e) {
+      if (e.origin !== location.origin || !e.data || !e.data.dcSns) return;
+      snsBack(e.data.dcSns);
+    });
+    if (SNS.ret) { snsBack(SNS.ret); SNS.ret = null; }
+    snsGuide(); snsLoad();
+  }
+  function snsBack(m) {   /* 연결을 마치고 돌아옴 */
+    var t = m.ok ? snsName(m.p) + ' 연결했습니다' : snsName(m.p) + ' 연결 실패: ' + (m.err || '');
+    snsSt(t); if (window.dcAuth && window.dcAuth.toast) window.dcAuth.toast(t);
+    snsLoad();
   }
   /* 브라우저에 H.264 인코더(WebCodecs)가 없을 때: WebAssembly H.264 인코더(assets/vendor/h264-mp4-encoder — minih264)로 한 장씩 → 언제나 H.264
      (MediaRecorder 는 브라우저에 따라 VP9 를 MP4 에 담아 인스타그램 등에서 거부될 수 있어 쓰지 않음) */
@@ -35303,6 +35610,7 @@ var WIF = (function () {
       var bg = store('bgm'); if (typeof bg === 'boolean') $('as-bgm').checked = bg;
       $('as-bgm-nowrow').hidden = !$('as-bgm').checked;
       bgmEnsure().catch(function () {});   /* 배경음악 목록 → '다음 영상 곡' 표시 · 자주 묻는 질문의 곡 목록 */
+      snsInit();                            /* SNS 자동 게시: 연결 상태 · 안내 */
       if (cfg && cfg.y) { $('as-y').value = cfg.y; $('as-m').value = cfg.m; } else setStart(Math.max(earliest(), lastMonth() - 120));
       chips();
       $('as-src').innerHTML = '자료: 네이버 금융·Yahoo Finance 월봉(매일 적립은 일봉) · 국토교통부 실거래가(아파트 중위가격) · 한국은행 ECOS(M2·소비자물가·환율·KB 아파트지수)' +
@@ -35324,6 +35632,7 @@ var WIF = (function () {
   }
   window.asRender = function () { if (PG.classList.contains('active')) { if (!window.dcAdmin.ok()) { window.dcAdmin.when(window.asRender); return; } if (!S.ready) init(); else if (S.sim) makeChart(); } else if (S.playing) pause(); };   /* [ADMIN] 관리자 확인 뒤에만 */
   window.ASPEED = { state: function () { return S; }, simulate: simulate, series: series, mseries: mseries, need: function () { return need(inputs()); }, video: makeVideo, videoMaker: videoMaker, openFull: openFull, closeFull: closeFull,
+    sns: { texts: snsTexts, state: function () { return SNS; }, video: snsVideo, load: snsLoad },
     bgm: { list: function () { return BGM.list; }, load: bgmList, pick: bgmPick, ok: bgmOk, sec: videoSec, credit: bgmCredit, decode: bgmDecode, render: bgmRender, next: function () { return BGM.next; } } };   /* 회귀 검사용 */
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.asRender); else setTimeout(window.asRender, 0);
 })();

@@ -251,7 +251,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script>(function(){try{var m=localStorage.getItem("site-theme")||"dark";var l=m==="light"||(m==="auto"&&window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches);document.documentElement.setAttribute("data-theme",l?"light":"dark");}catch(e){}})();</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link rel="stylesheet" href="assets/app.ad84eede5c.css">
+<link rel="stylesheet" href="assets/app.9f4e80972c.css">
 </head>
 <body>
 <div class="wrap">
@@ -459,6 +459,15 @@
           <p class="fc-note" id="as-sum" style="margin:0 0 10px;">—</p>
           <div class="table-scroll"><table class="cagr-table fc-table as-tbl"><thead><tr><th>순위</th><th style="text-align:left;">자산</th><th>최종 금액</th><th>넣은 돈의</th><th>연평균</th></tr></thead><tbody id="as-tbody"><tr><td colspan="5">—</td></tr></tbody></table></div>
         </div>
+        <div class="card as-sns" id="as-sns">   <!-- SNS 자동 게시 (관리자 전용 화면 안 · worker/src/sns.js) -->
+          <div class="as-sns-h"><p class="card-title">📣 SNS 자동 게시</p><small>9:16 영상을 유튜브 쇼츠 · 인스타그램 릴스 · 스레드 · 페이스북 릴스에 한 번에</small></div>
+          <div class="as-sns-acc" id="as-sns-acc">연결 상태를 불러오는 중…</div>
+          <div class="as-sns-vid" id="as-sns-vid">먼저 위의 <b>MP4 9:16</b> 단추로 영상을 만들어 주세요. 그 영상과 결과 숫자로 SNS 글이 자동으로 채워집니다.</div>
+          <div class="as-sns-ed" id="as-sns-ed" hidden></div>
+          <div class="as-sns-go"><button type="button" class="as-btn as-primary" id="as-sns-go" disabled>선택한 SNS에 올리기</button><span class="as-sns-st" id="as-sns-st" role="status"></span></div>
+          <ul class="as-sns-prog" id="as-sns-prog" aria-live="polite"></ul>
+          <details class="as-sns-help"><summary>처음 한 번: SNS 연결 준비 (개발자 앱 만들기 · 비밀값 넣기)</summary><div id="as-sns-guide"></div></details>
+        </div>
         <div class="notice fc-notice">※ 과거 수익률이 미래 수익을 보장하지 않습니다. 세금·매매 수수료·환전 수수료·아파트 취득세와 보유세는 넣지 않았습니다.<br>※ 모든 금액은 원화 기준입니다. 달러 자산은 매달(매일 적립은 그날) 원·달러 환율로 바꿔 사고 평가합니다. 매일 적립은 영업일(월~금)마다 그날 종가로 사며, 장이 쉬는 날은 직전 종가로 계산합니다. 매일 적립의 국내 개별 주식은 배당이 빠진 가격입니다.<br>※ 상장 전 가상 데이터는 실제 거래 가격이 아닙니다(그래프 점선). ETF는 ETF 차트 비교와 같은 재현 식, 비트코인·이더리움은 Coin Metrics 일별 가격, 금·은은 세계은행 월평균 가격, 아파트는 KB 서울 아파트 매매지수(강남도 서울 지수로 근사)를 첫 실제 값에 비율로 맞춰 이어 붙였습니다. 아파트는 국토교통부 실거래 매매 중위가격(연도별)을 달마다 이어 그린 값이고, 통화량(M2)·물가 선은 그 돈이 통화량·소비자물가와 같은 속도로 불어났다면의 값입니다.<br>※ 검색해서 더한 국내 주식은 배당이 빠진 가격(액면분할 등만 반영)이고, 국내 ETF는 분배금이 반영된 가격입니다. 미국 종목은 배당 재투자를 켜면 배당 반영 종가를 씁니다.</div>
       </div>
     </div>
@@ -641,7 +650,7 @@
 
 </div>
 
-<script src="assets/app.2c71770c80.js"></script>
+<script src="assets/app.17dad4f3c6.js"></script>
   <!-- ── 카카오톡 바로가기 (오른쪽 아래 공유 버튼 위, 같은 원형 버튼) — 오픈채팅 커뮤니티 · 후원 및 문의 1:1 채팅 ── -->
   <div class="kk-fabs">
     <button type="button" class="kk-fab" id="kk-fab" aria-label="카카오 오픈채팅" aria-expanded="false" aria-controls="kk-pop"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 4.5c-6.08 0-11 3.86-11 8.62 0 3.03 2 5.7 5.03 7.23l-1.08 3.95c-.1.36.31.65.62.44l4.7-3.12c.56.07 1.14.11 1.73.11 6.08 0 11-3.86 11-8.61S20.08 4.5 14 4.5z" fill="#191919"/><circle cx="9.6" cy="13.1" r="1.45" fill="#FEE500"/><circle cx="14" cy="13.1" r="1.45" fill="#FEE500"/><circle cx="18.4" cy="13.1" r="1.45" fill="#FEE500"/></svg></button>

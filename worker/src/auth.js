@@ -108,6 +108,8 @@ async function me(env, req) {
   return u;
 }
 
+export async function adminUser(env, req) { const u = await me(env, req); return isAdmin(u) ? u : null; }   /* 관리자 전용 기능(SNS 자동 게시 — worker/src/sns.js)이 같은 로그인 토큰으로 확인 */
+
 export async function auth(req, env, url, json) {
   const path = url.pathname, now = Math.floor(Date.now() / 1000);
   if (path === '/auth/config' && req.method === 'GET') return json({ providers: env.AUTH_SECRET ? providers(env) : {}, terms: TERMS_VER, kakao_js: env.KAKAO_JS_KEY || '' });   /* kakao_js: 카카오톡 공유용 자바스크립트 키(공개 값) */

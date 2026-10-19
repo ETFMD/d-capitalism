@@ -36,6 +36,16 @@ jobs:
       NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
       GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      # 선택: SNS 자동 게시(자산 속도 영상 → 유튜브·인스타·스레드·페이스북) — 각 개발자 앱의 ID·비밀값 (worker/src/sns.js · 설정 방법은 자산 속도 화면 'SNS 자동 게시' 안내)
+      YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}             # 없으면 GOOGLE_CLIENT_ID/SECRET(간편 로그인 앱)을 같이 씀
+      YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+      IG_APP_ID: ${{ secrets.IG_APP_ID }}
+      IG_APP_SECRET: ${{ secrets.IG_APP_SECRET }}
+      TH_APP_ID: ${{ secrets.TH_APP_ID }}
+      TH_APP_SECRET: ${{ secrets.TH_APP_SECRET }}
+      FB_APP_ID: ${{ secrets.FB_APP_ID }}
+      FB_APP_SECRET: ${{ secrets.FB_APP_SECRET }}
+      FB_CONFIG_ID: ${{ secrets.FB_CONFIG_ID }}             # 선택: '비즈니스용 Facebook 로그인' 구성 ID (있으면 scope 대신 config_id)
     steps:
       - uses: actions/checkout@v5
       - name: 설정 확인
@@ -65,8 +75,18 @@ jobs:
           origins="https://etfmd.github.io"
           if [ -f ../CNAME ]; then host=$(head -n1 ../CNAME | tr -d '[:space:]'); [ -n "$host" ] && origins="$origins,https://$host,https://www.$host"; fi
           sed -e "s/__D1_ID__/$id/" -e "s#__ORIGINS__#$origins#" wrangler.template.toml > wrangler.toml
+          # SNS 자동 게시 영상 임시 보관(KV 'etfmd-sns' · 하루 뒤 자동 삭제) — 찾거나 만들어 연결 · 안 되면 KV 없이 배포(그 기능만 꺼짐)
+          kvfind() { $W kv namespace list 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const a=JSON.parse(s);const x=a.find(n=>n.title==="etfmd-sns"||/-etfmd-sns$/.test(n.title));process.stdout.write(x?x.id:"")}catch(e){}})'; }
+          kvid=$(kvfind) || true
+          if [ -z "$kvid" ]; then $W kv namespace create etfmd-sns >/dev/null 2>&1 || true; kvid=$(kvfind) || true; fi
+          if [ -n "$kvid" ]; then printf '\n[[kv_namespaces]]\nbinding = "SNS_KV"\nid = "%s"\n' "$kvid" >> wrangler.toml; echo "::notice::SNS 영상 보관 KV 연결"; else echo "::warning::SNS 영상 보관 KV 를 찾거나 만들지 못했습니다 (API 토큰에 Workers KV 권한 필요) — SNS 자동 게시만 꺼집니다"; fi
           $W d1 execute "$DB" --remote --file schema.sql -y
-          $W deploy | tee deploy.log
+          if ! $W deploy | tee deploy.log; then
+            [ -n "$kvid" ] || exit 1
+            echo "::warning::KV 연결과 함께 배포하지 못해 KV 없이 다시 배포합니다 (SNS 자동 게시만 꺼짐)"
+            sed -i '/^\[\[kv_namespaces\]\]/,$d' wrangler.toml
+            $W deploy | tee deploy.log
+          fi
           if ! $W secret list 2>/dev/null | grep -q '"SALT"'; then
             openssl rand -hex 32 | $W secret put SALT
           fi
@@ -78,7 +98,12 @@ jobs:
           if ! $W secret list 2>/dev/null | grep -q '"HB_KEY"'; then
             openssl rand -hex 32 | $W secret put HB_KEY >/dev/null
           fi
-          for k in KAKAO_JS_KEY KAKAO_CLIENT_ID KAKAO_CLIENT_SECRET KAKAO_ADMIN_KEY NAVER_CLIENT_ID NAVER_CLIENT_SECRET GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET; do
+          # SNS 자동 게시: 연결 토큰 암호화 열쇠 — 없을 때 한 번만 자동 생성 (바꾸면 SNS 를 다시 연결해야 함)
+          if ! $W secret list 2>/dev/null | grep -q '"SNS_KEY"'; then
+            openssl rand -hex 32 | $W secret put SNS_KEY >/dev/null
+          fi
+          for k in KAKAO_JS_KEY KAKAO_CLIENT_ID KAKAO_CLIENT_SECRET KAKAO_ADMIN_KEY NAVER_CLIENT_ID NAVER_CLIENT_SECRET GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
+                   YT_CLIENT_ID YT_CLIENT_SECRET IG_APP_ID IG_APP_SECRET TH_APP_ID TH_APP_SECRET FB_APP_ID FB_APP_SECRET FB_CONFIG_ID; do
             v="${!k:-}"
             if [ -n "$v" ]; then printf '%s' "$v" | $W secret put "$k" >/dev/null && echo "::notice::$k 등록"; fi
           done

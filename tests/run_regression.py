@@ -1298,6 +1298,97 @@ def aspeed2_check(page, base, fail, local):
             fail('asset-speed', '물가 선 색이 흰색(밝은 테마는 #191f28)이 아님: %s' % r['cpi'])
     except Exception as e:
         fail('asset-speed', '배경음악 검사 실패: %s' % str(e)[:160])
+    sns_ui_check(page, fail)
+
+
+SNS_RE = re.compile(r'^https://[^/]+\.workers\.dev/sns/')
+
+
+def sns_ui_check(page, fail):
+    """[SNS] 자산 속도의 SNS 자동 게시(관리자 · worker/src/sns.js) 화면 — 이 검사 안에서만 가짜 Worker 응답(실제 SNS·Worker 에는 요청하지 않음):
+    연결 상태 4곳 · 안내에 콜백 주소 · 9:16 영상 → SNS 마다 글(메인 홈 링크 · 과거 수익률 경고 · 유튜브 제목 100자·#shorts · 스레드 500자·주제 태그 1개)
+    · 소리가 Opus 면 유튜브만 · 올리기(작업 → 조각 → 시작 → 단계) → 게시됨 링크 · 같은 영상을 다시 올리면 조각 없이 '이미 올린 영상'"""
+    S = {'calls': [], 'have': set(), 'post': {}}
+    plan = {'yt': ['up', 'done'], 'ig': ['wait', 'done'], 'th': ['done'], 'fb': ['wait', 'done']}
+
+    def h(route):
+        q = route.request; path = urllib.parse.urlparse(q.url).path
+        hd = {'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Content-Type': 'application/json'}
+        if q.method == 'OPTIONS': return route.fulfill(status=204, headers=hd)
+        buf = q.post_data_buffer or b''
+        b = json.loads(buf) if buf and '/sns/part/' not in path else {}
+        S['calls'].append((path, b or len(buf), q.headers.get('authorization')))
+        J = lambda o: route.fulfill(status=200, headers=hd, body=json.dumps(o))
+        if path == '/sns/status':
+            return J({'key': True, 'kv': True, 'worker': 'W', 'meta': {'deauth': 'W/sns/meta/deauth', 'del': 'W/sns/meta/delete'},
+                      'p': {p: {'ready': True, 'conn': True, 'name': '디코딩 자본주의', 'cb': 'W/sns/cb/' + p} for p in ('yt', 'ig', 'th', 'fb')}})
+        if path == '/sns/job':
+            S['size'] = b.get('size'); n = -(-b['size'] // (24 << 20))
+            return J({'id': b['id'], 'part': 24 << 20, 'parts': n, 'have': ''.join('1' if k in S['have'] else '0' for k in range(n)), 'posts': []})
+        m = re.match(r'^/sns/part/\w+/(\d+)$', path)
+        if m: S['have'].add(int(m.group(1))); return J({'ok': True})
+        p = b.get('p'); key = (b.get('job'), p)
+        if path == '/sns/pub':
+            if S['post'].get(key) == ['done']: return J({'p': p, 'st': 'done', 'url': 'https://example.com/' + p, 'dup': True})
+            S['post'][key] = list(plan[p])
+        if path in ('/sns/pub', '/sns/step'):
+            seq = S['post'][key]; st = seq.pop(0) if len(seq) > 1 else seq[0]
+            return J({'p': p, 'st': st, 'url': 'https://example.com/' + p if st == 'done' else None})
+        return route.fulfill(status=404, headers=hd, body='{}')
+    page.route(SNS_RE, h)
+    try:
+        page.evaluate("() => { window.__snsGet = dcAuth.get; dcAuth.get = () => ({ token: 'regression' }); return ASPEED.sns.load(); }")
+        page.wait_for_function("document.querySelectorAll('#as-sns-acc .as-sns-a').length === 4", timeout=15000)
+        r = page.evaluate("""() => { const v = ASPEED.state().vlast, g = document.getElementById('as-sns-guide').textContent, out = { blob: !!(v && v.blob), go0: document.getElementById('as-sns-go').disabled,
+              cb: ['yt', 'ig', 'th', 'fb'].every(p => g.indexOf('W/sns/cb/' + p) >= 0) && g.indexOf('W/sns/meta/delete') >= 0 };
+            if (!out.blob) return out;
+            ASPEED.sns.video(Object.assign({}, v, { w: 1080, h: 1920, audio: 'opus' }));
+            out.opus = [...document.querySelectorAll('[data-sns-use]')].filter(c => !c.disabled).map(c => c.dataset.snsUse);
+            ASPEED.sns.video(Object.assign({}, v, { w: 1080, h: 1920, audio: 'aac' }));
+            out.aac = [...document.querySelectorAll('[data-sns-use]')].filter(c => !c.disabled && c.checked).map(c => c.dataset.snsUse);
+            const cs = [...document.querySelectorAll('[data-sns-use]')], ch = () => cs.forEach(c => c.dispatchEvent(new Event('change', { bubbles: true })));
+            out.go1 = document.getElementById('as-sns-go').disabled; cs.forEach(c => { c.checked = false; }); ch();
+            out.go2 = document.getElementById('as-sns-go').disabled; cs.forEach(c => { c.checked = true; }); ch();
+            out.title = document.querySelector('[data-sns-t="yt"]').value;
+            out.tx = Object.fromEntries([...document.querySelectorAll('[data-sns-x]')].map(c => [c.dataset.snsX, c.value])); return out; }""")
+        if not r['blob']: fail('asset-speed', 'SNS 자동 게시 검사: 앞에서 만든 영상이 없음'); return
+        if not r['go0']: fail('asset-speed', 'SNS 자동 게시: 9:16 영상이 없는데 올리기 단추가 켜져 있음 (16:9 영상은 올리지 않음)')
+        if not r['cb']: fail('asset-speed', "SNS 자동 게시 '처음 한 번' 안내에 콜백·삭제 주소가 없음")
+        if r['opus'] != ['yt']: fail('asset-speed', 'SNS 자동 게시: 소리가 Opus 인 영상은 유튜브만 골라져야 함 (인스타·스레드·페이스북은 AAC 만): %s' % r['opus'])
+        if r['aac'] != ['yt', 'ig', 'th', 'fb']: fail('asset-speed', 'SNS 자동 게시: 연결된 4곳이 골라지지 않음: %s' % r['aac'])
+        if r['go1'] or not r['go2']: fail('asset-speed', 'SNS 올리기 단추: 고른 곳이 있으면 켜지고 모두 끄면 꺼져야 함 (켜짐 %s · 모두 끔 %s)' % (not r['go1'], not r['go2']))
+        if len(r['title']) > 100 or '#shorts' not in r['title']: fail('asset-speed', 'SNS 유튜브 제목 이상 (100자 · #shorts): %s' % r['title'])
+        for p, t in r['tx'].items():
+            if '과거 수익률은 미래를 보장하지 않' not in t or '→' not in t or 'undefined' in t or 'NaN' in t:
+                fail('asset-speed', 'SNS %s 글 이상 (결과 숫자·경고): %s' % (p, t[:120]))
+            if p != 'ig' and 'https://d-capitalism.com/' not in t: fail('asset-speed', 'SNS %s 글에 메인 홈 링크 없음' % p)
+        if len(r['tx']['th']) > 500 or r['tx']['th'].count('#') != 1: fail('asset-speed', 'SNS 스레드 글 (500자 · 주제 태그 1개) 이상: %d자 · # %d개' % (len(r['tx']['th']), r['tx']['th'].count('#')))
+        size = page.evaluate("() => ASPEED.sns.state().vid.blob.size")
+        for n in (1, 2):
+            S['calls'].clear()
+            page.once('dialog', lambda d: d.accept())
+            page.evaluate("() => { document.getElementById('as-sns-st').textContent = ''; }")   # 앞 결과 글이 남아 바로 끝난 것으로 보지 않게
+            page.click('#as-sns-go')
+            try:
+                page.wait_for_function("/모두|실패|못했/.test(document.getElementById('as-sns-st').textContent) && !/중…?$/.test(document.getElementById('as-sns-st').textContent)", timeout=60000)
+            except Exception:
+                fail('asset-speed', 'SNS 올리기 %d번째가 끝나지 않음: %s' % (n, page.inner_text('#as-sns-st'))); break
+            st, rows = page.inner_text('#as-sns-st'), page.inner_text('#as-sns-prog')
+            parts = [c for c in S['calls'] if c[0].startswith('/sns/part/')]
+            pubs = sorted(c[1]['p'] for c in S['calls'] if c[0] == '/sns/pub')
+            if '4곳 모두' not in st or rows.count('보기') != 4 or pubs != ['fb', 'ig', 'th', 'yt'] or any(not (c[2] or '').startswith('Bearer ') for c in S['calls']):
+                fail('asset-speed', 'SNS 올리기 %d번째 결과 이상: %s / %s / 시작 %s' % (n, st, rows.replace('\n', ' '), pubs))
+            if n == 1 and (len(parts) != -(-size // (24 << 20)) or sum(c[1] for c in parts) != size):
+                fail('asset-speed', 'SNS 영상 조각 올리기 이상: %s (영상 %d바이트)' % ([c[1] for c in parts], size))
+            if n == 2 and (parts or rows.count('이미 올린 영상') != 4):
+                fail('asset-speed', '같은 영상을 다시 올렸는데 조각을 다시 보내거나 이미 올린 영상 표시가 없음: 조각 %d · %s' % (len(parts), rows.replace('\n', ' ')))
+    except Exception as e:
+        fail('asset-speed', 'SNS 자동 게시 화면 검사 실패: %s' % str(e)[:200])
+    finally:
+        try: page.unroute(SNS_RE, h)
+        except Exception: pass
+        try: page.evaluate("() => { if (window.__snsGet) dcAuth.get = window.__snsGet; }")
+        except Exception: pass
 
 
 def kcmp_check(page, base, fail, local):
@@ -1675,6 +1766,12 @@ def main():
         print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'worker_grp_test: 출력 없음', flush=True)
         if _r.returncode != 0:
             fail('worker', 'PC 여러 대(/grp) 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:300])
+    # Worker SNS 자동 게시(/sns · 관리자만 · 연결 OAuth · 영상 조각·공개 주소 Range · 유튜브·인스타·스레드·페이스북 게시 단계 · 한 번만) 단독 확인 — node 가 있으면
+    if not a.etf_audit and shutil.which('node'):
+        _r = subprocess.run(['node', os.path.join(ROOT, 'tests', 'worker_sns_test.mjs')], capture_output=True, text=True, timeout=300)
+        print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'worker_sns_test: 출력 없음', flush=True)
+        if _r.returncode != 0:
+            fail('worker', 'SNS 자동 게시(/sns) 검사 실패: ' + (' | '.join(l.strip() for l in _r.stdout.splitlines() if '✗' in l) or _r.stderr.strip())[:300])
 
     # 외부 광고·방문 분석 서버(일시 오류가 잦고 사이트 기능과 무관) — 실패해도 사이트 오류로 보지 않음
     THIRD = ('clarity.ms', 'bing.com', 'naver.com', 'naver.net', 'pstatic.net', 'googlesyndication', 'doubleclick',

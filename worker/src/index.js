@@ -31,14 +31,16 @@
  *
  * POST /hb · GET /hb → 72루틴 자동매매 PC 프로그램 생존 신호 · 주문 시각이 지났는데 신호가 없으면 15분 cron 이 텔레그램으로 알림 (worker/src/hb.js)
  * POST /grp · GET /grp → 72루틴 자동매매 PC 여러 대 — 주문 권한(한 대만)·이어받기·암호화한 공유 상태 (worker/src/grp.js)
+ * /sns/* → SNS 자동 게시(유튜브 쇼츠·인스타그램 릴스·스레드·페이스북 릴스) — 관리자 전용 · 영상 공개 주소 /sns/m/<id>.mp4 · OAuth 콜백 /sns/cb/<sns> (worker/src/sns.js)
  *
  * 15분마다(cron) GitHub Actions '시세 데이터 갱신'을 직접 실행시킴 (GitHub 자체 예약 실행은 자주 늦어지거나 누락됨)
  *   · 한국장과 공시 시간(평일 09~20시)·미국장(평일 22~07시, 한국 시간) 15분마다, 그 밖에는 3시간마다
  *   · GH_TOKEN(저장소 1개·Actions 쓰기 권한만 있는 토큰) 비밀값이 있을 때만 동작 · GET /status 로 마지막 실행 결과 확인
  */
-import { auth } from './auth.js';
+import { auth, adminUser } from './auth.js';
 import { hb, hbScan } from './hb.js';   /* 72루틴 자동매매 PC 프로그램 생존 감시 (/hb) */
 import { grp, grpScan } from './grp.js';   /* 72루틴 자동매매 PC 여러 대 (/grp) */
+import { sns } from './sns.js';   /* SNS 자동 게시 — 관리자 전용 (/sns/*) */
 const REPO = 'ETFMD/d-capitalism';
 const WORKFLOW = 'update-market-data.yml';
 const APT_WORKFLOW = 'update-apt-rank.yml';   // 아파트 시세 순위 (2시간마다)
@@ -454,6 +456,7 @@ export default {
         if (url.pathname !== '/auth/config' && !cors.ok) return json({ error: 'origin' }, 403);
         return await auth(req, env, url, json);
       }
+      if (url.pathname.startsWith('/sns/')) return await sns(req, env, url, json, cors, adminUser);   /* SNS 자동 게시 (worker/src/sns.js · 관리자 전용 + 영상 공개 주소·OAuth 콜백) */
       if (url.pathname.startsWith('/kr')) return await kr(req, env, url, json);
       if (url.pathname === '/apt' || url.pathname === '/apt/put') return await apt(req, env, url, json);
       if (url.pathname === '/fear' && req.method === 'GET') {
