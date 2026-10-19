@@ -1,0 +1,205 @@
+d-capitalism.com 자산 속도 시뮬레이터 — 영상 배경음악 출처 (scripts/fetch_bgm.py)
+편집: 앞 무음·125초 뒤를 잘라 냄, 음량 맞춤(−14 LUFS), MP3 128 kbps 로 다시 인코딩
+
+adventure.mp3 (CC0)
+  원본: https://archive.org/download/freepd/epic/Adventure.mp3
+  Music: "Adventure" by Rafael Krux (FreePD.com)
+  Public Domain (CC0 1.0) https://creativecommons.org/publicdomain/zero/1.0/
+
+epic-blockbuster-2.mp3 (CC0)
+  원본: https://archive.org/download/freepd/epic/Epic%20Blockbuster%202.mp3
+  Music: "Epic Blockbuster 2" by Rafael Krux (FreePD.com)
+  Public Domain (CC0 1.0) https://creativecommons.org/publicdomain/zero/1.0/
+
+emotional-blockbuster-2.mp3 (CC0)
+  원본: https://archive.org/download/freepd/epic/Emotional%20Blockbuster%202.mp3
+  Music: "Emotional Blockbuster 2" by Rafael Krux (FreePD.com)
+  Public Domain (CC0 1.0) https://creativecommons.org/publicdomain/zero/1.0/
+
+rulers-of-our-lands.mp3 (CC0)
+  원본: https://archive.org/download/freepd/epic/Rulers%20of%20Our%20Lands.mp3
+  Music: "Rulers of Our Lands" by Rafael Krux (FreePD.com)
+  Public Domain (CC0 1.0) https://creativecommons.org/publicdomain/zero/1.0/
+
+black-knight.mp3 (CC0)
+  원본: https://archive.org/download/freepd/epic/Black%20Knight.mp3
+  Music: "Black Knight" by Rafael Krux (FreePD.com)
+  Public Domain (CC0 1.0) https://creativecommons.org/publicdomain/zero/1.0/
+
+strength-of-the-titans.mp3 (CC0)
+  원본: https://archive.org/download/freepd/epic/Strength%20of%20the%20Titans.mp3
+  Music: "Strength of the Titans" by Kevin MacLeod (FreePD.com)
+  Public Domain (CC0 1.0) https://creativecommons.org/publicdomain/zero/1.0/
+
+new-hero-in-town.mp3 (CC0)
+  원본: https://archive.org/download/freepd/epic/New%20Hero%20in%20Town.mp3
+  Music: "New Hero in Town" by Kevin MacLeod (FreePD.com)
+  Public Domain (CC0 1.0) https://creativecommons.org/publicdomain/zero/1.0/
+
+honor-bound.mp3 (CC0)
+  원본: https://archive.org/download/freepd/epic/Honor%20Bound.mp3
+  Music: "Honor Bound" by Bryan Teoh (FreePD.com)
+  Public Domain (CC0 1.0) https://creativecommons.org/publicdomain/zero/1.0/
+
+adventures-of-flying-jack.mp3 (CC BY 4.0)
+  원본: https://archive.org/download/freepd/epic/Adventures%20of%20Flying%20Jack.mp3
+  Music: "Adventures of Flying Jack" by Alexander Nakarada (alexandernakarada.bandcamp.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+fanfare-x.mp3 (CC BY 4.0)
+  원본: https://archive.org/download/freepd/epic/Fanfare%20X.mp3
+  Music: "Fanfare X" by Alexander Nakarada (alexandernakarada.bandcamp.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+heroic-age.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Heroic%20Age.mp3  ISRC USUAN1100848
+  Music: Heroic Age Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+undaunted.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Undaunted.mp3  ISRC USUAN1400025
+  Music: Undaunted Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+five-armies.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Five%20Armies.mp3  ISRC USUAN1100875
+  Music: Five Armies Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+at-launch.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/At%20Launch.mp3  ISRC USUAN1100539
+  Music: At Launch Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+our-story-begins.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Our%20Story%20Begins.mp3  ISRC USUAN1100856
+  Music: Our Story Begins Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+americana.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Americana.mp3  ISRC USUAN1200092
+  Music: Americana Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+dark-star.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Dark%20Star.mp3  ISRC USUAN1100534
+  Music: Dark Star Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+fanfare-for-space.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Fanfare%20for%20Space.mp3  ISRC USUAN1300026
+  Music: Fanfare for Space Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+take-a-chance.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Take%20a%20Chance.mp3  ISRC USUAN1300024
+  Music: Take a Chance Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+clenched-teeth.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Clenched%20Teeth.mp3  ISRC USUAN1100705
+  Music: Clenched Teeth Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+mighty-and-meek.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Mighty%20and%20Meek.mp3  ISRC USUAN1100500
+  Music: Mighty and Meek Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+movement-proposition.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Movement%20Proposition.mp3  ISRC USUAN1100778
+  Music: Movement Proposition Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+hiding-your-reality.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Hiding%20Your%20Reality.mp3  ISRC USUAN1700081
+  Music: Hiding Your Reality Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+urban-gauntlet.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Urban%20Gauntlet.mp3  ISRC USUAN1500009
+  Music: Urban Gauntlet Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+arcane.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Arcane.mp3  ISRC USUAN1100831
+  Music: Arcane Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+rynos-theme.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Rynos%20Theme.mp3  ISRC USUAN1600016
+  Music: Rynos Theme Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+full-on.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Full%20On.mp3  ISRC USUAN1300005
+  Music: Full On Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+rising-game.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Rising%20Game.mp3  ISRC USUAN1100593
+  Music: Rising Game Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+prelude-and-action.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Prelude%20and%20Action.mp3  ISRC USUAN1100887
+  Music: Prelude and Action Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+anglozulu.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/AngloZulu.mp3  ISRC USUAN1100411
+  Music: AngloZulu Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+a-mission.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/A%20Mission.mp3  ISRC USUAN1100343
+  Music: A Mission Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+the-curtain-rises.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/The%20Curtain%20Rises.mp3  ISRC USUAN1500011
+  Music: The Curtain Rises Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+truth-of-the-legend.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Truth%20of%20the%20Legend.mp3  ISRC USUAN1100592
+  Music: Truth of the Legend Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+achilles.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Achilles.mp3  ISRC USUAN1100463
+  Music: Achilles Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
+call-to-adventure.mp3 (CC BY 4.0)
+  원본: https://incompetech.com/music/royalty-free/mp3-royaltyfree/Call%20to%20Adventure.mp3  ISRC USUAN1300022
+  Music: Call to Adventure Kevin MacLeod (incompetech.com)
+  Licensed under Creative Commons: By Attribution 4.0 License
+  http://creativecommons.org/licenses/by/4.0/
+
