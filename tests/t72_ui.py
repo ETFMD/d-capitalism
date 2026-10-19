@@ -180,7 +180,8 @@ NOW_JS = """async () => {""" + PRE + """
     } else ok('기록 검사에 쓸 시세 없음', false, px.length);
     /* 설명 단추 → 아래 설명글로 */
     window.scrollTo(0, 0); click('.mh-top [data-act="guide"], [data-act="guide"]'); await W(700);
-    const g = document.getElementById('g-t72-h'), gy = g ? g.getBoundingClientRect().top : -1;
+    const g = document.getElementById('g-t72-h'); let gy = g ? g.getBoundingClientRect().top : -1;
+    for (let i = 0; i < 30 && g && !(gy >= -5 && gy < innerHeight); i++) { await W(100); gy = g.getBoundingClientRect().top; }   /* 부드러운 스크롤 — 바쁜 시험 PC 에선 0.7초에 덜 끝남(2026-10-20) · 최대 3초 더 */
     ok('설명 단추 → 설명글 제목으로 이동', g && gy >= -5 && gy < innerHeight, gy);
     window.scrollTo(0, 0);
   } catch (e) { ok('현재 화면 흐름 오류', false, String(e && e.message)); }

@@ -28808,7 +28808,9 @@ function mhApp(P) {
   /* 글자 크기(뿌리 요소 zoom = MH.fontScale) 보정 — 2026-10-19: 130% 에서 그래프 툴팁이 마우스와 최대 118px(72루틴 크게 보기 307px) 어긋나고 ⋮ 메뉴가 단추에서 떨어져 뜨던 것
      · 원인: Chart.js·이 화면의 손동작 코드가 마우스 위치(clientX = 화면 px)를 요소의 CSS 크기(배율 안 px)와 그대로 견줌 → 배율만큼 어긋남 (Chart.js 4.5.1 도 같음)
      · zk(el) = 요소의 'CSS px ÷ 화면 px' (배율 1 이면 1) · ZFIX = 이 화면의 모든 그래프(mkChart) 이벤트 위치를 그 비율로 다시 셈 — 72루틴 PC 프로그램(routine72-auto 5c4dbc1)과 같은 방식 */
-  function zk(el) { var r = el.getBoundingClientRect(); return { r: r, x: r.width > 0 ? el.offsetWidth / r.width : 1, y: r.height > 0 ? el.offsetHeight / r.height : 1 }; }
+  function zk(el) {   /* 정확한 배율(currentCSSZoom · 소수) 먼저 — offsetWidth 는 정수로 반올림돼 작은 단추에선 0.6% 틀어짐(⋮ 메뉴 2.9px · CI 글꼴 · 2026-10-20) · 없으면 너비 비율 */
+    var r = el.getBoundingClientRect(), z = el.currentCSSZoom; if (z > 0) return { r: r, x: 1 / z, y: 1 / z };
+    return { r: r, x: r.width > 0 ? el.offsetWidth / r.width : 1, y: r.height > 0 ? el.offsetHeight / r.height : 1 }; }
   var ZFIX = { id: 'mhCssZoom', beforeEvent: function (chart, args) {
     var e = args.event, n = e && e.native; if (!n) return;
     var p = n.touches && n.touches.length ? n.touches[0] : n.changedTouches && n.changedTouches.length ? n.changedTouches[0] : n;

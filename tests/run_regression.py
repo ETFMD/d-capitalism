@@ -1639,9 +1639,10 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
         pass
 
 
-MHZ_TIP = """(cv) => { const c = Chart.getChart(cv), r = cv.getBoundingClientRect(), a = c.tooltip.getActiveElements(); return a.length ? Math.abs(r.left + a[0].element.x * r.width / cv.offsetWidth - window.__mx) : null; }"""
-MHZ_GEO = """(cv) => { const c = Chart.getChart(cv), r = cv.getBoundingClientRect(), k = cv.offsetWidth / r.width; return { L: r.left + c.chartArea.left / k, R: r.left + c.chartArea.right / k, T: r.top + c.chartArea.top / k, B: r.top + c.chartArea.bottom / k, n: c.data.labels.length }; }"""
-MHZ_DATE = """([cv, px]) => { const c = Chart.getChart(cv), r = cv.getBoundingClientRect(), i = Math.round(c.scales.x.getValueForPixel((px - r.left) * cv.offsetWidth / r.width)); return c.data.labels[Math.max(0, Math.min(c.data.labels.length - 1, i))]; }"""
+MHZ_K = "const zf = cv.currentCSSZoom > 0 ? cv.currentCSSZoom : r.width / cv.offsetWidth;"   # 화면 px ÷ CSS px — 정확한 배율 먼저(offsetWidth 는 정수 반올림)
+MHZ_TIP = """(cv) => { const c = Chart.getChart(cv), r = cv.getBoundingClientRect(), a = c.tooltip.getActiveElements(); """ + MHZ_K + """ return a.length ? Math.abs(r.left + a[0].element.x * zf - window.__mx) : null; }"""
+MHZ_GEO = """(cv) => { const c = Chart.getChart(cv), r = cv.getBoundingClientRect(); """ + MHZ_K + """ return { L: r.left + c.chartArea.left * zf, R: r.left + c.chartArea.right * zf, T: r.top + c.chartArea.top * zf, B: r.top + c.chartArea.bottom * zf, n: c.data.labels.length }; }"""
+MHZ_DATE = """([cv, px]) => { const c = Chart.getChart(cv), r = cv.getBoundingClientRect(); """ + MHZ_K + """ const i = Math.round(c.scales.x.getValueForPixel((px - r.left) / zf)); return c.data.labels[Math.max(0, Math.min(c.data.labels.length - 1, i))]; }"""
 
 
 def mh_zoom_check(pg, base, path, fail):
