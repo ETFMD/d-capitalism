@@ -1525,6 +1525,9 @@ def board_check(ctx, base, fail, local, attach):
                 st, hd, bd = e.code, dict(e.headers), e.read()
             calls.append((q.method, path.split('?')[0], st))
             route.fulfill(status=st, headers=hd, body=bd)
+        for o in ctx.pages:   # 같은 출처의 다른 탭(무한매수법·VR 기록 화면 등)은 dc_auth 바뀜(storage 이벤트)에 반응해 진짜 Worker 에 가짜 토큰을 보내고 401 → 로그아웃시킴 → 비워 둠 (72루틴 검사와 같은 이유)
+            try: o.goto('about:blank')
+            except Exception: pass
         pg = ctx.new_page(); perr = []
         pg.on('pageerror', lambda e: perr.append(str(e)))
         pg.on('console', lambda m: perr.append(m.text) if m.type == 'error' and not m.text.startswith('Failed to load resource') else None)   # 손님 비밀글 403 처럼 일부러 받는 오류 응답의 브라우저 알림은 뺌(응답 코드는 calls 로 따로 확인)
@@ -1533,7 +1536,10 @@ def board_check(ctx, base, fail, local, attach):
         def login(who, uid, nick, admin=False):
             pg.evaluate("a => localStorage.setItem('dc_auth', JSON.stringify({ token: a[0], exp: 4102444800, user: { id: a[1], nick: a[2], admin: a[3] } }))", [TK[who], uid, nick, admin])
 
-        def ready(sel, ms=20000):
+        step = ['시작']
+
+        def ready(sel, ms=30000):
+            step[0] = '%s 기다림 (%s)' % (sel, pg.url.replace(base, '/'))
             pg.wait_for_selector(sel, timeout=ms)
             pg.wait_for_timeout(200)
 
@@ -1625,7 +1631,11 @@ def board_check(ctx, base, fail, local, attach):
         if bad: fail('suggest', '게시판 서버 오류 응답(손님 비밀글 403 말고): %r' % bad[:4])
         print('    건의 게시판: %s' % ' → '.join('%s %s %d' % c for c in calls if c[1].startswith('/board'))[:300], flush=True)
     except Exception as e:
-        fail('suggest', '건의 게시판 화면 검사 오류: %s' % str(e)[:200])
+        try:
+            now = pg.evaluate("(document.getElementById('sg-root') || document.body).innerText.slice(0, 160)")
+        except Exception:
+            now = '?'
+        fail('suggest', '건의 게시판 화면 검사 오류 — %s: %s · 화면: %s · 요청: %s' % (step[0] if 'step' in dir() else '?', str(e).splitlines()[0][:120], now.replace('\n', ' '), calls[-4:] if 'calls' in dir() else []))
     finally:
         try:
             pg.evaluate("() => { localStorage.removeItem('dc_auth'); localStorage.removeItem('dc_sg_draft'); }"); pg.close()
