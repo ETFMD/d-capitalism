@@ -158,7 +158,7 @@ def main():
     old = json.load(open(LIST, encoding='utf-8')).get('covers', {}) if os.path.isfile(LIST) else {}
     os.makedirs(DIR, exist_ok=True)
     ids = {b['id'] for b in books}
-    out, bad = {}, []
+    out, bad, new = {}, [], set()
     for b in books:
         bid = b['id']
         path = os.path.join(DIR, f'{bid}.webp')
@@ -175,6 +175,7 @@ def main():
             im, src, check, memo = fetch(b)
             (w, h), v = save(im, path, o.get('v') if have else None)
             out[bid] = {'w': w, 'h': h, 'from': src, 'v': v, 'check': check}
+            new.add(bid)
             print(f'  ✓ {bid} {w}×{h} {src} {check} · {memo}')
         except Exception as e:
             bad.append(bid)
@@ -194,7 +195,7 @@ def main():
     if not os.path.isfile(LIST) or open(LIST, encoding='utf-8').read() != txt:
         with open(LIST, 'w', encoding='utf-8') as f:
             f.write(txt)
-    n_diff = [k for k, c in res['covers'].items() if c.get('check') == 'diff']
+    n_diff = [k for k, c in res['covers'].items() if c.get('check') == 'diff' and k in new]   # 이번에 받은 것만 (확인한 책을 매번 다시 알리지 않게)
     print(f'표지 {len(res["covers"])}/{len(books)}권' + (f' · 서점끼리 다른 표지 {len(n_diff)}권(확인 필요): {", ".join(n_diff)}' if n_diff else '')
           + (f' · 받지 못함 {len(bad)}권: {", ".join(bad)}' if bad else ''))
     sys.exit(1 if bad else 0)
