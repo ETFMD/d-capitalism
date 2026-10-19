@@ -1487,11 +1487,23 @@ def books_check(page, base, fail, local):
     · 단계·책 수가 자료와 같음 · 표 줄 = 책 카드 · 책마다 저자·출판사·한줄평·이어 하기 · 단계 바로 가기가 실제 칸으로
     · 구매 링크: 쿠팡 단축 주소만 · rel=sponsored nofollow noopener · 하나라도 있으면 맨 위(첫 단계보다 앞)에 경제적 이해관계 문구 / 없으면 문구·단추 없음
     · '최저가' 표현 없음 · 애드센스·canonical·구조화 데이터(ItemList 책 수) · 사이트 안 링크가 실제 파일(로컬)
-    · 투자 공부 글의 '이 글과 함께 읽으면 좋은 책' → 실제 책 칸 · 하단 사이트맵·홈에 자본가 서재 링크"""
+    · 투자 공부 글의 '이 글과 함께 읽으면 좋은 책' → 실제 책 칸 · 하단 사이트맵·홈에 자본가 서재 링크
+    · 책 표지(scripts/fetch_book_covers.py → books/cover · content/books/covers.json): 단계마다 표지 책장(책 수 = 자료) · 카드 표지 · 글 아래 작은 표지가
+      실제로 열림(그림 크기 > 0) · 주소 = 그 책 파일 · alt 에 책 제목 · 보이는 크기(PC 카드 140px↑ · 책장 100px↑ / 320px 폭 카드 90px↑ · 책장 75px↑)
+      · 표지 목록에 없는 책은 실패가 아니라 알림(표지 갱신 Actions 가 받아 오는 사이) — 목록에 있는데 그림이 안 열리면 실패
+      · 표지를 누르면 구매 링크(링크 있는 책만) — 단추와 같은 형식·rel"""
     src = json.load(open(os.path.join(ROOT, 'content', 'books', 'books.json'), encoding='utf-8'))
     n_st, n_bk, n_cp = len(src['stages']), len(src['books']), sum(1 for b in src['books'] if b.get('cp'))
+    cvp = os.path.join(ROOT, 'content', 'books', 'covers.json')
+    cvl = json.load(open(cvp, encoding='utf-8')).get('covers', {}) if os.path.isfile(cvp) else {}
+    has_cv = {b['id'] for b in src['books'] if b['id'] in cvl and os.path.isfile(os.path.join(ROOT, 'books', 'cover', b['id'] + '.webp'))}
+    titles = {b['id']: b['title'] for b in src['books']}
     page.set_viewport_size({'width': 1280, 'height': 900})
     page.goto(base + 'books/', wait_until='load'); page.wait_for_timeout(300)
+    IMG_WAIT = "() => { document.querySelectorAll('img[loading=lazy]').forEach(i => i.loading = 'eager'); return true; }"
+    page.evaluate(IMG_WAIT)
+    try: page.wait_for_function("[...document.images].every(i => i.complete)", timeout=20000)
+    except Exception: pass   # 아래 그림 크기 검사가 실패로 알림
     r = page.evaluate("""() => {
       const q = s => [...document.querySelectorAll(s)], first = document.querySelector('.bk-stage'), disc = document.getElementById('bk-disc');
       const ld = q('script[type="application/ld+json"]').map(s => { try { return JSON.parse(s.textContent); } catch (e) { return 'ERR'; } }).flat();
@@ -1500,7 +1512,10 @@ def books_check(page, base, fail, local):
         empty: q('.bk-card').filter(c => !c.querySelector('h3').textContent.trim() || !c.querySelector('.bk-by').textContent.trim() || c.querySelector('.bk-line').textContent.trim().length < 20 || c.querySelector('.bk-use').textContent.trim().length < 20).map(c => c.id),
         steps: q('.bk-steps a').map(a => a.getAttribute('href')).filter(h => !document.querySelector(h)), nsteps: q('.bk-steps a').length,
         rowlinks: q('.bk-tbl a.bk-row').map(a => a.getAttribute('href')).filter(h => !document.querySelector(h)),
-        buys: q('a.bk-buy').map(a => [a.getAttribute('href'), a.getAttribute('rel'), a.getAttribute('target')]),
+        buys: q('a[href*="coupang"]').map(a => [a.getAttribute('href'), a.getAttribute('rel'), a.getAttribute('target'), a.className]),
+        shelf: q('.bk-stage').map(s => s.querySelectorAll('.bk-shelf li').length),
+        simgs: q('.bk-shelf a').map(a => { const i = a.querySelector('img'); return [a.getAttribute('href').slice(3), i ? i.getAttribute('src') : null, i ? i.naturalWidth : 0, i ? i.alt : '', i ? Math.round(i.getBoundingClientRect().width) : 0]; }),
+        cimgs: q('.bk-card').map(c => { const i = c.querySelector('.bk-cover img'); return [c.id.slice(2), i ? i.getAttribute('src') : null, i ? i.naturalWidth : 0, i ? i.alt : '', i ? Math.round(i.getBoundingClientRect().width) : 0, !!c.querySelector('.bk-rk')]; }),
         disc: disc ? { t: disc.textContent, before: !!first && !!(disc.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING), vis: !!disc.offsetParent } : null,
         cheap: /최저가/.test(document.body.innerText), ads: !!document.querySelector('script[src*="adsbygoogle.js?client=ca-pub-8051182229751523"]'),
         canon: (document.querySelector('link[rel=canonical]') || {}).href || '', types: ld.map(x => x && x['@type']), items: (il.itemListElement || []).length,
@@ -1510,12 +1525,29 @@ def books_check(page, base, fail, local):
     if r['stages'] != n_st or r['cards'] != n_bk or r['rows'] != n_bk: fail('books/', '단계 %d·책 카드 %d·표 줄 %d (자료 %d단계 %d권)' % (r['stages'], r['cards'], r['rows'], n_st, n_bk))
     if r['empty']: fail('books/', '저자·한줄평·이어 하기가 비었거나 너무 짧은 책: %s' % r['empty'][:5])
     if r['nsteps'] != n_st or r['steps'] or r['rowlinks']: fail('books/', '단계 바로 가기·표 링크가 없는 칸을 가리킴: %s %s' % (r['steps'], r['rowlinks'][:3]))
-    if len(r['buys']) != n_cp: fail('books/', '구매 단추 %d개 (자료의 링크 %d개)' % (len(r['buys']), n_cp))
+    n_cvl = sum(1 for b in src['books'] if b.get('cp') and b['id'] in has_cv)
+    nb = sum(1 for b in r['buys'] if b[3] == 'bk-buy'); nc = sum(1 for b in r['buys'] if b[3] == 'bk-cvl')
+    if nb != n_cp or nc != n_cvl or len(r['buys']) != n_cp + n_cvl:
+        fail('books/', '구매 링크: 단추 %d·표지 %d·전체 %d개 (자료의 링크 %d개 · 표지 있는 것 %d개)' % (nb, nc, len(r['buys']), n_cp, n_cvl))
     bad = [b for b in r['buys'] if not re.match(r'^https://link\.coupang\.com/a/[A-Za-z0-9]+$', b[0] or '') or b[1] != 'sponsored nofollow noopener' or b[2] != '_blank']
     if bad: fail('books/', '구매 링크 형식·rel 이상: %s' % bad[:3])
     if n_cp and not (r['disc'] and r['disc']['before'] and r['disc']['vis'] and '쿠팡 파트너스' in r['disc']['t'] and '수수료' in r['disc']['t']):
         fail('books/', '구매 링크가 있는데 맨 위에 경제적 이해관계 문구가 없음(공정위 지침 — 제목 또는 첫 부분): %s' % r['disc'])
     if not n_cp and r['disc']: fail('books/', '구매 링크가 없는데 제휴 문구가 보임')
+    # 책 표지
+    want_n = [sum(1 for b in src['books'] if b['stage'] == s['id']) for s in src['stages']]
+    if r['shelf'] != want_n: fail('books/', '단계별 표지 책장 권수 %s (자료 %s)' % (r['shelf'], want_n))
+    for kind, rows, minw in (('책장', r['simgs'], 100), ('카드', r['cimgs'], 140)):
+        for x in rows:
+            bid, s_, nw, alt, w = x[:5]
+            if bid in has_cv:
+                if not (s_ or '').startswith('/books/cover/%s.webp?v=' % bid) or nw <= 0 or titles.get(bid, '?') not in alt or w < minw:
+                    fail('books/', '%s 표지 이상 %s: 주소 %s · 그림 너비 %s · alt %r · 보이는 너비 %dpx(%dpx 이상)' % (kind, bid, s_, nw, alt[:30], w, minw))
+            elif s_:
+                fail('books/', '%s: 표지 목록에 없는 책 %s 에 그림 %s' % (kind, bid, s_))
+        if kind == '카드' and any(x[0] in has_cv and not x[5] for x in rows): fail('books/', '카드 표지에 순위 표시가 없음')
+    miss = [b['id'] for b in src['books'] if b['id'] not in has_cv]
+    if miss: print('    알림: 표지가 아직 없는 책 %d권(순위 숫자 상자로 대신) — %s' % (len(miss), ', '.join(miss[:6])), flush=True)
     if r['cheap']: fail('books/', "'최저가' 표현이 있음 (도서정가제 — 확인할 수 없는 표현)")
     if not r['ads'] or not r['canon'].endswith('/books/') or 'CollectionPage' not in r['types'] or 'BreadcrumbList' not in r['types'] or r['items'] != n_bk:
         fail('books/', '애드센스·canonical·구조화 데이터 이상: ads %s · %s · %s · 목록 %d' % (r['ads'], r['canon'], r['types'], r['items']))
@@ -1523,10 +1555,13 @@ def books_check(page, base, fail, local):
         for h in sorted(set(r['links'])):
             f = os.path.join(ROOT, h.strip('/'), 'index.html') if h.endswith('/') else os.path.join(ROOT, h.lstrip('/'))
             if h != '/' and not os.path.isfile(f): fail('books/', '깨진 링크 ' + h)
-    for w in (320, 390):   # 휴대폰 폭: 넘침 없음 (표는 가로 스크롤 상자 안)
+    for w in (320, 390):   # 휴대폰 폭: 넘침 없음 (표는 가로 스크롤 상자 안) · 표지가 너무 작아지지 않음
         page.set_viewport_size({'width': w, 'height': 900}); page.wait_for_timeout(150)
         o = page.evaluate(OVERFLOW_JS)
         if o['sw'] > o['vw'] + 1 or o['out']: fail('books/', '%dpx 넘침 %s' % (w, o['out'][:3]))
+        sz = page.evaluate("[Math.min(...[...document.querySelectorAll('.bk-shelf img')].map(i => i.getBoundingClientRect().width), 999), "
+                           "Math.min(...[...document.querySelectorAll('.bk-cover img')].map(i => i.getBoundingClientRect().width), 999)]")
+        if has_cv and (sz[0] < 75 or sz[1] < 90): fail('books/', '%dpx 폭에서 표지가 너무 작음: 책장 %.0fpx · 카드 %.0fpx (75·90px 이상)' % (w, sz[0], sz[1]))
     page.set_viewport_size({'width': 1280, 'height': 900})
     # 투자 공부 글 → 책 칸
     ids = {b['id'] for b in src['books']}
@@ -1536,6 +1571,12 @@ def books_check(page, base, fail, local):
         hs = page.evaluate("[...document.querySelectorAll('a[href^=\"/books/#b-\"]')].map(a => a.getAttribute('href').slice(10))")
         want = [b['id'] for b in src['books'] if slug in b.get('learn', [])][:4]
         if hs != want or any(h not in ids for h in hs): fail('learn/' + slug, "'이 글과 함께 읽으면 좋은 책' 이상: %s (기대 %s)" % (hs, want))
+        page.evaluate(IMG_WAIT)
+        try: page.wait_for_function("[...document.images].every(i => i.complete)", timeout=15000)
+        except Exception: pass
+        th = page.evaluate("[...document.querySelectorAll('a[href^=\"/books/#b-\"]')].map(a => { const i = a.querySelector('img'); return [a.getAttribute('href').slice(10), i ? i.naturalWidth : -1]; })")
+        badt = [x for x in th if (x[0] in has_cv) != (x[1] > 0)]
+        if badt: fail('learn/' + slug, "'함께 읽으면 좋은 책' 작은 표지 이상(-1 = 그림 없음 · 0 = 안 열림): %s" % badt)
     page.goto(base + 'learn/', wait_until='load'); page.wait_for_timeout(100)
     if not page.evaluate("!!document.querySelector('.box a[href=\"/books/\"]')"): fail('learn/', '투자 공부 목록에 자본가 서재 안내가 없음')
     page.goto(base + 'compound/', wait_until='load'); page.wait_for_timeout(200)
@@ -1543,7 +1584,7 @@ def books_check(page, base, fail, local):
     if '자본가 서재' not in t: fail('compound/', '하단 사이트맵 투자 공부 열에 자본가 서재가 없음')
     page.goto(base, wait_until='load'); page.wait_for_timeout(200)
     if not page.evaluate("!!document.querySelector('.learn-home a[href=\"books/\"]')"): fail('', '홈 투자 공부 칸에 자본가 서재 링크가 없음')
-    print('    자본가 서재: %d단계 · %d권 · 구매 링크 %d개' % (n_st, n_bk, n_cp), flush=True)
+    print('    자본가 서재: %d단계 · %d권 · 표지 %d권 · 구매 링크 %d개' % (n_st, n_bk, len(has_cv), n_cp), flush=True)
 
 
 BOARD_OV_JS = OVERFLOW_JS

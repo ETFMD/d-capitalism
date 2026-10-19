@@ -10,6 +10,9 @@
   · 단추는 rel="sponsored nofollow noopener" · 새 창 · '최저가' 같은 확인할 수 없는 표현은 쓰지 않음(도서정가제)
   · 링크가 없는 책은 단추를 그리지 않음 (준비 중)
 · 책 정보(제목·저자·옮긴이·출판사·출간 연도·ISBN)는 교보문고·예스24 등 판매 페이지로 확인한 값만 (src 출처 주소를 자료에 남김)
+· 책 표지: scripts/fetch_book_covers.py 가 받아 둔 books/cover/<id>.webp + content/books/covers.json(가로·세로·버전)
+  · 단계마다 표지 책장(6권을 한눈에) + 책 카드 왼쪽에 큰 표지 · 글 아래 '함께 읽으면 좋은 책'에도 작은 표지(build_learn)
+  · 표지가 아직 없는 책은 순위 숫자 상자로 대신 그리고 빌드 기록에 알림 (Actions '자본가 서재 책 표지 갱신'이 받아 오면 다시 빌드됨)
 · 표준 라이브러리만
 """
 import json, os, re, sys
@@ -18,6 +21,7 @@ import build_learn as BL
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 SRC = os.path.join(ROOT, 'content', 'books', 'books.json')
+COVERS = os.path.join(ROOT, 'content', 'books', 'covers.json')
 OUT = 'books'
 CP_RE = re.compile(r'^https://link\.coupang\.com/a/[A-Za-z0-9]+$')
 LEVEL = {1: '입문', 2: '보통', 3: '깊이'}
@@ -81,7 +85,28 @@ def load(routes, arts):
             sys.exit(f'books.json 단계 {s["id"]}: 순위가 1부터 빠짐없이 이어지지 않음 {rs}')
     d['books'].sort(key=lambda b: (st_ids.index(b['stage']), b['rank']))
     d['tools'] = tools
+    cv = json.load(open(COVERS, encoding='utf-8')).get('covers', {}) if os.path.isfile(COVERS) else {}
+    miss = []
+    for b in d['books']:   # 표지: 목록에 있고 파일도 있을 때만 (가로·세로는 그림 자리를 미리 잡아 화면이 밀리지 않게)
+        c = cv.get(b['id'])
+        if (c and isinstance(c.get('w'), int) and isinstance(c.get('h'), int) and re.fullmatch(r'[0-9a-f]{8}', str(c.get('v', '')))
+                and os.path.isfile(os.path.join(ROOT, OUT, 'cover', f'{b["id"]}.webp'))):
+            b['cover'] = {'src': f'/{OUT}/cover/{b["id"]}.webp?v={c["v"]}', 'w': c['w'], 'h': c['h']}
+        else:
+            miss.append(b['id'])
+    if miss:
+        print(f'  ⚠ 자본가 서재: 표지가 없는 책 {len(miss)}권 — 순위 숫자 상자로 대신 그림 (python scripts/fetch_book_covers.py): {", ".join(miss[:8])}')
     return d
+
+
+def cover_img(b, cls='', lazy=True):
+    """책 표지 <img> (없으면 '') — 글자 그대로 넣는 값은 모두 esc"""
+    c = b.get('cover')
+    if not c:
+        return ''
+    cl = f' class="{cls}"' if cls else ''
+    return (f'<img{cl} src="{esc(c["src"])}" width="{c["w"]}" height="{c["h"]}" '
+            f'alt="『{esc(b["title"])}』 표지"' + (' loading="lazy"' if lazy else '') + ' decoding="async">')
 
 
 def by_article(books, slug):
@@ -107,11 +132,28 @@ CSS = '''
   .bk-tbl td small { display:block; color:var(--text3); font-size:12.5px; }
   .bk-tbl a.bk-row { color:var(--text); text-decoration:none; } .bk-tbl a.bk-row:hover { color:var(--accent); }
   .bk-lv { white-space:nowrap; color:var(--text2); }
-  .bk-cards { display:grid; grid-template-columns:1fr; gap:12px; margin-top:14px; }
-  .bk-card { background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:16px 18px; scroll-margin-top:70px; display:flex; align-items:flex-start; gap:16px; }
-  .bk-body { flex:1 1 auto; min-width:0; }
+  .bk-shelf { list-style:none; margin:8px 0 22px; padding:0; display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:20px 16px; }
+  .bk-shelf li { min-width:0; }
+  .bk-shelf a { display:block; color:var(--text); text-decoration:none; }
+  .bk-im { display:block; position:relative; aspect-ratio:2/3; }
+  .bk-im img { position:absolute; left:0; right:0; bottom:0; margin:0 auto; max-width:100%; max-height:100%; width:auto; height:auto; transition:transform .15s ease; }
+  .bk-shelf a:hover .bk-im img { transform:translateY(-4px); }
+  .bk-st { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; font-size:13px; line-height:1.45; color:var(--text2); margin-top:9px; overflow-wrap:anywhere; }
+  .bk-st b { color:var(--accent); margin-right:5px; }
+  .bk-shelf a:hover .bk-st { color:var(--text); }
+  .bk-im img, .bk-cover img { border-radius:2px 5px 5px 2px; background:#fff; box-shadow:0 0 0 1px rgba(0,0,0,.08), 0 6px 18px rgba(0,0,0,.3); }
+  .bk-ph { position:absolute; inset:0; border-radius:3px 6px 6px 3px; background:linear-gradient(135deg, var(--accent), #7c5cf2); color:#fff; display:flex; align-items:center; justify-content:center; text-align:center; padding:10px; font-size:13px; font-weight:700; line-height:1.4; box-shadow:inset 5px 0 0 rgba(0,0,0,.18); overflow:hidden; overflow-wrap:anywhere; }
+  .bk-cards { display:grid; grid-template-columns:1fr; gap:14px; margin-top:16px; }
+  .bk-card { background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:18px 20px; scroll-margin-top:70px;
+    display:grid; grid-template-columns:150px minmax(0,1fr); grid-template-areas:"cv hd" "cv dt"; grid-template-rows:auto 1fr; column-gap:22px; align-items:start; }
   .bk-card:target { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-dim); }
-  .bk-cover { flex:0 0 auto; width:56px; height:78px; border-radius:4px 7px 7px 4px; background:linear-gradient(135deg, var(--accent), #7c5cf2); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:20px; box-shadow:inset 4px 0 0 rgba(0,0,0,.18); }
+  .bk-cover { grid-area:cv; position:relative; }
+  .bk-cover img { display:block; width:100%; height:auto; }
+  .bk-cover a { display:block; }
+  .bk-cover.bk-nocv { aspect-ratio:2/3; }
+  .bk-rk { position:absolute; top:-9px; left:-9px; min-width:28px; height:28px; padding:0 8px; border-radius:999px; background:var(--accent); color:#fff; font-size:14px; font-weight:800; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.4); pointer-events:none; }
+  .bk-head { grid-area:hd; min-width:0; }
+  .bk-detail { grid-area:dt; min-width:0; margin-top:4px; }
   .bk-card h3 { font-size:17.5px; line-height:1.45; font-weight:700; margin:0; color:var(--text); }
   .bk-card h3 small { font-size:13px; font-weight:400; color:var(--text3); margin-left:4px; }
   .bk-by { font-size:13px; color:var(--text3); margin:2px 0 6px; }
@@ -127,11 +169,19 @@ CSS = '''
   .bk-buy { font-size:13.5px; font-weight:700; color:#fff !important; background:var(--accent); border-radius:9px; padding:7px 14px; text-decoration:none; margin-left:auto; }
   .bk-buy:hover { filter:brightness(1.08); }
   .bk-rule ol { padding-left:22px; margin:8px 0 0; color:var(--text2); } .bk-rule li { margin:5px 0; }
+  @media (max-width:760px) {
+    .bk-shelf { grid-template-columns:repeat(3, minmax(0,1fr)); gap:18px 14px; }
+  }
   @media (max-width:640px) {
-    .bk-card { gap:12px; padding:14px; }
-    .bk-cover { width:44px; height:62px; font-size:17px; }
+    .bk-card { padding:14px; grid-template-columns:112px minmax(0,1fr); grid-template-areas:"cv hd" "dt dt"; grid-template-rows:auto auto; column-gap:14px; }
+    .bk-detail { margin-top:14px; }
+    .bk-rk { top:-7px; left:-7px; min-width:24px; height:24px; padding:0 6px; font-size:12.5px; }
     .bk-buy { margin-left:0; }
     .bk-tbl .bk-hide { display:none; }
+  }
+  @media (max-width:360px) {
+    .bk-card { grid-template-columns:96px minmax(0,1fr); column-gap:12px; }
+    .bk-shelf { gap:16px 10px; }
   }
 '''
 
@@ -156,6 +206,10 @@ def write_page(d, site, analytics, write):
         rows = ''.join(
             f'<tr><td class="n">{b["rank"]}</td><td><a class="bk-row" href="#b-{esc(b["id"])}"><b>{esc(b["title"])}</b></a><small>{esc(b["author"])}</small></td>'
             f'<td class="bk-lv">{LEVEL[b["level"]]}</td><td class="bk-hide">{esc(b["for"])}</td></tr>' for b in xs)
+        shelf = ''.join(
+            f'<li><a href="#b-{esc(b["id"])}"><span class="bk-im">'
+            + (cover_img(b, lazy=s is not stages[0]) or f'<span class="bk-ph">{esc(b["title"])}</span>')
+            + f'</span><span class="bk-st"><b>{b["rank"]}</b>{esc(b["title"])}</span></a></li>' for b in xs)
         cards = ''
         for b in xs:
             by = esc(b['author']) + (f' · {esc(b["trans"])} 옮김' if b.get('trans') else '') + f' · {esc(b["pub"])} · {b["year"]}'
@@ -164,22 +218,30 @@ def write_page(d, site, analytics, write):
             go += ''.join(f'<a class="t" href="/learn/{esc(a)}/">관련 글 읽기</a>' for a in b.get('learn', [])[:1])
             buy = (f'<a class="bk-buy" href="{esc(b["cp"])}" target="_blank" rel="sponsored nofollow noopener" data-bk="{esc(b["id"])}">쿠팡에서 보기</a>'
                    if b.get('cp') else '')
-            cards += (f'<article class="bk-card" id="b-{esc(b["id"])}"><div class="bk-cover" aria-hidden="true">{b["rank"]}</div><div class="bk-body">'
+            img = cover_img(b)
+            if img and b.get('cp'):   # 표지를 눌러도 구매 링크로 (단추와 같은 제휴 표시·rel)
+                img = (f'<a class="bk-cvl" href="{esc(b["cp"])}" target="_blank" rel="sponsored nofollow noopener" data-bk="{esc(b["id"])}" '
+                       f'aria-label="『{esc(b["title"])}』 쿠팡에서 보기">{img}</a>')
+            cover = (f'<div class="bk-cover">{img}<b class="bk-rk" title="단계 안 순위">{b["rank"]}</b></div>' if img else
+                     f'<div class="bk-cover bk-nocv" aria-hidden="true"><span class="bk-ph">{b["rank"]}</span></div>')
+            cards += (f'<article class="bk-card" id="b-{esc(b["id"])}">{cover}<div class="bk-head">'
                       f'<h3>{esc(b["title"])}' + (f'<small>{esc(b["sub"])}</small>' if b.get('sub') else '') + '</h3>'
-                      f'<p class="bk-by">{by}</p><div class="bk-tags">{tags}</div>'
+                      f'<p class="bk-by">{by}</p><div class="bk-tags">{tags}</div></div><div class="bk-detail">'
                       f'<p class="bk-line">{esc(b["line"])}</p><p class="bk-use"><b>사이트에서 이어 하기</b> — {esc(b["use"])}</p>'
                       f'<p class="bk-for">이런 분께: {esc(b["for"])}</p><div class="bk-links">{go}{buy}</div></div></article>')
         go = ''.join(f'<a href="/{esc(t)}/">{esc(BL.tool_name(tools[t]))} →</a>' for t in s.get('tools', []))
         secs += (f'<section class="bk-stage" id="s-{esc(s["id"])}" aria-labelledby="h-{esc(s["id"])}"><span class="bk-no">{s["no"]}단계</span>'
                  f'<h2 id="h-{esc(s["id"])}">{esc(s["name"])}</h2><p class="bk-q">{esc(s["q"])}</p><p class="bk-goal">{esc(s["goal"])}</p>'
                  + (f'<p class="bk-go">이 단계의 도구: {go}</p>' if go else '') +
+                 f'<ol class="bk-shelf" aria-label="{s["no"]}단계 책 {len(xs)}권 표지">{shelf}</ol>'
                  f'<div class="tbl bk-tbl"><table><thead><tr><th>순위</th><th>책</th><th>난이도</th><th class="bk-hide">이런 분께</th></tr></thead>'
                  f'<tbody>{rows}</tbody></table></div><div class="bk-cards">{cards}</div></section>\n')
     ld = [{'@context': 'https://schema.org', '@type': 'CollectionPage', 'name': '자본가 서재', 'description': desc, 'url': url, 'inLanguage': 'ko-KR',
            'mainEntity': {'@type': 'ItemList', 'numberOfItems': len(books), 'itemListElement': [
                {'@type': 'ListItem', 'position': i + 1, 'url': f'{url}#b-{b["id"]}', 'item': dict(
                    {'@type': 'Book', 'name': b['title'], 'author': {'@type': 'Person', 'name': b['author'].split(',')[0].split('·')[0].strip()},
-                    'publisher': {'@type': 'Organization', 'name': b['pub']}, 'datePublished': str(b['year'])}, **({'isbn': b['isbn']} if b.get('isbn') else {}))}
+                    'publisher': {'@type': 'Organization', 'name': b['pub']}, 'datePublished': str(b['year'])}, **({'isbn': b['isbn']} if b.get('isbn') else {}),
+                   **({'image': site.rstrip('/') + b['cover']['src']} if b.get('cover') else {}))}
                for i, b in enumerate(books)]}},
           {'@context': 'https://schema.org', '@type': 'BreadcrumbList', 'itemListElement': [
               {'@type': 'ListItem', 'position': 1, 'name': '홈', 'item': site},
@@ -195,7 +257,8 @@ def write_page(d, site, analytics, write):
             f'<nav class="bk-steps" aria-label="단계 바로 가기">{nav}</nav>\n'
             f'{secs}'
             f'<div class="box bk-rule" id="rule"><b>순위는 이렇게 정했습니다</b><ol>' + ''.join(f'<li>{r}</li>' for r in d['rules']) + '</ol></div>\n'
-            '<p class="disc">책 정보(제목·저자·출판사·출간 연도)는 서점 판매 페이지로 확인한 값입니다. 한줄평은 운영자의 의견이며, 책의 내용을 대신하지 않습니다. '
+            '<p class="disc">책 정보(제목·저자·출판사·출간 연도)는 서점 판매 페이지로 확인한 값입니다. 책 표지 그림의 저작권은 각 출판사·저작권자에게 있으며, 책을 소개하기 위해 싣습니다. '
+            '한줄평은 운영자의 의견이며, 책의 내용을 대신하지 않습니다. '
             '투자 판단과 책임은 본인에게 있습니다 — <a href="/disclaimer/">투자 면책</a>. 틀린 정보나 추천하고 싶은 책은 <a href="/suggest/">건의 게시판</a>에 남겨 주세요.</p>\n'
             f'{BL.FOOT}\n</main>\n</body>\n</html>\n')
     write(f'{OUT}/index.html', page)

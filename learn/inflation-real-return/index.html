@@ -132,6 +132,9 @@
   .tool:hover { border-color:rgba(49,130,246,.5); }
   .tool b { display:block; color:var(--text); font-size:14.5px; margin-bottom:2px; }
   .tool span { display:block; color:var(--text3); font-size:12.5px; line-height:1.6; }
+  .tool.bk-t { display:flex; align-items:flex-start; gap:12px; }
+  .tool.bk-t img { flex:0 0 auto; width:56px; height:auto; border-radius:2px 4px 4px 2px; background:#fff; box-shadow:0 0 0 1px rgba(0,0,0,.08), 0 3px 10px rgba(0,0,0,.25); }
+  .tool.bk-t div { min-width:0; }
   .sec-h { font-size:18px; font-weight:700; margin:44px 0 6px; }
   .more { list-style:none; padding:0; margin:8px 0 0; }
   .more li { border-bottom:1px solid var(--border); }
@@ -220,7 +223,7 @@
 <h2 class="sec-h">이 글과 함께 쓰는 계산기·자료</h2>
 <div class="tools"><a class="tool" href="/moneyspeed/"><b>돈, 자산, 노동의 가치 속도</b><span>통화량·물가·임금·서울 아파트 실거래가·금·주가지수의 연평균 상승률(CAGR)을 공식 통계로 비교합니다.</span></a><a class="tool" href="/compound/"><b>복리 계산기</b><span>원금·월 적립금·이율·기간으로 복리 최종 자산과 세후 수익, 적립식 실효 수익률을 연도별로 계산합니다.</span></a><a class="tool" href="/cagr/"><b>CAGR 계산기</b><span>초기·최종 금액과 기간으로 연평균 성장률(CAGR), 2배·10배 도달 기간, 목표 수익률 역산을 계산합니다.</span></a></div>
 <h2 class="sec-h">이 글과 함께 읽으면 좋은 책</h2>
-<div class="tools"><a class="tool" href="/books/#b-humanities-of-wealth"><b>부의 인문학</b><span>브라운스톤(우석) · 고전 경제학자와 철학자들의 생각을 한국의 집값·주가에 대입해 &quot;자본주의 게임의 규칙&quot;으로 설명합니다.</span></a><a class="tool" href="/books/#b-great-wealth-shift"><b>부의 대이동</b><span>오건영 · 돈이 풀릴 때 달러·금·채권이 어떻게 움직이는지 기초부터 차근차근 설명하는 경제 흐름 입문서입니다.</span></a></div>
+<div class="tools"><a class="tool bk-t" href="/books/#b-humanities-of-wealth"><img src="/books/cover/humanities-of-wealth.webp?v=30d5b379" width="320" height="473" alt="『부의 인문학』 표지" loading="lazy" decoding="async"><div><b>부의 인문학</b><span>브라운스톤(우석) · 고전 경제학자와 철학자들의 생각을 한국의 집값·주가에 대입해 &quot;자본주의 게임의 규칙&quot;으로 설명합니다.</span></div></a><a class="tool bk-t" href="/books/#b-great-wealth-shift"><img src="/books/cover/great-wealth-shift.webp?v=7c0a9dbe" width="320" height="472" alt="『부의 대이동』 표지" loading="lazy" decoding="async"><div><b>부의 대이동</b><span>오건영 · 돈이 풀릴 때 달러·금·채권이 어떻게 움직이는지 기초부터 차근차근 설명하는 경제 흐름 입문서입니다.</span></div></a></div>
 <p class="note" style="margin:8px 0 0">단계별 추천 도서 전체는 <a href="/books/">자본가 서재</a>에서 볼 수 있습니다.</p>
 <h2 class="sec-h">다른 글</h2>
 <ul class="more"><li><a href="/learn/labor-vs-capital/">노동소득과 자본소득 — 월급만으로는 왜 점점 뒤처질까<small>자본주의 이해 · 통화량·물가·임금·집값의 30년 연평균 상승률을 나란히 놓고, 노동소득만으로 뒤처지는 이유와 자본소득을 만드는 순서를 정리합니다.</small></a></li><li><a href="/learn/compound-interest/">복리의 수학 — 72의 법칙, 시작 시점, 세금과 수수료가 결과를 바꾸는 방식<small>자본주의 이해 · 복리가 왜 기간이 길수록 강해지는지, 72의 법칙과 시작 나이·세금·수수료가 최종 자산을 얼마나 바꾸는지 실제 계산으로 보여 줍니다.</small></a></li><li><a href="/learn/cagr-start-point/">CAGR 제대로 읽기 — 같은 지수인데 성장률이 7%도 되고 2%도 되는 이유<small>지수·ETF 투자 · 연평균 성장률(CAGR)의 정의와 계산법, 시작 시점에 따라 결과가 크게 달라지는 이유를 코스피·닛케이·S&amp;P 500 실제 숫자로 설명합니다.</small></a></li><li><a href="/learn/index-investing/">지수 투자 입문 — S&amp;P 500·나스닥 100·코스피, 무엇을 어떤 기준으로 고를까<small>지수·ETF 투자 · 지수가 무엇이고 어떻게 계산되는지, 가격지수와 총수익의 차이, 지수 ETF를 고를 때 볼 보수·환율·세금 기준을 정리합니다.</small></a></li><li><a href="/learn/leveraged-etf/">레버리지 ETF의 변동성 끌림 — TQQQ·SOXL을 오래 들고 있으면 생기는 일<small>지수·ETF 투자 · 하루 수익률의 3배를 따라가는 레버리지 ETF가 장기적으로 3배가 되지 않는 이유와, 실제 TQQQ·SOXL의 수익률·최대 낙폭을 함께 봅니다.</small></a></li><li><a href="/learn/monthly-dividend-etf/">월배당·월분배 ETF 제대로 고르기 — 분배율보다 먼저 봐야 할 것들<small>지수·ETF 투자 · 분배락일·기준일·지급일의 뜻, 분배율과 총수익의 차이, 과세표준과 세금, 월분배 ETF를 고를 때 확인할 다섯 가지를 정리합니다.</small></a></li></ul>

@@ -170,6 +170,9 @@ CSS = '''
   .tool:hover { border-color:rgba(49,130,246,.5); }
   .tool b { display:block; color:var(--text); font-size:14.5px; margin-bottom:2px; }
   .tool span { display:block; color:var(--text3); font-size:12.5px; line-height:1.6; }
+  .tool.bk-t { display:flex; align-items:flex-start; gap:12px; }
+  .tool.bk-t img { flex:0 0 auto; width:56px; height:auto; border-radius:2px 4px 4px 2px; background:#fff; box-shadow:0 0 0 1px rgba(0,0,0,.08), 0 3px 10px rgba(0,0,0,.25); }
+  .tool.bk-t div { min-width:0; }
   .sec-h { font-size:18px; font-weight:700; margin:44px 0 6px; }
   .more { list-style:none; padding:0; margin:8px 0 0; }
   .more li { border-bottom:1px solid var(--border); }
@@ -269,6 +272,14 @@ def _check_links(body, slug, valid):
             sys.exit(f'글 {slug}: 없는 주소로 가는 링크 {href}')
 
 
+def _bk_img(b):
+    """'함께 읽으면 좋은 책' 작은 표지 (build_books.load 가 붙인 cover · 없으면 '')"""
+    c = b.get('cover')
+    if not c:
+        return ''
+    return (f'<img src="{esc(c["src"])}" width="{c["w"]}" height="{c["h"]}" alt="『{esc(b["title"])}』 표지" loading="lazy" decoding="async">')
+
+
 def write_all(arts, site, routes, analytics, write, books=None):
     """글·목록 페이지 쓰기 → [(주소, 수정일)] · books = build_books.load() 결과(있으면 글마다 '이 글과 함께 읽으면 좋은 책' · 목록에 자본가 서재 안내)"""
     by_path = {r['path']: r for r in routes}
@@ -300,7 +311,8 @@ def write_all(arts, site, routes, analytics, write, books=None):
         tochtml = ''.join(f'<li><a href="#{esc(i)}">{esc(t)}</a></li>' for i, t in toc)
         bks = [b for b in (books or {}).get('books', []) if a['slug'] in b.get('learn', [])][:4]   # [BOOKS] 이 글과 함께 읽으면 좋은 책 (자본가 서재)
         bkhtml = (f'<h2 class="sec-h">이 글과 함께 읽으면 좋은 책</h2>\n<div class="tools">' + ''.join(
-            f'<a class="tool" href="/books/#b-{esc(b["id"])}"><b>{esc(b["title"])}</b><span>{esc(b["author"])} · {esc(b["line"].split(". ")[0].rstrip(".") + ".")}</span></a>' for b in bks) +
+            f'<a class="tool bk-t" href="/books/#b-{esc(b["id"])}">' + _bk_img(b) +
+            f'<div><b>{esc(b["title"])}</b><span>{esc(b["author"])} · {esc(b["line"].split(". ")[0].rstrip(".") + ".")}</span></div></a>' for b in bks) +
             '</div>\n<p class="note" style="margin:8px 0 0">단계별 추천 도서 전체는 <a href="/books/">자본가 서재</a>에서 볼 수 있습니다.</p>\n') if bks else ''
         page = (_head(site, f'{a["title"]} | 디코딩 자본주의', a['desc'], url, analytics, ld) + _top('learn/') +
                 f'<main class="wrap">\n<nav class="crumb" aria-label="현재 위치"><a href="/">홈</a> › <a href="/learn/">투자 공부</a> › {esc(CAT_NAME[a["cat"]])}</nav>\n'
