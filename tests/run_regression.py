@@ -1481,6 +1481,70 @@ def etf_audit(page, base, fail):
     return n
 
 
+def books_check(page, base, fail, local):
+    """[BOOKS] 자본가 서재 /books/ (scripts/build_books.py · content/books/books.json)
+    · 단계·책 수가 자료와 같음 · 표 줄 = 책 카드 · 책마다 저자·출판사·한줄평·이어 하기 · 단계 바로 가기가 실제 칸으로
+    · 구매 링크: 쿠팡 단축 주소만 · rel=sponsored nofollow noopener · 하나라도 있으면 맨 위(첫 단계보다 앞)에 경제적 이해관계 문구 / 없으면 문구·단추 없음
+    · '최저가' 표현 없음 · 애드센스·canonical·구조화 데이터(ItemList 책 수) · 사이트 안 링크가 실제 파일(로컬)
+    · 투자 공부 글의 '이 글과 함께 읽으면 좋은 책' → 실제 책 칸 · 하단 사이트맵·홈에 자본가 서재 링크"""
+    src = json.load(open(os.path.join(ROOT, 'content', 'books', 'books.json'), encoding='utf-8'))
+    n_st, n_bk, n_cp = len(src['stages']), len(src['books']), sum(1 for b in src['books'] if b.get('cp'))
+    page.set_viewport_size({'width': 1280, 'height': 900})
+    page.goto(base + 'books/', wait_until='load'); page.wait_for_timeout(300)
+    r = page.evaluate("""() => {
+      const q = s => [...document.querySelectorAll(s)], first = document.querySelector('.bk-stage'), disc = document.getElementById('bk-disc');
+      const ld = q('script[type="application/ld+json"]').map(s => { try { return JSON.parse(s.textContent); } catch (e) { return 'ERR'; } }).flat();
+      const il = (ld.find(x => x && x['@type'] === 'CollectionPage') || {}).mainEntity || {};
+      return { h1: (document.querySelector('h1') || {}).textContent || '', stages: q('.bk-stage').length, cards: q('.bk-card').length, rows: q('.bk-tbl tbody tr').length,
+        empty: q('.bk-card').filter(c => !c.querySelector('h3').textContent.trim() || !c.querySelector('.bk-by').textContent.trim() || c.querySelector('.bk-line').textContent.trim().length < 20 || c.querySelector('.bk-use').textContent.trim().length < 20).map(c => c.id),
+        steps: q('.bk-steps a').map(a => a.getAttribute('href')).filter(h => !document.querySelector(h)), nsteps: q('.bk-steps a').length,
+        rowlinks: q('.bk-tbl a.bk-row').map(a => a.getAttribute('href')).filter(h => !document.querySelector(h)),
+        buys: q('a.bk-buy').map(a => [a.getAttribute('href'), a.getAttribute('rel'), a.getAttribute('target')]),
+        disc: disc ? { t: disc.textContent, before: !!first && !!(disc.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING), vis: !!disc.offsetParent } : null,
+        cheap: /최저가/.test(document.body.innerText), ads: !!document.querySelector('script[src*="adsbygoogle.js?client=ca-pub-8051182229751523"]'),
+        canon: (document.querySelector('link[rel=canonical]') || {}).href || '', types: ld.map(x => x && x['@type']), items: (il.itemListElement || []).length,
+        links: q('a[href^="/"]').map(a => a.getAttribute('href').split('#')[0]) };
+    }""")
+    if '자본가 서재' not in r['h1']: fail('books/', '제목(h1) 이상: ' + r['h1'][:40])
+    if r['stages'] != n_st or r['cards'] != n_bk or r['rows'] != n_bk: fail('books/', '단계 %d·책 카드 %d·표 줄 %d (자료 %d단계 %d권)' % (r['stages'], r['cards'], r['rows'], n_st, n_bk))
+    if r['empty']: fail('books/', '저자·한줄평·이어 하기가 비었거나 너무 짧은 책: %s' % r['empty'][:5])
+    if r['nsteps'] != n_st or r['steps'] or r['rowlinks']: fail('books/', '단계 바로 가기·표 링크가 없는 칸을 가리킴: %s %s' % (r['steps'], r['rowlinks'][:3]))
+    if len(r['buys']) != n_cp: fail('books/', '구매 단추 %d개 (자료의 링크 %d개)' % (len(r['buys']), n_cp))
+    bad = [b for b in r['buys'] if not re.match(r'^https://link\.coupang\.com/a/[A-Za-z0-9]+$', b[0] or '') or b[1] != 'sponsored nofollow noopener' or b[2] != '_blank']
+    if bad: fail('books/', '구매 링크 형식·rel 이상: %s' % bad[:3])
+    if n_cp and not (r['disc'] and r['disc']['before'] and r['disc']['vis'] and '쿠팡 파트너스' in r['disc']['t'] and '수수료' in r['disc']['t']):
+        fail('books/', '구매 링크가 있는데 맨 위에 경제적 이해관계 문구가 없음(공정위 지침 — 제목 또는 첫 부분): %s' % r['disc'])
+    if not n_cp and r['disc']: fail('books/', '구매 링크가 없는데 제휴 문구가 보임')
+    if r['cheap']: fail('books/', "'최저가' 표현이 있음 (도서정가제 — 확인할 수 없는 표현)")
+    if not r['ads'] or not r['canon'].endswith('/books/') or 'CollectionPage' not in r['types'] or 'BreadcrumbList' not in r['types'] or r['items'] != n_bk:
+        fail('books/', '애드센스·canonical·구조화 데이터 이상: ads %s · %s · %s · 목록 %d' % (r['ads'], r['canon'], r['types'], r['items']))
+    if local:
+        for h in sorted(set(r['links'])):
+            f = os.path.join(ROOT, h.strip('/'), 'index.html') if h.endswith('/') else os.path.join(ROOT, h.lstrip('/'))
+            if h != '/' and not os.path.isfile(f): fail('books/', '깨진 링크 ' + h)
+    for w in (320, 390):   # 휴대폰 폭: 넘침 없음 (표는 가로 스크롤 상자 안)
+        page.set_viewport_size({'width': w, 'height': 900}); page.wait_for_timeout(150)
+        o = page.evaluate(OVERFLOW_JS)
+        if o['sw'] > o['vw'] + 1 or o['out']: fail('books/', '%dpx 넘침 %s' % (w, o['out'][:3]))
+    page.set_viewport_size({'width': 1280, 'height': 900})
+    # 투자 공부 글 → 책 칸
+    ids = {b['id'] for b in src['books']}
+    rel = sorted({a for b in src['books'] for a in b.get('learn', [])})
+    for slug in rel[:4]:
+        page.goto(base + 'learn/' + slug + '/', wait_until='load'); page.wait_for_timeout(100)
+        hs = page.evaluate("[...document.querySelectorAll('a[href^=\"/books/#b-\"]')].map(a => a.getAttribute('href').slice(10))")
+        want = [b['id'] for b in src['books'] if slug in b.get('learn', [])][:4]
+        if hs != want or any(h not in ids for h in hs): fail('learn/' + slug, "'이 글과 함께 읽으면 좋은 책' 이상: %s (기대 %s)" % (hs, want))
+    page.goto(base + 'learn/', wait_until='load'); page.wait_for_timeout(100)
+    if not page.evaluate("!!document.querySelector('.box a[href=\"/books/\"]')"): fail('learn/', '투자 공부 목록에 자본가 서재 안내가 없음')
+    page.goto(base + 'compound/', wait_until='load'); page.wait_for_timeout(200)
+    t = page.evaluate("(document.querySelector('.sf-map .sf-learn') || {}).innerText || ''")
+    if '자본가 서재' not in t: fail('compound/', '하단 사이트맵 투자 공부 열에 자본가 서재가 없음')
+    page.goto(base, wait_until='load'); page.wait_for_timeout(200)
+    if not page.evaluate("!!document.querySelector('.learn-home a[href=\"books/\"]')"): fail('', '홈 투자 공부 칸에 자본가 서재 링크가 없음')
+    print('    자본가 서재: %d단계 · %d권 · 구매 링크 %d개' % (n_st, n_bk, n_cp), flush=True)
+
+
 BOARD_OV_JS = OVERFLOW_JS
 
 
@@ -1949,6 +2013,8 @@ def main():
     learn = sorted(d for d in os.listdir(os.path.join(ROOT, 'learn')) if os.path.isfile(os.path.join(ROOT, 'learn', d, 'index.html'))) if os.path.isdir(os.path.join(ROOT, 'learn')) else []
     n_src = len([f for f in os.listdir(os.path.join(ROOT, 'content', 'learn')) if f.endswith('.html')]) if os.path.isdir(os.path.join(ROOT, 'content', 'learn')) else 0
     paths = [''] + [r['path'] + '/' for r in routes] + ['en/' + d + '/' for d in en] + (['learn/'] if learn or n_src else []) + ['learn/' + d + '/' for d in learn]
+    if os.path.isfile(os.path.join(ROOT, 'content', 'books', 'books.json')):   # 자본가 서재(단계별 추천 도서 · scripts/build_books.py)
+        paths.append('books/')
     if a.only:
         paths = [p for p in paths if a.only in p]
     widths = QUICK if a.quick else WIDTHS
@@ -2193,12 +2259,15 @@ def main():
                 if r['raw']: fail('learn/' + d, '채워지지 않은 자동 값 {{…}} 남음')
                 if d in ('index-investing', 'leveraged-etf', 'reading-earnings', 'market-cap-world') and not r['auto']:
                     fail('learn/' + d, '자동 갱신 기준일 표시(.meta .auto) 없음')
+        if 'books/' in paths:
+            print('[2-1b] 자본가 서재', flush=True)
+            books_check(page, base, fail, local)
         # 상단 메뉴 '투자 공부' · 좁은 화면에서도 메뉴 한 줄에 다 들어가는지 · 영어판에는 없음
         # 메뉴 9개(홈·투자 공부·영역 6개·커뮤니티)가 가로로 넘치지 않는지 — 320~1300px 를 10px 마다 + 줄바꿈 기준 바로 위·아래 (460px 아래는 두 줄)
         NAV_W = sorted(set(list(range(320, 1301, 10)) + [361, 461, 601, 871, 1141, 1251]))
-        NAV_JS = """() => { const n = document.getElementById('mainNav'), a = document.getElementById('grp-learn-btn'), c = document.getElementById('grp-community-btn');
+        NAV_JS = """() => { const n = document.getElementById('mainNav'), c = document.getElementById('grp-community-btn');
                 const nr = n.getBoundingClientRect(), cr = c ? c.getBoundingClientRect() : null, tops = new Set([...n.querySelectorAll(':scope > .tab-group')].map(g => Math.round(g.getBoundingClientRect().top)));
-                return { sw: n.scrollWidth, cw: n.clientWidth, href: a ? a.getAttribute('href') : null, rows: tops.size,
+                return { sw: n.scrollWidth, cw: n.clientWidth, href: [...document.querySelectorAll('#grp-learn-drop a')].map(x => x.getAttribute('href')).join(','), rows: tops.size,
                          cin: !!cr && cr.width > 0 && cr.left >= nr.left - 1 && cr.right <= nr.right + 1,
                          order: [...n.querySelectorAll(':scope > .tab-group')].map(g => g.id).slice(0, 3).join(',') }; }"""
         page.goto(base + 'compound/', wait_until='load'); page.wait_for_timeout(300)
@@ -2207,7 +2276,7 @@ def main():
             page.set_viewport_size({'width': w, 'height': 900}); page.wait_for_timeout(60)
             r = page.evaluate(NAV_JS)
             if w in (320, 1440) and r['order'] != 'grp-home,grp-learn,grp-me': fail('compound/', "상단 메뉴 순서 이상 (홈 → 투자 공부 → 내 위치 기대): " + r['order'])
-            if w == 320 and r['href'] != 'learn/': fail('compound/', "상단 메뉴 '투자 공부' 링크 이상: %s" % r['href'])
+            if w == 320 and r['href'] != 'learn/,books/': fail('compound/', "상단 메뉴 '투자 공부' 드롭다운 링크 이상 (투자 공부 글 · 자본가 서재 기대): %s" % r['href'])
             if r['sw'] > r['cw'] + 1 or not r['cin'] or r['rows'] != (2 if w <= 460 else 1): bad.append('%d(%d>%d·커뮤니티 %s·%d줄)' % (w, r['sw'], r['cw'], r['cin'], r['rows']))
         if bad: fail('compound/', '상단 메뉴가 넘치거나 줄 수가 다름 (460px 이하 2줄 · 그 위 1줄 기대): ' + ', '.join(bad[:8]))
         if en:   # 영어판(메뉴 8개 · 750px 아래 두 줄) — 360px 이상 넘침 없음
@@ -2229,7 +2298,7 @@ def main():
             fail('compound/', '하단 사이트맵 열 %d개(기대 8) · 지수 묶음 %d개(기대 %d)' % (r['cols'], r['band'], n_idx))
         if en:
             page.goto(base + 'en/' + en[0] + '/', wait_until='load'); page.wait_for_timeout(200)
-            if page.evaluate("!!document.getElementById('grp-learn')"): fail('en/' + en[0], "영어판 상단 메뉴에 '투자 공부'가 남음")
+            if page.evaluate("!!document.getElementById('grp-learn') || !!document.getElementById('grp-learn-drop')"): fail('en/' + en[0], "영어판 상단 메뉴에 '투자 공부'(또는 드롭다운)가 남음")
         # 지수 20쪽 고유 해설 + 자동 통계
         for k in IDX_KEYS:
             page.goto(base + next(x['path'] for x in routes if x['tab'] == k) + '/', wait_until='load'); page.wait_for_timeout(150)

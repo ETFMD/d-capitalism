@@ -21,7 +21,7 @@ TEXT = {
     'ETF 월분배 및 배당 달력': 'Korean ETF distribution calendar', '국내 나의 아파트 시세 순위': 'Korean apartment price ranking', '국내 나의 연봉 순위': 'My salary rank in Korea',
     '국내 나의 자산 순위': 'My net-worth rank in Korea', '배당소득세 계산기': 'Korean dividend income tax', '연금저축·IRP 세액공제 계산기': 'Korean pension savings tax credit', '전세계 시가총액 TOP 100': 'Global market cap TOP 100', '실적발표 캘린더': 'Earnings calendar',
     '홈': 'Home', '분배 시뮬레이터': 'Distribution simulators', '금융 계산기': 'Financial calculators', '기타 금융 자료': 'Market data',
-    '지수 성장률': 'Index growth', '대만': 'Taiwan', '일본': 'Japan', '중국': 'China', '한국': 'Korea', '홍콩': 'Hong Kong', '투자 공부': 'Learn', '커뮤니티': 'Community', '건의 게시판': 'Suggestions (Korean)', '미국 지수 성장률': 'U.S. index growth', '한국 지수 성장률': 'Korean index growth',
+    '지수 성장률': 'Index growth', '대만': 'Taiwan', '일본': 'Japan', '중국': 'China', '한국': 'Korea', '홍콩': 'Hong Kong', '투자 공부': 'Learn', '커뮤니티': 'Community', '건의 게시판': 'Suggestions (Korean)', '투자 공부 글': 'Articles (Korean)', '자본가 서재 · 추천 도서': 'Recommended books (Korean)', '미국 지수 성장률': 'U.S. index growth', '한국 지수 성장률': 'Korean index growth',
     '다크': 'Dark', '라이트': 'Light', '오토': 'Auto', '(기기 설정 따라감)': '(follow device)', '테마': 'Theme',
     # ── 하단 ──
     '후원 및 문의': 'Support & contact', '카카오 오픈 1:1채팅으로 연결됩니다': 'Opens a KakaoTalk 1:1 chat (Korean)',

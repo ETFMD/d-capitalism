@@ -197,8 +197,8 @@ CSS = '''
   }
 '''
 
-NAV = [('', '홈'), ('learn/', '투자 공부'), ('my-position/', '내 위치'), ('labor/', '노동자'), ('invest/', '투자'),
-       ('real-estate/', '부동산'), ('capitalist/', '자본가'), ('passive-income/', '불로소득')]
+NAV = [('', '홈'), ('learn/', '투자 공부'), ('books/', '자본가 서재'), ('my-position/', '내 위치'), ('labor/', '노동자'), ('invest/', '투자'),
+       ('real-estate/', '부동산'), ('capitalist/', '자본가'), ('passive-income/', '불로소득'), ('suggest/', '커뮤니티')]
 
 
 def _head(site, title, desc, url, analytics, extra_ld):
@@ -269,10 +269,10 @@ def _check_links(body, slug, valid):
             sys.exit(f'글 {slug}: 없는 주소로 가는 링크 {href}')
 
 
-def write_all(arts, site, routes, analytics, write):
-    """글·목록 페이지 쓰기 → [(주소, 수정일)]"""
+def write_all(arts, site, routes, analytics, write, books=None):
+    """글·목록 페이지 쓰기 → [(주소, 수정일)] · books = build_books.load() 결과(있으면 글마다 '이 글과 함께 읽으면 좋은 책' · 목록에 자본가 서재 안내)"""
     by_path = {r['path']: r for r in routes}
-    valid = {k for k, r in by_path.items() if not r.get('admin')} | {'learn'} | {f'learn/{a["slug"]}' for a in arts} | {'', 'about', 'terms', 'disclaimer', 'privacy'}
+    valid = {k for k, r in by_path.items() if not r.get('admin')} | {'learn'} | {f'learn/{a["slug"]}' for a in arts} | {'', 'about', 'terms', 'disclaimer', 'privacy', 'books', 'suggest'}
     urls = []
     for a in arts:
         _check_links(a['body'], a['slug'], valid)
@@ -298,6 +298,10 @@ def write_all(arts, site, routes, analytics, write):
         other = same + [b for b in arts if b['slug'] != a['slug'] and b['cat'] != a['cat']]
         more = ''.join(f'<li><a href="/learn/{esc(b["slug"])}/">{esc(b["title"])}<small>{esc(CAT_NAME[b["cat"]])} · {esc(b["desc"])}</small></a></li>' for b in other[:6])
         tochtml = ''.join(f'<li><a href="#{esc(i)}">{esc(t)}</a></li>' for i, t in toc)
+        bks = [b for b in (books or {}).get('books', []) if a['slug'] in b.get('learn', [])][:4]   # [BOOKS] 이 글과 함께 읽으면 좋은 책 (자본가 서재)
+        bkhtml = (f'<h2 class="sec-h">이 글과 함께 읽으면 좋은 책</h2>\n<div class="tools">' + ''.join(
+            f'<a class="tool" href="/books/#b-{esc(b["id"])}"><b>{esc(b["title"])}</b><span>{esc(b["author"])} · {esc(b["line"].split(". ")[0].rstrip(".") + ".")}</span></a>' for b in bks) +
+            '</div>\n<p class="note" style="margin:8px 0 0">단계별 추천 도서 전체는 <a href="/books/">자본가 서재</a>에서 볼 수 있습니다.</p>\n') if bks else ''
         page = (_head(site, f'{a["title"]} | 디코딩 자본주의', a['desc'], url, analytics, ld) + _top('learn/') +
                 f'<main class="wrap">\n<nav class="crumb" aria-label="현재 위치"><a href="/">홈</a> › <a href="/learn/">투자 공부</a> › {esc(CAT_NAME[a["cat"]])}</nav>\n'
                 f'<a class="cat" href="/learn/#{esc(a["cat"])}">{esc(CAT_NAME[a["cat"]])}</a>\n<h1>{esc(a["title"])}</h1>\n'
@@ -306,6 +310,7 @@ def write_all(arts, site, routes, analytics, write):
                 + (f'<nav class="toc" aria-label="목차"><b>목차</b><ol>{tochtml}</ol></nav>\n' if len(toc) >= 3 else '') +
                 f'<article>\n{body}\n</article>\n'
                 f'<h2 class="sec-h">이 글과 함께 쓰는 계산기·자료</h2>\n<div class="tools">{tools}</div>\n'
+                f'{bkhtml}'
                 f'<h2 class="sec-h">다른 글</h2>\n<ul class="more">{more}</ul>\n'
                 f'<p class="disc">이 글은 공부를 돕기 위한 일반적인 설명이며 특정 상품의 매수·매도 권유가 아닙니다. 세법·요율은 바뀔 수 있으니 실제 신고·투자 전에는 '
                 f'국세청·금융회사 등 공식 자료를 확인하세요. 글에 쓴 숫자는 표시한 기준일 기준이며, 틀린 곳을 알려 주시면 바로 고칩니다 '
@@ -341,6 +346,9 @@ def write_all(arts, site, routes, analytics, write):
             '<div class="box"><b>글을 쓰는 원칙</b><ul><li>숫자는 사이트가 직접 계산한 값이나 공공기관·거래소·운용사 공식 자료에서 가져오고, 기준일을 적습니다.</li>'
             '<li>좋은 점만 쓰지 않습니다. 위험과 한계, 흔히 하는 착각을 함께 씁니다.</li><li>특정 종목을 사라고 권하지 않습니다. 스스로 판단할 수 있는 기준을 드리는 것이 목표입니다.</li>'
             '<li>세법·제도가 바뀌면 글을 고치고 수정일을 표시합니다.</li></ul></div>\n'
+            + (f'<div class="box key"><b>자본가 서재 — 단계별 추천 도서 {len(books["books"])}권</b><p>글과 계산기로 원리를 익혔다면, 같은 길을 먼저 걸은 사람들의 책으로 깊이를 더하세요. '
+               'AI 시대 노동의 변화부터 돈의 본질, 주식·ETF, 부동산·경매, 배당·연금까지 단계마다 읽는 순서대로 골랐습니다. '
+               '<a href="/books/">자본가 서재 보기 →</a></p></div>\n' if books else '') +
             f'{secs}{FOOT}\n</main>\n</body>\n</html>\n')
     write(f'{OUT_DIR}/index.html', page)
     urls.insert(0, (url, max([a['mod'] for a in arts] or ['2026-10-17'])))

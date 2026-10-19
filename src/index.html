@@ -2959,6 +2959,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .learn-rel .lr-all a { font-size:14px; font-weight:600; color:var(--accent); text-decoration:none; }
   .learn-home { max-width:1100px; margin-left:auto; margin-right:auto; }
   .app-nav a.tab-group-btn { text-decoration:none; }
+  a.drop-item { text-decoration:none; }   /* [LEARN-DROP] 투자 공부 드롭다운의 링크 항목 */
   /* [IDXNOTE] 지수 성장률 페이지 고유 해설 + 자동 갱신 통계 (scripts/data_facts.py) */
   .idx-note .g-card + .g-card { margin-top:16px; }
   .idx-note h3 { font-size:16px; font-weight:700; color:var(--text); margin:18px 0 8px; }
@@ -3453,9 +3454,9 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
     <div class="tab-group" id="grp-home">
       <button class="tab-group-btn has-active" id="grp-home-btn" onclick="switchSubTab('home','home',document.getElementById('drop-home'))"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;"><path d="M2.5 8.2 L9 2.8 L15.5 8.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.2 7.2 V15.2 H13.8 V7.2" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M7.4 15.2 V11 H10.6 V15.2" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>홈</button>
     </div>
-    <!-- [LEARN] 투자 공부 글 모음 (/learn/ — scripts/build_learn.py) · 드롭다운 없는 바로가기 · 영어판에서는 build_pages 가 뺌 -->
+    <!-- [LEARN] 투자 공부 글 모음 (/learn/ — scripts/build_learn.py) + 자본가 서재 (/books/ — scripts/build_books.py) · 드롭다운(grp-learn-drop · 링크라 drop- id 없음) · 영어판에서는 build_pages 가 뺌 -->
     <div class="tab-group" id="grp-learn">
-      <a class="tab-group-btn" id="grp-learn-btn" href="learn/"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;"><path d="M9 4.6C7.6 3.5 5.6 3 2.6 3.1v10.6c3-.1 5 .4 6.4 1.5 1.4-1.1 3.4-1.6 6.4-1.5V3.1C12.4 3 10.4 3.5 9 4.6z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9 4.6v10.6" stroke="currentColor" stroke-width="1.2"/></svg>투자 공부</a>
+      <button class="tab-group-btn" id="grp-learn-btn" onclick="toggleTabGroup('learn')"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;"><path d="M9 4.6C7.6 3.5 5.6 3 2.6 3.1v10.6c3-.1 5 .4 6.4 1.5 1.4-1.1 3.4-1.6 6.4-1.5V3.1C12.4 3 10.4 3.5 9 4.6z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9 4.6v10.6" stroke="currentColor" stroke-width="1.2"/></svg>투자 공부<span class="tab-group-arrow">▼</span></button>
     </div>
     <div class="tab-group" id="grp-me">
       <button class="tab-group-btn" id="grp-me-btn" onclick="toggleTabGroup('me')">
@@ -3678,7 +3679,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
     </section>
 
     <!-- [LEARN] 투자 공부 글 — 카드는 scripts/build_learn.py 원본(content/learn)에서 빌드 때 채움 -->
-    <section class="guide learn-rel learn-home" aria-label="투자 공부 글"><h2>투자 공부 — 계산기 뒤에 있는 원리</h2><p class="lr-sub">숫자만으로는 판단하기 어렵습니다. 노동소득과 자본소득의 차이, 복리·CAGR 읽는 법, 레버리지·커버드콜 ETF의 구조, 실적 읽는 법, 절세 계좌와 세금까지 이 사이트의 계산기와 실제 데이터로 풀어 쓴 글입니다.</p><div class="g-grid"><!--LEARNLIST--><!--/LEARNLIST--></div><p class="lr-all"><a href="learn/">투자 공부 글 전체 보기 →</a></p></section>
+    <section class="guide learn-rel learn-home" aria-label="투자 공부 글"><h2>투자 공부 — 계산기 뒤에 있는 원리</h2><p class="lr-sub">숫자만으로는 판단하기 어렵습니다. 노동소득과 자본소득의 차이, 복리·CAGR 읽는 법, 레버리지·커버드콜 ETF의 구조, 실적 읽는 법, 절세 계좌와 세금까지 이 사이트의 계산기와 실제 데이터로 풀어 쓴 글입니다.</p><div class="g-grid"><!--LEARNLIST--><!--/LEARNLIST--></div><p class="lr-all"><a href="books/">자본가 서재 — 단계별 추천 도서 →</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="learn/">투자 공부 글 전체 보기 →</a></p></section>
 
     <p class="hm-disclaimer" id="hm-src">—</p>
   </div><!-- /page-home -->
@@ -38585,6 +38586,11 @@ var YE = (function () {
   </div></footer>
 
   <!-- ── 탭 드롭다운 (문서 기준 absolute, 메뉴 줄의 가로 스크롤 영역 밖에 둠) — 노동자→자본가 여정 순서(내 위치 → 노동자 → 투자 → 부동산 → 자본가 → 불로소득) + 커뮤니티, 탭 안은 검색 수요가 큰 순서 [NAV-AREAS] ── -->
+  <!-- [LEARN-DROP] 투자 공부 드롭다운 — 글 모음 · 자본가 서재(단계별 추천 도서) · 다른 페이지로 가는 링크(a) · 영어판에서는 build_pages 가 뺌 -->
+  <div class="tab-dropdown" id="grp-learn-drop">
+    <a class="drop-item" id="lk-learn" href="learn/"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;"><path d="M9 4.6C7.6 3.5 5.6 3 2.6 3.1v10.6c3-.1 5 .4 6.4 1.5 1.4-1.1 3.4-1.6 6.4-1.5V3.1C12.4 3 10.4 3.5 9 4.6z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9 4.6v10.6" stroke="currentColor" stroke-width="1.2"/></svg>투자 공부 글</a>
+    <a class="drop-item" id="lk-books" href="books/"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;"><rect x="2.6" y="3" width="3.2" height="12" rx=".8" stroke="currentColor" stroke-width="1.3"/><rect x="6.9" y="3" width="3.2" height="12" rx=".8" stroke="currentColor" stroke-width="1.3"/><path d="M11.4 4.3l2.9-.8 2.2 10.9-2.9.8z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>자본가 서재 · 추천 도서</a>
+  </div>
   <div class="tab-dropdown" id="grp-me-drop">
     <button class="drop-item" id="drop-hubme" data-hub onclick="switchSubTab('hubme','me',this)"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;"><rect x="2.5" y="2.5" width="5.2" height="5.2" rx="1.2" stroke="currentColor" stroke-width="1.3"/><rect x="10.3" y="2.5" width="5.2" height="5.2" rx="1.2" stroke="currentColor" stroke-width="1.3"/><rect x="2.5" y="10.3" width="5.2" height="5.2" rx="1.2" stroke="currentColor" stroke-width="1.3"/><rect x="10.3" y="10.3" width="5.2" height="5.2" rx="1.2" stroke="currentColor" stroke-width="1.3"/></svg>내 위치 진단 도구 모음<span class="drop-all">전체</span></button>
     <button class="drop-item" id="drop-home" style="display:none" onclick="switchSubTab('home','home',this)">홈</button>

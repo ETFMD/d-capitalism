@@ -15,6 +15,7 @@
 import datetime, hashlib, html, json, os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import build_learn as BL   # '투자 공부' 글 모음 (content/learn → learn/)
+import build_books as BB   # '자본가 서재' 단계별 추천 도서 (content/books/books.json → books/)
 import data_facts as DF    # 자동 갱신 숫자 (data/*.json) · 지수 고유 해설 [IDXNOTE]
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -48,6 +49,7 @@ HOME = dict(CFG['home'], path='')
 ROUTES = CFG['routes']
 ALL = [HOME] + ROUTES
 ARTS = BL.load()          # 투자 공부 글 (order 순)
+BOOKS = BB.load(ROUTES, ARTS)   # 자본가 서재 (자료 검사 통과한 것 · 파일 없으면 None)
 PATH_OF = {r['tab']: r['path'] for r in ROUTES}
 ADMIN = {r['tab'] for r in ROUTES if r.get('admin')}   # 관리자 전용 화면(routes.json "admin": true) — 상단 메뉴·허브·하단 사이트맵·sitemap.xml 에서 빼고 noindex (계정 메뉴 '관리자 기능'에서만 들어감)
 
@@ -340,6 +342,8 @@ def footmap(en=False):
         cols.append(f'<div class="sf-col"><p class="sf-h">{head}</p>{"".join(parts)}</div>')
     if ARTS and not en:   # 투자 공부 글 (한국어 페이지만)
         links = ''.join(f'<a href="learn/{esc(a["slug"])}/">{esc(a.get("short") or a["title"].split(" — ")[0])}</a>' for a in ARTS)
+        if BOOKS:   # 자본가 서재(추천 도서)를 투자 공부 열 맨 위에
+            links = f'<a href="books/">자본가 서재 · 추천 도서 {len(BOOKS["books"])}권</a>' + links
         cols.insert(0, f'<div class="sf-col sf-learn"><p class="sf-h"><a href="learn/">투자 공부</a></p>{links}</div>')   # 상단 메뉴처럼 맨 앞(왼쪽)
     out = f'<nav class="sf-map" aria-label="{esc(T("전체 도구"))}"><div class="sf-cols">' + ''.join(cols) + '</div>'
     if band:
@@ -357,7 +361,7 @@ def idx_note(key):
         if not os.path.isfile(f):
             sys.exit(f'지수 해설 원본이 없습니다: content/index/{key}.html')
         text = open(f, encoding='utf-8').read().strip()
-        valid = {r['path'] for r in ROUTES if not r.get('admin')} | {'learn/' + a['slug'] for a in ARTS}
+        valid = {r['path'] for r in ROUTES if not r.get('admin')} | {'learn/' + a['slug'] for a in ARTS} | {'books', 'learn'}
         for h in re.findall(r'href="([^"#]*)"', text):   # 해설 안 링크는 상대 주소(<base href>) — 실제 페이지인지 확인
             if h.rstrip('/') not in valid:
                 sys.exit(f'content/index/{key}.html: 없는 주소 링크 {h}')
@@ -408,6 +412,9 @@ def finalize(html_text, tab, en=False):
         html_text, k = re.subn(r'\s*<!-- \[LEARN\] 투자 공부 글 모음.*?<div class="tab-group" id="grp-learn">.*?</div>', '', html_text, count=1, flags=re.S)
         if not k:
             sys.exit('상단 메뉴 grp-learn 을 찾지 못했습니다')
+        html_text, k = re.subn(r'\s*<!-- \[LEARN-DROP\].*?<div class="tab-dropdown" id="grp-learn-drop">.*?</div>', '', html_text, count=1, flags=re.S)
+        if not k:
+            sys.exit('투자 공부 드롭다운 grp-learn-drop 을 찾지 못했습니다')
     else:
         html_text = re.sub(r'<!--IDXNOTE:([a-z0-9]+)-->.*?<!--/IDXNOTE-->', lambda m: f'<!--IDXNOTE:{m.group(1)}-->' + idx_note(m.group(1)) + '<!--/IDXNOTE-->', html_text, flags=re.S)
         rel = BL.related_block(ARTS, PATH_OF.get(tab, ''))
@@ -565,7 +572,8 @@ def main():
     am = re.search(r'<script>\n/\* \[ANALYTICS\].*?</script>', src, re.S)
     if not am:
         sys.exit('[ANALYTICS] 스크립트를 찾지 못했습니다')
-    learn_urls = BL.write_all(ARTS, SITE, ROUTES, am.group(0), write_if_changed) if ARTS else []
+    learn_urls = BL.write_all(ARTS, SITE, ROUTES, am.group(0), write_if_changed, books=BOOKS) if ARTS else []
+    learn_urls += BB.write_page(BOOKS, SITE, am.group(0), write_if_changed)   # 자본가 서재 /books/
     ldir = os.path.join(ROOT, 'learn')
     if os.path.isdir(ldir):   # 원본에서 빠진 글 정리
         for d in sorted(os.listdir(ldir)):

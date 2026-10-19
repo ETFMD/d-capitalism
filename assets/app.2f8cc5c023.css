@@ -2707,6 +2707,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .learn-rel .lr-all a { font-size:14px; font-weight:600; color:var(--accent); text-decoration:none; }
   .learn-home { max-width:1100px; margin-left:auto; margin-right:auto; }
   .app-nav a.tab-group-btn { text-decoration:none; }
+  a.drop-item { text-decoration:none; }   /* [LEARN-DROP] 투자 공부 드롭다운의 링크 항목 */
   /* [IDXNOTE] 지수 성장률 페이지 고유 해설 + 자동 갱신 통계 (scripts/data_facts.py) */
   .idx-note .g-card + .g-card { margin-top:16px; }
   .idx-note h3 { font-size:16px; font-weight:700; color:var(--text); margin:18px 0 8px; }
