@@ -1118,8 +1118,9 @@ def aspeed_check(page, base, fail, local):
     page.goto(base + 'asset-speed/', wait_until='load')
     try:
         page.wait_for_function("window.ASPEED && ASPEED.state().sim", timeout=20000)
-        d0 = page.evaluate("() => ({ sel: ASPEED.state().sel, qa: document.querySelectorAll('#as-qa button').length, bgm: document.getElementById('as-bgm').checked })")
-        if d0['sel'] != ['^KS11', 'SPY'] or d0['qa'] < 8 or not d0['bgm']: fail('asset-speed', '처음 기본값 이상 (기대: 코스피·S&P 500 · 바로 더하기 · 배경음악 켬): %s' % d0)
+        d0 = page.evaluate("() => { const s = ASPEED.state().sim; return { sel: ASPEED.state().sel, qa: document.querySelectorAll('#as-qa button').length, bgm: document.getElementById('as-bgm').checked, sec: s.o.sec, months: s.e0 - s.s0 }; }")
+        if d0['sel'] != ['^KS11', 'SPY'] or d0['qa'] < 8 or not d0['bgm'] or d0['sec'] != 20 or d0['months'] != 240:   # 그리는 시간 20초 · 시작 20년 전 (사용자 지정 2026-10-20)
+            fail('asset-speed', '처음 기본값 이상 (기대: 코스피·S&P 500 · 바로 더하기 · 배경음악 켬 · 20초 · 20년 전): %s' % d0)
     except Exception:
         fail('asset-speed', '시뮬레이터가 계산되지 않음 (처음 기본값)'); return
     page.evaluate(AS10)
