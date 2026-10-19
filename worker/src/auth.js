@@ -8,18 +8,18 @@
  *   4) 로그인 토큰 = HMAC-SHA256(AUTH_SECRET) 서명한 {uid, ver, exp} (30일) — 사이트가 localStorage 에 두고 Authorization: Bearer 로 보냄
  * 저장하는 개인정보: 로그인 제공자, 제공자 회원 식별값, 닉네임, 가입·최근 로그인 시각, 동의 시각, 저장한 계산 입력값 (이메일·전화번호·프로필 사진은 받지 않음)
  * 계정 자료: GET/POST /udata/<키> — 도구별 기록(무한매수법 등)을 계정에 통째로 보관 · base 버전이 다르면 409(다른 기기에서 먼저 바뀜)
- * 탈퇴: DELETE /auth/me → 회원·저장함·계정 자료 즉시 삭제 (카카오는 KAKAO_ADMIN_KEY 가 있으면 앱 연결도 끊음)
+ * 탈퇴: DELETE /auth/me → 회원·저장함·계정 자료·건의 게시판 글/댓글/공감 즉시 삭제 (카카오는 KAKAO_ADMIN_KEY 가 있으면 앱 연결도 끊음)
  * 비밀값(Worker secret): AUTH_SECRET(자동 생성) · KAKAO_CLIENT_ID(REST API 키) · KAKAO_CLIENT_SECRET(선택) · KAKAO_ADMIN_KEY(선택)
  *                        NAVER_CLIENT_ID · NAVER_CLIENT_SECRET · GOOGLE_CLIENT_ID · GOOGLE_CLIENT_SECRET — 있는 제공자만 켜짐
  */
 const enc = new TextEncoder();
-const TOKEN_DAYS = 30, TICKET_MIN = 10, MAX_SAVES = 200, MAX_DATA = 16000, TERMS_VER = '2026-10-09';
+const TOKEN_DAYS = 30, TICKET_MIN = 10, MAX_SAVES = 200, MAX_DATA = 16000, TERMS_VER = '2026-10-20';   /* 약관 시행일 (2026-10-20 건의 게시판 조항 추가) — 가입할 때 회원 정보에 함께 기록 */
 const UDATA_KEYS = ['muhan', 'vr', 'r72'], MAX_UDATA = 1800000;
 /* 관리자(사이트 운영자 현경흠 — 카카오 로그인 회원 번호 2, D1 users.id) — 닉네임은 누구나 같게 지을 수 있어 회원 번호로만 판단
  * · /auth/me·로그인 응답의 user.admin = true → 사이트가 계정 메뉴에 '관리자 기능'(자산 속도 시뮬레이터·72루틴)을 보여 줌
  * · 관리자 전용 계정 자료 키(ADMIN_UDATA)는 관리자만 읽고 쓸 수 있음 (다른 회원은 403 · 이미 저장된 자료는 지우지 않음) */
 const ADMIN_UIDS = [2], ADMIN_UDATA = ['r72'];
-function isAdmin(u) { return !!u && ADMIN_UIDS.includes(Number(u.id)); }   /* 계정 자료 키 (허용 목록: 무한매수법·밸류리밸런싱·72루틴 기록 — 화면에서 새 키를 쓰면 여기에도 추가, 회귀 테스트가 확인) · 한 덩어리 최대 크기(UTF-8 바이트, D1 한 칸 한도 2MB 안쪽) */
+export function isAdmin(u) { return !!u && ADMIN_UIDS.includes(Number(u.id)); }   /* 계정 자료 키 (허용 목록: 무한매수법·밸류리밸런싱·72루틴 기록 — 화면에서 새 키를 쓰면 여기에도 추가, 회귀 테스트가 확인) · 한 덩어리 최대 크기(UTF-8 바이트, D1 한 칸 한도 2MB 안쪽) */
 
 function b64u(buf) {
   const s = typeof buf === 'string' ? btoa(unescape(encodeURIComponent(buf))) : btoa(String.fromCharCode(...new Uint8Array(buf)));
@@ -108,7 +108,8 @@ async function me(env, req) {
   return u;
 }
 
-export async function adminUser(env, req) { const u = await me(env, req); return isAdmin(u) ? u : null; }   /* 관리자 전용 기능(SNS 자동 게시 — worker/src/sns.js)이 같은 로그인 토큰으로 확인 */
+export async function adminUser(env, req) { const u = await me(env, req); return isAdmin(u) ? u : null; }
+export async function member(env, req) { return me(env, req); }   /* 건의 게시판(worker/src/board.js)이 같은 로그인 토큰으로 회원 확인 (없거나 만료면 null) */   /* 관리자 전용 기능(SNS 자동 게시 — worker/src/sns.js)이 같은 로그인 토큰으로 확인 */
 
 export async function auth(req, env, url, json) {
   const path = url.pathname, now = Math.floor(Date.now() / 1000);
@@ -163,7 +164,12 @@ export async function auth(req, env, url, json) {
     if (u.provider === 'kakao' && env.KAKAO_ADMIN_KEY) {
       try { await form('https://kapi.kakao.com/v1/user/unlink', { target_id_type: 'user_id', target_id: u.pid }, { Authorization: 'KakaoAK ' + env.KAKAO_ADMIN_KEY }); } catch (e) {}
     }
-    await env.DB.batch([env.DB.prepare('DELETE FROM saves WHERE uid = ?').bind(u.id), env.DB.prepare('DELETE FROM udata WHERE uid = ?').bind(u.id), env.DB.prepare('DELETE FROM users WHERE id = ?').bind(u.id)]);
+    await env.DB.batch([env.DB.prepare('DELETE FROM saves WHERE uid = ?').bind(u.id), env.DB.prepare('DELETE FROM udata WHERE uid = ?').bind(u.id),
+      /* 건의 게시판(worker/src/board.js): 내가 쓴 글(남이 단 댓글·공감 포함) · 내가 단 댓글 · 내가 누른 공감 */
+      env.DB.prepare('DELETE FROM board_vote WHERE uid = ? OR pid IN (SELECT id FROM board_post WHERE uid = ?)').bind(u.id, u.id),
+      env.DB.prepare('DELETE FROM board_cmt WHERE uid = ? OR pid IN (SELECT id FROM board_post WHERE uid = ?)').bind(u.id, u.id),
+      env.DB.prepare('DELETE FROM board_post WHERE uid = ?').bind(u.id),
+      env.DB.prepare('DELETE FROM users WHERE id = ?').bind(u.id)]);
     return json({ ok: true });
   }
   if (path === '/saves' && req.method === 'GET') {

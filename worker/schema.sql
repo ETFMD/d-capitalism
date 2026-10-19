@@ -24,3 +24,11 @@ CREATE TABLE IF NOT EXISTS grp_tok (gid TEXT NOT NULL, b TEXT NOT NULL, s TEXT, 
 -- (뺌 2026-10-19) 72루틴 배포판 라이선스(/license) — 사용자 결정으로 기능 삭제 · 발급 0건(비밀값을 넣기 전)이라 빈 표만 정리
 DROP TABLE IF EXISTS lic_pc;
 DROP TABLE IF EXISTS lic;
+-- 건의 게시판 (/board · worker/src/board.js · 사이트 /suggest/): 글(분류 bug·feat·etc·notice · 처리 상태 open·plan·done·hold · 비밀글 · 쓴 사람이 고른 경우만 기기 정보) · 댓글(운영자 답변 admin=1) · 공감(회원당 글마다 1번) — 글쓴이가 지우거나 탈퇴하면 즉시 삭제
+CREATE TABLE IF NOT EXISTS board_post (id INTEGER PRIMARY KEY AUTOINCREMENT, uid INTEGER NOT NULL, cat TEXT NOT NULL, st TEXT NOT NULL DEFAULT 'open', title TEXT NOT NULL, body TEXT NOT NULL, page TEXT, secret INTEGER NOT NULL DEFAULT 0, info TEXT, created INTEGER NOT NULL, upd INTEGER, sat INTEGER);
+CREATE INDEX IF NOT EXISTS board_post_uid ON board_post (uid, created);
+CREATE TABLE IF NOT EXISTS board_cmt (id INTEGER PRIMARY KEY AUTOINCREMENT, pid INTEGER NOT NULL, uid INTEGER NOT NULL, body TEXT NOT NULL, admin INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS board_cmt_pid ON board_cmt (pid, id);
+CREATE INDEX IF NOT EXISTS board_cmt_uid ON board_cmt (uid, created);
+CREATE TABLE IF NOT EXISTS board_vote (pid INTEGER NOT NULL, uid INTEGER NOT NULL, PRIMARY KEY (pid, uid));
+CREATE INDEX IF NOT EXISTS board_vote_uid ON board_vote (uid);

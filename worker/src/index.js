@@ -7,6 +7,7 @@
  * · 허용된 사이트(ALLOWED_ORIGINS)에서 온 요청만 셉니다. 검색봇·크롤러는 세지 않습니다.
  *
  * /auth/* · /saves  → 카카오·네이버·구글 간편 로그인과 내 저장함 (worker/src/auth.js)
+ * /board            → 건의 게시판 — 버그 신고·기능 제안 (worker/src/board.js · 쓰기는 회원만)
  *
  * GET /geo  → {country} 접속 국가 코드 (기본 언어 선택용 · 기록하지 않음)
  *
@@ -41,6 +42,7 @@ import { auth, adminUser } from './auth.js';
 import { hb, hbScan } from './hb.js';   /* 72루틴 자동매매 PC 프로그램 생존 감시 (/hb) */
 import { grp, grpScan } from './grp.js';   /* 72루틴 자동매매 PC 여러 대 (/grp) */
 import { sns } from './sns.js';   /* SNS 자동 게시 — 관리자 전용 (/sns/*) */
+import { board } from './board.js';   /* 건의 게시판 (/board · 사이트 /suggest/) */
 const REPO = 'ETFMD/d-capitalism';
 const WORKFLOW = 'update-market-data.yml';
 const APT_WORKFLOW = 'update-apt-rank.yml';   // 아파트 시세 순위 (2시간마다)
@@ -451,6 +453,10 @@ export default {
         const r = await fetch(target.toString(), { headers: { 'User-Agent': CNN_UA, Accept: req.headers.get('Accept') || '*/*', 'Accept-Language': 'ko-KR,ko;q=0.9',
           Referer: target.origin + '/' }, redirect: 'follow' });
         return new Response(r.body, { status: r.status, headers: { 'Content-Type': r.headers.get('Content-Type') || 'text/plain', 'Cache-Control': 'no-store' } });
+      }
+      if (url.pathname === '/board' || url.pathname.startsWith('/board/')) {   /* 건의 게시판 (worker/src/board.js) — 사이트(허용 출처)에서만 */
+        if (!cors.ok) return json({ error: 'origin' }, 403);
+        return await board(req, env, url, json);
       }
       if (url.pathname.startsWith('/auth/') || url.pathname === '/saves' || url.pathname.startsWith('/saves/') || url.pathname.startsWith('/udata/')) {   /* 간편 로그인 · 내 저장함 (worker/src/auth.js) */
         if (url.pathname !== '/auth/config' && !cors.ok) return json({ error: 'origin' }, 403);
