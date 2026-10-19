@@ -198,8 +198,10 @@ MUHANV_JS = """async () => {
       const vb = $('#mh-bt [data-act="bt-view"]:not(.mh-btn-sel)'); vb.click(); await W(150); const l1 = ln();
       ok('카드 그래프: 포함/미포함 보기 전환 → 총자산 선 바뀜 · 그냥 보유 그대로', l1.length === 2 && l1[1] !== l0[1] && l1[0] === l0[0]);
       $('#mh-bt [data-act="bt-view"]:not(.mh-btn-sel)').click(); await W(100);
-      const svg = $('#mh-bt .mh-bt-ch svg'), rc = svg.getBoundingClientRect();
-      svg.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: rc.left + rc.width / 2, clientY: rc.top + 20 })); await W(30);
+      /* 보기를 바꾼 뒤 카드가 다시 그려질 때까지(바쁜 시험 PC 에선 0.1초가 모자람 — 2026-10-20) 가리키기를 되풀이 · 끝내 값이 안 나오면 아래에서 실패 */
+      for (let i = 0; i < 40; i++) { const svg = $('#mh-bt .mh-bt-ch svg'), rc = svg.getBoundingClientRect();
+        svg.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: rc.left + rc.width / 2, clientY: rc.top + 20 })); await W(50);
+        if (/^\\d{4}-\\d{2}-\\d{2} · \\$/.test($('#mh-bt .mh-bt-hv').textContent)) break; }
       ok('카드 그래프: 가리키면 그날 값', /^\\d{4}-\\d{2}-\\d{2} · \\$/.test($('#mh-bt .mh-bt-hv').textContent) && $('#mh-bt .mh-bt-cur').getAttribute('visibility') === 'visible', $('#mh-bt .mh-bt-hv').textContent);
     }
     {  // ⋮ 메뉴 글자 크기: 끌면 옆 %도 바로 · 화면 확대
@@ -1484,6 +1486,77 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
         pass
 
 
+MHZ_TIP = """(cv) => { const c = Chart.getChart(cv), r = cv.getBoundingClientRect(), a = c.tooltip.getActiveElements(); return a.length ? Math.abs(r.left + a[0].element.x * r.width / cv.offsetWidth - window.__mx) : null; }"""
+MHZ_GEO = """(cv) => { const c = Chart.getChart(cv), r = cv.getBoundingClientRect(), k = cv.offsetWidth / r.width; return { L: r.left + c.chartArea.left / k, R: r.left + c.chartArea.right / k, T: r.top + c.chartArea.top / k, B: r.top + c.chartArea.bottom / k, n: c.data.labels.length }; }"""
+MHZ_DATE = """([cv, px]) => { const c = Chart.getChart(cv), r = cv.getBoundingClientRect(), i = Math.round(c.scales.x.getValueForPixel((px - r.left) * cv.offsetWidth / r.width)); return c.data.labels[Math.max(0, Math.min(c.data.labels.length - 1, i))]; }"""
+
+
+def mh_zoom_check(pg, base, path, fail):
+    """무한매수법 기록·72루틴 화면 '글자 크기'(뿌리 요소 CSS zoom) 130% 에서 마우스 정확도 (2026-10-19 — 툴팁 최대 118px·크게 보기 307px 어긋남 · ⋮ 메뉴가 단추에서 떨어져 뜸 · 크게 보기 휠 중심·끌어 고르기 어긋남)
+       그래프 툴팁 점 = 마우스 아래(브라우저가 받은 좌표로 견줌) · ⋮ 메뉴 = 단추 바로 아래 · 72루틴 크게 보기: 툴팁 · 휠 확대 뒤 마우스 아래 날짜 그대로 · 끌어 고른 구간 = 끈 자리의 날짜 · 고르기 상자 = 마우스 자리"""
+    where, t72 = ('t72' if path.startswith('72') else 'muhan'), path.startswith('72')
+    keys = ['r72-store', 'r72-fontScale'] if t72 else ['muhan4-store', 'muhan4-fontScale']
+    vp0 = pg.viewport_size; pg.set_viewport_size({'width': 1280, 'height': 900})   # 마우스를 쓰는 PC 폭 — 앞 검사가 바꿔 둔 폭(휴대폰 430 등)과 무관하게 · 끝나면 되돌림
+    pg.goto(base + path, wait_until='load'); pg.evaluate("(ks) => ks.forEach(k => localStorage.removeItem(k))", keys)
+    pg.goto('about:blank'); pg.goto(base + path, wait_until='load'); pg.wait_for_timeout(1500)
+    pg.evaluate("(t72) => { window.__D = t72 ? window.T72debug : window.MHdebug; window.__M = __D.MH; document.addEventListener('mousemove', e => { window.__mx = e.clientX; }, true); }", t72)
+    try:
+        def start(cap):
+            if pg.locator('[data-in="su:cap"]').count():
+                pg.fill('[data-in="su:cap"]', cap); pg.wait_for_timeout(100); pg.click('[data-act="su-start"]')
+        start('20000')
+        pg.wait_for_function("() => __M.market && Object.values(__M.market).some(m => m && m.prices && m.prices.length) && !__M.loading", timeout=90000)
+        pg.wait_for_function("() => { const c = document.querySelector('canvas[data-chart=close]'); return c && Chart.getChart(c); }", timeout=60000)
+        pg.evaluate("() => { __M.menu = true; __D.render(); }"); pg.wait_for_timeout(100)   # 세션 탭(⋮)은 세션 2개부터
+        pg.click('.mh-menu [data-act="ses-add"]'); pg.wait_for_timeout(300); start('10000'); pg.wait_for_timeout(2500)
+        pg.evaluate("() => { __M.menu = false; __M.fontScale = 1.3; __D.render(); }"); pg.wait_for_timeout(800)
+        if pg.evaluate("() => document.querySelector('#mh-root, #t7-root').style.zoom") != '1.3':
+            fail(where, '글자 크기 130% 가 뿌리 요소 zoom 으로 걸리지 않음 — 이 검사의 전제가 바뀜'); return
+
+        def tips(sel, name):
+            cv = pg.locator(sel).first; cv.evaluate("e => e.scrollIntoView({ block: 'center' })"); pg.wait_for_timeout(200)   # 화면 가운데로 — 아래 가장자리의 떠 있는 단추에 가리지 않게
+            h = cv.element_handle(); g = pg.evaluate(MHZ_GEO, h); y = (g['T'] + g['B']) / 2; step = (g['R'] - g['L']) / max(1, g['n'] - 1); gaps = []
+            for f in (0.05, 0.5, 0.95):
+                x = g['L'] + (g['R'] - g['L']) * f
+                if not pg.evaluate("([cv, x, y]) => document.elementFromPoint(x, y) === cv", [h, x, y]):
+                    fail(where, '글자 크기 130%%: %s 의 %d%% 지점이 다른 요소에 가려짐 — 검사 자리 확인 필요' % (name, f * 100)); gaps.append(-1); continue
+                pg.mouse.move(x, y); pg.wait_for_timeout(80); gaps.append(pg.evaluate(MHZ_TIP, h))
+            pg.mouse.move(2, 2)
+            if -1 in gaps: return h, g, y
+            if not all(v is not None and v <= step / 2 + 0.05 for v in gaps):
+                fail(where, '글자 크기 130%%: %s 툴팁 점이 마우스 아래가 아님 (차이 %s px · 한 칸 %.2f px)' % (name, [None if v is None else round(v, 2) for v in gaps], step))
+            return h, g, y
+        tips('canvas[data-chart=close]', '종가 그래프')
+        sm = pg.locator('[data-act="ses-menu"]').first; sm.scroll_into_view_if_needed(); bb = sm.bounding_box(); sm.click(); pg.wait_for_timeout(200)
+        pb = pg.locator('.mh-pop').bounding_box(); bot = bb['y'] + bb['height']
+        if not pb or not (bot - 1 <= pb['y'] <= bot + 10) or abs(pb['x'] - bb['x']) > 2:
+            fail(where, '글자 크기 130%%: ⋮ 세션 메뉴가 단추 바로 아래가 아님 (단추 아래 %.1f · 왼쪽 %.1f → 메뉴 %s)' % (bot, bb['x'], pb and (round(pb['y'], 1), round(pb['x'], 1))))
+        pg.click('.mh-overlay'); pg.wait_for_timeout(150)
+        if t72:
+            ob = pg.locator('[data-act="btz-open"]').first; ob.scroll_into_view_if_needed(); ob.click()
+            pg.wait_for_function("() => { const c = document.querySelector('canvas[data-chart=btz]'); return c && Chart.getChart(c); }", timeout=60000); pg.wait_for_timeout(500)
+            h, g, y = tips('canvas[data-chart=btz]', '크게 보기 그래프')
+            x = g['L'] + (g['R'] - g['L']) * 0.8; pg.mouse.move(x, y); pg.wait_for_timeout(60)
+            d0 = pg.evaluate(MHZ_DATE, [h, x]); pg.mouse.wheel(0, -400); pg.wait_for_timeout(500)
+            d1 = pg.evaluate(MHZ_DATE, [pg.locator('canvas[data-chart=btz]').first.element_handle(), x])
+            if d0 != d1: fail(where, '글자 크기 130%%: 크게 보기 휠 확대 뒤 마우스 아래 날짜가 바뀜 (%s → %s)' % (d0, d1))
+            pg.evaluate("() => { const b = document.querySelector('[data-act=\"btz-per\"][data-v=\"0\"]'); if (b) b.click(); }"); pg.wait_for_timeout(500)
+            h = pg.locator('canvas[data-chart=btz]').first.element_handle(); g = pg.evaluate(MHZ_GEO, h)
+            x0, x1 = g['L'] + (g['R'] - g['L']) * 0.3, g['L'] + (g['R'] - g['L']) * 0.7
+            want = [pg.evaluate(MHZ_DATE, [h, x0]), pg.evaluate(MHZ_DATE, [h, x1])]
+            pg.mouse.move(x0, y); pg.mouse.down()
+            for i in range(1, 11):
+                pg.mouse.move(x0 + (x1 - x0) * i / 10, y); pg.wait_for_timeout(15)
+            sb = pg.locator('.mh-btz-sel').bounding_box(); pg.mouse.up(); pg.wait_for_timeout(600)
+            got = pg.evaluate("(cv) => { const c = Chart.getChart(cv); return [c.data.labels[0], c.data.labels[c.data.labels.length - 1]]; }", pg.locator('canvas[data-chart=btz]').first.element_handle())
+            if got != want or not sb or abs(sb['x'] - x0) > 2 or abs(sb['x'] + sb['width'] - x1) > 2:
+                fail(where, '글자 크기 130%%: 크게 보기 끌어 고르기 어긋남 (끈 자리 %s → 고른 구간 %s · 상자 %s · 마우스 %s)' % (want, got, sb and [round(sb['x'], 1), round(sb['x'] + sb['width'], 1)], [round(x0, 1), round(x1, 1)]))
+    finally:
+        pg.evaluate("(ks) => { try { if (window.__M) { __M.fontScale = 1; __M.sheet = null; } } catch (e) {} ks.forEach(k => localStorage.removeItem(k)); }", keys)
+        pg.goto('about:blank')
+        if vp0: pg.set_viewport_size(vp0)
+
+
 def serve(root):
     handler = functools.partial(Quiet, directory=root)
     httpd = socketserver.ThreadingTCPServer(('127.0.0.1', 0), handler)
@@ -2085,6 +2158,12 @@ def main():
         bad = [t for t, u in errs if not ignorable(t, u)]
         for t in bad[:3]:
             fail('muhan', '버전 기록 콘솔 오류: ' + t[:200])
+        # 글자 크기(CSS zoom) 130% 에서 그래프·⋮ 메뉴·72루틴 크게 보기 마우스 정확도 — 무한매수법 기록 · 72루틴(관리자 전용 화면)
+        mh_zoom_check(page, base, 'muhan/', fail)
+        zpage = admin_page(ctx, attach)
+        mh_zoom_check(zpage, base, '72/', fail)
+        zpage.close()
+        page.goto(base + 'muhan/', wait_until='load'); page.wait_for_timeout(500)
         # 무한매수법 백테스트 화면
         if os.path.isdir(os.path.join(ROOT, 'muhan-backtest')):
             print('[3b] 무한매수법 백테스트', flush=True)

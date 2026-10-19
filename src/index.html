@@ -27101,11 +27101,11 @@ function mhApp(P) {
     var na = Math.max(0, Math.min(n - 1 - w, a0 + sh)); if (na === a0) return false;
     btzSet(na, na + w, n); return true;
   }
-  function btzFx(cv, clientX) { var ch = BTZ.ch, rc = cv.getBoundingClientRect(), ca = ch && ch.chartArea; if (!ca) return 0.5; return Math.max(0, Math.min(1, (clientX - rc.left - ca.left) / Math.max(1, ca.right - ca.left))); }
+  function btzFx(cv, clientX) { var ch = BTZ.ch, k = zk(cv), ca = ch && ch.chartArea; if (!ca) return 0.5; return Math.max(0, Math.min(1, ((clientX - k.r.left) * k.x - ca.left) / Math.max(1, ca.right - ca.left))); }   /* 화면 px → 캔버스 CSS px(글자 크기 배율) 뒤 그래프 칸과 견줌 */
   /* 그래프 손동작: 마우스 휠 = 확대·축소(Shift·옆 스크롤 = 이동) · 두 손가락 = 벌리고 오므려 확대·축소 + 옆으로 밀어 이동 · 한 손가락·마우스로 끌기 = 고른 구간 확대 */
   function btzInput(cv) {
     var sel = cv.parentNode.querySelector('.mh-btz-sel'), pts = {}, pinch = null; cv.style.touchAction = 'none';
-    var xOf = function (e) { var rc = cv.getBoundingClientRect(); return Math.max(0, Math.min(rc.width, e.clientX - rc.left)); };
+    var xOf = function (e) { var k = zk(cv); return Math.max(0, Math.min(cv.offsetWidth, (e.clientX - k.r.left) * k.x)); };   /* 캔버스 CSS px — 고르기 상자 자리·getValueForPixel 와 같은 단위(글자 크기 배율 보정) */
     var ids = function () { return Object.keys(pts); };
     cv.onwheel = function (e) {
       if (!BTZ.ch) return;
@@ -28631,7 +28631,21 @@ function mhApp(P) {
 
   /* ════ 차트 (Chart.js) ════ */
   function cssVar(n) { var pg = $(P.page); return (pg ? getComputedStyle(pg).getPropertyValue(n).trim() : '') || '#888'; }
-  function mkChart(cv, cfg) { if (!window.Chart) return; try { _charts.push(new Chart(cv.getContext('2d'), cfg)); } catch (e) {} }
+  /* 글자 크기(뿌리 요소 zoom = MH.fontScale) 보정 — 2026-10-19: 130% 에서 그래프 툴팁이 마우스와 최대 118px(72루틴 크게 보기 307px) 어긋나고 ⋮ 메뉴가 단추에서 떨어져 뜨던 것
+     · 원인: Chart.js·이 화면의 손동작 코드가 마우스 위치(clientX = 화면 px)를 요소의 CSS 크기(배율 안 px)와 그대로 견줌 → 배율만큼 어긋남 (Chart.js 4.5.1 도 같음)
+     · zk(el) = 요소의 'CSS px ÷ 화면 px' (배율 1 이면 1) · ZFIX = 이 화면의 모든 그래프(mkChart) 이벤트 위치를 그 비율로 다시 셈 — 72루틴 PC 프로그램(routine72-auto 5c4dbc1)과 같은 방식 */
+  function zk(el) { var r = el.getBoundingClientRect(); return { r: r, x: r.width > 0 ? el.offsetWidth / r.width : 1, y: r.height > 0 ? el.offsetHeight / r.height : 1 }; }
+  var ZFIX = { id: 'mhCssZoom', beforeEvent: function (chart, args) {
+    var e = args.event, n = e && e.native; if (!n) return;
+    var p = n.touches && n.touches.length ? n.touches[0] : n.changedTouches && n.changedTouches.length ? n.changedTouches[0] : n;
+    if (typeof p.clientX !== 'number' || typeof p.clientY !== 'number') return;
+    var cv = chart.canvas, k = zk(cv); if (Math.abs(k.x - 1) < 1e-4 && Math.abs(k.y - 1) < 1e-4) return;
+    var cs = getComputedStyle(cv), px = function (v) { return parseFloat(v) || 0; };
+    e.x = (p.clientX - k.r.left) * k.x - px(cs.paddingLeft) - px(cs.borderLeftWidth);   /* 반올림 안 함 — 배율이 크면 CSS 1px 가 화면 1px 보다 커서 반올림이 오차가 됨 */
+    e.y = (p.clientY - k.r.top) * k.y - px(cs.paddingTop) - px(cs.borderTopWidth);
+    args.inChartArea = chart.isPointInArea(e);
+  } };
+  function mkChart(cv, cfg) { if (!window.Chart) return; cfg.plugins = (cfg.plugins || []).concat([ZFIX]); try { _charts.push(new Chart(cv.getContext('2d'), cfg)); } catch (e) {} }
   function baseOpts(yfmt) {
     var t3 = cssVar('--m-t3'), bd = cssVar('--m-bd');
     return { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
@@ -28688,7 +28702,7 @@ function mhApp(P) {
       /* 세션 */
       case 'ses-go': store.activeSessionId = v; MH.view = 'now'; MH.menu = false; save(); render(); break;
       case 'ses-add': mut(function () { var n = newSession('세션 ' + (store.sessions.length + 1)); store.sessions.push(n); store.activeSessionId = n.id; MH.menu = false; MH.view = 'now'; }); break;
-      case 'ses-menu': var r = el.getBoundingClientRect(); MH.pop = { id: v, top: r.bottom + 4, left: Math.min(r.left, window.innerWidth - 170) }; render(); break;
+      case 'ses-menu': var r = el.getBoundingClientRect(), kz = zk(el).x; MH.pop = { id: v, top: r.bottom * kz + 4, left: Math.min(r.left, window.innerWidth - 170 / kz) * kz }; render(); break;   /* 메뉴(position:fixed)는 글자 크기 배율 안 px → 화면 px 에 kz 를 곱함 */
       case 'pop-close': MH.pop = null; render(); break;
       case 'ses-rename': var t = store.sessions.filter(function (x) { return x.id === v; })[0]; MH.pop = null; MH.menu = false; MH.sheet = { kind: 'rename', id: v, name: t.name, nick: t.nickname || '', color: t.color || null }; render(); break;
       case 'rn-color': MH.sheet.color = v || null; render(); break;
