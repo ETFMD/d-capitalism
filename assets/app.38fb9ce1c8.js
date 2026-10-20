@@ -7457,6 +7457,7 @@ var TAX = (function () {
   }
   function render() {
     if (!S.ready) return;
+    (window.dcShareSpec = window.dcShareSpec || {})['etf-compare'] = null;   /* 결과가 그려지면 맨 끝 shareCard 가 채움 (고른 ETF 없음·오류·불러오는 중엔 카드 없음) */
     renderSel(); renderPer(); writeHash();
     var canvas = $('ecx-chart'), leg = $('ecx-leg'), tb = $('ecx-stats'), note = $('ecx-range');
     var hasU = S.sel.some(function (it) { return rgOf(it) === 'U'; });
@@ -7581,6 +7582,23 @@ var TAX = (function () {
       (checking ? '<br>' + Lx('실제 거래 가격 확인 중… (차트·표가 곧 확인된 가격으로 바뀝니다)', 'Checking actual trade prices… (the chart and table will update)')
         : inexact.length ? '<br><span class="ecx-warn">' + Lx('실제 거래 가격 자료가 없어 수정주가로 근사한 날(오차는 대개 호가 1단위 안팎 · 표의 ≈ 가격): ', 'Days approximated from adjusted prices because actual prices are unavailable (usually within one tick; ≈ in the table): ') + esc(inexact.join(', ')) + '</span>' : '') +
       (R.list.length > 1 ? Lx(' · 표에서 기간 수익률이 가장 높은 ETF에 ‘최고’ 표시', ' · “Best” marks the highest return in the table') : '');
+    if (!waiting) shareCard(R, items, lab, hasU);
+  }
+  /* 오른쪽 아래 공유 창의 결과 카드 (2026-10-20 — 다른 계산기처럼 카드 이미지 · 받은 사람이 같은 비교로 열도록 결과 링크엔 주소 #e=… 를 [SHARE] 가 ?hs= 로 함께 담음)
+     제목 = 고른 ETF(3개 넘으면 '외 n개') · 설명 = 기간·날짜·보기(시장가/기준가)·원화 환산 · 큰 숫자 = 가장 높은 기간 수익률 · 줄 = 수익률 높은 순 4개(기간 수익률 · 연평균) */
+  function shareCard(R, items, lab, hasU) {
+    var reg = (window.dcShareSpec = window.dcShareSpec || {});
+    if (!R || !R.list || !R.list.length || !R.w) { reg['etf-compare'] = null; return; }
+    var L = R.list.map(function (o) { return { n: labelOf(items[o.i].it), st: o.st }; }).filter(function (x) { return x.st && isFinite(x.st.ret); })
+      .sort(function (a, b) { return b.st.ret - a.st.ret; });
+    if (!L.length) { reg['etf-compare'] = null; return; }
+    var names = S.sel.map(labelOf), best = L[0], yr = function (x) { return x.st.cagr != null && isFinite(x.st.cagr); };
+    reg['etf-compare'] = { key: 'etf-compare', chip: 'ETF 차트 비교',
+      title: names.slice(0, 3).join(' vs ') + (names.length > 3 ? ' 외 ' + (names.length - 3) + '개' : ''),
+      label: lab + ' · ' + fmtD(R.w.S) + ' ~ ' + fmtD(R.w.E) + ' · ' + (S.mode === 'nav' ? '기준가(분배 재투자·세후)' : '시장가') + (S.fx && hasU ? ' · 원화 환산' : ''),
+      big: pct(best.st.ret), sub: (L.length > 1 ? '최고 ' : '') + best.n + ' 기간 수익률' + (yr(best) ? ' · 연평균 ' + pct(best.st.cagr) : ''),
+      rows: L.slice(0, 4).map(function (x) { return [x.n, pct(x.st.ret) + (yr(x) ? ' · 연 ' + pct(x.st.cagr, 1) : ''), false]; }),
+      source: '실제 종가 기준 (국내 네이버·미국 야후) · 과거 수익률은 미래를 보장하지 않음' };
   }
   function modeNote(hasU) {
     var cur = S.fx && hasU ? Lx(' · 미국 ETF·지수는 원/달러 매매기준율로 원화 환산', ' · U.S. ETFs and indices converted to KRW at the Bank of Korea rate') : Lx(' · 각 ETF·지수의 통화 기준', ' · in each ETF’s or index’s currency');
@@ -20223,7 +20241,9 @@ var JBX = (function () {
       } catch (e) { return null; }
     }
     function count(d) { return d ? ['v', 'g', 'u'].reduce(function (n, k) { return n + (d[k] ? Object.keys(d[k]).length : 0); }, 0) : 0; }
-    return { page: page, snapshot: snapshot, restore: restore, apply: apply, enc: enc, dec: dec, capture: capture, count: count };
+    /* 주소 # 에 둔 화면 상태(이름=값 꼴 — ETF 차트 비교 #e=… 등) · 단순한 자리표(#제목)는 아님 (2026-10-20 · 공유 링크·내 저장함이 함께 담음) */
+    function hash() { var h = String(location.hash || '').replace(/^#/, ''); return /=/.test(h) && h.length <= 4000 ? h : ''; }
+    return { page: page, snapshot: snapshot, restore: restore, apply: apply, enc: enc, dec: dec, capture: capture, count: count, hash: hash };
   })();
   window.dcState = State;
 
@@ -20300,10 +20320,11 @@ var JBX = (function () {
     }
     if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, legacy); else legacy();
   }
-  function links() {
-    var key = pageKey(), base = SITE + (key ? key + '/' : ''), s = '';
-    if (st.opt.inp && key) s = State.enc(State.snapshot(true));
-    return { clean: base, result: s ? base + '?s=' + s : base, has: !!s };
+  function links() {   /* 결과 링크 = 입력값(?s=) + 주소 # 의 화면 상태(?hs= — 받은 쪽 [SHARE-ARRIVE] 가 # 로 되돌림) */
+    var key = pageKey(), base = SITE + (key ? key + '/' : ''), s = '', h = '';
+    if (st.opt.inp && key) { s = State.enc(State.snapshot(true)); h = State.hash(); }
+    var q = [s ? 's=' + s : '', h ? 'hs=' + encodeURIComponent(h) : ''].filter(Boolean).join('&');
+    return { clean: base, result: q ? base + '?' + q : base, has: !!q };
   }
   function sig() { return JSON.stringify([st.spec, !st.opt.amt]); }
   function cfg() { return window.dcConfig ? window.dcConfig().catch(function () { return {}; }) : Promise.resolve({}); }
@@ -20418,7 +20439,7 @@ var JBX = (function () {
     return generic();
   }
   function sync() {
-    var el = st.el, o = st.spec, hasInp = !!pageKey() && State.count(State.snapshot(false)) > 0;   /* 입력칸이 있는 화면이면 항상 (안 바꿨으면 링크는 그냥 주소) */
+    var el = st.el, o = st.spec, hasInp = !!pageKey() && (State.count(State.snapshot(false)) > 0 || !!State.hash());   /* 입력칸이 있거나 주소 # 에 화면 상태가 있는 화면이면 항상 (안 바꿨으면 링크는 그냥 주소) */
     var amtOn = !!o && (o.bigSecret || o.subSecret || (o.rows || []).some(function (r) { return r && r[2]; }));
     el.querySelector('[data-o="inp"]').hidden = !hasInp;
     el.querySelector('[data-o="amt"]').hidden = !amtOn;
@@ -20493,11 +20514,11 @@ var JBX = (function () {
   }
   /* 공유받은 링크(?s=)로 들어왔을 때: 입력값을 되살리고 안내 */
   function arrive() {
-    var m = location.search.match(/[?&]s=([A-Za-z0-9_\-]+)/); if (!m) return;
-    var d = State.dec(m[1]);
-    try { history.replaceState(history.state, '', location.pathname + location.search.replace(/([?&])s=[^&]*&?/, '$1').replace(/[?&]$/, '') + location.hash); } catch (e) {}
-    if (!d || !State.count(d)) return;
-    State.apply(d);
+    var m = location.search.match(/[?&]s=([A-Za-z0-9_\-]+)/), d = m ? State.dec(m[1]) : null;
+    if (m) try { history.replaceState(history.state, '', location.pathname + location.search.replace(/([?&])s=[^&]*&?/, '$1').replace(/[?&]$/, '') + location.hash); } catch (e) {}
+    var has = !!(d && State.count(d));
+    if (!has && !window.dcArrivedHash) return;                       /* 화면 상태(#)만 담긴 링크도 안내 — # 는 머리 [SHARE-ARRIVE] 가 이미 되돌려 화면이 그 상태로 열림 */
+    if (has) State.apply(d);
     var pg = State.page(), host = pg && (pg.querySelector('.header-left') || pg);
     if (!host || document.getElementById('dsh-notice')) return;
     var n = document.createElement('div'); n.id = 'dsh-notice'; n.className = 'dsh-notice'; n.setAttribute('role', 'status');
@@ -24630,7 +24651,11 @@ var YE = (function () {
   /* ── 계산기 입력값 저장·복원 ── */
   function pageKey() { var m = location.pathname.match(/^\/([a-z0-9\-]+)\/?$/); return m ? m[1] : ''; }
   function activePage() { return document.querySelector('.app-page.active') || document.querySelector('.app-page'); }
-  function snapshot() { return window.dcState ? window.dcState.snapshot(false) : {}; }   /* 화면 입력값 전체 ([SHARE] 의 dcState) */
+  function snapshot() {   /* 화면 입력값 전체 ([SHARE] 의 dcState) + 주소 # 의 화면 상태 h (ETF 차트 비교의 고른 ETF·기간 등 — 2026-10-20 · 없으면 기본값으로 열리던 것) */
+    var d = window.dcState ? window.dcState.snapshot(false) : {}, h = window.dcState && window.dcState.hash ? window.dcState.hash() : '';
+    if (h) d.h = h;
+    return d;
+  }
   function toast(t) {
     var el = $('dca-toast'); if (!el) { el = document.createElement('div'); el.id = 'dca-toast'; el.className = 'dca-toast'; el.setAttribute('role', 'status'); document.body.appendChild(el); }
     el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(function () { el.classList.remove('on'); }, 2800);
@@ -24654,9 +24679,13 @@ var YE = (function () {
     var m = location.search.match(/[?&]load=(\d+)/); if (!m || !getAuth()) return;
     api('GET', '/saves/' + m[1]).then(function (j) {
       var d = j.save && j.save.data; if (!d) return;
+      /* 주소 # 의 화면 상태가 저장돼 있으면 그 # 주소로 한 번 다시 엶 — 화면마다 # 를 처음 열 때만 읽으므로(ETF 차트 비교·백테스트·직업 수명 등) 다시 열어야 모든 화면에서 그대로
+         (머리 [SHARE-ARRIVE] 가 ?hs= 를 # 로 · hz=1 = 이미 다시 연 것이라 또 열지 않음 — 화면이 # 를 고쳐 써도 되풀이하지 않게) */
+      var h = typeof d.h === 'string' && /=/.test(d.h) && d.h.length <= 4000 ? d.h.replace(/^#/, '') : '';
+      if (h && location.hash !== '#' + h && !/[?&]hz=1/.test(location.search)) { location.replace(location.pathname + '?load=' + m[1] + '&hz=1&hs=' + encodeURIComponent(h)); return; }
       if (window.dcState) window.dcState.apply(d);
       toast('‘' + j.save.title + '’ 불러옴');
-      try { history.replaceState(null, '', location.pathname); } catch (e) {}
+      try { history.replaceState(null, '', location.pathname + (h ? location.hash : '')); } catch (e) {}
     }).catch(function () { toast('저장한 계산을 불러오지 못했습니다'); });
   }
   document.addEventListener('click', function (e) {

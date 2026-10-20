@@ -2132,6 +2132,259 @@ def apt_range_check(page, base, fail):
     page.set_viewport_size({'width': 1440, 'height': 900})
 
 
+KAKAO_STUB = """(() => {   /* 카카오 SDK 대역: 실제 카카오 서버에 보내지 않고 보낼 내용만 기록 */
+  window.__ksent = []; window.__kup = 0;
+  window.Kakao = { isInitialized: () => true, init: () => {},
+    Share: { sendDefault: o => { window.__ksent.push(JSON.parse(JSON.stringify(o))); },
+             uploadImage: () => { window.__kup++; return Promise.resolve({ infos: { original: { url: 'https://k.kakaocdn.net/dn/share-test.png' } } }); } } };
+})();"""
+
+SH_ETF_READY = ("() => window.ECXdebug && ECXdebug.S.ready && ECXdebug.S.sel.length && !Object.keys(ECXdebug.S.pend).length"
+                " && !Object.keys(ECXdebug.S.distP).length && !Object.keys(ECXdebug.S.exP).length && !Object.keys(ECXdebug.S.pgP).length"
+                " && !Object.keys(ECXdebug.S.btP).length && !Object.keys(ECXdebug.S.depP).length && (!ECXdebug.S.fx || ECXdebug.S.fxd)"
+                " && !!(window.dcShareSpec && dcShareSpec['etf-compare'] && dcShareSpec['etf-compare'].big)")
+SH_ETF_STATE = """() => { const S = ECXdebug.S, c = window.shareCard && shareCard.spec();
+  return { sel: S.sel.map(s => s.k + s.c), per: S.per, fx: !!S.fx, mode: S.mode, feeK: S.feeK, hash: location.hash, search: location.search, path: location.pathname,
+           notice: !!document.getElementById('dsh-notice'), spec: c && { key: c.key, chip: c.chip, title: c.title, label: c.label, big: c.big, sub: c.sub, rows: c.rows } }; }"""
+
+
+def share_hash_check(br, base, local, fail):
+    """[SHARE] 공유 링크·내 저장함이 주소 # 의 화면 상태(ETF 차트 비교 #e=…&p=… 등)까지 담는지 (2026-10-20 — 전에는 기본값으로 열림)
+    · ETF 차트 비교 결과 카드(dcShareSpec) = 화면 표의 수익률 · 카카오톡 공유의 [결과 보기] 링크 = …/?s=입력값&hs=화면상태 (카카오가 # 뒤를 버려도 열리게)
+    · 그 링크로 열면 머리 [SHARE-ARRIVE] 가 ?hs= 를 # 로 → 같은 ETF·기간·보기·수수료·결과 카드 + '공유받은 계산 결과' 안내
+    · 내 저장함: 저장 자료에 h(화면 상태) · ?load=번호 로 열면 한 번 다시 열어(hz=1) 그 상태로 · 화면이 # 를 고쳐 써도 되풀이 없음 · h 없는 예전 저장도 그대로
+    로컬: 실제 도메인을 저장소 파일로 흉내 + 가짜 Worker(로그인·저장함·ETF 합성 일봉) · 배포: ?hs= 링크로 여는 것과 카카오 링크만 (저장함은 실제 계정이 필요해 로컬에서만)"""
+    SITE = 'https://d-capitalism.com/' if local else base
+    EPX = 'https://share-test.example.workers.dev'
+    ctx = br.new_context(viewport={'width': 1280, 'height': 900}, locale='ko-KR')
+    ctx.route(TRACK_RE, lambda route: route.fulfill(status=200, content_type='application/javascript', body=''))
+    ctx.add_init_script(KAKAO_STUB)
+    saves, gets = {}, []
+    if local:
+        def site(route):
+            u = urllib.parse.urlparse(route.request.url).path
+            if u == '/data/counter.json':
+                return route.fulfill(status=200, content_type='application/json', body=json.dumps({'endpoint': EPX}))
+            f = os.path.join(ROOT, urllib.parse.unquote(u).lstrip('/'))
+            if u.endswith('/'):
+                f = os.path.join(f, 'index.html')
+            if not os.path.isfile(f):
+                return route.fulfill(status=404, body='')
+            ct = {'.html': 'text/html; charset=utf-8', '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2'}.get(os.path.splitext(f)[1])
+            route.fulfill(status=200, body=open(f, 'rb').read(), **({'content_type': ct} if ct else {}))
+        ctx.route(re.compile(r'^https://d-capitalism\.com/.*'), site)
+        def ep(route):
+            q = route.request
+            pu = urllib.parse.urlparse(q.url)
+            if pu.path == '/etf':
+                return etf_route(route)
+            hd = {'Access-Control-Allow-Origin': 'https://d-capitalism.com', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+                  'Access-Control-Allow-Headers': 'Content-Type,Authorization', 'Content-Type': 'application/json'}
+            if q.method == 'OPTIONS':
+                return route.fulfill(status=204, headers=hd, body='')
+            body = {}
+            if pu.path == '/auth/config':
+                body = {'providers': {'kakao': {'client_id': 'share-test'}}, 'kakao_js': 'share-test'}
+            elif pu.path == '/auth/me':
+                body = {'user': {'id': 1, 'nick': '검사'}}
+            elif pu.path == '/saves' and q.method == 'POST':
+                d = json.loads(q.post_data or '{}'); n = 7 + len(saves)
+                saves[n] = {'id': n, 'page': d.get('page'), 'title': d.get('title'), 'data': d.get('data')}
+                body = {'ok': True, 'id': n}
+            elif re.fullmatch(r'/saves/\d+', pu.path):
+                n = int(pu.path.rsplit('/', 1)[1]); gets.append(n)
+                if n not in saves:
+                    return route.fulfill(status=404, headers=hd, body='{"error":"not found"}')
+                body = {'save': saves[n]}
+            route.fulfill(status=200, headers=hd, body=json.dumps(body))
+        ctx.route(re.compile(r'^https://share-test\.example\.workers\.dev/.*'), ep)
+        ctx.route(re.compile(r'.*/data/etfdist/\d\.json.*'), etf_dist_route)
+        ctx.route(re.compile(r'.*/data/etfbt/.*\.json.*'), etf_bt_route)
+        ctx.route(re.compile(r'.*allorigins\.win/.*'), lambda r: r.fulfill(status=200, headers={'Access-Control-Allow-Origin': '*'}, body=''))
+    F = lambda m: fail('share-state', m)
+    perr = []
+    def newpage():
+        pg = ctx.new_page()
+        pg.on('pageerror', lambda e: perr.append(str(e)[:200]))
+        pg.on('dialog', lambda d: d.accept('ETF 비교 저장 검사') if d.type == 'prompt' else d.accept())
+        return pg
+    def etf_wait(pg, what):
+        try:
+            pg.wait_for_function(SH_ETF_READY, timeout=60000)
+            return pg.evaluate(SH_ETF_STATE)
+        except Exception as ex:
+            F('%s: ETF 차트 비교 결과가 준비되지 않음 (%s)' % (what, str(ex)[:160])); return None
+    def kakao_send(pg, what):
+        """공유 버튼 → 창(카드 미리보기·카카오에 카드 올리기 끝날 때까지) → 카카오톡 공유 → 보낸 내용"""
+        pg.click('.dsh-fab')
+        try:
+            pg.wait_for_function("() => window.__kup > 0", timeout=20000)
+        except Exception:
+            F('%s: 공유 창을 열어도 결과 카드를 카카오에 올리지 않음' % what)
+        pg.wait_for_timeout(400)
+        pg.click('#dsh-pop [data-a="kakao"]')
+        pg.wait_for_timeout(200)
+        s = pg.evaluate("() => window.__ksent.slice(-1)[0] || null")
+        pg.keyboard.press('Escape')
+        if not s:
+            F('%s: 카카오톡 공유를 눌러도 보낸 것이 없음' % what)
+        return s
+    def link_of(s):
+        return ((s or {}).get('content') or {}).get('link', {}).get('webUrl', '')
+    def hs_of(u):
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(u).query)
+        return (q.get('hs') or [''])[0], (q.get('s') or [''])[0]
+
+    # ① ETF 차트 비교: 기본과 다른 상태(종목 3개·1년·원화 환산·기준가·국내 수수료 0.02%)
+    H0 = 'e=K069500,USPY,UQQQ&p=1Y&fx=1&m=nav&fk=0.02'
+    pg = newpage()
+    pg.goto(SITE + 'etf-compare/#' + H0, wait_until='load')
+    a = etf_wait(pg, '① 상태 주소로 열기')
+    if a:
+        if a['hash'] != '#' + H0:
+            F('① 화면이 주소 # 를 다르게 고쳐 씀: %s (기대 #%s)' % (a['hash'], H0))
+        c = a['spec'] or {}
+        if c.get('key') != 'etf-compare' or c.get('chip') != 'ETF 차트 비교':
+            F('① 결과 카드가 ETF 차트 비교 카드가 아님: %s' % c)
+        else:
+            if not c.get('title', '').count(' vs ') == 2:
+                F('① 카드 제목에 고른 ETF 3개가 없음: %s' % c.get('title'))
+            lab = c.get('label', '')
+            if '1년' not in lab and '1Y' not in lab:
+                F('① 카드 설명에 기간(1년)이 없음: %s' % lab)
+            if '기준가' not in lab or '원화 환산' not in lab:
+                F('① 카드 설명에 보기(기준가)·원화 환산이 없음: %s' % lab)
+            rows = c.get('rows') or []
+            if len(rows) != 3:
+                F('① 카드 줄이 ETF 3개가 아님: %s' % rows)
+            else:
+                nums = [float(re.match(r'[+\-−]?[\d,.]+', r[1].replace('−', '-')).group(0).replace(',', '')) for r in rows]
+                if nums != sorted(nums, reverse=True):
+                    F('① 카드 줄이 수익률 높은 순이 아님: %s' % rows)
+                if not c.get('big') or c['big'] != rows[0][1].split(' · ')[0]:
+                    F('① 카드 큰 숫자 ≠ 최고 수익률 줄: %s · %s' % (c.get('big'), rows[0]))
+                if rows[0][0] not in (c.get('sub') or ''):
+                    F('① 카드 아래 설명에 최고 ETF 이름이 없음: %s' % c.get('sub'))
+            # 카드 숫자 = 화면 표 숫자 (표의 이름·기간 수익률 칸)
+            tbl = pg.evaluate("""() => [...document.querySelectorAll('#page-etfcmp table tbody tr')].map(tr => tr.innerText.replace(/\\s+/g, ' ').trim()).filter(Boolean)""")
+            for r in rows:
+                if not any(r[0] in t and r[1].split(' · ')[0] in t for t in tbl):
+                    F('① 카드 줄(%s %s)이 화면 표에 없음: %s' % (r[0], r[1], tbl[:4])); break
+        s = kakao_send(pg, '① 카카오톡 공유')
+        u = link_of(s)
+        hs, sv = hs_of(u)
+        if not u.startswith(SITE + 'etf-compare/?') or hs != H0:
+            F('① 카카오 [결과 보기] 링크에 화면 상태(hs=)가 없거나 다름: %s' % u[:200])
+        if s:
+            btn = [b for b in s.get('buttons') or [] if b.get('title') == '결과 보기']
+            if not btn or btn[0]['link']['webUrl'] != u:
+                F('① 카카오 [결과 보기] 버튼이 없거나 링크가 다름: %s' % s.get('buttons'))
+            ct = s.get('content') or {}
+            if ct.get('imageUrl') != 'https://k.kakaocdn.net/dn/share-test.png' or ct.get('imageWidth') != 1080 or ct.get('imageHeight') != 1350:
+                F('① 카카오 메시지 이미지가 결과 카드가 아님: %s %sx%s' % (ct.get('imageUrl'), ct.get('imageWidth'), ct.get('imageHeight')))
+            if c.get('big') and c['big'] not in ct.get('title', ''):
+                F('① 카카오 메시지 제목에 결과 숫자가 없음: %s' % ct.get('title'))
+            if '#' in u:
+                F('① 링크에 # 가 남음(카카오가 버릴 수 있음): %s' % u[:200])
+        # ② 받은 사람: 그 링크(# 없음)로 열기 → 같은 상태·같은 카드·안내
+        if u:
+            pg2 = newpage()
+            pg2.goto(u, wait_until='load')
+            b = etf_wait(pg2, '② 받은 링크로 열기')
+            if b:
+                if b['hash'] != '#' + H0 or 'hs=' in b['search'] or 's=' in b['search']:
+                    F('② 받은 링크로 연 주소가 상태 # 로 바뀌지 않음: %s%s' % (b['search'], b['hash']))
+                if b['sel'] != ['K069500', 'USPY', 'UQQQ'] or b['per'] != '1Y' or not b['fx'] or b['mode'] != 'nav' or abs(b['feeK'] - 0.02) > 1e-12:
+                    F('② 받은 쪽 화면 상태가 보낸 쪽과 다름: %s' % {k: b[k] for k in ('sel', 'per', 'fx', 'mode', 'feeK')})
+                if not b['notice']:
+                    F('② 공유받은 결과 안내가 없음')
+                if (b['spec'] or {}) != c:
+                    F('② 받은 쪽 결과 카드가 보낸 쪽과 다름: %s ≠ %s' % ((b['spec'] or {}).get('big'), c.get('big')))
+            pg2.close()
+        # ②-1 카카오가 # 를 지키는 경우(# 와 ?hs= 둘 다) · 잘못된 hs(= 없음)는 무시하고 원래 # 그대로
+        pg3 = newpage()
+        pg3.goto(SITE + 'etf-compare/?hs=' + urllib.parse.quote('e=USPY&p=MAX') + '#' + H0, wait_until='load')
+        b = etf_wait(pg3, '②-1 # 와 hs 함께')
+        if b and (b['sel'] != ['USPY'] or b['per'] != 'MAX'):
+            F('②-1 hs= 가 # 보다 먼저여야 함: %s %s' % (b['sel'], b['per']))
+        pg3.goto(SITE + 'etf-compare/?hs=garbage#' + H0, wait_until='load')
+        b = etf_wait(pg3, '②-1 잘못된 hs')
+        if b and (b['sel'] != ['K069500', 'USPY', 'UQQQ'] or 'hs=' in b['search']):
+            F('②-1 잘못된 hs= 가 원래 # 를 망치거나 주소에 남음: %s %s' % (b['sel'], b['search']))
+        pg3.close()
+        # ③ 내 저장함 (로컬만): 저장 → 다른 상태로 바꾼 뒤 ?load=번호 로 열기
+        if local:
+            pg.evaluate("() => localStorage.setItem('dc_auth', JSON.stringify({ token: 'share.test', exp: Math.floor(Date.now() / 1000) + 3600, user: { id: 1, nick: '검사' } }))")
+            pg.goto(SITE + 'etf-compare/#' + H0, wait_until='load')
+            etf_wait(pg, '③ 저장 전')
+            try:
+                pg.wait_for_selector('#dca-save', timeout=15000)
+                pg.click('#dca-save')
+                pg.wait_for_function("() => /내 저장함에 저장/.test((document.getElementById('dca-toast') || {}).textContent || '')", timeout=10000)
+            except Exception as ex:
+                F('③ 저장 버튼으로 저장하지 못함: %s' % str(ex)[:160])
+            sv1 = saves.get(7)
+            if not sv1 or sv1['page'] != 'etf-compare' or (sv1['data'] or {}).get('h') != H0:
+                F('③ 저장 자료에 화면 상태(h)가 없음: %s' % json.dumps(sv1, ensure_ascii=False)[:300])
+            else:
+                pg.goto(SITE + 'etf-compare/#e=K360750&p=MAX', wait_until='load')   # 다른 상태로 바꿔 둠 (그대로 남아 있어 통과하는 일이 없게)
+                etf_wait(pg, '③ 다른 상태')
+                del gets[:]
+                pg.goto(SITE + 'etf-compare/?load=7', wait_until='load')
+                pg.wait_for_function("() => /불러옴/.test((document.getElementById('dca-toast') || {}).textContent || '')", timeout=30000)
+                b = etf_wait(pg, '③ 내 저장함에서 열기')
+                pg.wait_for_timeout(2500)
+                if b:
+                    b = pg.evaluate(SH_ETF_STATE)
+                    if b['sel'] != ['K069500', 'USPY', 'UQQQ'] or b['per'] != '1Y' or not b['fx'] or b['mode'] != 'nav' or abs(b['feeK'] - 0.02) > 1e-12:
+                        F('③ 내 저장함에서 연 화면이 저장한 상태가 아님: %s' % {k: b[k] for k in ('sel', 'per', 'fx', 'mode', 'feeK')})
+                    if b['search'] or b['hash'] != '#' + H0:
+                        F('③ 불러온 뒤 주소 정리 안 됨: %s%s' % (b['search'], b['hash']))
+                    if b['notice']:
+                        F('③ 내 저장함에서 열었는데 \'공유받은 결과\' 안내가 뜸')
+                    if (b['spec'] or {}) != c:
+                        F('③ 내 저장함에서 연 결과 카드가 저장할 때와 다름: %s ≠ %s' % ((b['spec'] or {}).get('big'), c.get('big')))
+                if gets != [7, 7]:
+                    F('③ 저장 자료를 두 번(처음 · 상태 주소로 다시 연 뒤) 읽어야 함: %s' % gets)
+                # ③-1 화면이 # 를 고쳐 쓰는 저장(소문자) → 한 번만 다시 열고 멈춤 · 상태는 맞게
+                saves[8] = {'id': 8, 'page': 'etf-compare', 'title': '소문자', 'data': {'v': {}, 'g': {}, 'u': {}, 'h': 'e=k069500,uspy&p=1y&m=nav'}}
+                del gets[:]
+                pg.goto(SITE + 'etf-compare/?load=8', wait_until='load')
+                pg.wait_for_function("() => /불러옴/.test((document.getElementById('dca-toast') || {}).textContent || '')", timeout=30000)
+                b = etf_wait(pg, '③-1 고쳐 쓰는 #')
+                pg.wait_for_timeout(2500)
+                if b and (b['sel'] != ['K069500', 'USPY'] or b['per'] != '1Y' or b['mode'] != 'nav'):
+                    F('③-1 고쳐 쓰는 # 저장의 상태가 다름: %s' % {k: b[k] for k in ('sel', 'per', 'mode')})
+                if gets != [8, 8]:
+                    F('③-1 다시 열기가 한 번에서 멈추지 않음(또는 안 함): %s' % gets)
+                # ③-2 예전 저장(h 없음): 다시 열지 않고 입력값만
+                saves[9] = {'id': 9, 'page': 'etf-compare', 'title': '예전', 'data': {'v': {}, 'g': {}, 'u': {}}}
+                del gets[:]
+                pg.goto(SITE + 'etf-compare/?load=9', wait_until='load')
+                pg.wait_for_function("() => /불러옴/.test((document.getElementById('dca-toast') || {}).textContent || '')", timeout=30000)
+                pg.wait_for_timeout(1500)
+                if gets != [9] or 'load=' in pg.url:
+                    F('③-2 h 없는 예전 저장을 다시 열거나 주소를 정리하지 않음: %s %s' % (gets, pg.url))
+    pg.close()
+    # ④ 다른 # 상태 화면도 같은 방법으로 (직업 수명 #job=)
+    if os.path.isdir(os.path.join(ROOT, 'job-life')):
+        pg = newpage()
+        pg.goto(SITE + 'job-life/#job=' + urllib.parse.quote('간호사'), wait_until='load'); pg.wait_for_timeout(2500)
+        s = kakao_send(pg, '④ 직업 수명 공유') if pg.locator('.dsh-fab').count() else None
+        hs, _ = hs_of(link_of(s))
+        if hs != 'job=' + urllib.parse.quote('간호사'):
+            F('④ 직업 수명 공유 링크에 #job= 상태가 없음: %s' % link_of(s)[:200])
+        else:
+            pg.goto(link_of(s), wait_until='load'); pg.wait_for_timeout(2500)
+            j = pg.evaluate("() => ({ q: (document.getElementById('jl-q') || {}).value, res: !(document.getElementById('jl-res') || { hidden: true }).hidden, hash: decodeURIComponent(location.hash), n: !!document.getElementById('dsh-notice') })")
+            if j['q'] != '간호사' or not j['res'] or j['hash'] != '#job=간호사' or not j['n']:
+                F('④ 받은 직업 수명 링크가 그 직업으로 열리지 않음: %s' % j)
+        pg.close()
+    for e in perr[:3]:
+        F('페이지 오류: ' + e)
+    ctx.close()
+
+
 def serve(root):
     handler = functools.partial(Quiet, directory=root)
     httpd = socketserver.ThreadingTCPServer(('127.0.0.1', 0), handler)
@@ -2693,6 +2946,8 @@ def main():
         kcmp_check(page, base, fail, local)
         print('[2-5] 아파트 시세 순위 — 가격 구간', flush=True)
         apt_range_check(page, base, fail)
+        print('[2-6] 공유 링크·내 저장함 — 주소 # 의 화면 상태(ETF 차트 비교 등)', flush=True)
+        share_hash_check(br, base, local, fail)
         for pth in ['compound/', 'earnings-calendar/', 'fire/']:
             page.goto(base + pth, wait_until='load'); page.wait_for_timeout(300)
             k = page.evaluate("[...document.querySelectorAll('.learn-rel .lr-card')].filter(a => a.offsetParent).length")
