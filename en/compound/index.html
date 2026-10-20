@@ -16,7 +16,9 @@
    · 탭 이동은 [ROUTER] 가 제목을 먼저 바꾼 뒤 주소를 바꾸므로(pushState) GA4 '향상된 측정'이 탭별 페이지뷰를 정확한 제목으로 자동 집계
    · 네이버 애널리틱스는 주소 변경을 스스로 감지하지 못하므로 pushState·뒤로가기 때 wcs_do() 를 직접 호출
      (이때 이전 주소를 referrer 로 넘겨, 탭 이동이 '외부 유입'으로 중복 집계되지 않게 함)
-   · ID 를 비워 두면 해당 도구는 설치되지 않음 */
+   · ID 를 비워 두면 해당 도구는 설치되지 않음
+   · [VISIT-HIT] 맨 위 방문자 수(Cloudflare Worker /hit)도 여기서 셈 — 네이버 애널리틱스와 같은 페이지(이 스크립트가 있는 모든 페이지:
+     도구·영어판·투자 공부·자본가 서재 · 실제 도메인만)에서, 같은 기준(브라우저마다 하루 1번 · 번호 dc_live_id)으로 */
 (function () {
   var GA_ID = 'G-Z76QH8HLZ9', CLARITY_ID = 'ytm7hk3l3d', NAVER_ID = '1c5d67738faa0a0';
   if (!/(^|\.)d-capitalism\.com$/.test(location.hostname)) return;
@@ -52,6 +54,25 @@
     history.pushState = function () { var r = ps.apply(this, arguments); onNav(); return r; };
     window.addEventListener('popstate', onNav);
   }
+  /* [VISIT-HIT] 오늘(한국 시간) 이 브라우저를 아직 안 셌으면 한 번 셈 → window.__dcHit (맨 위 숫자를 그리는 [VISITS] 가 기다렸다 받음)
+     · 브라우저 저장소를 못 쓰면(일부 사생활 보호 모드) 번호 없이 보냄 → 서버가 예전처럼 IP 기준으로 하루 1번 */
+  window.__dcHit = (function () {
+    var day = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10), id = '', ls = true;
+    try { if (localStorage.getItem('etfmd-visit-day') === day) return Promise.resolve(); id = localStorage.getItem('dc_live_id') || ''; } catch (e) { ls = false; }
+    if (ls && !/^[a-f0-9]{32}$/.test(id)) {
+      var a = new Uint8Array(16); crypto.getRandomValues(a);
+      id = Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+      try { localStorage.setItem('dc_live_id', id); } catch (e) { id = ''; }
+    }
+    return fetch('/data/counter.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (c) {
+      if (!c || !/^https:\/\//.test(c.endpoint || '')) return null;
+      return fetch(c.endpoint.replace(/\/$/, '') + '/hit', { method: 'POST', mode: 'cors', cache: 'no-store', body: JSON.stringify(id ? { id: id } : {}) });
+    }).then(function (r) {
+      if (!r || !r.ok) return null;
+      try { localStorage.setItem('etfmd-visit-day', day); } catch (e) {}
+      return r.json();
+    }).catch(function () { return null; });
+  })();
 })();
 </script>
 <!--SEO:BEGIN-->
@@ -762,7 +783,7 @@
 
 </div>
 
-<script src="assets/app.1cc7afb680.js"></script>
+<script src="assets/app.2176df5034.js"></script>
   <!-- ── 카카오톡 바로가기 (오른쪽 아래 공유 버튼 위, 같은 원형 버튼) — 오픈채팅 커뮤니티 · 후원 및 문의 1:1 채팅 ── -->
   <div class="kk-fabs">
     <button type="button" class="kk-fab" id="kk-fab" aria-label="KakaoTalk open chat (Korean)" aria-expanded="false" aria-controls="kk-pop"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 4.5c-6.08 0-11 3.86-11 8.62 0 3.03 2 5.7 5.03 7.23l-1.08 3.95c-.1.36.31.65.62.44l4.7-3.12c.56.07 1.14.11 1.73.11 6.08 0 11-3.86 11-8.61S20.08 4.5 14 4.5z" fill="#191919"/><circle cx="9.6" cy="13.1" r="1.45" fill="#FEE500"/><circle cx="14" cy="13.1" r="1.45" fill="#FEE500"/><circle cx="18.4" cy="13.1" r="1.45" fill="#FEE500"/></svg></button>

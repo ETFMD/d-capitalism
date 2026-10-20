@@ -1,8 +1,9 @@
 /* 디코딩 자본주의 방문자 수 카운터 (Cloudflare Worker + D1)
- * · 같은 IP는 하루(한국 시간 기준) 1번만 셉니다.
- * · IP 원문은 저장하지 않습니다: SHA-256(SALT + 날짜 + IP) 해시만 그날 하루 중복 확인용으로 보관하고,
+ * · 네이버 애널리틱스 '방문자수'와 같은 기준: 브라우저마다 하루(한국 시간 기준) 1번만 셉니다 (2026-10-20 부터 · 아래 hit())
+ *   (예전에는 같은 IP를 1명으로 셌음 — 같은 와이파이·회사·통신사 IP를 쓰는 여러 사람이 1명으로 묶여 네이버보다 적게 나왔음)
+ * · 원문은 저장하지 않습니다: SHA-256(SALT + 날짜 + 브라우저 번호) 해시만 그날 하루 중복 확인용으로 보관하고,
  *   매일 새벽 정리 작업이 2일 지난 해시를 지웁니다. 날짜마다 해시가 달라 다른 날과 연결할 수도 없습니다.
- * · POST /hit  → 오늘 처음 온 IP면 1 증가 후 {today, yesterday, max, maxDay, total} 반환
+ * · POST /hit {id} → 오늘 처음 온 브라우저면 1 증가 후 {today, yesterday, max, maxDay, total} 반환
  *   GET  /     → 세지 않고 같은 값만 반환
  * · 허용된 사이트(ALLOWED_ORIGINS)에서 온 요청만 셉니다. 검색봇·크롤러는 세지 않습니다.
  *
@@ -151,6 +152,39 @@ async function live(req, env, cors, json, day) {
     if (Math.random() < 0.05) await env.DB.prepare('DELETE FROM live WHERE t < ?').bind(now - 600).run();   /* 오래된 기록 정리 */
   }
   if (b.bye) return new Response(null, { status: 204, headers: cors.headers });
+  return json(await counts(env, day));
+}
+/* ── 방문자 수 (네이버 애널리틱스 '방문자수'와 같은 기준) ──
+ * 사이트 머리의 [ANALYTICS] 스크립트(네이버 애널리틱스와 같은 페이지 · 실제 도메인에서만)가 브라우저마다 하루 1번 POST /hit {id}
+ *   · id = 브라우저 무작위 번호(dc_live_id · 실시간 접속과 같은 번호 · 그 기기에만 저장) — 네이버의 쿠키 방식처럼 브라우저마다 1명
+ *   · 저장: SHA-256(SALT|날짜|v|번호) 해시만 그날 중복 확인용(visits · 2일 뒤 삭제) — 번호 원문·IP 원문은 저장하지 않음
+ *   · 남용 막기: 같은 IP(해시)에서 하루 새 번호 VISIT_IP_MAX 개까지만 센다 (번호를 바꿔 가며 숫자를 부풀리는 것 방지 · vcap)
+ *   · 번호 없는 요청(예전 화면이 브라우저 캐시에 남은 경우)은 예전처럼 IP 기준
+ *   · 검색봇·크롤러(BOT)·허용되지 않은 사이트에서 온 요청은 세지 않음 */
+const VISIT_IP_MAX = 40;
+async function hit(req, env, cors, json, day) {
+  let b = {};
+  try { const t = await req.text(); if (t) b = JSON.parse(t); } catch (e) {}
+  const ip = req.headers.get('CF-Connecting-IP') || '';
+  const ua = req.headers.get('User-Agent') || '';
+  const id = String((b && b.id) || '');
+  if (cors.ok && ip && ua && !BOT.test(ua)) {
+    const ih = await sha256((env.SALT || '') + '|' + day + '|' + ip);
+    let key = ih, room = true;
+    if (/^[a-f0-9]{32}$/.test(id)) {
+      key = 'v' + (await sha256((env.SALT || '') + '|' + day + '|v|' + id)).slice(1);   // IP 해시(16진수만)와 섞이지 않게 'v' 로 시작
+      const c = await env.DB.prepare('SELECT n FROM vcap WHERE day = ? AND h = ?').bind(day, ih).first();
+      room = !c || c.n < VISIT_IP_MAX;
+    }
+    if (room) {
+      const r = await env.DB.prepare('INSERT OR IGNORE INTO visits (day, h) VALUES (?, ?)').bind(day, key).run();
+      if (r.meta && r.meta.changes > 0) {
+        const ops = [env.DB.prepare('INSERT INTO daily (day, n) VALUES (?, 1) ON CONFLICT(day) DO UPDATE SET n = n + 1').bind(day)];
+        if (key !== ih) ops.push(env.DB.prepare('INSERT INTO vcap (day, h, n) VALUES (?, ?, 1) ON CONFLICT(day, h) DO UPDATE SET n = n + 1').bind(day, ih));
+        await env.DB.batch(ops);
+      }
+    }
+  }
   return json(await counts(env, day));
 }
 async function counts(env, day) {
@@ -420,18 +454,7 @@ export default {
     });
     const day = kstDay(Date.now());
     try {
-      if (url.pathname === '/hit' && req.method === 'POST') {
-        const ip = req.headers.get('CF-Connecting-IP') || '';
-        const ua = req.headers.get('User-Agent') || '';
-        if (cors.ok && ip && ua && !BOT.test(ua)) {
-          const h = await sha256((env.SALT || '') + '|' + day + '|' + ip);
-          const r = await env.DB.prepare('INSERT OR IGNORE INTO visits (day, h) VALUES (?, ?)').bind(day, h).run();
-          if (r.meta && r.meta.changes > 0) {
-            await env.DB.prepare('INSERT INTO daily (day, n) VALUES (?, 1) ON CONFLICT(day) DO UPDATE SET n = n + 1').bind(day).run();
-          }
-        }
-        return json(await counts(env, day));
-      }
+      if (url.pathname === '/hit' && req.method === 'POST') return await hit(req, env, cors, json, day);
       if (url.pathname === '/' && req.method === 'GET') return json(await counts(env, day));
       if (url.pathname === '/live' && req.method === 'POST') return await live(req, env, cors, json, day);
       /* GET /geo → 접속 국가 (Cloudflare 가 IP 로 판별한 ISO 국가 코드) — 사이트 기본 언어 선택용, 저장하지 않음 */
@@ -481,6 +504,7 @@ export default {
     if (h === 3 && m < 15) {                                             // 매일 03:00~03:14 (한국 시간)
       const cut = kstDay(Date.now() - 2 * 86400e3);
       ctx.waitUntil(env.DB.prepare('DELETE FROM visits WHERE day < ?').bind(cut).run());
+      ctx.waitUntil(env.DB.prepare('DELETE FROM vcap WHERE day < ?').bind(cut).run());   // 방문자 수 IP별 새 번호 개수(남용 막기)
       ctx.waitUntil(env.DB.prepare("DELETE FROM cache WHERE k LIKE 'etf:%' AND t < ?").bind(Math.floor(Date.now() / 1000) - 7 * 86400).run());   // ETF 차트 보관본: 7일 넘게 안 쓴 것
       ctx.waitUntil(grpScan(env, Date.now()).catch(() => 0));          // 72루틴 PC 여러 대: 60일 넘게 조용한 묶음·PC 정리
     }

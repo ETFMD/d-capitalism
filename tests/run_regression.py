@@ -1234,6 +1234,63 @@ def static_pages_check(page, base, fail, widths, routes, local):
             fail('sitemap', 'noindex 화면이 sitemap.xml 에 있음: ' + r['path'])
 
 
+def visit_hit_check(br, fail):
+    """[VISIT-HIT] 방문자 수를 네이버 애널리틱스와 같은 페이지·기준으로 세는지 — 실제 도메인 주소를 저장소 파일로 흉내(실사이트·Worker 에 요청하지 않음)
+    · 도구 페이지·투자 공부 글: POST /hit {id: 32자리 번호} 한 번 · 다시 열면(같은 날) 안 보냄 · 맨 위 숫자는 그 답으로 그림
+    · 번호는 실시간 접속 번호(dc_live_id)와 같음 · 소개 페이지(네이버 스크립트 없음)는 세지 않음"""
+    SITE = 'https://d-capitalism.com/'
+    EPX = 'https://visit-test.example.workers.dev'
+    ctx = br.new_context(viewport={'width': 1280, 'height': 900}, locale='ko-KR')
+    ctx.route(TRACK_RE, lambda route: route.fulfill(status=200, content_type='application/javascript', body=''))
+    hits, lives = [], []
+    def site(route):
+        u = urllib.parse.urlparse(route.request.url).path
+        if u == '/data/counter.json':
+            return route.fulfill(status=200, content_type='application/json', body=json.dumps({'endpoint': EPX}))
+        f = os.path.join(ROOT, u.lstrip('/'))
+        if u.endswith('/'):
+            f = os.path.join(f, 'index.html')
+        if not os.path.isfile(f):
+            return route.fulfill(status=404, body='')
+        ct = 'text/html; charset=utf-8' if f.endswith('.html') else 'application/javascript' if f.endswith('.js') else 'text/css' if f.endswith('.css') else 'application/json' if f.endswith('.json') else None
+        route.fulfill(status=200, body=open(f, 'rb').read(), **({'content_type': ct} if ct else {}))
+    ctx.route(re.compile(r'^https://d-capitalism\.com/.*'), site)
+    def ep(route):
+        q = route.request
+        body = q.post_data or ''
+        if q.url.endswith('/hit'):
+            hits.append(body)
+        elif q.url.endswith('/live'):
+            lives.append(body)
+        route.fulfill(status=200, headers={'Access-Control-Allow-Origin': 'https://d-capitalism.com'}, content_type='application/json',
+                      body=json.dumps({'day': '2026-10-20', 'today': 7, 'yesterday': 31, 'total': 165, 'max': 33, 'maxDay': '2026-10-14', 'live': 2}))
+    ctx.route(re.compile(r'^https://visit-test\.example\.workers\.dev/.*'), ep)
+    pg = ctx.new_page()
+    pg.goto(SITE + 'fx/', wait_until='load'); pg.wait_for_timeout(1500)
+    st = pg.evaluate("() => ({ id: localStorage.getItem('dc_live_id'), day: localStorage.getItem('etfmd-visit-day'), today: (document.getElementById('visit-today') || {}).textContent, total: (document.getElementById('visit-total') || {}).textContent })")
+    if len(hits) != 1 or not re.fullmatch(r'\{"id":"[a-f0-9]{32}"\}', hits[0] if hits else '') or json.loads(hits[0])['id'] != st['id']:
+        fail('visits', '도구 페이지: /hit 을 브라우저 번호(dc_live_id)로 한 번 보내야 함 — 보낸 것 %s · 번호 %s' % (hits, st['id']))
+    if st['today'] != '7' or st['total'] != '165':
+        fail('visits', '맨 위 방문자 수가 /hit 답으로 그려지지 않음: %s' % st)
+    if not any(st['id'] and st['id'] in x for x in lives):
+        fail('visits', '실시간 접속(/live)이 같은 브라우저 번호를 쓰지 않음: %s' % lives[:2])
+    n0 = len(hits)
+    pg.goto(SITE + 'loan/', wait_until='load'); pg.wait_for_timeout(800)
+    pg.goto(SITE + 'learn/compound-interest/', wait_until='load'); pg.wait_for_timeout(800)
+    if len(hits) != n0:
+        fail('visits', '같은 날 다른 페이지를 열어도 다시 세면 안 됨 (/hit %d번 더)' % (len(hits) - n0))
+    pg.evaluate("() => localStorage.removeItem('etfmd-visit-day')")
+    pg.goto(SITE + 'learn/compound-interest/', wait_until='load'); pg.wait_for_timeout(1000)
+    if len(hits) != n0 + 1:
+        fail('visits', '투자 공부 글(네이버 애널리틱스가 있는 페이지)에서도 세야 함: /hit %d번' % (len(hits) - n0))
+    pg.evaluate("() => localStorage.removeItem('etfmd-visit-day')")
+    n1 = len(hits)
+    pg.goto(SITE + 'about/', wait_until='load'); pg.wait_for_timeout(800)
+    if len(hits) != n1:
+        fail('visits', '소개 페이지(네이버 애널리틱스 없음)에서는 세지 않아야 함')
+    ctx.close()
+
+
 def ssr_h1_check(br, page, base, fail):
     """무한매수법·VR: 처음 HTML 의 제목(h1 · [SSR-H1])이 JS 가 그린 뒤에는 숨고 보이는 h1 은 하나 · JS 를 끄면 그 제목이 보임"""
     for p, root in (('muhan/', 'mh-root'), ('vr/', 'vr-root')):
@@ -2282,6 +2339,13 @@ def main():
         if _r.returncode != 0:
             fail('worker', '건의 게시판(/board) 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stdout.strip()[-200:] or _r.stderr.strip())[:300])
 
+    # Worker 방문자 수(/hit · 네이버 애널리틱스 기준 — 브라우저마다 하루 1번 · 남용 한도 · 봇 제외 · 해시만 저장) 단독 확인 — 진짜 SQLite(node:sqlite)
+    if not a.etf_audit and shutil.which('node'):
+        _r = subprocess.run(['node', os.path.join(ROOT, 'tests', 'worker_visit_test.mjs')], capture_output=True, text=True, timeout=120)
+        print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'worker_visit_test: 출력 없음', flush=True)
+        if _r.returncode != 0:
+            fail('worker', '방문자 수(/hit) 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:300])
+
     # 외부 광고·방문 분석 서버(일시 오류가 잦고 사이트 기능과 무관) — 실패해도 사이트 오류로 보지 않음
     THIRD = ('clarity.ms', 'bing.com', 'naver.com', 'naver.net', 'pstatic.net', 'googlesyndication', 'doubleclick',
              'google-analytics', 'googletagmanager', 'adtrafficquality', 'googleadservices', 'gstatic.com', 'kakao', 'withgoogle.com')
@@ -2518,6 +2582,8 @@ def main():
         print('[2-4] 독립 페이지(소개·약관·개인정보·면책) · sitemap · 무한매수법·VR 정적 제목 · 자료 화면 자동 요약', flush=True)
         static_pages_check(page, base, fail, widths, routes, local)
         ssr_h1_check(br, page, base, fail)
+        if local:   # 방문자 수 [VISIT-HIT] — 실제 도메인을 저장소 파일로 흉내 (실사이트에는 요청 안 함)
+            visit_hit_check(br, fail)
         for r in [x for x in routes if x['tab'] in AUTOSUM_OF]:
             page.goto(base + r['path'] + '/', wait_until='load'); page.wait_for_timeout(300)
             a = page.evaluate("() => { const s = document.querySelector('.auto-sum'); return s ? { vis: !!s.offsetParent, rows: s.querySelectorAll('tbody tr').length, li: s.querySelectorAll('.in-auto li').length } : null; }")

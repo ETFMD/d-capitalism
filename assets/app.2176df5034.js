@@ -5213,9 +5213,9 @@ var TAX = (function () {
 })();
 
 /* ════════════════════════════════════════
-   [VISITS] 맨 위 방문자 수 — Cloudflare Worker(worker/)가 같은 IP를 하루(한국 시간) 1번만 셈
+   [VISITS] 맨 위 방문자 수 — Cloudflare Worker(worker/)가 브라우저마다 하루(한국 시간) 1번 셈 (네이버 애널리틱스 '방문자수'와 같은 기준)
    · 주소는 data/counter.json (Actions '방문자 수 카운터 배포'가 저장) — 없으면 표시하지 않음
-   · 이 브라우저가 오늘 이미 센 경우에는 세지 않고 숫자만 받아 옴 (서버도 IP로 다시 한 번 중복 확인)
+   · 세는 일은 머리의 [ANALYTICS] [VISIT-HIT] 가 함(네이버와 같은 페이지·같은 조건) — 여기서는 그 결과를 기다렸다가 숫자만 그림
    · 실시간: 화면을 보고 있는 동안 45초마다 POST /live {id} (브라우저별 무작위 번호) — 숨기거나 닫으면 바로 빠짐
 ════════════════════════════════════════ */
 (function () {
@@ -5242,7 +5242,6 @@ var TAX = (function () {
     document.addEventListener('visibilitychange', function () { if (document.hidden) bye(); else ping(); });
     window.addEventListener('pagehide', bye);
   }
-  function kstDay() { return new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10); }
   function show(d) {
     if (!d || typeof d.today !== 'number') return;
     var f = function (v) { return typeof v === 'number' ? v.toLocaleString('ko-KR') : '—'; }, set = function (id, v) { document.getElementById(id).textContent = v; };
@@ -5257,15 +5256,8 @@ var TAX = (function () {
     var cfg = null;
     try { cfg = await window.mdLoad('counter.json'); } catch (e) {}
     if (!cfg || !/^https:\/\//.test(cfg.endpoint || '')) return;
-    var day = kstDay(), seen = false;
     EP = cfg.endpoint.replace(/\/$/, '');
-    try { seen = localStorage.getItem('etfmd-visit-day') === day; } catch (e) {}
-    try {
-      if (!seen) {                                                    /* 오늘 첫 방문만 세고, 숫자는 실시간 신호의 답으로 받음 */
-        var r = await fetch(EP + '/hit', { method: 'POST', mode: 'cors', cache: 'no-store' });
-        if (r.ok) { show(await r.json()); try { localStorage.setItem('etfmd-visit-day', day); } catch (e) {} }
-      }
-    } catch (e) {}
+    try { if (window.__dcHit) show(await window.__dcHit); } catch (e) {}   /* 방금 센 결과(오늘 처음일 때) — 나머지는 실시간 신호의 답으로 받음 */
     startLive();
   }
   /* 휴대폰(마우스 없음)·키보드: 누르면 열고 닫기, 바깥 누르거나 Esc 면 닫기 */
