@@ -1,0 +1,177 @@
+/* ── [STRATSIM-INTRA] TQQQ 장중 흐름 (사이트 테마 변수만 씀: 다크 기본 · html[data-theme=light]) ──
+   색: 오름·매수 = 빨강, 내림·매도 = 파랑 (사이트 규칙) · 평균 청록 · 중앙값 주황 · 오늘 보라 · 가리킨 날 분홍 */
+#page-ssintra .header { margin-bottom: 14px; }
+.ssi-app { --ssi-up: #f04452; --ssi-dn: #3182f6; --ssi-mean: #2ec4b6; --ssi-med: #fe9800; --ssi-today: #a78bfa; --ssi-hov: #f472b6;
+  position: relative; font-family: var(--font); color: var(--text); }
+html[data-theme="light"] .ssi-app { --ssi-mean: #0d9488; --ssi-med: #e8890b; --ssi-today: #7c3aed; --ssi-hov: #db2777; }
+.ssi-app *, .ssi-app *::before, .ssi-app *::after { box-sizing: border-box; }
+.ssi-app [hidden] { display: none !important; }
+.ssi-app .up { color: var(--ssi-up); fill: var(--ssi-up); }
+.ssi-app .dn { color: var(--ssi-dn); fill: var(--ssi-dn); }
+
+.ssi-top { display: flex; align-items: center; gap: 10px; min-height: 22px; margin-bottom: 10px; }
+.ssi-fetched { font-size: 12px; color: var(--text3); line-height: 1.6; }
+.ssi-fetched b { color: var(--text2); font-weight: 500; font-family: var(--mono); }
+
+.ssi-card.card { padding: 16px 18px 12px; min-width: 0; }
+
+/* 조절 장치 줄 */
+.ssi-tools { display: grid; grid-template-columns: auto minmax(150px, 1fr) minmax(150px, 1fr) minmax(230px, 320px); gap: 10px 22px; align-items: end; margin-bottom: 10px; }
+.ssi-switch { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; padding-bottom: 16px; min-width: 0; }
+.ssi-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.ssi-track { position: relative; flex: none; width: 36px; height: 20px; border-radius: 10px; background: rgba(var(--fg-rgb), .16); transition: background .15s; }
+.ssi-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s; }
+.ssi-switch input:checked + .ssi-track { background: var(--accent); }
+.ssi-switch input:checked + .ssi-track::after { transform: translateX(16px); }
+.ssi-switch input:focus-visible + .ssi-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ssi-swt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ssi-swt b { font-size: 13.5px; font-weight: 600; color: var(--text); white-space: nowrap; }
+.ssi-swt small { font-size: 11px; color: var(--text3); line-height: 1.35; }
+
+.ssi-metric { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding-bottom: 16px; }
+.ssi-mh { display: flex; align-items: center; justify-content: space-between; gap: 6px; height: 20px; white-space: nowrap; }
+.ssi-mn { font-size: 12.5px; color: var(--text2); font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.ssi-mn small { font-size: 10.5px; color: var(--text3); font-weight: 400; }
+.ssi-mrange { font-size: 11px; color: var(--text3); }
+.ssi-mreset { font: inherit; font-size: 11px; color: var(--accent); background: var(--accent-dim); border: 1px solid rgba(49,130,246,.35); border-radius: 6px; padding: 1px 7px; cursor: pointer; }
+.ssi-mreset:hover { border-color: var(--accent); }
+.ssi-hist { display: block; width: 100%; height: 30px; overflow: visible; background: var(--bg3); border: 1px solid var(--card-border); border-radius: 6px; cursor: crosshair; touch-action: none; -webkit-user-select: none; user-select: none; }
+.ssi-hist .bars rect { fill: rgba(var(--fg-rgb), .2); }
+.ssi-hist .bars rect.in { fill: var(--accent); }
+.ssi-hist .zero { stroke: rgba(var(--fg-rgb), .45); stroke-width: 1; }
+.ssi-hist .sel { fill: var(--accent); fill-opacity: .1; stroke: var(--accent); stroke-width: 1; pointer-events: none; }
+.ssi-hist .handle { fill: var(--bg2); stroke: var(--accent); stroke-width: 1.5; cursor: ew-resize; outline: none; }
+.ssi-hist .handle:focus-visible { stroke-width: 3; }
+.ssi-hist .hlabel { font-family: var(--mono); font-size: 10px; font-weight: 500; fill: var(--accent); pointer-events: none; }
+
+.ssi-period { display: flex; flex-direction: column; gap: 6px; padding-bottom: 14px; min-width: 0; }
+.ssi-cov { font-size: 12px; color: var(--text3); text-align: right; white-space: nowrap; font-family: var(--mono); }
+.ssi-cov b { color: var(--text); font-weight: 500; }
+.ssi-range { position: relative; height: 20px; }
+.ssi-rtrack, .ssi-rfill { position: absolute; top: 8px; height: 4px; border-radius: 2px; }
+.ssi-rtrack { left: 0; right: 0; background: rgba(var(--fg-rgb), .14); }
+.ssi-rfill { background: var(--accent); }
+.ssi-range input { position: absolute; left: 0; top: 0; width: 100%; height: 20px; margin: 0; background: none; -webkit-appearance: none; appearance: none; pointer-events: none; }
+.ssi-range input::-webkit-slider-runnable-track { background: none; height: 20px; }
+.ssi-range input::-moz-range-track { background: none; height: 20px; }
+.ssi-range input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; pointer-events: auto; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; background: var(--bg2); border: 2px solid var(--accent); cursor: grab; }
+.ssi-range input::-moz-range-thumb { pointer-events: auto; width: 12px; height: 12px; border-radius: 50%; background: var(--bg2); border: 2px solid var(--accent); cursor: grab; }
+.ssi-range input:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ssi-range input:focus-visible::-moz-range-thumb { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 범례 · 가리킨 날 안내줄 */
+.ssi-info { position: relative; min-height: 24px; margin: 0 0 4px; }
+.ssi-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; font-size: 11.5px; color: var(--text2); transition: opacity .15s; }
+.ssi-legend.dim { opacity: 0; }
+.ssi-legend .lg { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.ssi-legend i { display: inline-block; width: 16px; height: 0; border-top: 2px solid; }
+.ssi-legend .mean i { border-color: var(--ssi-mean); border-top-width: 2.5px; }
+.ssi-legend .median i { border-color: var(--ssi-med); border-top-style: dashed; }
+.ssi-legend .today i { border-color: var(--ssi-today); border-top-width: 3px; }
+.ssi-legend .buy i, .ssi-legend .sell i { width: 10px; height: 10px; border: 2px solid; border-radius: 50%; }
+.ssi-legend .buy i { border-color: var(--ssi-up); }
+.ssi-legend .sell i { border-color: var(--ssi-dn); }
+.ssi-legend .win i { width: 14px; height: 10px; border: 0; border-radius: 2px; background: var(--ssi-today); opacity: .25; }
+.ssi-readout { position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text2); }
+.ssi-ro { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; font-family: var(--mono); min-width: 0; }
+.ssi-ro b { font-family: var(--font); color: var(--ssi-hov); font-weight: 600; }
+.ssi-ro .mut { color: var(--text3); font-family: var(--font); }
+.ssi-rox { flex: none; font: inherit; font-size: 15px; line-height: 1; width: 26px; height: 24px; color: var(--text2); background: var(--bg3); border: 1px solid var(--card-border); border-radius: 7px; cursor: pointer; }
+
+/* 차트 */
+.ssi-chart { position: relative; min-height: 440px; }
+.ssi-svg { display: block; overflow: visible; font-family: var(--mono); -webkit-user-select: none; user-select: none; }
+.ssi-target { cursor: crosshair; touch-action: pan-y; }
+.ssi-msg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; text-align: center; font-size: 13px; color: var(--text2); pointer-events: none; }
+.ssi-msg button { pointer-events: auto; }
+.ssi-spin { width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--card-border); border-top-color: var(--accent); animation: ssiSpin .8s linear infinite; }
+@keyframes ssiSpin { to { transform: rotate(360deg); } }
+.ssi-retry { font: inherit; font-size: 13px; color: #fff; background: var(--accent); border: 0; border-radius: 9px; padding: 8px 14px; cursor: pointer; }
+
+.ssi-grid line { stroke: rgba(var(--fg-rgb), .07); stroke-dasharray: 2 3; }
+.ssi-xaxis text, .ssi-yaxis text { fill: var(--text3); font-size: 11px; }
+.ssi-svg.compact .ssi-xaxis text, .ssi-svg.compact .ssi-yaxis text { font-size: 10px; }
+.ssi-xaxis line, .ssi-yaxis line { stroke: rgba(var(--fg-rgb), .2); }
+.ssi-zero line { stroke: rgba(var(--fg-rgb), .4); stroke-width: 1; }
+.ssi-window { fill: var(--ssi-today); fill-opacity: .07; }
+.ssi-day { fill: none; stroke: var(--text); stroke-width: 1; stroke-linejoin: round; }
+.ssi-day.ref { stroke: var(--ssi-today); stroke-width: 2; }
+.ssi-day.hover { stroke: var(--ssi-hov); stroke-width: 1.6; }
+.ssi-hday, .ssi-aggs, .ssi-now, .ssi-annot, .ssi-today, .ssi-hover { pointer-events: none; }
+.ssi-mean { fill: none; stroke: var(--ssi-mean); stroke-width: 2.5; stroke-linejoin: round; }
+.ssi-median { fill: none; stroke: var(--ssi-med); stroke-width: 2; stroke-dasharray: 6 4; }
+.ssi-lname { font-family: var(--font); font-size: 11px; font-weight: 600; }
+.ssi-lname.mean { fill: var(--ssi-mean); }
+.ssi-lname.median { fill: var(--ssi-med); }
+.ssi-svg.compact .ssi-lname { font-size: 10px; }
+.ssi-nowline { stroke: var(--text3); stroke-width: 1; stroke-dasharray: 2 4; }
+.ssi-nowlabel { font-family: var(--font); font-size: 10.5px; fill: var(--text3); }
+
+.ssi-annot { transition: opacity .15s; }
+.ssi-svg.hovering .ssi-annot { opacity: .3; }
+.ssi-mark.buy { --c: var(--ssi-up); }
+.ssi-mark.sell { --c: var(--ssi-dn); }
+.ssi-mline { fill: none; stroke: var(--c); stroke-width: 1; stroke-opacity: .75; }
+.ssi-mdot { fill: var(--bg2); stroke: var(--c); stroke-width: 2; }
+.ssi-mbox { fill: var(--bg2); fill-opacity: .94; stroke: rgba(var(--fg-rgb), .16); stroke-width: 1; }
+.ssi-mtitle { font-family: var(--font); font-size: 11px; font-weight: 700; fill: var(--c); }
+.ssi-mtext { font-family: var(--font); font-size: 10.5px; fill: var(--text2); }
+.ssi-mtext .num, .ssi-hx .num { font-family: var(--mono); }
+
+.ssi-tglow { fill: none; stroke: var(--ssi-today); stroke-width: 9; stroke-opacity: .16; stroke-linejoin: round; stroke-linecap: round; }
+.ssi-tpath { fill: none; stroke: var(--ssi-today); stroke-width: 2.25; stroke-linejoin: round; stroke-linecap: round; }
+.ssi-tdot { fill: var(--ssi-today); stroke: var(--bg2); stroke-width: 2; }
+.ssi-ring { fill: none; stroke: var(--ssi-today); stroke-width: 2; transform-box: fill-box; transform-origin: center; animation: ssiPulse 1.8s ease-out infinite; }
+.ssi-ring.second { animation-delay: .9s; }
+@keyframes ssiPulse { 0% { transform: scale(.5); opacity: .8; } 100% { transform: scale(3.2); opacity: 0; } }
+.ssi-tlabel { font-family: var(--font); font-size: 11px; font-weight: 700; fill: var(--ssi-today); paint-order: stroke; stroke: var(--bg2); stroke-width: 3px; stroke-linejoin: round; }
+.ssi-tlabel tspan { font-family: var(--mono); }
+
+.ssi-hrule { stroke: var(--text3); stroke-width: 1; stroke-dasharray: 3 3; }
+.ssi-hchip rect { fill: var(--bg2); stroke: var(--text3); stroke-width: 1; }
+.ssi-hchip text { fill: var(--text); font-size: 10.5px; font-weight: 500; }
+.ssi-hx circle { fill: var(--bg2); stroke-width: 2; }
+.ssi-hx text, .ssi-hend { font-family: var(--font); font-size: 10.5px; font-weight: 600; paint-order: stroke; stroke: var(--bg2); stroke-width: 3px; stroke-linejoin: round; }
+.ssi-hx.mean circle { stroke: var(--ssi-mean); } .ssi-hx.mean text { fill: var(--ssi-mean); }
+.ssi-hx.median circle { stroke: var(--ssi-med); } .ssi-hx.median text { fill: var(--ssi-med); }
+.ssi-hx.day circle { stroke: var(--ssi-hov); } .ssi-hx.day text { fill: var(--ssi-hov); }
+.ssi-hend { fill: var(--ssi-hov); }
+.ssi-hend .dim { font-weight: 400; fill: var(--text2); }
+
+/* 아래 줄: 눈금 바꾸기 · 시간대 */
+.ssi-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 14px; margin-top: 6px; }
+.ssi-scale { display: inline-flex; border: 1px solid var(--card-border); border-radius: 8px; overflow: hidden; background: var(--bg3); }
+.ssi-scale button { font: inherit; font-size: 11.5px; color: var(--text3); background: transparent; border: 0; padding: 4px 11px; cursor: pointer; }
+.ssi-scale button + button { border-left: 1px solid var(--card-border); }
+.ssi-scale button[aria-pressed="true"] { color: #fff; background: var(--accent); font-weight: 600; }
+.ssi-scale button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ssi-zone { font-size: 11.5px; color: var(--text3); }
+
+@media (max-width: 1080px) {
+  .ssi-tools { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .ssi-period { grid-column: 2; grid-row: 1; }
+}
+@media (max-width: 640px) {
+  .ssi-card.card { padding: 12px 12px 10px; }
+  .ssi-tools { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px 12px; }
+  .ssi-switch { grid-column: 1 / -1; padding-bottom: 8px; }
+  .ssi-period { grid-column: 1 / -1; grid-row: auto; padding-bottom: 6px; }
+  .ssi-cov { text-align: left; }
+  .ssi-legend { gap: 3px 10px; font-size: 11px; }
+  .ssi-zone { font-size: 11px; }
+}
+@media (pointer: coarse) {
+  .ssi-range { height: 28px; }
+  .ssi-rtrack, .ssi-rfill { top: 12px; }
+  .ssi-range input, .ssi-range input::-webkit-slider-runnable-track { height: 28px; }
+  .ssi-range input::-webkit-slider-thumb { width: 24px; height: 24px; margin-top: 2px; }
+  .ssi-range input::-moz-range-thumb { width: 20px; height: 20px; }
+  .ssi-hist { height: 34px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #page-ssintra .card { animation: none; }
+  .ssi-ring { animation: none; display: none; }
+  .ssi-track, .ssi-track::after, .ssi-legend, .ssi-annot { transition: none; }
+  .ssi-spin { animation-duration: 2.4s; }
+}
+
