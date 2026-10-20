@@ -135,6 +135,13 @@ function ssRun9(o) {
   };
   const daysOf = (mk) => (sched.list && sched.list.length && DS.days)
     ? [...new Set(sched.list.filter(r => r.date.slice(0, 7) === mk).map(r => r.date))].filter(d => DS.idx.has(d)).sort() : [];
+  // 마지막 행 날짜가 달 중간(그달 거래일이 더 남음)이면 그달 실제 거래내역 입금일 중 그 날까지 — 월말 행이 그 뒤라 달 처리에서 빠지는 것
+  const tailDays = (qDate) => {
+    if (!(sched.list && sched.list.length) || !DS.days) return [];
+    const i = DS.idx.get(qDate), nx = i != null ? DS.days[i + 1] : null, mk = qDate.slice(0, 7);
+    if (!nx || nx.date.slice(0, 7) !== mk) return [];
+    return daysOf(mk).filter((d) => d <= qDate && d > S[0][0]);
+  };
 
   for (let qi = 0; qi < S.length; qi++) {
     const qDate = S[qi][0], qPx = S[qi][ul];
@@ -200,6 +207,17 @@ function ssRun9(o) {
     };
     if (fastMonths) for (const mi of monthsOf[qi0 + qi]) doMonth(DS.m[mi]);
     else for (const r of DS.m) if (r[0] > prevDate && r[0] <= qDate) doMonth(r);
+    // 마지막 행이 달 중간(정확한 청산일 · 주 단위 · 리밸런스 시점 옮김)이면 그달 월말 행은 위에서 안 돎 →
+    // 실제 거래내역의 그달 입금 중 이 날까지 것을 그날 가격으로 넣음 (이자는 달마다라 덜 찬 달은 없음 · 공식 적립은 월말 금액이라 없음)
+    if (qi === S.length - 1) for (const d of tailDays(qDate)) {
+      fillWeeks(d);
+      const row = DS.rows[DS.idx.get(d)], dp = ulKey ? DS.days[DS.idx.get(d)][ulKey] : 0;
+      putMoney(dp > 0 ? dp : qPx, d, row);
+      if ((sampleW || sampleQ) && dp > 0) {
+        const c = cashPark ? cash : (row[parkCol] > 0 ? parkSh * row[parkCol] : cash);
+        samples.push(snap(d, dp, sh * dp, c));
+      }
+    }
     fillWeeks(qDate);
     if (!cashPark) { const pp = parkPx(S[qi]); if (pp > 0) cash = parkSh * pp; }
 
@@ -283,6 +301,13 @@ function ssRun9(o) {
       if (qi > 0 && (!needPx || qp)) {
         if (fastMonths) for (const mi of monthsOf[qi0 + qi]) month(DS.m[mi]);
         else for (const r of DS.m) if (r[0] > pd && r[0] <= qd) month(r);
+        // 마지막 행이 달 중간이면 실제 거래내역의 그달 그 날까지 입금도 (9sig 쪽과 같은 규칙)
+        if (qi === S.length - 1) for (const d of tailDays(qd)) {
+          weeks(d);
+          const dp = key ? DS.days[DS.idx.get(d)][key] : null, px = dp > 0 ? dp : qp, amt = sched.byDate.get(d) || 0;
+          if (needPx ? px : true) n += amt / px;
+          if ((sampleW || sampleQ) && dp > 0) smp.push({ date: d, value: n * dp });
+        }
         weeks(qd);
         if (sampleW && qp) smp.push({ date: qd, value: n * qp });
       }

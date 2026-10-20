@@ -2,10 +2,12 @@
 /* [STRATSIM] 투자전략 시뮬레이터 계산 회귀 검사 — node tests/stratsim_test.cjs
    · 화면 계산 코드(src/stratsim/*.js)를 그대로 불러와(scripts/stratsim_fit.cjs 와 같은 방법) 고정 구간 5가지의 기준값과 대조
      (기준값 = 원본 Strategies Simulator 와 무작위 3,800번·화면 12가지 대조를 마친 엔진으로 2026-10-20 에 계산 — 구간이 고정이라 새 자료가 붙어도 그대로.
-      2026-10-21: 연평균만 7곳 다시 계산 — 원본도 틀리던 것을 고침: SMA 적립 날짜(월말 → 실제 달 첫 거래일) · 리밸런스 시점을 옮긴 9sig 의 끝 날짜(청산일 전 마지막 리밸런스 날 값인데 청산일까지 셈) ·
-      주 단위 화면에서 진입 전 월말 적립이 하나 더 들어가던 것. 끝 금액·낙폭은 그대로)
-   · 연평균(돈 가중 CAGR): 답을 아는 흐름으로 IRR(50년 넘는 기간 포함) · 적립 흐름 = 엔진이 실제로 넣은 돈(무작위 화면 조건 60가지) ·
-     정확한 청산일의 SMA 끝 값 · 1953년~최신 적립식 연평균
+      2026-10-21: 원본도 틀리던 것을 고쳐 다시 계산 — 연평균: 적립을 월말이 아니라 엔진이 실제로 산 날(달이 바뀐 첫 거래일 —
+      9sig·그냥 보유·SMA 모두, 현금 복리만 달마다 이자 뒤 더하므로 월말) · 끝 값이 나온 점 날짜 · 주 단위 화면의 진입 전 적립 /
+      끝 금액: 리밸런스 시점을 옮긴 9sig 의 마지막 행이 달 중간이면 그달 이미 들어온 적립도 넣음(예전엔 빠짐). 낙폭은 그대로)
+   · 연평균(돈 가중 CAGR): 답을 아는 흐름으로 IRR(50년 넘는 기간 포함) · 적립 흐름 = 엔진이 실제로 넣은 돈(무작위 화면 조건 60가지 —
+     행마다 넣은 돈 누계 + 그냥 보유 주수로 돈의 날짜·가격까지) · 실제 거래내역의 달 중간 마지막 행 · 정확한 청산일의 SMA 끝 값 ·
+     시각이 붙은 날짜 · 아주 작은 값의 IRR 부호 · 1953년~최신 적립식 연평균
    · 과최적화 탐색기 자료(data/stratsim/fit-*.json): 탭·행 수가 후보와 같고, 무작위 행의 맞춘 구간 지표를 다시 계산하면 저장된 값과 같음
    · 전략 라이브러리 코드 전략(2026-10-21 고친 것): 어느 날 들어온 돈도 사라지지 않음(특히 파는 날) · #1 Faber 는 달의 마지막
      거래일에만 판단(주 단위 화면에서도 같은 거래) · #18 은 주의 마지막 거래일에만 · #26 중심선 = 마지막 W 거래일로 직접 계산한 값
@@ -15,11 +17,11 @@ const path = require('path'), fs = require('fs');
 const F = require(path.join(__dirname, '..', 'scripts', 'stratsim_fit.cjs'));
 const M = F.M, S = M.S;
 const GOLD = [
-  {"name":"기본 2010–2025 · 전략 없음","e":228,"x":291,"i":333,"m":500,"a":"0","cfgs":[],"labels":[65,"2009-12-31","2025-12-31"],"met":{"bh":[40.2731878649,81.6150703134,6162492.04356,"2021-11-19","2022-12-28"],"invested":[4.07280249347,0,153114.16388,null,null]}},
-  {"name":"9sig·SMA 기본","e":228,"x":291,"i":333,"m":500,"a":"0","cfgs":[["9sig",{}],["sma",{}]],"labels":[65,"2009-12-31","2025-12-31"],"met":{"bh":[40.2731878649,81.6150703134,6162492.04356,"2021-11-19","2022-12-28"],"invested":[4.07280249347,0,153114.16388,null,null],"g0":[39.0547580275,59.66735114,5448549.33593,"2021-11-19","2022-12-28"],"g1":[44.9301312397,46.2811945542,9990216.92722,"2018-08-29","2019-08-05"]}},
+  {"name":"기본 2010–2025 · 전략 없음","e":228,"x":291,"i":333,"m":500,"a":"0","cfgs":[],"labels":[65,"2009-12-31","2025-12-31"],"met":{"bh":[40.1075404758,81.6150703134,6162492.04356,"2021-11-19","2022-12-28"],"invested":[4.07280249347,0,153114.16388,null,null]}},
+  {"name":"9sig·SMA 기본","e":228,"x":291,"i":333,"m":500,"a":"0","cfgs":[["9sig",{}],["sma",{}]],"labels":[65,"2009-12-31","2025-12-31"],"met":{"bh":[40.1075404758,81.6150703134,6162492.04356,"2021-11-19","2022-12-28"],"invested":[4.07280249347,0,153114.16388,null,null],"g0":[38.892610706,59.66735114,5448549.33593,"2021-11-19","2022-12-28"],"g1":[44.9301312397,46.2811945542,9990216.92722,"2018-08-29","2019-08-05"]}},
   {"name":"거치식 $100K 2000–2020","e":188,"x":271,"i":500,"m":0,"a":"0","cfgs":[["9sig",{}],["sma",{}],["9sig",{"per":"monthly","g":"3"}]],"labels":[253,"1999-12-31","2020-12-31"],"met":{"bh":[-9.21103178578,99.9823378436,13140.3979103,"2000-03-27","2009-03-09"],"invested":[4.07374795303,0,231313.351046,null,null],"g0":[-7.40838272748,99.9552507683,19858.0420443,"2000-03-27","2009-03-09"],"g1":[14.4836791711,78.9873796806,1712914.79269,"2000-04-03","2003-04-09"],"g2":[-8.19129104088,99.9581791471,16614.4233182,"2000-03-27","2009-03-09"]}},
-  {"name":"적립 $1000 +5% 1990–2015","e":148,"x":251,"i":333,"m":1000,"a":"5","cfgs":[["9sig",{"park":"qqq","dep":"50","rp":"50"}],["sma",{"sig":"spy","win":"100","eb":"2","xb":"2","cb":"3","cs":"3","settle":"2","oh":"70","cool":"50","out":"qqq","din":"5","dout":"10","bg":"0"}]],"labels":[105,"1989-12-29","2015-12-31"],"met":{"bh":[11.4427582318,99.9364556645,2875775.77533,"2000-03-27","2002-09-23"],"invested":[4.07341312015,0,1041994.61333,null,null],"g0":[12.0045555275,99.1114675088,3076467.31677,"2000-03-27","2002-10-07"],"g1":[13.5376651311,87.5237503647,4001125.07494,"2000-03-27","2008-11-20"]}},
-  {"name":"1953–1999 · 매년·매주","e":1,"x":187,"i":300,"m":100,"a":"0","cfgs":[["9sig",{"per":"yearly","g":"30","cash":"30","bp":"100","tc":"target"}],["9sig",{"per":"weekly","g":"1","ul":"qld","cost":"0.1"}],["bh",{"ul":"spy"}],["invested",{"r":"300"}]],"labels":[2441,"1953-03-27","1999-12-31"],"met":{"bh":[20.7871139834,96.6186281433,86119176.9562,"1972-04-12","1974-10-03"],"invested":[4.07389214888,0,204793.870698,null,null],"g0":[20.6686005009,96.6349994763,82472483.8721,"1972-04-12","1974-10-03"],"g1":[16.5161529271,87.1364862715,18035088.7931,"1972-04-12","1974-10-03"],"g2":[9.96595361879,46.5624985366,1590456.66504,"1973-01-11","1974-10-03"],"g3":[9.38018658215,0,1285249.89721,null,null]}}
+  {"name":"적립 $1000 +5% 1990–2015","e":148,"x":251,"i":333,"m":1000,"a":"5","cfgs":[["9sig",{"park":"qqq","dep":"50","rp":"50"}],["sma",{"sig":"spy","win":"100","eb":"2","xb":"2","cb":"3","cs":"3","settle":"2","oh":"70","cool":"50","out":"qqq","din":"5","dout":"10","bg":"0"}]],"labels":[105,"1989-12-29","2015-12-31"],"met":{"bh":[11.3902418868,99.9364556645,2875775.77533,"2000-03-27","2002-09-23"],"invested":[4.07341312015,0,1041994.61333,null,null],"g0":[11.9496680766,99.1114675088,3079863.65144,"2000-03-27","2002-10-07"],"g1":[13.5376651311,87.5237503647,4001125.07494,"2000-03-27","2008-11-20"]}},
+  {"name":"1953–1999 · 매년·매주","e":1,"x":187,"i":300,"m":100,"a":"0","cfgs":[["9sig",{"per":"yearly","g":"30","cash":"30","bp":"100","tc":"target"}],["9sig",{"per":"weekly","g":"1","ul":"qld","cost":"0.1"}],["bh",{"ul":"spy"}],["invested",{"r":"300"}]],"labels":[2441,"1953-03-27","1999-12-31"],"met":{"bh":[20.7669187395,96.6186281433,86119176.9562,"1972-04-12","1974-10-03"],"invested":[4.07389214888,0,204793.870698,null,null],"g0":[20.6484685868,96.6349994763,82472483.8721,"1972-04-12","1974-10-03"],"g1":[16.4985066326,87.1364862715,18035088.7931,"1972-04-12","1974-10-03"],"g2":[9.95250808863,46.5624985366,1590456.66504,"1973-01-11","1974-10-03"],"g3":[9.38018658215,0,1285249.89721,null,null]}}
 ];
 let n = 0, bad = 0;
 const fail = (m) => { bad++; console.log('FAIL ' + m); };
@@ -166,16 +168,26 @@ for (const kind of ['9sig', 'sma']) {
     M.ssRender();
     const R = M.R, c = R.ctx;
     if (!R.labels.length) continue;
-    const sumTo = (d0, d1, daily) => { let s = 0; for (const f of M.ssFlows(c.initial, c.monthly, c.raise, d0, d1, null, daily)) if (f.t > 0) s -= f.cf; return c.initial + s; };
+    const flowsTo = (d0, d1, mode, fin) => M.ssFlows(c.initial, c.monthly, c.raise, d0, d1, null, mode, fin);
+    const sumTo = (d0, d1, mode, fin) => { let s = 0; for (const f of flowsTo(d0, d1, mode, fin)) if (f.t > 0) s -= f.cf; return c.initial + s; };
     for (const id of ['n', 's', 'b', 'v']) {
       const sim = R.cfgSim[id], log = sim && sim.log;
       if (!log || !log.length) continue;
-      const daily = id === 's', d0 = daily ? c.entryDate : log[0].date;
+      const mode = id === 's' ? 'day' : id === 'v' ? 'r9base' : 'r9', d0 = mode === 'day' ? c.entryDate : log[0].date;
       let bad1 = null;
-      for (const r of log) { if (r.invested == null) continue; const want = r.invested, got = sumTo(d0, r.date, daily); if (Math.abs(got - want) > 1e-6 * Math.max(1, Math.abs(want))) { bad1 = r.date + ' 엔진 ' + want.toFixed(2) + ' · 흐름 ' + got.toFixed(2); break; } }
+      log.forEach((r, i) => { if (bad1 || r.invested == null) return; const want = r.invested, got = sumTo(d0, r.date, mode, i === log.length - 1); if (Math.abs(got - want) > 1e-6 * Math.max(1, Math.abs(want))) bad1 = r.date + ' 엔진 ' + want.toFixed(2) + ' · 흐름 ' + got.toFixed(2); });
       n++;
       if (bad1) fail('적립 흐름 ≠ 엔진 (' + id + ' ' + per + ' ' + Q[e][0] + '~' + Q[x][0] + (ed ? ' 정확한 날짜 ' + ed + '~' + xd : '') + '): ' + bad1);
     }
+    // 돈의 날짜까지: 그냥 보유는 적립 날짜의 가격으로 삼 → 행마다 주수 = 시작 금액/첫날 가격 + Σ 적립/그 돈 날짜의 가격 ('r9' 흐름의 날짜로)
+    { const bs = R.cfgSim.b, key = M.SS_COL[S.saved[2].params.ul] ? S.saved[2].params.ul : 'tqqq', pts = bs && bs.bh && bs.bh[key];
+      if (pts && pts.length) {
+        const pxOf = (d) => M.DS.days[M.DS.idx.get(d)][key];
+        let bad2 = null;
+        pts.forEach((pt, i) => { if (bad2) return; let sh = 0; for (const f of flowsTo(pts[0].date, pt.date, 'r9', i === pts.length - 1)) { const p0 = pxOf(f.d); if (p0 > 0) sh += -f.cf / p0; } if (Math.abs(sh - pt.shares) > 1e-9 * Math.max(1, pt.shares)) bad2 = pt.date + ' 주수 ' + pt.shares + ' ≠ ' + sh; });
+        n++;
+        if (bad2) fail('그냥 보유 적립 날짜·가격 ≠ r9 흐름 (' + key + ' ' + per + (ed ? ' ' + ed + '~' + xd : '') + '): ' + bad2);
+      } }
     // 사용자 코드 전략이 받는 적립(달이 바뀐 첫 거래일) = daily 흐름
     const co = M.ssContribObj(c.monthly, c.raise, c.entryDate, c.exitDate, null), fl = M.ssFlows(c.initial, c.monthly, c.raise, c.entryDate, c.exitDate, null, true).filter((f) => f.t > 0);
     const t0 = Date.parse(c.entryDate + 'T00:00:00Z'), ks = Object.keys(co).sort();
@@ -184,6 +196,48 @@ for (const kind of ['9sig', 'sma']) {
     // ③ SMA 끝 값 = 엔진의 청산일 값
     const sl = R.cfgSim.s && R.cfgSim.s.log, ms = R.metrics['cfg:s'];
     if (sl && sl.length && ms) { n++; const lt = sl[sl.length - 1]; if (Math.abs(ms.end - lt.total) > 1e-6 * Math.max(1, lt.total)) fail('SMA 끝 값 ' + ms.end + ' ≠ 청산일(' + lt.date + ') 값 ' + lt.total + (xd ? ' · 청산 ' + xd : '')); }
+  }
+  // ⑤ 실제 거래내역 + 마지막 행이 달 중간(정확한 청산일 · 주 단위 · 리밸런스 시점 옮김): 그 날까지의 입금이 엔진에 모두 들어감
+  //    (예전엔 그달 월말 행이 청산일 뒤라 입금이 빠졌는데 연평균은 셈) — 9sig 넣은 돈 누계 · 그냥 보유 끝 값을 직접 계산과 대조
+  for (let k = 0; k < 40; k++) {
+    const a = M.DS.idx.get(Q[1 + Math.floor(rnd() * (Q.length - 30))][0]), b = Math.min(days.length - 2, a + 60 + Math.floor(rnd() * 900));
+    const d0 = days[a].date, d1 = days[b].date, list = [];
+    for (let i = a + 1; i <= Math.min(days.length - 1, b + 40); i++) if (rnd() < 0.06) list.push({ date: days[i].date, amount: Math.round(100 + rnd() * 5000) * (rnd() < 0.1 ? -0.3 : 1) });
+    const sch = { byDate: new Map(), byMonth: new Map(), list: list.slice(), priceDateByMonth: new Map() };
+    for (const r of list) { sch.byDate.set(r.date, (sch.byDate.get(r.date) || 0) + r.amount); sch.byMonth.set(r.date.slice(0, 7), (sch.byMonth.get(r.date.slice(0, 7)) || 0) + r.amount); }
+    const per = pick(['quarterly', 'weekly', 'monthly', 'yearly']), mode = pick(['exact', 'shift', 'plain']);
+    let rows = null;
+    if (mode === 'exact') rows = M.ssExactRows(per, d0, d1);
+    if (mode === 'shift') rows = M.ssShiftRows(per, 5 + Math.floor(rnd() * 40), d0, d1);
+    if (rows && rows.length < 2) rows = null;
+    const qi0 = Q.findIndex((r) => r[0] >= d0), qi1 = Math.max(qi0 + 1, Q.findIndex((r) => r[0] >= d1));
+    const o = Object.assign({ initial: 10000, monthly: 0, raise: 0, rate: 0.04, qi0, qi1, period: per, rows, sched: sch }, mode === 'plain' ? {} : { ed: d0, xd: d1 }, M.ssOpts9(M.ssDefaults('9sig')));
+    if (mode === 'plain') { o.qi0 = Math.max(0, qi0 - 1); }
+    const r = M.ssRun9(o);
+    if (!r.log.length) continue;
+    const s0 = r.log[0].date, sL = r.log[r.log.length - 1].date;
+    let want = 10000;
+    const seen = new Set();
+    for (const x of list) if (x.date > s0 && x.date <= sL && !seen.has(x.date)) { seen.add(x.date); want += sch.byDate.get(x.date); }
+    const last = r.log[r.log.length - 1];
+    n++;
+    if (Math.abs(last.invested - want) > 1e-6 * Math.max(1, want)) fail('거래내역 9sig(' + per + ' ' + mode + ' ' + s0 + '~' + sL + '): 넣은 돈 ' + last.invested + ' ≠ 그날까지 입금 ' + want);
+    // 그냥 보유 TQQQ: 시작에 전부 사고 입금일마다 그날 가격으로 삼 → 끝 값 = 주수 × 끝날 가격
+    const bh = r.bh.tqqq, px = (d) => days[M.DS.idx.get(d)].tqqq;
+    let sh = 10000 / px(s0);
+    for (const d of seen) sh += sch.byDate.get(d) / px(d);
+    const bv = bh[bh.length - 1].value, bw = sh * px(bh[bh.length - 1].date);
+    n++;
+    if (Math.abs(bv - bw) > 1e-6 * Math.max(1, bw)) fail('거래내역 그냥 보유(' + per + ' ' + mode + '): 끝 값 ' + bv + ' ≠ 직접 계산 ' + bw);
+  }
+  // ⑥ 사용자 코드가 시각이 붙은 날짜로 기록해도 적립 흐름이 같음 · ⑦ 아주 작은 값(−99.8%/년, 60년)도 IRR 부호를 바르게
+  {
+    const d0 = '1999-12-31', d1 = '2014-12-31', f1 = M.ssFlows(10000, 1000, 0.05, d0, d1, null, true), f2 = M.ssFlows(10000, 1000, 0.05, d0, d1 + 'T00:00:00.000Z', null, true);
+    n++;
+    if (f1.length !== f2.length || f1.length < 170) fail('시각이 붙은 날짜의 daily 흐름 ' + f2.length + ' ≠ ' + f1.length);
+    const rs = -0.9982, T = 60, got = M.ssIrr([{ t: 0, cf: -100 }, { t: T, cf: 100 * Math.pow(1 + rs, T) }]);
+    n++;
+    if (got == null || Math.abs(got - rs * 100) > 1e-6) fail('아주 작은 값 IRR ' + got + ' ≠ ' + rs * 100);
   }
   // ④ 1953년~최신, 시작 $10K + 매달 $1,000: 그냥 보유 연평균 = 흐름을 따로 풀어 구한 값 (예전: 풀지 못해 대략식 ≈ 8%)
   S.saved = []; S.e = 1; S.x = Q.length - 1; S.iPos = M.ssInitialToPos(10000); S.mPos = M.ssMonthlyToPos(1000); S.raise = '0'; S.ed = ''; S.xd = ''; S.tx = null;

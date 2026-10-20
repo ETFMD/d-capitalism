@@ -42,7 +42,7 @@ function loadEngine() {
 }
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
 // 맞춘 구간(고정) 지표의 정의가 바뀌면 이 숫자를 올림 → 다음 실행이 전체를 다시 계산
-const STATIC_VER = 3;   // 2: 연평균·낙폭을 소수 넷째 자리까지 (화면에서 한 번만 반올림되게) · 3: 연평균을 엔진이 실제로 넣은 돈의 날짜와 끝 값이 나온 날로 (SMA 달 첫 거래일 · 리밸런스 시점 옮긴 9sig 끝 날짜)
+const STATIC_VER = 3;   // 2: 연평균·낙폭을 소수 넷째 자리까지 (화면에서 한 번만 반올림되게) · 3: 연평균을 엔진이 실제로 넣은 돈의 날짜(달이 바뀐 첫 거래일)와 끝 값이 나온 날로 · 50년 넘는 기간 IRR · 리밸런스 시점 옮긴 9sig 의 달 중간 마지막 행 적립
 const engineHash = sha(HASH_FILES.map((f) => fs.readFileSync(path.join(SRC, f), 'utf8')).join('\n') + '|static-v' + STATIC_VER);
 
 const M = loadEngine();

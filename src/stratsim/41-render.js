@@ -108,7 +108,8 @@ function ssRender() {
   const years = log.length > 1 ? (Date.parse(fin.date) - Date.parse(log[0].date)) / SS_YEAR_MS : 1;
   ctx.labels = labels; ctx.years = years; ctx.d0 = log[0].date; ctx.d1 = fin.date;
   const onLabels = (arr, f) => (sameGrain ? arr.map(f) : ssResample((arr || []).map((a) => ({ date: a.date, value: f(a) })), labels));
-  const mw = (v) => ssCagrMW(initial, monthly, raise, log[0].date, fin.date, years, v, base.contributed, sched);
+  // 연평균(돈 가중): 그냥 보유 = ssRun9 의 적립 규칙('r9'), 현금 복리 = 달마다 이자 뒤 더하는 base('r9base') — ssFlows
+  const mw = (v, mode) => ssCagrMW(initial, monthly, raise, log[0].date, fin.date, years, v, base.contributed, sched, mode);
 
   const metrics = {}, yday = {}, datasets = [];
   const defl = S.infl ? ssInflFactor(prevDay, labels[0]) : 1;
@@ -118,13 +119,13 @@ function ssRender() {
   const bhD = onLabels(sampleW ? (base.bhS[bhKey] || []) : bhPts, (p) => p.value);
   const bhFinal = bhPts.length ? bhPts[bhPts.length - 1].value : 0;
   const bhDD = bhPts.length && bhPts[0].shares != null ? ssDailyDD(bhPts.map((p) => ({ date: p.date, shares: p.shares, cash: 0 })), bhKey) : ssSeriesDD(bhD, labels);
-  metrics.bh = { cagr: mw(bhFinal), start: bhD[0], end: bhD[bhD.length - 1], maxDD: bhDD.pct * 100, ddPeak: bhDD.peakDate, ddTrough: bhDD.troughDate };
+  metrics.bh = { cagr: mw(bhFinal, 'r9'), start: bhD[0], end: bhD[bhD.length - 1], maxDD: bhDD.pct * 100, ddPeak: bhDD.peakDate, ddTrough: bhDD.troughDate };
   if (latest && bhPts.length && bhPts[bhPts.length - 1].shares > 0) { const y = ssRepriceYesterday({ [bhKey]: bhPts[bhPts.length - 1].shares }, 0); if (y != null) yday.bh = y * defl; }
   datasets.push(ssDs('bh', '그냥 보유 ' + bhKey.toUpperCase(), bhD, ssBaseColor('bh'), { borderWidth: 2, borderDash: [6, 3], hidden: S.hide.bh }));
   // ── 현금 복리 (모든 적립을 이자 붙는 현금으로)
   const invD = onLabels(sampleW ? base.samples : log, (l) => l.base);
   const invDD = ssSeriesDD(invD, labels);
-  metrics.invested = { cagr: mw(fin.base), start: invD[0], end: invD[invD.length - 1], maxDD: invDD.pct * 100, ddPeak: invDD.peakDate, ddTrough: invDD.troughDate };
+  metrics.invested = { cagr: mw(fin.base, 'r9base'), start: invD[0], end: invD[invD.length - 1], maxDD: invDD.pct * 100, ddPeak: invDD.peakDate, ddTrough: invDD.troughDate };
   datasets.push(ssDs('invested', '현금 복리', invD, ssBaseColor('invested'), { borderWidth: 1.5, borderDash: [3, 3], tension: 0, hidden: S.hide.invested }));
 
   // ── 저장 전략
@@ -151,7 +152,7 @@ function ssRender() {
     const fv = pts[pts.length - 1].value;
     const flows = [{ date: eff.entryDate || S.tx.entryDate, amount: eff.initial }].concat(eff.schedule.list);
     const dd = ssFlowAdjDD(pts, flows);
-    R.actual = { cagr: ssCfgCagr(ctx, fv, false, eff.entryDate || ctx.entryDate, String(pts[pts.length - 1].date)), maxDD: dd.pct * 100, ddPeak: dd.peakDate, ddTrough: dd.troughDate, start: pts[0].value, end: fv };
+    R.actual = { cagr: ssCfgCagr(ctx, fv, 'day', eff.entryDate || ctx.entryDate, String(pts[pts.length - 1].date)), maxDD: dd.pct * 100, ddPeak: dd.peakDate, ddTrough: dd.troughDate, start: pts[0].value, end: fv };
     metrics.actual = R.actual;
     datasets.push(ssDs('actual', '내 계좌', ser, SS_ACTUAL_COLOR, { borderWidth: 2.5 }));
   }
@@ -185,17 +186,18 @@ function ssSubLabel(key, p) {
   return park === 'cash' ? '현금' : park.toUpperCase();
 }
 
-// 저장 전략의 돈 가중 CAGR — 그 전략이 실제로 돈을 넣은 날짜·금액과 끝 값이 나온 날로 (분석 표 풍선과 같은 계산)
-//  · d0 = 시작 금액을 넣은 날: 날마다 걷는 계산(daily — SMA·사용자 코드)은 진입일, 나머지는 계산의 첫 점
-//    (주 단위 화면의 첫 눈금은 진입일 전 주말일 수 있어 눈금으로 세면 진입 전 월말 적립이 하나 더 들어갔었음)
-//  · d1 = 끝 값이 나온 점의 날짜 · 적립: daily 는 달이 바뀐 첫 거래일, 나머지는 월말 (실제 거래내역이 있으면 그 날짜)
-function ssCfgCagr(ctx, finalV, daily, d0, d1) {
+// 저장 전략의 돈 가중 CAGR — 그 전략의 계산이 실제로 넣은 돈(날짜·금액)과 끝 값이 나온 날로 (분석 표 풍선과 같은 계산)
+//  · mode = ssFlows 의 'day'(SMA·사용자 코드·내 계좌) / 'r9'(9sig·그냥 보유) / 'r9base'(현금 복리)
+//  · d0 = 시작 금액을 넣은 날: 날마다 걷는 계산은 진입일, 나머지는 계산의 첫 점
+//    (주 단위 화면의 첫 눈금은 진입일 전 주말일 수 있어 눈금으로 세면 진입 전 적립이 하나 더 들어갔었음)
+//  · d1 = 끝 값이 나온 점의 날짜 (그 계산의 마지막 행)
+function ssCfgCagr(ctx, finalV, mode, d0, d1) {
   const L = ctx.labels;
   if (L.length && d0 && d1 && d1 > d0) {
     const yrs = (Date.parse(d1) - Date.parse(d0)) / SS_YEAR_MS;
-    return ssCagrMW(ctx.initial, ctx.monthly, ctx.raise, d0, d1, yrs, finalV, ctx.contributed, ctx.sched, !!daily);
+    return ssCagrMW(ctx.initial, ctx.monthly, ctx.raise, d0, d1, yrs, finalV, ctx.contributed, ctx.sched, mode, true);
   }
-  if (L.length) return ssCagrMW(ctx.initial, ctx.monthly, ctx.raise, L[0], L[L.length - 1], ctx.years, finalV, ctx.contributed, ctx.sched);
+  if (L.length) return ssCagrMW(ctx.initial, ctx.monthly, ctx.raise, L[0], L[L.length - 1], ctx.years, finalV, ctx.contributed, ctx.sched, mode, true);
   return ctx.years > 0 && ctx.contributed > 0 && finalV > 0 ? (Math.pow(finalV / ctx.contributed, 1 / ctx.years) - 1) * 100 : 0;
 }
 // 날짜 d 에 쓰인 값의 점 날짜 (ssResample 과 같은 규칙: d 이하 마지막 점, 없으면 첫 점)
@@ -272,8 +274,8 @@ function ssCfgSeries(cfg, ctx, lite) {
   const finalV = data.length ? data[data.length - 1] : 0, startV = data.length ? data[0] : 0;
   if (lite) return { data, end: finalV, start: startV };
   const dd = ddMulti && ddMulti.length ? ssDailyDDMulti(ddMulti) : ddc && ddc.length ? ssDailyDD(ddc, ddKey) : ssSeriesDD(data, L);
-  const daily = cfg.type === 'sma', cd0 = daily ? ctx.entryDate : points && points.length ? String(points[0].date) : null;
-  const cagr = ssCfgCagr(ctx, finalV, daily, cd0, L.length ? ssSrcDate(points, L[L.length - 1]) : null);
+  const mode = cfg.type === 'sma' ? 'day' : cfg.type === 'invested' ? 'r9base' : 'r9', cd0 = mode === 'day' ? ctx.entryDate : points && points.length ? String(points[0].date) : null;
+  const cagr = ssCfgCagr(ctx, finalV, mode, cd0, L.length ? ssSrcDate(points, L[L.length - 1]) : null);
   return { data, cagr, maxDD: dd.pct * 100, start: startV, end: finalV, sub, ddPeak: dd.peakDate, ddTrough: dd.troughDate, yday: yd };
 }
 
@@ -320,6 +322,6 @@ function ssCustomResult(log, ctx, error, stale) {
   // 끝 값이 나온 점: 값이 있는 마지막 눈금에 쓰인 기록 날짜
   let li = -1;
   for (let i = data.length - 1; i >= 0; i--) if (data[i] != null) { li = i; break; }
-  const cagr = ssCfgCagr(ctx, fv, true, ctx.entryDate, li >= 0 ? ssSrcDate(pts, L[li]) : null);
+  const cagr = ssCfgCagr(ctx, fv, 'day', ctx.entryDate, li >= 0 ? ssSrcDate(pts, L[li]) : null);
   return { data, cagr, maxDD: dd.pct * 100, start: sv, end: fv, ddPeak: dd.peakDate, ddTrough: dd.troughDate };
 }

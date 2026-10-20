@@ -1764,8 +1764,8 @@ function slMeasure(res) {
   const pts = res && res.points;
   if (!pts || pts.length < 2 || !(pts[0].value > 0)) return null;
   const v1 = pts[pts.length - 1].value;
-  // 프리셋 점은 리밸런스 날에만 있어 구간 끝보다 짧을 수 있음 → 연수는 앱과 같은 '구간'으로
-  const d0 = res.start || pts[0].date, d1 = res.end || pts[pts.length - 1].date;
+  // 끝 = 마지막 값이 나온 점의 날짜 (리밸런스 시점을 옮긴 프리셋은 구간 끝보다 앞일 수 있음 — 본 화면 연평균과 같은 규칙)
+  const d0 = res.start || pts[0].date, d1 = String(pts[pts.length - 1].date);
   const yrs = (Date.parse(d1) - Date.parse(d0)) / (365.25 * 864e5);
   // 낙폭: 앱처럼 매일 종가로 다시 평가 (엔진 기준점 → 없으면 코드 기록으로 기준점을 만듦 → 그래도 없으면 기록 값으로)
   let dd = null;
@@ -1778,7 +1778,8 @@ function slMeasure(res) {
     for (const r of pts) { if (r.value > top) top = r.value; if (top > 0) dd = Math.max(dd, 1 - r.value / top); }
   }
   const paid = SL_START + SL_MONTH * Math.max(0, Math.round(yrs * 12));
-  const cagr = yrs > 0 ? ssCagrMW(SL_START, SL_MONTH, 0, d0, d1, yrs, v1, paid, null, !!res.daily) : 0;
+  // 적립 날짜·장부 규칙은 그 계산과 같게: 코드 전략·SMA = 'day', 9sig 프리셋 = 'r9' (ssFlows)
+  const cagr = yrs > 0 ? ssCagrMW(SL_START, SL_MONTH, 0, d0, d1, yrs, v1, paid, null, res.daily ? 'day' : 'r9', true) : 0;
   return { cagr, dd: dd * 100 };
 }
 // 기록을 분기 점에 맞춤 (그 분기 날짜까지의 마지막 값 · 첫 기록 전은 시작 금액)

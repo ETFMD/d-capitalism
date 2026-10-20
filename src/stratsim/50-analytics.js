@@ -130,7 +130,11 @@ function ssAnSimPoints(sim, k) {
 function ssAnCfgPoints(cfg, inp, qi0, qi1) {
   const p = cfg.params || {}, base = { initial: inp.initial, monthly: inp.monthly, raise: inp.raise, qi0, qi1 };
   if (cfg.type === '9sig') {
-    const r = ssRun9(Object.assign(base, { rate: ssRate9(p), period: p.per || 'quarterly', noBH: true }, ssOpts9(p)));
+    // 리밸런스 시점을 옮긴 설정(rp)은 본 화면(ssCfgSeries)과 같은 옮긴 행으로 — 행이 진입일부터 같은 간격이라 칸의 값·날짜가 본 화면과 같음
+    const per = p.per || 'quarterly', rp = +p.rp || 0;
+    let rows = null;
+    if (rp > 0) { const off = Math.round(rp / 100 * ((SS_PERIOD_DAYS[per] || 63) - 1)); const q = ssShiftRows(per, off, DS.q[qi0][0], DS.q[qi1][0]); if (q && q.length >= 2) rows = q; }
+    const r = ssRun9(Object.assign(base, { rate: ssRate9(p), period: per, rows, noBH: true }, ssOpts9(p)));
     return r.log.map((l) => ({ date: l.date, value: l.total }));
   }
   if (cfg.type === 'sma') return ssRunSma(Object.assign(base, { rate: ssRate9(p) }, ssOptsSma(p))).points.map((pt) => ({ date: pt.date, value: pt.value }));
@@ -186,26 +190,28 @@ async function ssAnRowSeries(k, ctx) {
   }
   out.src = src;
   out.d0 = ssAnStartDate(k, ctx.e, pts);
+  out.dl = String(pts[pts.length - 1].date);   // 그 계산의 마지막 행 (ssRun9 은 마지막 행에서만 달 중간 적립까지 넣음)
   return out;
 }
-// 날마다 걷는 계산(SMA · 사용자 코드)인지 — 적립이 '달이 바뀐 첫 거래일'에 들어감. 나머지(9sig·그냥 보유·현금 복리)는 월말
-function ssAnDaily(k) {
-  if (k === 'sma') return true;
+// 적립 규칙(ssFlows mode): SMA·사용자 코드 = 'day'(날마다 계산 — 달이 바뀐 첫 거래일에 바로) · 현금 복리 = 'r9base' · 9sig·그냥 보유 = 'r9'
+function ssAnMode(k) {
+  if (k === 'sma') return 'day';
+  if (k === 'compounded') return 'r9base';
   const c = ssAnIsCfg(k) ? ssAnCfg(k) : null;
-  return !!c && (c.type === 'sma' || c.type === 'custom');
+  return !c ? 'r9' : c.type === 'sma' || c.type === 'custom' ? 'day' : c.type === 'invested' ? 'r9base' : 'r9';
 }
 // 시작 금액을 넣은 날: 날마다 걷는 계산은 진입 분기말(엔진·코드가 받는 진입일), 나머지는 계산의 첫 점(주 단위 9sig 는 그 전 주말일 수 있음)
-const ssAnStartDate = (k, e, pts) => (ssAnDaily(k) ? DS.q[e][0] : pts && pts.length ? String(pts[0].date) : null);
-// 기간 연평균(%, 돈 가중) — 그 전략이 실제로 돈을 넣은 날짜·금액(시작 금액 d0 · 적립 d0 다음 ~ d1)과 d1 의 평가액 v 로 푼 IRR.
-// 본 화면 '연평균 수익률'과 같은 계산(ssCagrMW). 못 구하면 null
-function ssAnCagr(daily, d0, d1, v, inp) {
+const ssAnStartDate = (k, e, pts) => (ssAnMode(k) === 'day' ? DS.q[e][0] : pts && pts.length ? String(pts[0].date) : null);
+// 기간 연평균(%, 돈 가중) — 그 전략의 계산이 d1 의 값 v 에 실제로 넣은 돈(시작 금액 d0 · 적립 — 날짜·금액)으로 푼 IRR.
+// 본 화면 '연평균 수익률'과 같은 계산(ssCagrMW). final = d1 이 그 계산의 마지막 행인지. 못 구하면 null
+function ssAnCagr(mode, d0, d1, v, inp, final) {
   if (!d0 || !d1 || !(d1 > d0) || !(v > 0)) return null;
-  const key = (daily ? 'd' : 'm') + d0 + d1 + '|' + v + '|' + inp.initial + '|' + inp.monthly + '|' + inp.raise;
+  const key = mode + (final ? 'F' : '') + d0 + d1 + '|' + v + '|' + inp.initial + '|' + inp.monthly + '|' + inp.raise;
   if (SAN.cg.has(key)) return SAN.cg.get(key);
   const years = (Date.parse(d1) - Date.parse(d0)) / SS_YEAR_MS;
   let paid = 0;
-  for (const f of ssFlows(inp.initial, inp.monthly, inp.raise, d0, d1, null, daily)) paid -= f.cf;
-  const r = paid > 0 ? ssCagrMW(inp.initial, inp.monthly, inp.raise, d0, d1, years, v, paid, null, daily) : null;
+  for (const f of ssFlows(inp.initial, inp.monthly, inp.raise, d0, d1, null, mode, !!final)) paid -= f.cf;
+  const r = paid > 0 ? ssCagrMW(inp.initial, inp.monthly, inp.raise, d0, d1, years, v, paid, null, mode, !!final) : null;
   const out = Number.isFinite(r) ? { pct: r, years } : null;
   if (SAN.cg.size > 20000) SAN.cg.clear();
   SAN.cg.set(key, out);
@@ -523,9 +529,11 @@ async function ssAnHeat(epoch) {
         // 연평균용: 시작 금액 넣은 날 · 이 칸 값이 나온 날 (전략 / 비교)
         td.setAttribute('data-s0', ss.d0 || '');
         td.setAttribute('data-sd', (ss.src && ss.src[off]) || '');
+        td.setAttribute('data-sf', ss.src && ss.src[off] && ss.src[off] === ss.dl ? '1' : '');
         td.setAttribute('data-bv', String(b));
         td.setAttribute('data-b0', bs.d0 || '');
         td.setAttribute('data-bd', (bs.src && bs.src[off]) || '');
+        td.setAttribute('data-bf', bs.src && bs.src[off] && bs.src[off] === bs.dl ? '1' : '');
       }
       done++;
     }
@@ -752,9 +760,9 @@ function ssAnCellTipHtml(td) {
   const Y = ssAnYears(), xi = Y.last.get(ey), xd = xi != null ? DS.q[xi][0] : '';
   const endTxt = xd && !(+xd.slice(5, 7) === 12 && +xd.slice(8, 10) >= 28) ? ssDate(xd) + ' 기준' : ey + '년 말';
   // 기간 연평균 (돈 가중 — 본 화면 '연평균 수익률'과 같은 계산) · 비교 대상도 같은 방법
-  const inp = ssAnInputs(), cg = ssAnCagr(ssAnDaily(st), td.getAttribute('data-s0'), td.getAttribute('data-sd'), v, inp);
+  const inp = ssAnInputs(), cg = ssAnCagr(ssAnMode(st), td.getAttribute('data-s0'), td.getAttribute('data-sd'), v, inp, td.getAttribute('data-sf') === '1');
   const bAmt = +td.getAttribute('data-bv') > 0 ? +td.getAttribute('data-bv') : bv;
-  const bcg = bl !== 'custom' && dv > 0 ? ssAnCagr(ssAnDaily(bl), td.getAttribute('data-b0'), td.getAttribute('data-bd'), bAmt, inp) : null;
+  const bcg = bl !== 'custom' && dv > 0 ? ssAnCagr(ssAnMode(bl), td.getAttribute('data-b0'), td.getAttribute('data-bd'), bAmt, inp, td.getAttribute('data-bf') === '1') : null;
   const cagrRow = '<div class="ss-an-tc">연평균 ' + (cg ? '<b class="' + (cg.pct >= 0 ? 'up' : 'dn') + '">' + ssAnCgPct(cg.pct) + '</b> <i>' + cg.years.toFixed(1) + '년 · 넣은 날짜별 돈 가중</i>' : '<b>—</b>') + '</div>';
   const ratio = bl !== 'custom' && dv > 0 ? '<div class="ss-an-tr">' + ssEsc(ssAnLabel(bl)) + ' ' + ssMoney(Math.round(bAmt)) + (bcg ? ' <span class="cg">(연 ' + ssAnCgPct(bcg.pct) + ')</span>' : '') + ' 의 <b>' + (dv >= 10 ? dv.toFixed(1) : dv.toFixed(2)) + '배</b></div>'
     : bl === 'custom' ? '<div class="ss-an-tr">목표 ' + ssMoney(S.an.target) + ' ' + (v >= S.an.target ? '<b class="up">달성</b>' : '<b class="dn">미달</b>') + '</div>' : '';
@@ -769,12 +777,12 @@ function ssAnColStats(period) {
   tds.forEach((td) => {
     const v = +td.getAttribute('data-v'), sy = +td.getAttribute('data-r');
     if (Number.isFinite(v) && v > 0 && Number.isFinite(sy)) smp.push({ year: sy, value: v, dd: +td.getAttribute('data-dd'), ddPeak: td.getAttribute('data-dp') || null, ddTrough: td.getAttribute('data-dt') || null,
-      s0: td.getAttribute('data-s0'), sd: td.getAttribute('data-sd') });
+      s0: td.getAttribute('data-s0'), sd: td.getAttribute('data-sd'), sf: td.getAttribute('data-sf') === '1' });
   });
   if (!smp.length) return null;
   // 연평균: 칸마다 칸 풍선과 같은 돈 가중 연수익률 (실제 넣은 날짜·금액 · 실제 기간 — 올해처럼 덜 찬 해도 그대로)
-  const inp = ssAnInputs(), daily = ssAnDaily(S.an.strategy);
-  for (const s of smp) { const g = ssAnCagr(daily, s.s0, s.sd, s.value, inp); s.cagr = g ? g.pct : null; }
+  const inp = ssAnInputs(), mode = ssAnMode(S.an.strategy);
+  for (const s of smp) { const g = ssAnCagr(mode, s.s0, s.sd, s.value, inp, s.sf); s.cagr = g ? g.pct : null; }
   const asc = (a) => a.slice().sort((x, y) => x - y);
   const med = (s) => { const n = s.length; return n === 0 ? 0 : n % 2 ? s[(n - 1) >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2; };
   const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
@@ -841,7 +849,7 @@ function ssAnSpiralTipHtml(d) {
     later = endY - d.year;
     // 그해 시작 → 최신 연평균 (칸 풍선과 같은 돈 가중 계산)
     const rng = ssAnYearRange(d.year), k = S.an.strategy;
-    const cg = rng ? ssAnCagr(ssAnDaily(k), ssAnStartDate(k, rng.e, ser), String(ser[ser.length - 1].date), today, ssAnInputs()) : null;
+    const cg = rng ? ssAnCagr(ssAnMode(k), ssAnStartDate(k, rng.e, ser), String(ser[ser.length - 1].date), today, ssAnInputs(), true) : null;
     if (cg) cagrRow = '<div class="ss-an-tc">연평균 <b class="' + (cg.pct >= 0 ? 'up' : 'dn') + '">' + ssAnCgPct(cg.pct) + '</b> <i>' + cg.years.toFixed(1) + '년 · 넣은 날짜별 돈 가중</i></div>';
   }
   return '<button type="button" class="x" data-x aria-label="닫기">×</button>'

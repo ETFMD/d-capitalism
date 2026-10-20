@@ -2668,7 +2668,7 @@ def stratsim_check(br, base, fail, ignorable):
         st = {'v': 1, 'i': 333, 'm': 500, 'a': '0', 'r': 4, 'e': 228, 'x': 291, 'hd': [], 'sc': [{'t': '9sig', 'n': '9sig', 'p': {}, 'c': '#e879f9'}, {'t': 'sma', 'n': 'SMA', 'p': {}, 'c': '#f59e0b'}]}
         pg.goto(base + 'strategy-simulator/#ss=' + tok(st), wait_until='load'); pg.wait_for_timeout(3500)
         g = pg.evaluate(SS_GOLD_JS)
-        want = [[40.2731878649, 81.6150703134], [39.0547580275, 59.6674], [44.9301, 46.2812]]
+        want = [[40.1075404758, 81.6150703134], [38.892610706, 59.6674], [44.9301, 46.2812]]
         ok = g['ready'] and g['n'] == 65 and g['l0'] == '2009-12-31' and g['l1'] == '2025-12-31' and abs(g['bh'][0] - want[0][0]) < 1e-6 and abs(g['bh'][1] - want[0][1]) < 1e-6 \
             and len(g['cfg']) == 2 and abs(g['cfg'][0][1] - want[1][0]) < 1e-6 and abs(g['cfg'][1][1] - want[2][0]) < 1e-3
         if not ok:
@@ -2695,6 +2695,7 @@ def stratsim_check(br, base, fail, ignorable):
         # 3-1) 분석 표 칸 풍선의 기간 연평균(전략·비교) = 같은 구간으로 맞춘 본 화면 '연평균 수익률' · 로그 단추 = 본 차트 로그와 같은 설정
         try:
             sa = {'v': 1, 'i': 333, 'm': 500, 'a': '0', 'r': 4, 'e': 228, 'x': 291, 'hd': [], 'sc': [{'t': 'sma', 'n': 'SMA', 'p': {}, 'c': '#f59e0b'}], 'am': 1, 'as': 'cfg:0', 'ab': 'compounded'}
+            pg.evaluate("() => { for (const k of Object.keys(localStorage)) if (k.startsWith('dc_ss_')) localStorage.removeItem(k); }")   # 앞 단계에서 저장한 전략이 섞이지 않게
             pa = ctx.new_page()
             pa.goto(base + 'strategy-simulator/#ss=' + tok(sa), wait_until='load')
             pa.wait_for_function("() => window.SSM && SSM.ready() && window.SSAN && document.querySelector('#ss-an-grid td[data-v]') && !SSAN.busy()", timeout=90000)
@@ -2707,8 +2708,8 @@ def stratsim_check(br, base, fail, ignorable):
             cell.hover(); pa.wait_for_timeout(200)
             lg = pa.evaluate("() => ({ s: SSM.S.log, main: document.getElementById('ss-log').getAttribute('aria-pressed'), cap: !!document.querySelector('#ss-an-tip .ss-an-mlg') })")
             mm = pa.evaluate("""() => { const Q = SSM.DS.q, last = (y) => { let k = -1; Q.forEach((r, i) => { if (+r[0].slice(0, 4) === y) k = i; }); return k; };
-              const S = SSM.S; S.an.open = false; document.getElementById('ss-an').hidden = true; S.e = last(1999) + 1; S.x = last(2019); SSM.render(); const M = SSM.R.metrics;
-              return { st: M['cfg:' + S.saved[0].id].cagr, bl: M.invested.cagr, d0: SSM.R.ctx.entryDate, d1: SSM.R.ctx.exitDate }; }""")
+              const S = SSM.S, k = S.an.strategy; S.an.open = false; document.getElementById('ss-an').hidden = true; S.e = last(1999) + 1; S.x = last(2019); SSM.render(); const M = SSM.R.metrics;
+              return { st: M[k] ? M[k].cagr : NaN, bl: M.invested.cagr, d0: SSM.R.ctx.entryDate, d1: SSM.R.ctx.exitDate }; }""")
             pa.close()
             got = [float(m.group(1).replace('−', '-')) if m else None for m in (m1, m2)]
             if None in got or abs(round(mm['st'], 2) - got[0]) > 0.0051 or abs(round(mm['bl'], 2) - got[1]) > 0.0051:

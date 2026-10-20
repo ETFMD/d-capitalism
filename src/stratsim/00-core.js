@@ -266,38 +266,66 @@ function ssIrr(flows) {
   const pb = fv(b);
   if (pa === 0) return a * 100;
   if (pb === 0) return b * 100;
-  if (!(Number.isFinite(pa) && Number.isFinite(pb)) || pa * pb > 0) return null;
+  // 부호는 곱이 아니라 직접 비교 (아주 작은 두 값의 곱은 0 으로 떨어져 부호가 틀림)
+  if (!(Number.isFinite(pa) && Number.isFinite(pb)) || (pa > 0) === (pb > 0)) return null;
   for (let left = 200; left > 0 && b - a > 1e-13; left--) {
     const c = (a + b) / 2, pc = fv(c);
     if (!Number.isFinite(pc)) return null;
     if (pc === 0) return c * 100;
-    if (pa * pc > 0) { a = c; pa = pc; } else b = c;
+    if ((pc > 0) === (pa > 0)) { a = c; pa = pc; } else b = c;
   }
   return (a + b) / 2 * 100;
 }
 const SS_YEAR_MS = 365.25 * 86400000;
-// 넣은 돈의 흐름: 시작 −initial, 그 뒤 적립 — 계산 엔진이 실제로 돈을 넣은 날짜 그대로
-//  · 일정(sched — 실제 거래내역)이 있으면 그 날짜
-//  · daily(날마다 걷는 SMA·사용자 코드 전략)면 달이 바뀐 첫 거래일 = 그 엔진이 쓰는 ssSchedule 의 list (d0·d1 도 엔진과 같게 넘길 것)
-//  · 아니면(9sig·그냥 보유·현금 복리) 월말 거래일
-function ssFlows(initial, monthly, raise, d0, d1, sched, daily) {
-  const t0 = Date.parse(d0 + 'T00:00:00Z');
-  const flows = [{ t: 0, cf: -initial }];
-  const s = sched && sched.list ? sched : daily && monthly > 0 ? ssSchedule(monthly, raise, d0, d1) : null;
-  if (s) {
-    for (const r of s.list) if (r.date > d0 && r.date <= d1 && r.amount !== 0) flows.push({ t: (Date.parse(r.date + 'T00:00:00Z') - t0) / SS_YEAR_MS, cf: -r.amount });
+// d 이하 마지막 거래일 ('YYYY-MM-DD' 뒤에 붙은 시각 등은 무시) — 없으면 null
+function ssDayOnOrBefore(d) {
+  if (!d || !DS.days || !DS.days.length) return null;
+  const s = String(d).slice(0, 10);
+  if (DS.idx.has(s)) return s;
+  let lo = 0, hi = DS.days.length - 1, at = null;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (DS.days[m].date <= s) { at = DS.days[m].date; lo = m + 1; } else hi = m - 1; }
+  return at;
+}
+// 넣은 돈의 흐름 [{t(년), cf, d(그 돈의 날짜)}] — 시작 −initial(d0) + 계산 엔진이 d1 의 값에 실제로 넣은 적립을 그 돈의 날짜로
+// 적립 일정: 실제 거래내역(sched.list)이 있으면 그 날짜, 없으면 공식 ssSchedule(d0 뒤 달이 바뀐 첫 거래일 · 금액 = 매달 × (1+인상률)^(그해 − d0 해))
+// mode — 어느 계산의 값인지 (d0 = 그 계산이 시작 금액을 넣은 날로 넘길 것):
+//  'day'    SMA·사용자 코드(날마다 걷는 계산): 일정 날짜에 바로 들어감 → d0 < 날짜 ≤ d1 인 것 모두
+//  'r9'     9sig·그냥 보유(ssRun9): 그달 월말 행을 처리할 때 넣되 가격은 일정 날짜 — 그달 일정 날짜가 없으면(달 중간 진입의 첫 달 등) 월말에 그달 금액
+//           → 그달 월말 ≤ d1 인 달 것 · final(그 계산의 마지막 행)이면 d1 이 달 중간이어도 그달 d1 까지의 일정 날짜 것도(ssRun9 tailDays)
+//  'r9base' 현금 복리 선(같은 엔진의 base): 달마다 이자를 먼저 붙이고 그달 돈을 더함 = 그달 월말에 넣은 것 → 날짜는 월말(마지막 행의 덜 찬 달은 d1)
+//  (예전 호출의 true = 'day')
+function ssFlows(initial, monthly, raise, d0, d1, sched, mode, final) {
+  const t0 = Date.parse(d0 + 'T00:00:00Z'), tOf = (d) => (Date.parse(String(d).slice(0, 10) + 'T00:00:00Z') - t0) / SS_YEAR_MS;
+  const flows = [{ t: 0, cf: -initial, d: String(d0) }], add = (d, a) => flows.push({ t: tOf(d), cf: -a, d: String(d).slice(0, 10) });
+  const m = mode === true ? 'day' : mode || 'r9';
+  // 공식 일정은 거래일 사이로 만들어야 함 — 사용자 코드가 기록한 날짜가 거래일 모양이 아니어도(시각 붙음 등) 그 날 이하 마지막 거래일로
+  const s = sched && sched.list ? sched : monthly > 0 ? ssSchedule(monthly, raise, d0, ssDayOnOrBefore(d1) || d1) : null;
+  if (!s) return flows;
+  if (m === 'day') {
+    for (const r of s.list) if (r.date > d0 && r.date <= d1 && r.amount) add(r.date, r.amount);
     return flows;
   }
-  if (monthly > 0 && DS.m) {
-    const y0 = +d0.slice(0, 4);
-    for (const r of DS.m) if (r[0] > d0 && r[0] <= d1) flows.push({ t: (Date.parse(r[0] + 'T00:00:00Z') - t0) / SS_YEAR_MS, cf: -monthly * Math.pow(1 + (raise || 0), +r[0].slice(0, 4) - y0) });
+  const base = m === 'r9base', d1s = String(d1).slice(0, 10), byMk = new Map();
+  for (const r of s.list) if (DS.idx.has(r.date)) { const mk = r.date.slice(0, 7); if (!byMk.has(mk)) byMk.set(mk, new Set()); byMk.get(mk).add(r.date); }
+  for (const row of DS.m || []) {
+    const me = row[0];
+    if (me <= d0) continue;
+    const mk = me.slice(0, 7), days = byMk.has(mk) ? [...byMk.get(mk)].sort() : null;
+    if (me <= d1s) {
+      if (days) { for (const d of days) { const a = s.byDate.get(d) || 0; if (a) add(base ? me : d, a); } }
+      else { const a = s.byMonth.get(mk) || 0; if (a) add(me, a); }
+      continue;
+    }
+    // 그달 월말이 d1 뒤 = d1 이 그달 중간: 마지막 행이면 그달 d1 까지의 일정 날짜 것만 (그 뒤 달은 없음)
+    if (final !== false && days && mk === d1s.slice(0, 7)) for (const d of days) if (d <= d1s && d > d0) { const a = s.byDate.get(d) || 0; if (a) add(base ? d1s : d, a); }
+    break;
   }
   return flows;
 }
-// 돈 가중 CAGR(%) — 못 풀면 (평가액/넣은 돈)^(1/년) − 1
-function ssCagrMW(initial, monthly, raise, d0, d1, years, finalV, contributed, sched, daily) {
+// 돈 가중 CAGR(%) — 못 풀면 (평가액/넣은 돈)^(1/년) − 1 · mode·final 은 ssFlows 와 같음
+function ssCagrMW(initial, monthly, raise, d0, d1, years, finalV, contributed, sched, mode, final) {
   if (!(finalV > 0) || !(years > 0)) return 0;
-  const flows = ssFlows(initial, monthly, raise, d0, d1, sched, daily);
+  const flows = ssFlows(initial, monthly, raise, d0, d1, sched, mode, final);
   flows.push({ t: years, cf: finalV });
   const r = ssIrr(flows);
   if (r != null && Number.isFinite(r)) return r;
