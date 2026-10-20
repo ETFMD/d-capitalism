@@ -2649,7 +2649,8 @@ SS_GOLD_JS = """() => { const m = SSM.R.metrics; return { ready: SSM.ready(), n:
 def stratsim_check(br, base, fail, ignorable):
     """[STRATSIM] 투자전략 시뮬레이터(/strategy-simulator/) · 9sig/SMA 과최적화 탐색기 · TQQQ 장중 흐름
     · 고정 구간(2010 1분기~2025 4분기) 9sig·SMA 기본 숫자 = tests/stratsim_test.cjs 기준값(화면 코드가 Node 계산과 같은지)
-    · 전략 라이브러리 44개 · 써 보기(사용자 코드 전략은 격리 Worker 에서 계산 끝) · 분석 표 열림 · 링크 복사 → 새 창 같은 숫자
+    · 전략 라이브러리 44개 · 써 보기(사용자 코드 전략은 격리 Worker 에서 계산 끝) · 분석 표 열림 · 분석 표 풍선 연평균 = 본 화면 연평균 · 로그 단추
+    · 링크 복사 → 새 창 같은 숫자
     · 탐색기: 탭 6개 · 첫 탭 행 수 · '열기' 링크로 연 시뮬레이터(청산 2025 4분기)가 표의 연평균과 같음 · 장중 흐름 그려짐"""
     import base64
     ctx = br.new_context(viewport={'width': 1400, 'height': 900})
@@ -2667,7 +2668,7 @@ def stratsim_check(br, base, fail, ignorable):
         st = {'v': 1, 'i': 333, 'm': 500, 'a': '0', 'r': 4, 'e': 228, 'x': 291, 'hd': [], 'sc': [{'t': '9sig', 'n': '9sig', 'p': {}, 'c': '#e879f9'}, {'t': 'sma', 'n': 'SMA', 'p': {}, 'c': '#f59e0b'}]}
         pg.goto(base + 'strategy-simulator/#ss=' + tok(st), wait_until='load'); pg.wait_for_timeout(3500)
         g = pg.evaluate(SS_GOLD_JS)
-        want = [[40.2731878649, 81.6150703134], [39.0547580275, 59.6674], [45.1095, 46.2812]]
+        want = [[40.2731878649, 81.6150703134], [39.0547580275, 59.6674], [44.9301, 46.2812]]
         ok = g['ready'] and g['n'] == 65 and g['l0'] == '2009-12-31' and g['l1'] == '2025-12-31' and abs(g['bh'][0] - want[0][0]) < 1e-6 and abs(g['bh'][1] - want[0][1]) < 1e-6 \
             and len(g['cfg']) == 2 and abs(g['cfg'][0][1] - want[1][0]) < 1e-6 and abs(g['cfg'][1][1] - want[2][0]) < 1e-3
         if not ok:
@@ -2691,6 +2692,31 @@ def stratsim_check(br, base, fail, ignorable):
         if not an['open']:
             fail('strategy-simulator', '분석 표가 열리지 않음: %s' % an)
         pg.keyboard.press('Escape'); pg.wait_for_timeout(400)
+        # 3-1) 분석 표 칸 풍선의 기간 연평균(전략·비교) = 같은 구간으로 맞춘 본 화면 '연평균 수익률' · 로그 단추 = 본 차트 로그와 같은 설정
+        try:
+            sa = {'v': 1, 'i': 333, 'm': 500, 'a': '0', 'r': 4, 'e': 228, 'x': 291, 'hd': [], 'sc': [{'t': 'sma', 'n': 'SMA', 'p': {}, 'c': '#f59e0b'}], 'am': 1, 'as': 'cfg:0', 'ab': 'compounded'}
+            pa = ctx.new_page()
+            pa.goto(base + 'strategy-simulator/#ss=' + tok(sa), wait_until='load')
+            pa.wait_for_function("() => window.SSM && SSM.ready() && window.SSAN && document.querySelector('#ss-an-grid td[data-v]') && !SSAN.busy()", timeout=90000)
+            pa.wait_for_timeout(300)
+            cell = pa.query_selector('#ss-an-grid td[data-yp="2000:20"]')
+            cell.scroll_into_view_if_needed(); cell.hover(); pa.wait_for_timeout(200)
+            tt = pa.inner_text('#ss-an-tip')
+            m1, m2 = re.search(r'연평균 ([+−-]?[\d.]+)%', tt), re.search(r'\(연 ([+−-]?[\d.]+)%\)', tt)
+            pa.mouse.move(3, 3); pa.click('#ss-an-log'); pa.wait_for_timeout(400)
+            cell.hover(); pa.wait_for_timeout(200)
+            lg = pa.evaluate("() => ({ s: SSM.S.log, main: document.getElementById('ss-log').getAttribute('aria-pressed'), cap: !!document.querySelector('#ss-an-tip .ss-an-mlg') })")
+            mm = pa.evaluate("""() => { const Q = SSM.DS.q, last = (y) => { let k = -1; Q.forEach((r, i) => { if (+r[0].slice(0, 4) === y) k = i; }); return k; };
+              const S = SSM.S; S.an.open = false; document.getElementById('ss-an').hidden = true; S.e = last(1999) + 1; S.x = last(2019); SSM.render(); const M = SSM.R.metrics;
+              return { st: M['cfg:' + S.saved[0].id].cagr, bl: M.invested.cagr, d0: SSM.R.ctx.entryDate, d1: SSM.R.ctx.exitDate }; }""")
+            pa.close()
+            got = [float(m.group(1).replace('−', '-')) if m else None for m in (m1, m2)]
+            if None in got or abs(round(mm['st'], 2) - got[0]) > 0.0051 or abs(round(mm['bl'], 2) - got[1]) > 0.0051:
+                fail('strategy-simulator', '분석 표 풍선 연평균 %s 이 본 화면(%s~%s) %.4f / %.4f 와 다름' % (got, mm['d0'], mm['d1'], mm['st'], mm['bl']))
+            if not (lg['s'] and lg['main'] == 'true' and lg['cap']):
+                fail('strategy-simulator', '분석 창 로그 단추 이상: %s' % lg)
+        except Exception as ex:
+            fail('strategy-simulator', '분석 표 연평균·로그 검사 오류: %s' % str(ex)[:200])
         # 4) 링크 복사 → 새 창
         pg.click('#ss-share'); pg.wait_for_timeout(700)
         url = pg.evaluate("() => navigator.clipboard.readText().catch(() => '')")

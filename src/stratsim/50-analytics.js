@@ -6,6 +6,9 @@
    · 색: 비교 대비 비율의 ln 을 전체 칸 최소·최대로 나눠 0.5 중심 → 제곱근 곡선 → 파랑(못함)·회청(비슷)·빨강(나음)
      목표 금액이면 달성(빨강)/미달(파랑) 두 색
    · 목표 성장률(연 %)이면 히트맵 대신 나선 — 해마다 수익률 막대(가운데가 가장 오래된 해, 12시가 올해)
+   · 풍선의 기간 연평균(이 사이트에서 더함): 그 전략이 실제로 돈을 넣은 날짜·금액과 칸 값이 나온 날로 푼 돈 가중 연수익률
+     (본 화면 '연평균 수익률'과 같은 ssCagrMW) — 열 머리 통계의 연평균도 같은 값으로 (원본은 넣은 돈 합계 대비 단순 연평균)
+   · 로그 단추 = 본 차트 '로그'(S.log)와 같은 설정 → 풍선 작은 차트의 평가액 선 · 열 머리 끝 금액 막대
    · 사용자 전략(코드)은 늘 격리 Worker(ssPreviewRun)로만 돌림 — 이 페이지에서 직접 실행하지 않음 */
 
 // ── 선택지 ──
@@ -32,6 +35,7 @@ const SAN = {
   yearSim: { key: '', map: new Map() },   // 나선 풍선용 계산 (그해 시작 → 최신)
   spSim: { key: '', sim: null },          // 나선 전체 기간 계산
   sp: { key: '', points: null, size: 0 }, // 그려 둔 나선
+  cg: new Map(),                          // 기간 연평균 (조건 키 → { pct, years })
   ui: {}, hl: '', tipFor: '', warming: '', h2c: null, lock: null,
 };
 
@@ -160,6 +164,7 @@ function ssAnCodeRun(cfg, inp, qi0, qi1) {
   });
 }
 // 한 행(진입 → 가장 긴 청산)의 분기 값 — 행 날짜마다 그 날 이하 마지막 값, 못 구하면 0
+// 연평균 계산용으로 .src[i] = 그 값이 나온 점의 날짜, .d0 = 그 전략이 시작 금액을 넣은 날
 async function ssAnRowSeries(k, ctx) {
   const n = ctx.dates.length;
   if (k === 'custom') return new Array(n).fill(S.an.target);
@@ -170,7 +175,41 @@ async function ssAnRowSeries(k, ctx) {
     if (c) pts = c.type === 'custom' ? await ssAnCodeRun(c, ctx.inp, ctx.e, ctx.x) : ssAnCfgPoints(c, ctx.inp, ctx.e, ctx.x);
   }
   if (!pts || !pts.length) return new Array(n).fill(0);
-  return ssResample(pts, ctx.dates).map((v) => (Number.isFinite(v) ? v : 0));
+  const out = new Array(n), src = new Array(n);
+  let j = 0;
+  for (let i = 0; i < n; i++) {
+    const d = ctx.dates[i];
+    while (j + 1 < pts.length && pts[j + 1].date <= d) j++;
+    const v = pts[j].value;
+    out[i] = Number.isFinite(v) ? v : 0;
+    src[i] = String(pts[j].date);
+  }
+  out.src = src;
+  out.d0 = ssAnStartDate(k, ctx.e, pts);
+  return out;
+}
+// 날마다 걷는 계산(SMA · 사용자 코드)인지 — 적립이 '달이 바뀐 첫 거래일'에 들어감. 나머지(9sig·그냥 보유·현금 복리)는 월말
+function ssAnDaily(k) {
+  if (k === 'sma') return true;
+  const c = ssAnIsCfg(k) ? ssAnCfg(k) : null;
+  return !!c && (c.type === 'sma' || c.type === 'custom');
+}
+// 시작 금액을 넣은 날: 날마다 걷는 계산은 진입 분기말(엔진·코드가 받는 진입일), 나머지는 계산의 첫 점(주 단위 9sig 는 그 전 주말일 수 있음)
+const ssAnStartDate = (k, e, pts) => (ssAnDaily(k) ? DS.q[e][0] : pts && pts.length ? String(pts[0].date) : null);
+// 기간 연평균(%, 돈 가중) — 그 전략이 실제로 돈을 넣은 날짜·금액(시작 금액 d0 · 적립 d0 다음 ~ d1)과 d1 의 평가액 v 로 푼 IRR.
+// 본 화면 '연평균 수익률'과 같은 계산(ssCagrMW). 못 구하면 null
+function ssAnCagr(daily, d0, d1, v, inp) {
+  if (!d0 || !d1 || !(d1 > d0) || !(v > 0)) return null;
+  const key = (daily ? 'd' : 'm') + d0 + d1 + '|' + v + '|' + inp.initial + '|' + inp.monthly + '|' + inp.raise;
+  if (SAN.cg.has(key)) return SAN.cg.get(key);
+  const years = (Date.parse(d1) - Date.parse(d0)) / SS_YEAR_MS;
+  let paid = 0;
+  for (const f of ssFlows(inp.initial, inp.monthly, inp.raise, d0, d1, null, daily)) paid -= f.cf;
+  const r = paid > 0 ? ssCagrMW(inp.initial, inp.monthly, inp.raise, d0, d1, years, v, paid, null, daily) : null;
+  const out = Number.isFinite(r) ? { pct: r, years } : null;
+  if (SAN.cg.size > 20000) SAN.cg.clear();
+  SAN.cg.set(key, out);
+  return out;
 }
 // 앞에서부터의 최대 낙폭 — out[i] = 0..i 구간의 { pct, 고점 위치, 저점 위치 }
 function ssAnDDPrefix(s) {
@@ -237,7 +276,8 @@ function ssAnEnsureDom() {
   root.tabIndex = -1;
   root.innerHTML = '<div class="ss-an-box" id="ss-an-box"><div class="ss-an-head"><div class="ss-an-row1">'
     + '<div class="ss-an-acts"><button type="button" class="ss-an-ib" id="ss-an-share" title="이 분석 그대로 열리는 링크 복사" aria-label="링크 복사">' + SS_AN_ICO.share + '</button>'
-    + '<button type="button" class="ss-an-ib" id="ss-an-dl" title="그림(PNG)으로 받기" aria-label="그림으로 받기">' + SS_AN_ICO.dl + '</button></div>'
+    + '<button type="button" class="ss-an-ib" id="ss-an-dl" title="그림(PNG)으로 받기" aria-label="그림으로 받기">' + SS_AN_ICO.dl + '</button>'
+    + '<button type="button" class="ss-an-ib ss-an-lgb" id="ss-an-log" aria-pressed="false" title="풍선 속 작은 차트(평가액 선)와 끝 금액 막대를 로그 눈금으로 — 본 차트 \'로그\'와 같은 설정">로그</button></div>'
     + '<div class="ss-an-sent" id="ss-an-sent">'
     + '<select id="ss-an-st" class="ss-an-sel ss-an-key" aria-label="볼 전략"></select><span class="ss-an-t" id="ss-an-mode">히트맵</span>'
     + '<span class="ss-an-t">· 비교</span><select id="ss-an-bl" class="ss-an-sel ss-an-key" aria-label="비교 대상"></select>'
@@ -311,7 +351,14 @@ function ssAnPillsFor(k, side) {
   if (!type) return '';
   return SS_AN_PILLS[type].map((pk) => ssAnPill(SS_AN_PLAB[type][pk], SS_PDEF[type + '.' + pk].opts, S.base[type][pk], ' data-kind="b" data-type="' + type + '" data-k="' + pk + '"')).join('');
 }
+function ssAnLogUi() {
+  const b = document.getElementById('ss-an-log');
+  if (!b) return;
+  b.setAttribute('aria-pressed', S.log ? 'true' : 'false');
+  b.classList.toggle('on', !!S.log);
+}
 function ssAnRenderControls() {
+  ssAnLogUi();
   const d = SAN.dom, a = S.an, st = a.strategy, bl = a.baseline, inp = ssAnInputs();
   const builtin = (sel) => '<optgroup label="전략">' + ssAnBuiltins(sel).map((x) => ssAnOpt(x[0], x[1], sel)).join('') + '</optgroup>';
   const saved = (sel) => (S.saved.length ? '<optgroup label="저장한 전략">' + S.saved.map((c) => ssAnOpt('cfg:' + c.id, c.name, sel)).join('') + '</optgroup>' : '');
@@ -352,8 +399,8 @@ function ssAnRenderControls() {
   const sw = (c) => '<i class="ss-an-sw" style="background:rgb(' + c.join(',') + ')"></i>';
   let lg;
   if (spiral) lg = sw(SS_AN_UP) + '<span>그해 수익률이 기준 이상</span>' + sw(SS_AN_DN) + '<span>미만</span><span class="ss-an-lgn">· 가운데가 가장 오래된 해, 12시 방향이 올해</span><span class="ss-an-lgn ss-an-hint">· 막대에 마우스를 올리거나 누르면 자세히</span>';
-  else if (bl === 'custom') lg = sw(SS_AN_UP) + '<span>목표 이상</span>' + sw(SS_AN_DN) + '<span>목표 미만</span><span class="ss-an-lgn">· 칸 = 끝 금액 · 작은 숫자 = 끝난 해</span><span class="ss-an-lgn ss-an-hint">· 칸·열 머리에 마우스를 올리거나 누르면 자세히</span>';
-  else lg = '<i class="ss-an-sw ss-an-grad"></i><span>파랑 = ' + ssEsc(ssAnLabel(bl)) + '보다 적음 · 빨강 = 많음 (진할수록 차이 큼)</span><span class="ss-an-lgn">· 칸 = 끝 금액 · 작은 숫자 = 끝난 해</span><span class="ss-an-lgn ss-an-hint">· 칸·열 머리에 마우스를 올리거나 누르면 자세히</span>';
+  else if (bl === 'custom') lg = sw(SS_AN_UP) + '<span>목표 이상</span>' + sw(SS_AN_DN) + '<span>목표 미만</span><span class="ss-an-lgn">· 칸 = 끝 금액 · 작은 숫자 = 끝난 해</span><span class="ss-an-lgn ss-an-hint">· 칸·열 머리에 마우스를 올리거나 누르면 자세히(기간 연평균 · 작은 차트)</span>';
+  else lg = '<i class="ss-an-sw ss-an-grad"></i><span>파랑 = ' + ssEsc(ssAnLabel(bl)) + '보다 적음 · 빨강 = 많음 (진할수록 차이 큼)</span><span class="ss-an-lgn">· 칸 = 끝 금액 · 작은 숫자 = 끝난 해</span><span class="ss-an-lgn ss-an-hint">· 칸·열 머리에 마우스를 올리거나 누르면 자세히(기간 연평균 · 작은 차트)</span>';
   ssAnSet(d.leg, 'leg', lg);
 }
 function ssAnYearUi(lo, hi) {
@@ -473,6 +520,12 @@ async function ssAnHeat(epoch) {
         td.setAttribute('data-dd', String(q.pct));
         td.setAttribute('data-dp', (q.p >= 0 && dates[q.p]) || '');
         td.setAttribute('data-dt', (q.t >= 0 && dates[q.t]) || '');
+        // 연평균용: 시작 금액 넣은 날 · 이 칸 값이 나온 날 (전략 / 비교)
+        td.setAttribute('data-s0', ss.d0 || '');
+        td.setAttribute('data-sd', (ss.src && ss.src[off]) || '');
+        td.setAttribute('data-bv', String(b));
+        td.setAttribute('data-b0', bs.d0 || '');
+        td.setAttribute('data-bd', (bs.src && bs.src[off]) || '');
       }
       done++;
     }
@@ -698,50 +751,61 @@ function ssAnCellTipHtml(td) {
   } else if (ssAnIsCfg(st) && (ssAnCfg(st) || {}).type === 'custom') chart = '<div class="ss-an-tmsg">작은 차트를 계산하는 중…</div>';
   const Y = ssAnYears(), xi = Y.last.get(ey), xd = xi != null ? DS.q[xi][0] : '';
   const endTxt = xd && !(+xd.slice(5, 7) === 12 && +xd.slice(8, 10) >= 28) ? ssDate(xd) + ' 기준' : ey + '년 말';
-  const ratio = bl !== 'custom' && dv > 0 ? '<div class="ss-an-tr">' + ssEsc(ssAnLabel(bl)) + ' ' + ssMoney(Math.round(bv)) + ' 의 <b>' + (dv >= 10 ? dv.toFixed(1) : dv.toFixed(2)) + '배</b></div>'
+  // 기간 연평균 (돈 가중 — 본 화면 '연평균 수익률'과 같은 계산) · 비교 대상도 같은 방법
+  const inp = ssAnInputs(), cg = ssAnCagr(ssAnDaily(st), td.getAttribute('data-s0'), td.getAttribute('data-sd'), v, inp);
+  const bAmt = +td.getAttribute('data-bv') > 0 ? +td.getAttribute('data-bv') : bv;
+  const bcg = bl !== 'custom' && dv > 0 ? ssAnCagr(ssAnDaily(bl), td.getAttribute('data-b0'), td.getAttribute('data-bd'), bAmt, inp) : null;
+  const cagrRow = '<div class="ss-an-tc">연평균 ' + (cg ? '<b class="' + (cg.pct >= 0 ? 'up' : 'dn') + '">' + ssAnCgPct(cg.pct) + '</b> <i>' + cg.years.toFixed(1) + '년 · 넣은 날짜별 돈 가중</i>' : '<b>—</b>') + '</div>';
+  const ratio = bl !== 'custom' && dv > 0 ? '<div class="ss-an-tr">' + ssEsc(ssAnLabel(bl)) + ' ' + ssMoney(Math.round(bAmt)) + (bcg ? ' <span class="cg">(연 ' + ssAnCgPct(bcg.pct) + ')</span>' : '') + ' 의 <b>' + (dv >= 10 ? dv.toFixed(1) : dv.toFixed(2)) + '배</b></div>'
     : bl === 'custom' ? '<div class="ss-an-tr">목표 ' + ssMoney(S.an.target) + ' ' + (v >= S.an.target ? '<b class="up">달성</b>' : '<b class="dn">미달</b>') + '</div>' : '';
   return '<button type="button" class="x" data-x aria-label="닫기">×</button>'
     + '<div class="tt"><span>' + ssEsc(ssAnLabel(st)) + ' · ' + sy + '년 시작 · ' + p + '년</span><span class="dd">낙폭 ' + ssDD(dd * 100) + (rg ? ' <i>' + rg + '</i>' : '') + '</span></div>'
-    + '<div class="tv">' + ssMoney(Math.round(v)) + ' <small>(' + endTxt + ')</small></div>' + ratio + chart;
+    + '<div class="tv">' + ssMoney(Math.round(v)) + ' <small>(' + endTxt + ')</small></div>' + cagrRow + ratio + chart;
 }
+const ssAnCgPct = (p) => (p >= 0 ? '+' : '') + p.toFixed(2) + '%';
 // 열 머리: 그 보유 기간의 모든 시작 연도 칸 모아 통계
 function ssAnColStats(period) {
   const tds = SAN.dom.grid.querySelectorAll('td.c:not(.e)[data-c="' + period + '"]'), smp = [];
   tds.forEach((td) => {
     const v = +td.getAttribute('data-v'), sy = +td.getAttribute('data-r');
-    if (Number.isFinite(v) && v > 0 && Number.isFinite(sy)) smp.push({ year: sy, value: v, dd: +td.getAttribute('data-dd'), ddPeak: td.getAttribute('data-dp') || null, ddTrough: td.getAttribute('data-dt') || null });
+    if (Number.isFinite(v) && v > 0 && Number.isFinite(sy)) smp.push({ year: sy, value: v, dd: +td.getAttribute('data-dd'), ddPeak: td.getAttribute('data-dp') || null, ddTrough: td.getAttribute('data-dt') || null,
+      s0: td.getAttribute('data-s0'), sd: td.getAttribute('data-sd') });
   });
   if (!smp.length) return null;
-  const inp = ssAnInputs();
-  let contributed = inp.initial;
-  for (let y = 0; y < period; y++) contributed += 12 * inp.monthly * Math.pow(1 + inp.raise, y);
-  for (const s of smp) s.cagr = contributed > 0 && s.value > 0 ? (Math.pow(s.value / contributed, 1 / period) - 1) * 100 : 0;
+  // 연평균: 칸마다 칸 풍선과 같은 돈 가중 연수익률 (실제 넣은 날짜·금액 · 실제 기간 — 올해처럼 덜 찬 해도 그대로)
+  const inp = ssAnInputs(), daily = ssAnDaily(S.an.strategy);
+  for (const s of smp) { const g = ssAnCagr(daily, s.s0, s.sd, s.value, inp); s.cagr = g ? g.pct : null; }
   const asc = (a) => a.slice().sort((x, y) => x - y);
   const med = (s) => { const n = s.length; return n === 0 ? 0 : n % 2 ? s[(n - 1) >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2; };
   const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
   const stat = (a) => { const s = asc(a); return { median: med(s), mean: mean(a), min: s[0], max: s[s.length - 1] }; };
   const byDd = smp.slice().sort((a, b) => (a.dd || 0) - (b.dd || 0)), byVal = smp.slice().sort((a, b) => a.value - b.value);
+  const withCg = smp.filter((s) => s.cagr != null), byCg = withCg.slice().sort((a, b) => a.cagr - b.cagr);
   const n = smp.length, desc = smp.map((s) => s.value).sort((a, b) => b - a), dec = [];
   for (let k = 0; k < 10; k++) { const lo = Math.floor(k * n / 10), hi = Math.floor((k + 1) * n / 10); dec.push(lo >= hi ? null : med(asc(desc.slice(lo, hi)))); }
-  return { period, n, contributed, val: stat(smp.map((s) => s.value)), cagr: stat(smp.map((s) => s.cagr)), dd: stat(smp.map((s) => (Number.isFinite(s.dd) ? s.dd : 0))),
-    worstYear: byVal[0].year, bestYear: byVal[n - 1].year, worstDd: byDd[n - 1], bestDd: byDd[0], dec };
+  return { period, n, val: stat(smp.map((s) => s.value)), cagr: withCg.length ? stat(withCg.map((s) => s.cagr)) : null, cagrN: withCg.length,
+    cagrWorstYear: byCg.length ? byCg[0].year : null, cagrBestYear: byCg.length ? byCg[byCg.length - 1].year : null,
+    dd: stat(smp.map((s) => (Number.isFinite(s.dd) ? s.dd : 0))), worstYear: byVal[0].year, bestYear: byVal[n - 1].year, worstDd: byDd[n - 1], bestDd: byDd[0], dec };
 }
 function ssAnColTipHtml(period) {
   const s = ssAnColStats(period);
   if (!s) return '';
-  const m = (v) => ssMoney(Math.round(v)), pc = (v) => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+  const m = (v) => ssMoney(Math.round(v)), pc = ssAnCgPct;
   const ddr = (v, x) => { const r = x ? ssDDRange(x.ddPeak, x.ddTrough) : ''; return ssDD(v * 100) + (r ? '<em>' + r + '</em>' : ''); };
   const cell = (k, v) => '<span class="hc"><span>' + k + '</span><b>' + v + '</b></span>';
   const labs = ['상위 10%', '10–20%', '20–30%', '30–40%', '40–50%', '50–60%', '60–70%', '70–80%', '80–90%', '하위 10%'];
   const bar = (v) => (v >= 1e9 ? '$' + (v / 1e9).toFixed(1) + 'B' : v >= 1e6 ? '$' + (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? '$' + Math.round(v / 1e3) + 'K' : '$' + Math.round(v));
   const W = 360, padY = 4, rowH = 15, gapY = 3, lw = 70, vw = 62, bx = 4 + lw, bwid = W - 8 - lw - vw, H = padY * 2 + 10 * rowH + 9 * gapY;
   const have = s.dec.filter((v) => v != null && v > 0), top = have.length ? Math.max.apply(null, have) : 1;
+  // 로그 눈금: 막대 길이 ∝ log(값 / 밑) — 밑 = 가장 작은 값 아래 10의 거듭제곱 (가장 작은 막대도 보이게)
+  const lg = !!S.log && have.length > 0, bot = lg ? Math.pow(10, Math.floor(Math.log10(Math.min.apply(null, have)))) : 0;
+  const lenOf = (v) => (lg ? (top > bot ? Math.log(v / bot) / Math.log(top / bot) : 1) : v / top) * bwid;
   let svg = '';
   for (let i = 0; i < 10; i++) {
     const v = s.dec[i], y = padY + i * (rowH + gapY), ly = y + rowH - 4;
     svg += '<text class="dl" x="' + (bx - 6) + '" y="' + ly + '" text-anchor="end">' + labs[i] + '</text>';
     if (v == null || v <= 0) continue;
-    const len = Math.max(2, (v / top) * bwid), col = ssAnMix(1 - i / 9);
+    const len = Math.max(2, lenOf(v)), col = ssAnMix(1 - i / 9);
     svg += '<rect x="' + bx + '" y="' + y + '" width="' + len.toFixed(1) + '" height="' + rowH + '" rx="2" fill="rgb(' + col.join(',') + ')"><title>시작 연도 ' + labs[i] + ' 구간의 끝 금액 중앙값 ' + m(v) + '</title></rect>'
       + '<text class="dv" x="' + (bx + len + 4).toFixed(1) + '" y="' + ly + '">' + bar(v) + '</text>';
   }
@@ -749,11 +813,12 @@ function ssAnColTipHtml(period) {
     + '<div class="tt"><span>' + period + '년 보유 · 시작 연도 ' + s.n + '개</span></div>'
     + '<div class="ss-an-hs">'
     + '<div class="hr"><span class="hl">끝 금액</span>' + cell('중앙값', m(s.val.median)) + cell('평균', m(s.val.mean)) + cell('최저 · ' + s.worstYear, m(s.val.min)) + cell('최고 · ' + s.bestYear, m(s.val.max)) + '</div>'
-    + '<div class="hr"><span class="hl" title="넣은 돈 합계(' + m(s.contributed) + ') 대비 단순 연평균">연 수익률</span>' + cell('중앙값', pc(s.cagr.median)) + cell('평균', pc(s.cagr.mean)) + cell('최저', pc(s.cagr.min)) + cell('최고', pc(s.cagr.max)) + '</div>'
+    + (s.cagr ? '<div class="hr"><span class="hl" title="칸마다 넣은 날짜·금액을 반영한 돈 가중 연수익률(IRR)">연평균</span>' + cell('중앙값', pc(s.cagr.median)) + cell('평균', pc(s.cagr.mean))
+      + cell('최저 · ' + s.cagrWorstYear, pc(s.cagr.min)) + cell('최고 · ' + s.cagrBestYear, pc(s.cagr.max)) + '</div>' : '')
     + '<div class="hr"><span class="hl">최대 낙폭</span>' + cell('중앙값', ssDD(s.dd.median * 100)) + cell('평균', ssDD(s.dd.mean * 100)) + cell('가장 깊음', ddr(s.dd.max, s.worstDd)) + cell('가장 얕음', ddr(s.dd.min, s.bestDd)) + '</div>'
-    + '</div><div class="ss-an-dt">시작한 해가 이 구간에 들었다면 — 끝 금액 중앙값</div>'
+    + '</div><div class="ss-an-dt">시작한 해가 이 구간에 들었다면 — 끝 금액 중앙값' + (lg ? ' <span class="lgt">로그 눈금 · 밑 ' + bar(bot) + '</span>' : '') + '</div>'
     + '<svg class="ss-an-dsvg" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '">' + svg + '</svg>'
-    + '<div class="ss-an-tn">연 수익률 = 넣은 돈 합계 ' + m(s.contributed) + ' 대비 단순 연평균</div>';
+    + '<div class="ss-an-tn">연평균 = 칸마다 넣은 날짜·금액을 반영한 돈 가중 연수익률(본 화면 \'연평균 수익률\'과 같은 계산)</div>';
 }
 // 나선 풍선: 그해 시작해 최신까지
 function ssAnYearSeries(y) {
@@ -768,16 +833,20 @@ function ssAnYearSeries(y) {
 }
 function ssAnSpiralTipHtml(d) {
   const thr = S.an.growth, hit = d.pct >= thr, ser = ssAnYearSeries(d.year);
-  let today = 0, later = 0, endY = '', chart = '';
+  let today = 0, later = 0, endY = '', chart = '', cagrRow = '';
   if (ser.length) {
     today = ser[ser.length - 1].value;
     chart = ssAnMini(ser, null);
     endY = parseInt(String(ser[ser.length - 1].date).slice(0, 4), 10);
     later = endY - d.year;
+    // 그해 시작 → 최신 연평균 (칸 풍선과 같은 돈 가중 계산)
+    const rng = ssAnYearRange(d.year), k = S.an.strategy;
+    const cg = rng ? ssAnCagr(ssAnDaily(k), ssAnStartDate(k, rng.e, ser), String(ser[ser.length - 1].date), today, ssAnInputs()) : null;
+    if (cg) cagrRow = '<div class="ss-an-tc">연평균 <b class="' + (cg.pct >= 0 ? 'up' : 'dn') + '">' + ssAnCgPct(cg.pct) + '</b> <i>' + cg.years.toFixed(1) + '년 · 넣은 날짜별 돈 가중</i></div>';
   }
   return '<button type="button" class="x" data-x aria-label="닫기">×</button>'
     + '<div class="tt"><span>' + ssEsc(ssAnLabel(S.an.strategy)) + ' · ' + d.year + '년 시작</span></div>'
-    + '<div class="tv">' + ssMoney(Math.round(today)) + (later > 0 ? ' <small>(' + later + '년 뒤 · ' + endY + ')</small>' : '') + '</div>' + chart
+    + '<div class="tv">' + ssMoney(Math.round(today)) + (later > 0 ? ' <small>(' + later + '년 뒤 · ' + endY + ')</small>' : '') + '</div>' + cagrRow + chart
     + '<div class="tf"><span>' + d.year + '년' + (d.partial ? '(올해 지금까지)' : '') + ' 한 해: <b>' + (d.pct >= 0 ? '+' : '') + d.pct.toFixed(2) + '%</b></span>'
     + '<span class="' + (hit ? 'up' : 'dn') + '">기준 ' + (thr >= 0 ? '+' : '') + thr + '% ' + (hit ? '✓ 이상' : '✗ 미만') + '</span></div>';
 }
@@ -812,8 +881,17 @@ function ssAnMini(series, base) {
   let mn = Infinity, mx = -Infinity;
   for (const p of series) { if (p.value < mn) mn = p.value; if (p.value > mx) mx = p.value; }
   if (base && base.length) for (const p of base) if (Number.isFinite(p.value)) { if (p.value < mn) mn = p.value; if (p.value > mx) mx = p.value; }
-  if (mx <= mn) mx = mn + 1;
-  const Yv = (v) => lt + (1 - (v - mn) / (mx - mn)) * lh;
+  // 로그 눈금(본 차트 '로그'와 같은 설정): 0 보다 큰 값으로 범위를 잡고, 0 이하(시작 금액 0 등)는 바닥에 붙임
+  let lg = !!S.log;
+  if (lg) {
+    let pm = Infinity;
+    for (const p of series) if (p.value > 0 && p.value < pm) pm = p.value;
+    if (base && base.length) for (const p of base) if (p.value > 0 && p.value < pm) pm = p.value;
+    if (Number.isFinite(pm) && mx > 0) mn = pm; else lg = false;
+  }
+  if (mx <= mn) mx = lg ? mn * 2 : mn + 1;
+  const sv = lg ? (v) => Math.log(Math.max(v, mn)) : (v) => v, s0 = sv(mn), s1 = sv(mx);
+  const Yv = (v) => lt + (1 - (sv(v) - s0) / (s1 - s0)) * lh;
   let line = '';
   for (let i = 0; i < n; i++) line += (i ? 'L' : 'M') + f1(X(i)) + ',' + f1(Yv(series[i].value));
   const area = 'M' + f1(X(0)) + ',' + f1(lb) + 'L' + line.slice(1) + 'L' + f1(X(n - 1)) + ',' + f1(lb) + 'Z';
@@ -851,7 +929,8 @@ function ssAnMini(series, base) {
     + '<circle class="pd" cx="' + f1(X(0)) + '" cy="' + f1(sy0) + '" r="2.6"/><circle class="pd" cx="' + f1(X(n - 1)) + '" cy="' + f1(sy1) + '" r="2.6"/>'
     + '<text class="ev" x="' + f1(X(0) + 4) + '" y="' + f1(sl) + '">' + ssMoney(Math.round(series[0].value)) + '</text>'
     + '<text class="ev" x="' + f1(X(n - 1) - 15) + '" y="' + f1(el) + '" text-anchor="end">' + ssMoney(Math.round(series[n - 1].value)) + '</text>'
-    + '<line class="xa" x1="' + pad + '" y1="' + f1(lb + 1) + '" x2="' + (W - pad) + '" y2="' + f1(lb + 1) + '"/>' + ax + '</svg>';
+    + '<line class="xa" x1="' + pad + '" y1="' + f1(lb + 1) + '" x2="' + (W - pad) + '" y2="' + f1(lb + 1) + '"/>' + ax + '</svg>'
+    + (lg ? '<div class="ss-an-mlg">평가액 선 · 로그 눈금</div>' : '');
 }
 // 풍선 위치: 기준 칸의 오른쪽 아래(넘치면 반대쪽) 또는 마우스 옆 — 늘 화면 안
 function ssAnPlace(anchor, ev) {
@@ -940,6 +1019,13 @@ function ssAnWire() {
     ssCopy(url, () => { b.classList.add('ok'); b.innerHTML = SS_AN_ICO.ok; b.title = '복사됨'; setTimeout(() => { b.classList.remove('ok'); b.innerHTML = SS_AN_ICO.share; b.title = '이 분석 그대로 열리는 링크 복사'; }, 1600); });
   });
   document.getElementById('ss-an-dl').addEventListener('click', () => ssAnDownload());
+  // 로그 눈금 (본 차트 '로그' 단추와 같은 S.log — 저장·공유 주소에도 같이 담김)
+  document.getElementById('ss-an-log').addEventListener('click', () => {
+    S.log = !S.log;
+    ssAnLogUi();
+    ssChanged();
+    if (!tip.hidden && SAN.tipFor) ssAnRefillTip();
+  });
   d.ptog.addEventListener('click', () => { const on = !d.params.classList.contains('open'); d.params.classList.toggle('open', on); d.ptog.setAttribute('aria-expanded', on ? 'true' : 'false'); d.ptog.classList.toggle('on', on); });
   d.st.addEventListener('change', () => { const v = d.st.value; if (!v || v === S.an.strategy) return; S.an.strategy = v; ssAnHideTip(); ssSyncHash(); ssAnBuild(); });
   d.bl.addEventListener('change', () => {
