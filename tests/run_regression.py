@@ -1412,7 +1412,13 @@ def kcmp_check(page, base, fail, local):
     for tab, (path, sym) in KCMP_SYMS.items():
         ser = (j.get('series') or {}).get(sym) or []
         if len(ser) < 5: fail(path, 'compare.json %s 일봉 부족' % sym); continue
-        for d, c in (ser[0], ser[-1]):
+        # 장중(한국 시간 16시 전)의 오늘 값은 아직 확정 종가가 아님 — 시세 봇(15분마다)과 네이버 현재가가 몇 분 차이로 달라 '수정주가 의심'으로
+        # 잘못 실패하던 것(2026-10-20 장중 5건) → 그때는 전 거래일 종가로 대조 (마감 뒤에는 오늘 종가 그대로)
+        kst = time.gmtime(time.time() + 9 * 3600)
+        last = ser[-1]
+        if time.strftime('%Y%m%d', time.gmtime(last[0] * 86400)) == time.strftime('%Y%m%d', kst) and kst.tm_hour < 16:
+            last = ser[-2]
+        for d, c in (ser[0], last):
             ymd = time.strftime('%Y%m%d', time.gmtime(d * 86400))
             try:
                 act = A.kr('stock', sym.split('.')[0], ymd)
