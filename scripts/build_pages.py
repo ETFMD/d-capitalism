@@ -52,6 +52,10 @@ ARTS = BL.load()          # 투자 공부 글 (order 순)
 BOOKS = BB.load(ROUTES, ARTS)   # 자본가 서재 (자료 검사 통과한 것 · 파일 없으면 None)
 PATH_OF = {r['tab']: r['path'] for r in ROUTES}
 ADMIN = {r['tab'] for r in ROUTES if r.get('admin')}   # 관리자 전용 화면(routes.json "admin": true) — 상단 메뉴·허브·하단 사이트맵·sitemap.xml 에서 빼고 noindex (계정 메뉴 '관리자 기능'에서만 들어감)
+# 광고 스크립트를 넣지 않는 화면 — 관리자 잠금 화면(방문자에게는 잠김 안내뿐) + routes.json "noads": true(회원 글 게시판 등)
+#   애드센스 정책: 콘텐츠가 없거나(잠김 안내) 사용자가 쓴 글이 중심인 화면에는 광고를 두지 않음 — 심사에서 '가치 없는 화면'으로 보이지 않게
+NOADS = ADMIN | {r['tab'] for r in ROUTES if r.get('noads')}
+ADS_RE = re.compile(r'<script async src="https://pagead2\.googlesyndication\.com/pagead/js/adsbygoogle\.js\?client=ca-pub-\d+" crossorigin="anonymous"></script>\n?')
 
 
 def esc(s):
@@ -162,6 +166,8 @@ def head_block(r, lang='ko'):
     ]
     if r.get('admin'):   # 관리자 전용 — 검색 결과에 나오지 않게
         lines.append('<meta name="robots" content="noindex, nofollow">')
+    elif r.get('noindex'):   # 회원 글 게시판 등(routes.json "noindex": true) — 검색 결과에서 빼되 안의 링크는 따라가게
+        lines.append('<meta name="robots" content="noindex, follow">')
     if 'en' in r:   # 한국어·영어 두 판이 있는 도구: 검색엔진에 서로의 언어판을 알려 줌
         lines += [f'<link rel="alternate" hreflang="ko" href="{esc(url_of(r))}">',
                   f'<link rel="alternate" hreflang="en" href="{esc(url_of(r, "en"))}">',
@@ -394,6 +400,25 @@ def learn_hub(g):
             f'<p class="lr-all"><a href="learn/">투자 공부 글 전체 보기 →</a></p></section>')
 
 
+_ASUM = {}
+
+
+def autosum(key, tab):
+    """[AUTOSUM] 자료 화면 자동 요약(data_facts.autosum) — 자료 이상이면 빌드는 계속, 지난 페이지의 요약을 그대로 씀"""
+    if key not in _ASUM:
+        try:
+            _ASUM[key] = DF.autosum(key)
+        except SystemExit:
+            raise
+        except Exception as e:
+            print(f'  ※ {key} 자동 요약 계산 실패 — 지난 요약 유지: {e!r}')
+            path = next(r['path'] for r in ROUTES if r['tab'] == tab)
+            old = os.path.join(ROOT, path, 'index.html')
+            m = re.search(r'<!--AUTOSUM:%s-->(.*?)<!--/AUTOSUM-->' % key, open(old, encoding='utf-8').read(), re.S) if os.path.isfile(old) else None
+            _ASUM[key] = m.group(1) if m else ''
+    return _ASUM[key]
+
+
 def finalize(html_text, tab, en=False):
     """한 페이지 출력: 그 도구 화면만 남기고, 큰 CSS·JS 는 공용 파일로"""
     tabs = re.findall(r'<div class="app-page[^"]*" id="page-([a-z0-9]+)">', html_text)
@@ -417,6 +442,7 @@ def finalize(html_text, tab, en=False):
             sys.exit('투자 공부 드롭다운 grp-learn-drop 을 찾지 못했습니다')
     else:
         html_text = re.sub(r'<!--IDXNOTE:([a-z0-9]+)-->.*?<!--/IDXNOTE-->', lambda m: f'<!--IDXNOTE:{m.group(1)}-->' + idx_note(m.group(1)) + '<!--/IDXNOTE-->', html_text, flags=re.S)
+        html_text = re.sub(r'<!--AUTOSUM:([a-z]+)-->.*?<!--/AUTOSUM-->', lambda m: f'<!--AUTOSUM:{m.group(1)}-->' + autosum(m.group(1), tab) + '<!--/AUTOSUM-->', html_text, flags=re.S)
         rel = BL.related_block(ARTS, PATH_OF.get(tab, ''))
         if rel:
             html_text = html_text.replace(f'<!-- /page-{tab} -->', rel + f'  <!-- /page-{tab} -->', 1) if f'<!-- /page-{tab} -->' in html_text else html_text
@@ -425,6 +451,10 @@ def finalize(html_text, tab, en=False):
     html_text, n = re.subn(r'<!--FOOTMAP-->.*?<!--/FOOTMAP-->', lambda m: '<!--FOOTMAP-->' + footmap(en) + '<!--/FOOTMAP-->', html_text, count=1, flags=re.S)
     if n != 1:
         sys.exit('<!--FOOTMAP--> 표시를 찾지 못했습니다')
+    if tab in NOADS:
+        html_text, n = ADS_RE.subn('', html_text, count=1)
+        if n != 1:
+            sys.exit(f'{tab}: 빼야 할 애드센스 스크립트를 찾지 못했습니다 (src/index.html [ADSENSE] 줄이 바뀌었으면 ADS_RE 를 맞춰 주세요)')
     return html_text
 
 
@@ -520,6 +550,75 @@ def english_page(html):
     return out
 
 
+STATIC = ('about', 'terms', 'disclaimer', 'privacy')   # 탭이 아닌 독립 페이지(사람이 쓴 HTML) — 공유 미리보기·소개 페이지 도구 목록만 빌드가 채움
+
+
+def about_map():
+    """[ABOUTMAP] 소개 페이지의 '사이트 구성' — 상단 메뉴와 같은 자료(DROP)로 만들어 도구가 늘거나 바뀌면 함께 바뀜"""
+    by = {x['tab']: x for x in ROUTES}
+    items = []
+    for g, name in AREA.items():
+        links, idx = [], []
+        for sec, tabs in DROP.get(g, []):
+            rs = [by[t] for t in tabs if t in by and t not in ADMIN]
+            if '지수 성장률' in sec:   # 지수 20쪽은 이름만 묶어서
+                idx += rs
+                continue
+            links += [f'<a href="/{esc(r["path"])}/">{esc(NAV_LABEL[r["tab"]])}</a>' for r in rs]
+        if idx:
+            links.append(f'지수 성장률 {len(idx)}개(' + '·'.join(esc(NAV_LABEL[r["tab"]].replace(" 성장률", "")) for r in idx[:4]) + ' 등)')
+        n = len(links) - (1 if idx else 0) + len(idx)
+        if not n:
+            continue
+        head = f'<a href="/{esc(HUB[g]["path"])}/">{esc(name)}</a>' if g in HUB else esc(name)
+        items.append(f'<li><b>{head}</b> <small>{n}개</small><br><span class="tools">{" · ".join(links)}</span></li>')
+    if ARTS:
+        extra = f' · <a href="/books/">자본가 서재</a> <small>추천 도서 {len(BOOKS["books"])}권</small>' if BOOKS else ''
+        items.insert(0, f'<li><b><a href="/learn/">투자 공부</a></b> <small>글 {len(ARTS)}편</small>{extra}<br><span class="tools">'
+                        + ' · '.join(f'<a href="/learn/{esc(a["slug"])}/">{esc(a.get("short") or a["title"].split(" — ")[0])}</a>' for a in ARTS) + '</span></li>')
+    return '<ul class="amap">' + ''.join(items) + '</ul>'
+
+
+def static_pages():
+    """독립 페이지: <!--OG--> 공유 미리보기(제목·설명·대표 이미지) + 소개 페이지 <!--ABOUTMAP--> 도구 목록"""
+    img = og_image(HOME)
+    for d in STATIC:
+        f = os.path.join(ROOT, d, 'index.html')
+        if not os.path.isfile(f):
+            sys.exit(f'{d}/index.html 이 없습니다')
+        s = open(f, encoding='utf-8').read()
+        t = re.search(r'<title>(.*?)</title>', s, re.S)
+        ds = re.search(r'<meta name="description" content="([^"]*)">', s)
+        cu = re.search(r'<link rel="canonical" href="([^"]*)">', s)
+        if not (t and ds and cu):
+            sys.exit(f'{d}/index.html: title·description·canonical 중 없는 것이 있습니다')
+        title, desc, url = html.unescape(t.group(1)), html.unescape(ds.group(1)), html.unescape(cu.group(1))
+        og = '\n'.join([
+            '<!--OG-->',
+            '<meta property="og:type" content="website">',
+            f'<meta property="og:site_name" content="{esc(BRAND)}">',
+            '<meta property="og:locale" content="ko_KR">',
+            f'<meta property="og:title" content="{esc(title)}">',
+            f'<meta property="og:description" content="{esc(desc)}">',
+            f'<meta property="og:url" content="{esc(url)}">',
+            f'<meta property="og:image" content="{esc(img)}">',
+            '<meta property="og:image:width" content="1200">',
+            '<meta property="og:image:height" content="630">',
+            '<meta name="twitter:card" content="summary_large_image">',
+            f'<meta name="twitter:title" content="{esc(title)}">',
+            f'<meta name="twitter:description" content="{esc(desc)}">',
+            f'<meta name="twitter:image" content="{esc(img)}">',
+            '<!--/OG-->'])
+        s, n = re.subn(r'<!--OG-->.*?<!--/OG-->', lambda m: og, s, flags=re.S)
+        if n != 1:
+            sys.exit(f'{d}/index.html: <!--OG--><!--/OG--> 표시가 1개가 아닙니다 ({n}개)')
+        if d == 'about':
+            s, n = re.subn(r'<!--ABOUTMAP-->.*?<!--/ABOUTMAP-->', lambda m: '<!--ABOUTMAP-->' + about_map() + '<!--/ABOUTMAP-->', s, flags=re.S)
+            if n != 1:
+                sys.exit('about/index.html: <!--ABOUTMAP--> 표시가 없습니다')
+        write_if_changed(f'{d}/index.html', s)
+
+
 def write_if_changed(path, text):
     full = os.path.join(ROOT, path)
     os.makedirs(os.path.dirname(full), exist_ok=True)
@@ -583,14 +682,15 @@ def main():
     today = datetime.date.today().isoformat()
     urls = ''.join(f'  <url><loc>{esc(SITE + (r["path"] + "/" if r["path"] else ""))}</loc><lastmod>{today}</lastmod>'
                    f'<changefreq>{"daily" if not r["path"] else "weekly"}</changefreq><priority>{"1.0" if not r["path"] else "0.9" if r.get("hub") else "0.8"}</priority></url>\n'
-                   for r in ALL if not r.get('admin'))
+                   for r in ALL if not r.get('admin') and not r.get('noindex'))
     for u, lm in learn_urls:
         urls += f'  <url><loc>{esc(u)}</loc><lastmod>{lm}</lastmod><changefreq>monthly</changefreq><priority>{"0.9" if u.endswith("/learn/") else "0.8"}</priority></url>\n'
     for r in ROUTES:   # 영어판 페이지
         if 'en' in r:
             urls += f'  <url><loc>{esc(url_of(r, "en"))}</loc><lastmod>{today}</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>\n'
-    # 탭이 아닌 독립 페이지(개인정보처리방침 등): 폴더에 index.html 이 있을 때만 sitemap 에 포함
-    for extra in ('about', 'terms', 'disclaimer', 'privacy'):
+    # 탭이 아닌 독립 페이지(개인정보처리방침 등): 공유 미리보기·소개 도구 목록을 채우고 sitemap 에 포함
+    static_pages()
+    for extra in STATIC:
         if os.path.isfile(os.path.join(ROOT, extra, 'index.html')):
             urls += f'  <url><loc>{esc(SITE + extra + "/")}</loc><lastmod>{today}</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>\n'
     sitemap = f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{urls}</urlset>\n'

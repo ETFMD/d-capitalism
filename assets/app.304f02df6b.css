@@ -2721,6 +2721,23 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .idx-note .in-auto li { font-size:14px; line-height:1.75; color:var(--text2); }
   .idx-note .in-src { font-size:12px; color:var(--text3); line-height:1.7; margin:12px 0 0; }
   @media (max-width:600px) { .idx-note .in-tbl td:first-child { min-width:0; width:42%; } }
+  /* [SSR-H1] 화면을 JS 가 그리는 무한매수법·VR: 처음 받은 HTML 에도 제목(h1)이 있게 — JS 가 켜져 있으면 자리를 차지하지 않고(화면 밀림 없음),
+     화면이 그려지면(#…-root 가 비지 않으면) 아예 숨김(그린 화면의 h1 하나만 남음) · JS 가 꺼져 있으면 그대로 보임 */
+  .ssr-h1 { font-size:22px; font-weight:800; text-align:center; margin:18px 0 14px; color:var(--text); }
+  .ssr-ns { text-align:center; color:var(--text2); font-size:14px; margin:0 0 18px; }
+  html[data-theme] .ssr-h1 { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+  #mh-root:not(:empty) ~ .ssr-h1, #vr-root:not(:empty) ~ .ssr-h1 { display:none; }
+  /* [AUTOSUM] 자료 화면(시가총액·환율·아파트 순위·실적 캘린더) 자동 요약 — .idx-note 모양을 그대로 쓰고 여러 열 표만 보정 */
+  .guide.auto-sum .asum-tbl th, .guide.auto-sum .asum-tbl td { text-align:left; font-variant-numeric:tabular-nums; }
+  .guide.auto-sum .asum-tbl td:last-child { font-family:var(--font); font-size:12.5px; color:var(--text2); }
+  .guide.auto-sum .asum-tbl td:first-child { min-width:0; white-space:nowrap; }
+  .guide.auto-sum#asum-fx .asum-tbl td:first-child { white-space:normal; }
+  .guide.auto-sum .asum-tbl td.n { text-align:right; white-space:nowrap; color:var(--text); }
+  .guide.auto-sum .asum-tbl th.n { text-align:right; }
+  .guide.auto-sum .asum-tbl td small { color:var(--text3); font-size:11.5px; }
+  .auto-sum .in-auto { margin:12px 0 0; }
+  .auto-sum h3 + .in-auto, .auto-sum .in-auto + h3 { margin-top:14px; }
+  @media (max-width:900px) { .guide.auto-sum .asum-tbl td:first-child { min-width:0; } }
   .guide .g-faqs { margin-top:16px; }
   .guide h3 { font-size:15px; font-weight:700; color:var(--text); margin:0 0 12px; }
   .guide .g-steps, .guide .g-list { margin:0; padding-left:20px; font-size:13px; line-height:1.8; color:var(--text2); }

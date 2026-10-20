@@ -201,6 +201,7 @@ KRW = ('Why is the simulation in Korean won?', '<p>This site is built for Korean
 
 TEXT.update({'밸류리밸런싱 VR 5.0 백테스트': 'Value rebalancing backtest (Korean)'})   # VR 백테스트 메뉴 이름 (도구 화면은 한국어만)
 TEXT.update({'72루틴': '72 Routine (Korean)'})   # 72루틴 메뉴 이름 (도구 화면은 한국어만)
+TEXT.update({'무한매수법 계산기 — V1.0~V4.0 주문표·기록': 'Infinite Buying calculator — V1.0–V4.0 order sheet and tracker'})   # 무한매수법 정적 제목(h1 · [SSR-H1])
 
 GUIDES = {}
 GUIDES['sp500'] = guide('sp500', 'How the S&amp;P 500 growth rate is calculated',

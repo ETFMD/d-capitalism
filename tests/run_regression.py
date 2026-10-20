@@ -1107,6 +1107,120 @@ def admin_lock_check(page, base, fail, routes):
         fail('sitemap', 'sitemap.xml 을 읽지 못함: %s' % e)
 
 
+ADS_TAG = 'pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8051182229751523'
+STATIC_PAGES = ('about/', 'terms/', 'privacy/', 'disclaimer/')
+AUTOSUM_OF = {'mcap': 'mcap', 'fx': 'fx', 'aptrank': 'apt', 'earn': 'earn'}   # 탭 → [AUTOSUM:키] (자료 화면 자동 요약 · scripts/data_facts.py)
+HUB_GUIDE = ('me', 'pay', 'realty', 'capital')                              # 단계 해설 [HUB-GUIDE] 을 넣은 허브(영역)
+
+
+def raw_body(raw):
+    return re.sub(r'<script\b.*?</script>|<style\b.*?</style>|<!--.*?-->', '', raw, flags=re.S)
+
+
+def seo_raw_check(path, raw, fail, route):
+    """[ADSENSE·SEO] 처음 받은 HTML(스크립트 실행 전 · 검색엔진·애드센스 심사가 보는 그대로)
+    · 애드센스 스크립트: 관리자 잠금 화면·routes.json "noads"(회원 게시판)에는 없고 나머지에는 있음
+    · robots: 관리자 = noindex, nofollow · "noindex" = noindex, follow · 그 밖에는 없음
+    · 제목(h1) 정확히 1개(관리자 잠금 화면 제외) · 공유 이미지(og:image) · 채우지 않은 {{…}} 없음
+    · 자료 화면 자동 요약 [AUTOSUM] · 허브 단계 해설 [HUB-GUIDE] 이 비지 않았는지
+    route: routes.json 항목(도구 화면) 또는 None(홈·영어판·투자 공부·서재·독립 페이지)"""
+    r = route or {}
+    adm, noads, noidx = bool(r.get('admin')), bool(r.get('noads')), bool(r.get('noindex'))
+    has = ADS_TAG in raw
+    if (adm or noads) and has:
+        fail(path, '광고를 넣지 않기로 한 화면(관리자 잠금·회원 게시판)에 애드센스 스크립트가 있음')
+    if not (adm or noads) and not has:
+        fail(path, '애드센스 스크립트 없음')
+    m = re.search(r'<meta name="robots" content="([^"]*)">', raw)
+    rob, want = (m.group(1) if m else ''), ('noindex, nofollow' if adm else 'noindex, follow' if noidx else '')
+    if rob != want:
+        fail(path, 'robots %r (기대 %r)' % (rob, want))
+    body = raw_body(raw)
+    n = len(re.findall(r'<h1\b', body))
+    if not adm and n != 1:
+        fail(path, '처음 받은 HTML 의 제목(h1) %d개 (기대 1개 — 검색엔진이 보는 제목)' % n)
+    if not re.search(r'<meta property="og:image" content="https://[^"]+">', raw):
+        fail(path, '공유 미리보기 이미지(og:image) 없음')
+    if re.search(r'\{\{[a-zA-Z0-9_.]+\}\}', body):
+        fail(path, '채우지 않은 자동 값 {{…}} 이 HTML 에 남음')
+    key = AUTOSUM_OF.get(r.get('tab'))
+    if key and not path.startswith('en/'):
+        b = re.search(r'<!--AUTOSUM:%s-->(.*?)<!--/AUTOSUM-->' % key, raw, re.S)
+        t = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', b.group(1))) if b else ''
+        rows = len(re.findall(r'<tr>', b.group(1))) if b else 0
+        if len(t) < 600 or rows < 4 or not re.search(r'\d{4}년 \d{1,2}월 \d{1,2}일', t) or re.search(r'NaN|None|undefined|Infinity', t):
+            fail(path, '자동 요약 [AUTOSUM:%s] 이 비었거나 이상함 (글자 %d · 표 %d줄)' % (key, len(t), rows))
+    if r.get('hub') and r.get('group') in HUB_GUIDE:
+        b = re.search(r'<section class="guide hub-guide"[^>]*>(.*?)</section>', raw, re.S)
+        t = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', b.group(1))) if b else ''
+        if len(t) < 1200 or (b and b.group(1).count('class="g-faq"') < 4):
+            fail(path, '허브 단계 해설 [HUB-GUIDE] 이 없거나 짧음 (%d자)' % len(t))
+
+
+def static_pages_check(page, base, fail, widths, routes, local):
+    """[ADSENSE·SEO] 독립 페이지(소개·약관·개인정보·면책) — 광고·h1·og:image(빌드가 채움) · 넘침 · 소개 페이지 항목·도구 목록(빌드가 채움)
+    · 투자 공부 글쓴이 → 소개 #operator · sitemap.xml: 독립 페이지 있음 · noindex 화면(회원 게시판)·관리자 화면 없음"""
+    for p in STATIC_PAGES:
+        resp = page.goto(base + p, wait_until='load', timeout=60000)
+        raw = resp.text() if resp else ''
+        if not raw:
+            fail(p, '페이지를 열지 못함'); continue
+        seo_raw_check(p, raw, fail, None)
+        if not re.search(r'<!--OG-->\s*<meta property="og:type"', raw):
+            fail(p, '공유 미리보기 블록(<!--OG-->)이 빌드로 채워지지 않음')
+        for w in widths:
+            page.set_viewport_size({'width': w, 'height': 900}); page.wait_for_timeout(80)
+            o = page.evaluate(OVERFLOW_JS)
+            if o['sw'] > o['vw'] + 1 or o['out']:
+                fail(p, '%dpx 가로 넘침·화면 밖 요소 (문서 %dpx) %s' % (w, o['sw'], o['out'][:3]))
+        page.set_viewport_size({'width': 1440, 'height': 900})
+        if p == 'about/':
+            a = page.evaluate("""() => ({ ids: ['operator', 'areas', 'data', 'method', 'policy', 'ads', 'report'].filter(i => !document.getElementById(i)),
+                li: document.querySelectorAll('ul.amap > li').length, links: document.querySelectorAll('ul.amap a[href^="/"]').length,
+                rows: document.querySelectorAll('#data ~ .tbl tbody tr').length, txt: document.querySelector('main').innerText.length,
+                sug: !!document.querySelector('a[href="/suggest/"]'), cp: document.body.innerText.includes('쿠팡 파트너스') })""")
+            if a['ids'] or a['li'] < 8 or a['links'] < 60 or a['rows'] < 8 or a['txt'] < 3500 or not a['sug'] or not a['cp']:
+                fail(p, '소개 페이지 항목 이상 (빠진 절·도구 목록·출처 표·광고/제휴 안내): %s' % a)
+            want = len([r for r in routes if not r.get('admin') and not r.get('hub')])
+            hubs = ['/' + r['path'] + '/' for r in routes if r.get('hub')]
+            got = page.evaluate("(hubs) => new Set([...document.querySelectorAll('ul.amap a[href^=\"/\"]')].map(a => a.getAttribute('href')).filter(h => !h.startsWith('/learn/') && h !== '/books/' && !hubs.includes(h))).size", hubs)
+            idx = len([r for r in routes if r['tab'] in IDX_KEYS])
+            if got + idx != want:
+                fail(p, '소개 페이지 도구 목록 %d개 + 지수 %d개 (routes.json 공개 도구 %d개) — 빌드의 [ABOUTMAP] 이 메뉴와 어긋남' % (got, idx, want))
+    page.goto(base + 'learn/', wait_until='load'); page.wait_for_timeout(150)
+    if not page.evaluate("() => !!document.querySelector('a[href=\"/about/#operator\"]')"):
+        fail('learn/', "글쓴이(운영자) 링크가 소개 페이지 '운영자'(#operator)로 가지 않음")
+    try:
+        sm = open(os.path.join(ROOT, 'sitemap.xml'), encoding='utf-8').read() if local else http_text(base + 'sitemap.xml')
+    except Exception as e:
+        fail('sitemap', 'sitemap.xml 을 읽지 못함: %s' % e); return
+    for p in STATIC_PAGES:
+        if '/' + p + '</loc>' not in sm:
+            fail('sitemap', '독립 페이지가 sitemap.xml 에 없음: ' + p)
+    for r in routes:
+        if (r.get('noindex') or r.get('admin')) and '/' + r['path'] + '/</loc>' in sm:
+            fail('sitemap', 'noindex 화면이 sitemap.xml 에 있음: ' + r['path'])
+
+
+def ssr_h1_check(br, page, base, fail):
+    """무한매수법·VR: 처음 HTML 의 제목(h1 · [SSR-H1])이 JS 가 그린 뒤에는 숨고 보이는 h1 은 하나 · JS 를 끄면 그 제목이 보임"""
+    for p, root in (('muhan/', 'mh-root'), ('vr/', 'vr-root')):
+        page.goto(base + p, wait_until='load'); page.wait_for_timeout(1500)
+        r = page.evaluate("""(id) => { const s = document.querySelector('.ssr-h1'), root = document.getElementById(id);
+            const vis = [...document.querySelectorAll('h1')].filter(h => { const b = h.getBoundingClientRect(); return h.offsetParent && b.width > 2 && b.height > 2; });
+            return { root: root ? root.childElementCount : -1, ssr: s ? getComputedStyle(s).display : 'missing', vis: vis.length, txt: vis.map(h => h.textContent.trim()).join(' | ') }; }""", root)
+        if r['root'] < 1 or r['ssr'] != 'none' or r['vis'] != 1:
+            fail(p, '그린 뒤 제목(h1): 숨긴 정적 제목 %s · 보이는 h1 %d개(기대 1) · 화면 %d — %s' % (r['ssr'], r['vis'], r['root'], r['txt'][:80]))
+    ctx = br.new_context(viewport={'width': 1440, 'height': 900}, locale='ko-KR', java_script_enabled=False)
+    ctx.route(TRACK_RE, lambda route: route.fulfill(status=200, content_type='application/javascript', body=''))
+    pg = ctx.new_page()
+    for p in ('muhan/', 'vr/'):
+        pg.goto(base + p, wait_until='load')
+        if not pg.locator('.ssr-h1').is_visible():
+            fail(p, '자바스크립트를 끈 화면에서 정적 제목(h1)이 보이지 않음')
+    ctx.close()
+
+
 AS10 = "() => { localStorage.setItem('as.cfg2', JSON.stringify({ sel: ['^KS11', 'SPY', 'APT-seoul', 'APT-gangnam', 'GC=F', 'SI=F', 'BTC-USD', 'ETH-USD', 'M2', 'CPI'] })); }"
 
 
@@ -2221,10 +2335,19 @@ def main():
 
         # 1·2. 전 경로 × 화면 폭
         print('[1] 전 경로 %d개 × 화면 폭 %d개' % (len(paths), len(widths)), flush=True)
+        RT = {r['path'] + '/': r for r in routes}
         for path in paths:
             errs.clear()
             page.set_viewport_size({'width': 1440, 'height': 900})
-            page.goto(base + path, wait_until='load', timeout=60000)
+            resp = page.goto(base + path, wait_until='load', timeout=60000)
+            try:
+                raw = resp.text() if resp else ''
+            except Exception:
+                raw = ''
+            if raw:
+                seo_raw_check(path, raw, fail, RT.get(path))   # 처음 받은 HTML (광고·robots·h1·og:image·자동 요약·허브 해설)
+            else:
+                fail(path, '처음 받은 HTML 을 읽지 못함')
             page.wait_for_timeout(1200)
             for w in widths:
                 page.set_viewport_size({'width': w, 'height': 900})
@@ -2264,6 +2387,10 @@ def main():
             got = page.evaluate("[...document.querySelectorAll('.app-page')].filter(p => getComputedStyle(p).display !== 'none').reduce((a, p) => a + p.querySelectorAll('.hub-card').length, 0)")
             if got != want:
                 fail(hub['path'], '허브 카드 %d개 (같은 그룹 도구 %d개)' % (got, want))
+            if hub['group'] in HUB_GUIDE:
+                g = page.evaluate("() => { const s = document.querySelector('.hub-guide'); return s ? { vis: !!s.offsetParent, faq: s.querySelectorAll('details.g-faq').length, after: !!s.nextElementSibling && s.nextElementSibling.classList.contains('hub-next') } : null; }")
+                if not g or not g['vis'] or g['faq'] < 4 or not g['after']:
+                    fail(hub['path'], "허브 단계 해설(.hub-guide)이 안 보이거나 FAQ 4개 미만·'다음 단계' 앞이 아님: %s" % g)
 
         # 투자 공부 글 (애드센스 '가치 있는 콘텐츠' 보완) — 목록·글·도구 페이지 연결
         if n_src:
@@ -2356,6 +2483,14 @@ def main():
             if not r: fail(k, '지수 해설(.idx-note)이 보이지 않음'); continue
             if r['txt'] < 500 or r['rows'] < 6 or r['raw'] or not r['auto']:
                 fail(k, '지수 해설 이상: %s' % r)
+        print('[2-4] 독립 페이지(소개·약관·개인정보·면책) · sitemap · 무한매수법·VR 정적 제목 · 자료 화면 자동 요약', flush=True)
+        static_pages_check(page, base, fail, widths, routes, local)
+        ssr_h1_check(br, page, base, fail)
+        for r in [x for x in routes if x['tab'] in AUTOSUM_OF]:
+            page.goto(base + r['path'] + '/', wait_until='load'); page.wait_for_timeout(300)
+            a = page.evaluate("() => { const s = document.querySelector('.auto-sum'); return s ? { vis: !!s.offsetParent, rows: s.querySelectorAll('tbody tr').length, li: s.querySelectorAll('.in-auto li').length } : null; }")
+            if not a or not a['vis'] or a['rows'] < 4 or a['li'] < 2:
+                fail(r['path'], '자료 화면 자동 요약(.auto-sum)이 안 보이거나 비어 있음: %s' % a)
         print('[2-3] 관리자 전용 화면 잠금 · 자산 속도 시뮬레이터', flush=True)
         admin_lock_check(page, base, fail, routes)
         apage = admin_page(ctx, attach)

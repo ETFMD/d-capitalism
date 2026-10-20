@@ -703,6 +703,8 @@
       "path": "suggest",
       "tab": "suggest",
       "group": "community",
+      "noindex": true,
+      "noads": true,
       "title": "건의 게시판 — 버그 신고·기능 제안 | 회원 커뮤니티",
       "short": "건의 게시판",
       "desc": "사이트를 쓰다가 만난 오류와 바라는 기능을 남기면 운영자가 직접 확인하고 처리 상태와 답변으로 알려 드립니다."

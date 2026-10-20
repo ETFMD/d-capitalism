@@ -317,7 +317,7 @@ def write_all(arts, site, routes, analytics, write, books=None):
         page = (_head(site, f'{a["title"]} | 디코딩 자본주의', a['desc'], url, analytics, ld) + _top('learn/') +
                 f'<main class="wrap">\n<nav class="crumb" aria-label="현재 위치"><a href="/">홈</a> › <a href="/learn/">투자 공부</a> › {esc(CAT_NAME[a["cat"]])}</nav>\n'
                 f'<a class="cat" href="/learn/#{esc(a["cat"])}">{esc(CAT_NAME[a["cat"]])}</a>\n<h1>{esc(a["title"])}</h1>\n'
-                f'<p class="meta">글 <a href="/about/">{AUTHOR}</a> · 작성 {_ymd(a["date"])}' + (f' · 수정 {_ymd(a["updated"])}' if a['updated'] != a['date'] else '') +
+                f'<p class="meta">글 <a href="/about/#operator">{AUTHOR}</a> · 작성 {_ymd(a["date"])}' + (f' · 수정 {_ymd(a["updated"])}' if a['updated'] != a['date'] else '') +
                 f' · 읽는 데 약 {mins}분' + (f' · <span class="auto">숫자는 {_ymd(a["asof"])} 자료 기준 자동 갱신</span>' if a.get('asof') else '') + '</p>\n'
                 + (f'<nav class="toc" aria-label="목차"><b>목차</b><ol>{tochtml}</ol></nav>\n' if len(toc) >= 3 else '') +
                 f'<article>\n{body}\n</article>\n'
@@ -351,7 +351,7 @@ def write_all(arts, site, routes, analytics, write, books=None):
     total = sum(a['chars'] for a in arts)
     page = (_head(site, '투자 공부 — 노동자에서 자본가로 가는 글 모음 | 디코딩 자본주의', desc, url, analytics, ld) + _top('learn/') +
             '<main class="wrap">\n<nav class="crumb" aria-label="현재 위치"><a href="/">홈</a> › 투자 공부</nav>\n<h1>투자 공부</h1>\n'
-            f'<p class="meta">글 {len(arts)}편 · 운영자 <a href="/about/">{AUTHOR}</a>가 직접 쓰고 고칩니다</p>\n'
+            f'<p class="meta">글 {len(arts)}편 · 운영자 <a href="/about/#operator">{AUTHOR}</a>가 직접 쓰고 고칩니다</p>\n'
             '<div class="lead">계산기는 답을 주지만, <b>왜 그런 답이 나오는지</b>는 알려 주지 않습니다. 이곳의 글은 디코딩 자본주의의 계산기와 데이터를 '
             '<b>어떻게 읽고 내 결정에 쓰는지</b>를 처음 공부하는 사람 눈높이로 풀어 씁니다. 모든 글은 공식 통계·공시·실제 시세로 계산한 숫자를 쓰고, '
             '기준일과 출처를 함께 적습니다.</div>\n'

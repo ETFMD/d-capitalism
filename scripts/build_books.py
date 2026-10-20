@@ -252,7 +252,7 @@ def write_page(d, site, analytics, write):
     page = (head + BL._top('books/') +
             '<main class="wrap bk">\n<nav class="crumb" aria-label="현재 위치"><a href="/">홈</a> › <a href="/learn/">투자 공부</a> › 자본가 서재</nav>\n'
             f'<h1>자본가 서재 — 노동자에서 자본가로 가는 단계별 추천 도서</h1>\n{disc}'
-            f'<p class="meta">{len(stages)}단계 · {len(books)}권 · 운영자 <a href="/about/">{BL.AUTHOR}</a> 선정 · {BL._ymd(d["updated"])} 갱신</p>\n'
+            f'<p class="meta">{len(stages)}단계 · {len(books)}권 · 운영자 <a href="/about/#operator">{BL.AUTHOR}</a> 선정 · {BL._ymd(d["updated"])} 갱신</p>\n'
             f'<div class="lead">{d["lead"]}</div>\n'
             f'<nav class="bk-steps" aria-label="단계 바로 가기">{nav}</nav>\n'
             f'{secs}'

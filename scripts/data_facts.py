@@ -441,3 +441,306 @@ def fill(text, facts, where=''):
             sys.exit(f'{where}: 알 수 없는 자동 값 {{{{{k}}}}}')
         return str(facts[k])
     return re.sub(r'\{\{([a-zA-Z0-9_.]+)\}\}', rep, text)
+
+
+# ── 자료 화면 자동 요약 [AUTOSUM] ──
+# 시가총액·환율·아파트 순위·실적 캘린더는 표를 자바스크립트가 채워, 처음 받은 HTML(검색엔진·스크립트 꺼진 화면)에는 숫자가 없음.
+# 빌드 때 같은 data/*.json 으로 요약 글·표를 만들어 넣음 → 자료가 갱신될 때마다(build-pages.yml workflow_run·예약 실행) 글도 따라 바뀜
+KST = datetime.timezone(datetime.timedelta(hours=9))
+WD = '월화수목금토일'
+
+
+def _kst(iso):
+    return datetime.datetime.fromisoformat(iso.replace('Z', '+00:00')).astimezone(KST)
+
+
+def _when(iso):
+    k = _kst(iso)
+    return f'{ymd_ko(k.date())} {k:%H:%M}'
+
+
+def _md(d):
+    """'2026-10-21' → '10.21(수)'"""
+    x = datetime.date.fromisoformat(d[:10])
+    return f'{x.month}.{x.day}({WD[x.weekday()]})'
+
+
+def _ro(word):
+    """'으로'/'로' — 받침 없음·ㄹ 받침이면 '로' (숫자 끝은 읽는 소리: 영·삼·육 → 으로)"""
+    c = word.strip()[-1]
+    if '가' <= c <= '힣':
+        return '로' if (ord(c) - 0xAC00) % 28 in (0, 8) else '으로'
+    if c.isdigit():
+        return '으로' if c in '036' else '로'
+    return '로'
+
+
+def _sp(x, d=2):
+    """% 값(1.38 → +1.38%) — 반올림해서 0이면 부호 없이"""
+    return pct(x / 100, d, sign=round(x, d) != 0)
+
+
+def _sec(key, title, sub, inner, src):
+    return (f'\n    <!-- [AUTOSUM] {esc(title)} — 빌드 때 data/*.json 으로 채움 (scripts/data_facts.py · 자동 갱신) -->\n'
+            f'    <section class="guide idx-note auto-sum" id="asum-{key}" aria-labelledby="asum-{key}-h">'
+            f'<h2 id="asum-{key}-h">{esc(title)}</h2>'
+            f'<div class="g-card in-data"><h3>{sub}</h3>{inner}<p class="in-src">{src}</p></div></section>\n')
+
+
+def _tbl(head, rows):
+    return ('<div class="table-scroll"><table class="g-tbl asum-tbl"><thead><tr>'
+            + ''.join(f'<th class="{h[1]}">{h[0]}</th>' if isinstance(h, tuple) else f'<th>{h}</th>' for h in head) + '</tr></thead><tbody>'
+            + ''.join('<tr>' + ''.join(f'<td class="{c[1]}">{c[0]}</td>' if isinstance(c, tuple) else f'<td>{c}</td>' for c in r) + '</tr>' for r in rows)
+            + '</tbody></table></div>')   # 칸이 (글자, 'n') 이면 숫자 칸(오른쪽 정렬·줄바꿈 없음)
+
+
+def _ul(items):
+    return '<ul class="g-list in-auto">' + ''.join(f'<li>{x}</li>' for x in items) + '</ul>' if items else ''
+
+
+def autosum_mcap(src_text):
+    m, rows = _mcap_rows()
+    if len(rows) < 20:
+        raise ValueError(f'mcap.json 기업 {len(rows)}곳')
+    ko = _ko_names(src_text)
+    name = lambda r: ko.get(r['s'], r['n'])
+    cty = lambda r: COUNTRY_KO.get(r['c'], r['c'])
+    tot = sum(r['m'] for r in rows)
+
+    def move(r):
+        if r.get('pr') is None:
+            return 'NEW'
+        d = r['pr'] - r['r']
+        return f'▲{d}' if d > 0 else f'▼{-d}' if d < 0 else '—'
+    top = rows[:10]
+    tb = _tbl(['순위', '기업 · 나라', ('시가총액', 'n'), ('전일 대비', 'n'), ('순위', 'n')],
+              [[str(r['r']), f'{esc(name(r))}<br><small>{esc(cty(r))}</small>', (f'{r["m"] / 1e12:.2f}조 달러', 'n'),
+                (_sp(r['ch']) if isinstance(r.get('ch'), (int, float)) else '—', 'n'), (move(r), 'n')] for r in top])
+    by = {}
+    for r in rows:
+        n, s = by.get(cty(r), (0, 0))
+        by[cty(r)] = (n + 1, s + r['m'])
+    order = sorted(by.items(), key=lambda x: -x[1][1])
+    t10 = sum(r['m'] for r in top)
+    li = [f'상위 100개 기업의 시가총액 합계는 약 {tot / 1e12:.1f}조 달러이고, 1위 {esc(name(rows[0]))}{josa(name(rows[0]), "이", "가")} 그중 {pct(rows[0]["m"] / tot)}, '
+          f'상위 10개 기업이 {pct(t10 / tot)}를 차지합니다.',
+          '나라별로는 ' + ', '.join(f'{esc(c)} {n}곳({pct(s / tot)})' for c, (n, s) in order[:4]) + ' 순으로 많습니다.']
+    kr = [r for r in rows if r['c'] == 'South Korea']
+    if kr:
+        li.append(f'한국 기업은 {len(kr)}곳이 100위 안에 있습니다: ' + ', '.join(f'{esc(name(r))} {r["r"]}위' for r in kr) + '.')
+    else:
+        li.append('오늘은 100위 안에 든 한국 기업이 없습니다.')
+    hc = [r for r in rows if isinstance(r.get('ch'), (int, float))]
+    up, dn = (max(hc, key=lambda r: r['ch']), min(hc, key=lambda r: r['ch'])) if hc else (None, None)
+    if up and up['ch'] > 0 and dn['ch'] < 0:
+        li.append(f'전 거래일보다 주가가 가장 많이 오른 기업은 {esc(name(up))}({pct(up["ch"] / 100, 2, sign=True)}), '
+                  f'가장 많이 내린 기업은 {esc(name(dn))}({pct(dn["ch"] / 100, 2, sign=True)})입니다.')
+    new = [r for r in rows if r.get('pr') is None]
+    jump = [r for r in rows if r.get('pr') is not None and r['pr'] - r['r'] >= 3]
+    if new:
+        li.append('새로 100위 안에 들어온 기업: ' + ', '.join(f'{esc(name(r))}({r["r"]}위)' for r in new) + '.')
+    if jump:
+        jump.sort(key=lambda r: r['r'] - r['pr'])
+        li.append('순위가 3계단 이상 오른 기업: ' + ', '.join(f'{esc(name(r))}({r["pr"]}위 → {r["r"]}위)' for r in jump[:5]) + '.')
+    return _sec('mcap', '오늘의 세계 시가총액 순위 요약', f'{ymd_ko(m["asOf"])} 종가 기준 TOP 10 <small>자동 갱신</small>', tb + _ul(li),
+                f'자료: {esc(m.get("source", "companiesmarketcap.com · Yahoo Finance"))} — {ymd_ko(m["asOf"])} 종가(전 거래일 {ymd_ko(m["prevDate"])} 순위와 비교). '
+                '시가총액은 같은 날 환율로 바꾼 미국 달러 기준이고, 위 표는 페이지를 열 때 최신 자료로 다시 그려집니다.')
+
+
+FX_LIST = [('USD', '미국 달러', 1), ('EUR', '유로', 1), ('JPY', '일본 엔', 100), ('CNY', '중국 위안', 1), ('GBP', '영국 파운드', 1), ('HKD', '홍콩 달러', 1),
+           ('SGD', '싱가포르 달러', 1), ('AUD', '호주 달러', 1), ('CAD', '캐나다 달러', 1), ('CHF', '스위스 프랑', 1), ('THB', '태국 바트', 1), ('VND', '베트남 동', 100)]
+
+
+def _fx_quote(code):
+    """원화 환율(1 외화 = N원) — (최신값, 시각 ISO, 전 거래일 종가, [(날짜, 종가)…]) · 베트남 동은 USD/KRW ÷ USD/VND"""
+    q = _load('market.json')['quotes']
+    if code == 'VND':
+        a, b = q['USDKRW=X'], q['USDVND=X']
+        da = {datetime.datetime.fromtimestamp(t, KST).date(): v for t, v in a['daily']}
+        db = {datetime.datetime.fromtimestamp(t, KST).date(): v for t, v in b['daily']}
+        ser = [(d, da[d] / db[d]) for d in sorted(set(da) & set(db))]
+        return a['price'] / b['price'], min(a['time'], b['time']), a['prev'] / b['prev'], ser
+    x = q[code + 'KRW=X']
+    ser = [(datetime.datetime.fromtimestamp(t, KST).date(), v) for t, v in x['daily']]
+    return x['price'], x['time'], x['prev'], ser
+
+
+def _usdkrw_ecos():
+    u = _load('usdkrw.json')
+    d, days = u['d0'], [u['d0']]
+    for x in u['dd']:
+        d += x
+        days.append(d)
+    if len(days) != len(u['c']):
+        raise ValueError('usdkrw.json 날짜·종가 개수 다름')
+    return [(day(a), v) for a, v in zip(days, u['c'])], u
+
+
+def autosum_fx():
+    rows, chg = [], []
+    t_last = 0
+    for code, nm, unit in FX_LIST:
+        p, t, prev, ser = _fx_quote(code)
+        if not (p > 0 and prev > 0):
+            raise ValueError(f'{code} 환율 이상: {p}')
+        t_last = max(t_last, t)
+        d1 = p / prev - 1 if prev != p else None
+        m1 = None
+        if len(ser) >= 2:
+            last = ser[-1][0]
+            old = [v for dd, v in ser if (last - dd).days >= 28]
+            base = old[-1] if old else (ser[0][1] if (last - ser[0][0]).days >= 20 else None)
+            if base:
+                m1 = p / base - 1
+                chg.append((nm, m1))
+        rows.append([f'{esc(nm)}<br><small>{unit} {code}</small>', (f'<b>{p * unit:,.2f}원</b>', 'n'),
+                     (pct(d1, 2, sign=True) if d1 is not None else '—', 'n'), (pct(m1, 1, sign=True) if m1 is not None else '—', 'n')])
+    when = datetime.datetime.fromtimestamp(t_last, KST)
+    tb = _tbl(['통화', ('원화 환율', 'n'), ('전일 대비', 'n'), ('약 1개월', 'n')], rows)
+    usd_p, _, usd_prev, _ = _fx_quote('USD')
+    li = []
+    d = usd_p / usd_prev - 1
+    if abs(d) >= 0.00005:
+        li.append(f'원·달러 환율은 {usd_p:,.2f}원으로 전 거래일 종가보다 {pct(abs(d), 2)} {"올랐" if d > 0 else "내렸"}습니다. '
+                  f'환율이 {"오르면 같은 1달러를 사는 데 원화가 더 들어 원화 가치가 떨어진 것(원화 약세)" if d > 0 else "내리면 같은 1달러를 더 적은 원화로 살 수 있어 원화 가치가 오른 것(원화 강세)"}입니다.')
+    if len(chg) >= 3:
+        chg.sort(key=lambda x: x[1])
+        a, b = chg[-1], chg[0]   # 원화 대비 가장 많이 오른(덜 내린) 통화 · 가장 많이 내린(덜 오른) 통화
+        nn = f'{len(chg)}개 통화' if len(chg) == len(FX_LIST) else f'1개월 전 시세가 있는 {len(chg)}개 통화'
+        if a[1] < 0:
+            li.append(f'최근 약 1개월 동안 {nn}가 모두 원화 대비 내렸습니다(원화 강세). 가장 많이 내린 통화는 {esc(b[0])}({pct(b[1], 1, sign=True)}), '
+                      f'가장 적게 내린 통화는 {esc(a[0])}({pct(a[1], 1, sign=True)})입니다.')
+        elif b[1] > 0:
+            li.append(f'최근 약 1개월 동안 {nn}가 모두 원화 대비 올랐습니다(원화 약세). 가장 많이 오른 통화는 {esc(a[0])}({pct(a[1], 1, sign=True)}), '
+                      f'가장 적게 오른 통화는 {esc(b[0])}({pct(b[1], 1, sign=True)})입니다.')
+        else:
+            li.append(f'최근 약 1개월 동안 원화 대비 가장 많이 오른 통화는 {esc(a[0])}({pct(a[1], 1, sign=True)}), 가장 많이 내린 통화는 {esc(b[0])}({pct(b[1], 1, sign=True)})입니다.')
+    ser, u = _usdkrw_ecos()
+    ld, lv = ser[-1]
+    y1 = [(dd, v) for dd, v in ser if (ld - dd).days <= 365]
+    hi, lo = max(y1, key=lambda x: x[1]), min(y1, key=lambda x: x[1])
+    y10 = [v for dd, v in ser if (ld - dd).days <= 3653]
+    avg10 = sum(y10) / len(y10)
+    top = max(ser, key=lambda x: x[1])
+    gfc = max(((dd, v) for dd, v in ser if datetime.date(2008, 1, 1) <= dd <= datetime.date(2009, 12, 31)), key=lambda x: x[1], default=None)
+    li.append(f'한국은행 매매기준율로 보면 {ymd_ko(ld)} 원·달러 환율은 {lv:,.1f}원입니다. 최근 1년 최고는 {hi[1]:,.1f}원({ymd_dot(hi[0])}), 최저는 {lo[1]:,.1f}원({ymd_dot(lo[0])})이었고, '
+              f'최근 10년 평균 {avg10:,.1f}원보다 {pct(abs(lv / avg10 - 1))} {"높" if lv > avg10 else "낮"}습니다.')
+    crisis = '외환위기' if top[0].year in (1997, 1998) else ''
+    li.append(f'1990년 이후 가장 높았던 날은 {ymd_ko(top[0])}{"(" + crisis + ")" if crisis else ""}의 {top[1]:,.1f}원'
+              + (f'이고, 2008년 글로벌 금융위기 때는 {ymd_ko(gfc[0])} {gfc[1]:,.1f}원까지 올랐습니다.' if gfc else '입니다.')
+              + ' 환율은 위기 때 짧은 기간에 크게 오르는 경향이 있어, 해외 자산은 환율 변동까지 함께 생각해야 합니다.')
+    return _sec('fx', '주요 통화 원화 환율 요약', f'{ymd_ko(when.date())} {when:%H:%M} 기준 · 12개 통화 <small>자동 갱신</small>', tb + _ul(li),
+                f'자료: Yahoo Finance 외환 시세(data/market.json · 베트남 동은 달러 환율로 교차 계산) · 한국은행 ECOS 원/미국달러 매매기준율(data/usdkrw.json, {ymd_ko(ld)}까지). '
+                '엔·동은 100단위로 표시합니다. 은행에서 실제로 바꿀 때는 여기에 환전 수수료(스프레드)가 붙습니다.')
+
+
+def _man(n):
+    """만원 → '25억 3,000만원' (아파트 순위 화면과 같은 표기)"""
+    e, m = int(n // 10000), int(round(n - (n // 10000) * 10000))
+    return f'{m:,}만원' if not e else f'{e:,}억' + (f' {m:,}만원' if m else '원')
+
+
+def autosum_apt():
+    a = _load('apt_rank.json')
+    R = sorted(a['rows'], key=lambda r: r[4], reverse=True)   # 화면과 같은 순서: 금액 높은 순 · 같은 금액은 최근 계약 먼저
+    R.sort(key=lambda r: -r[2])
+    if len(R) < 1000:
+        raise ValueError(f'apt_rank.json 단지 {len(R)}곳')
+    rank, prev = [], None
+    for i, r in enumerate(R):
+        rank.append(rank[-1] if prev is not None and prev[2] == r[2] else i + 1)
+        prev = r
+    py = lambda r: r[2] / (r[3] / 3.3058) if r[3] > 0 else 0
+    tb = _tbl(['순위', '아파트 · 지역', ('실거래가', 'n'), ('전용면적', 'n'), ('계약일', 'n')],
+              [[str(rank[i]), f'{esc(r[1])}<br><small>{esc(r[7])} {esc(r[8])} {esc(r[9].split(" ")[0])}</small>', (_man(r[2]), 'n'),
+                (f'{r[3]:g}㎡<br><small>{r[3] / 3.3058:.0f}평</small>', 'n'), (ymd_dot(r[4]), 'n')] for i, r in enumerate(R[:10])])
+    med = R[len(R) // 2]
+    se = sorted([r[2] for r in R if r[7] == '서울'], reverse=True)
+    ex = sorted([r[2] for r in R if r[7] != '서울'], reverse=True)
+    cnt = sum(r[12] or 0 for r in R)
+    over = [r for r in R if r[2] >= 100000]
+    li = [f'최근 1년 동안 매매가 신고된 전국 아파트 단지는 {len(R):,}곳, 거래는 모두 {cnt:,}건입니다. 단지마다 가장 최근 실거래가를 줄 세우면 가운데 단지(중위)는 {_man(med[2])}입니다.']
+    if se and ex:
+        li.append(f'서울 단지 {len(se):,}곳의 중위 실거래가는 {_man(se[len(se) // 2])}, 서울을 뺀 지역 {len(ex):,}곳은 {_man(ex[len(ex) // 2])}{_ro(_man(ex[len(ex) // 2]))} '
+                  f'서울이 약 {se[len(se) // 2] / ex[len(ex) // 2]:.1f}배입니다.')
+    if over:
+        so = sum(1 for r in over if r[7] == '서울')
+        li.append(f'최근 실거래가가 10억원 이상인 단지는 {len(over):,}곳(전체의 {pct(len(over) / len(R))})이고, 그중 {so:,}곳({pct(so / len(over), 0)})이 서울입니다.')
+    big = [r for r in R if r[3] >= 59]   # 아주 작은 면적의 높은 평당가가 1위가 되지 않게 전용 59㎡ 이상에서
+    if big:
+        b = max(big, key=py)
+        li.append(f'전용 59㎡ 이상에서 평당가(전용 3.3㎡당)가 가장 높은 단지는 {esc(b[7])} {esc(b[8])} {esc(b[1])}{_ro(b[1])}, 전용 {b[3]:g}㎡가 {_man(b[2])}에 거래돼 평당 약 {py(b) / 1e4:,.2f}억원입니다.')
+    last = max(r[4] for r in R)
+    li.append(f'가장 최근 계약일은 {ymd_ko(last)}입니다. 실거래 신고 기한이 계약 후 30일이라 최근 몇 주 거래는 앞으로 더 늘어날 수 있습니다.')
+    return _sec('apt', '전국 아파트 실거래가 순위 요약', f'최근 1년 실거래 기준 TOP 10 <small>{_when(a["updated"])} 갱신 · 자동 갱신</small>', tb + _ul(li),
+                f'자료: {esc(a.get("source", "국토교통부 아파트 매매 실거래가"))} (data/apt_rank.json). 단지마다 가장 최근 1건(계약 해제 제외)의 금액이며, '
+                '시세·호가와 다를 수 있습니다. 위 순위표는 페이지를 열 때 최신 자료로 다시 그려집니다.')
+
+
+def autosum_earn():
+    e = _load('earnings.json')
+    if len(e.get('kr') or []) < 50 or len(e.get('us') or []) < 50:
+        raise ValueError(f'earnings.json 기업 수 이상 (국내 {len(e.get("kr") or [])} · 미국 {len(e.get("us") or [])})')
+    td = datetime.date.fromisoformat(e['today'])
+    nm = lambda x, mk: x.get('n') if mk == 'kr' else (x.get('ko') or x.get('n'))
+    up = {}
+    n_est = {'kr': 0, 'us': 0}
+    for mk in ('kr', 'us'):
+        for x in e[mk]:
+            n = x.get('nx') or {}
+            if not n.get('d'):
+                continue
+            dd = (datetime.date.fromisoformat(n['d']) - td).days
+            if not 0 <= dd <= 14:
+                continue
+            if n.get('k') in ('ir', 'conf'):
+                up.setdefault(n['d'], {'kr': [], 'us': []})[mk].append(x)
+            else:
+                n_est[mk] += 1
+    rows = []
+    for d in sorted(up):
+        cell = lambda mk: ', '.join(esc(nm(x, mk)) for x in sorted(up[d][mk], key=lambda x: x.get('r') or 999)) or '—'
+        rows.append([_md(d), cell('kr'), cell('us')])
+    n_kr = sum(len(v['kr']) for v in up.values())
+    n_us = sum(len(v['us']) for v in up.values())
+    inner = (_tbl(['날짜', '국내 (시가총액 순)', '미국 (시가총액 순)'], rows) if rows else '<p class="in-src">앞으로 2주 안에 회사가 확정해 알린 발표 일정이 없습니다.</p>')
+    li = [f'앞으로 2주(오늘 포함) 안에 발표일이 확정된 기업은 국내 {n_kr}곳, 미국 {n_us}곳입니다.'
+          + (f' 이 밖에 국내 {n_est["kr"]}곳·미국 {n_est["us"]}곳은 작년 발표일·법정 기한으로 추정한 예상 일정이라 표에서 뺐습니다.' if n_est['kr'] or n_est['us'] else '')]
+    rec = []
+    for mk in ('kr', 'us'):
+        for x in e[mk]:
+            ls = x.get('ls') or {}
+            if ls.get('d') and 0 <= (td - datetime.date.fromisoformat(ls['d'])).days <= 14 and isinstance(ls.get('sp'), (int, float)):
+                rec.append((ls['d'], mk, x, ls['sp']))
+    rec.sort(key=lambda t: (t[1] != 'kr', t[2].get('r') or 999))   # 같은 날은 국내 먼저 · 시가총액 순
+    rec.sort(key=lambda t: t[0], reverse=True)                        # 최근 발표 먼저 (정렬 안정성으로 위 순서 유지)
+    rt = ''
+    if rec:
+        beat = sum(1 for t in rec if t[3] > 0)
+        rt = _tbl(['발표일', '기업', ('예상 대비', 'n')], [[_md(d), f'{esc(nm(x, mk))}<br><small>{"국내 · 영업이익" if mk == "kr" else "미국 · 주당순이익(EPS)"}</small>',
+                                                (_sp(sp, 1), 'n')] for d, mk, x, sp in rec[:20]])
+        li.append(f'최근 2주 동안 실적을 발표한 {len(rec)}곳 중 {beat}곳이 증권가 예상(컨센서스)보다 좋게, {len(rec) - beat}곳이 같거나 나쁘게 나왔습니다.'
+                  ' 국내는 영업이익, 미국은 주당순이익(EPS)을 예상치와 비교했습니다.')
+        big = max(rec, key=lambda t: abs(t[3]))
+        li.append(f'예상과 가장 크게 달랐던 곳은 {esc(nm(big[2], big[1]))}{_ro(nm(big[2], big[1]))}, 예상 대비 {pct(big[3] / 100, 1, sign=True)}였습니다. '
+                  '예상과의 차이가 클수록 발표 직후 주가가 크게 움직이는 경우가 많습니다.')
+    inner += _ul(li)
+    if rt:
+        inner += '<h3>최근 2주 발표 결과 <small>예상 대비 · 최근 순</small></h3>' + rt
+    return _sec('earn', '실적발표 일정 요약 — 앞으로 2주와 최근 발표', f'앞으로 2주 확정 일정 <small>{_when(e["updated"])} 갱신 · 자동 갱신</small>', inner,
+                f'자료: {esc(e.get("source", ""))} (data/earnings.json). 국내 시가총액 상위 {len(e["kr"])}곳·미국 {len(e["us"])}곳 대상이며, '
+                '확정 일정은 회사 공시(IR)·회사 발표 날짜만 넣었습니다. 아래 캘린더는 페이지를 열 때 최신 자료로 다시 그려집니다.')
+
+
+AUTOSUM = {'mcap': autosum_mcap, 'fx': autosum_fx, 'apt': autosum_apt, 'earn': autosum_earn}
+
+
+def autosum(key, src_text=None):
+    if key not in AUTOSUM:
+        sys.exit(f'알 수 없는 자동 요약 {key} (<!--AUTOSUM:키--> · scripts/data_facts.py AUTOSUM)')
+    if key == 'mcap':
+        if src_text is None:
+            with open(os.path.join(ROOT, 'src', 'index.html'), encoding='utf-8') as fh:
+                src_text = fh.read()
+        return AUTOSUM[key](src_text)
+    return AUTOSUM[key]()
