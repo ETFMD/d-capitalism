@@ -1691,6 +1691,38 @@ def etf_audit(page, base, fail):
     return n
 
 
+BK_IMG_ALL = "[...document.images].every(i => i.complete)"
+BK_IMG_RETRY = """() => { const bad = [...document.images].filter(i => i.complete && i.naturalWidth === 0 && i.getAttribute('src'));
+  bad.forEach(i => { const s = i.getAttribute('src'); i.src = s + (s.includes('?') ? '&' : '?') + 'retry=1'; });
+  return bad.map(i => i.getAttribute('src')); }"""
+
+
+BK_NET = []   # 표지 요청 실패·HTTP 오류 기록 (다시 불러올 때 원인을 함께 알림)
+
+
+def bk_net_watch(page):
+    def rf(q):
+        if '/books/cover/' in q.url: BK_NET.append('%s %s' % (q.url.split('/books/cover/')[1][:40], q.failure))
+    def rs(r):
+        if '/books/cover/' in r.url and r.status >= 400: BK_NET.append('%s HTTP %d' % (r.url.split('/books/cover/')[1][:40], r.status))
+    page.on('requestfailed', rf); page.on('response', rs)
+
+
+def bk_img_settle(page, timeout):
+    """자본가 서재 표지: 늦게 불러오기(lazy)를 풀고 모두 받을 때까지 기다림 → 안 열린 그림은 한 번만 다시 불러옴
+    (실사이트에서 네트워크가 한 번 끊겨 생기는 거짓 실패 방지 — 2026-10-20 learn/cagr-start-point 1건. 파일이 정말 깨졌으면 다시 불러와도 0 이라 그대로 실패)
+    → 다시 불러온 그림 주소 목록(알림용)"""
+    page.evaluate("() => { document.querySelectorAll('img[loading=lazy]').forEach(i => i.loading = 'eager'); return true; }")
+    try: page.wait_for_function(BK_IMG_ALL, timeout=timeout)
+    except Exception: pass   # 아래 그림 크기 검사가 실패로 알림
+    again = page.evaluate(BK_IMG_RETRY)
+    if again:
+        try: page.wait_for_function(BK_IMG_ALL, timeout=10000)
+        except Exception: pass
+        print('    알림: 처음에 안 열린 그림 %d개를 한 번 다시 불러옴 — %s · 원인 %s' % (len(again), ', '.join(again[:3]), '; '.join(BK_NET[-4:]) or '기록 없음'), flush=True)
+    return again
+
+
 def books_check(page, base, fail, local):
     """[BOOKS] 자본가 서재 /books/ (scripts/build_books.py · content/books/books.json)
     · 단계·책 수가 자료와 같음 · 표 줄 = 책 카드 · 책마다 저자·출판사·한줄평·이어 하기 · 단계 바로 가기가 실제 칸으로
@@ -1708,11 +1740,9 @@ def books_check(page, base, fail, local):
     has_cv = {b['id'] for b in src['books'] if b['id'] in cvl and os.path.isfile(os.path.join(ROOT, 'books', 'cover', b['id'] + '.webp'))}
     titles = {b['id']: b['title'] for b in src['books']}
     page.set_viewport_size({'width': 1280, 'height': 900})
+    bk_net_watch(page)
     page.goto(base + 'books/', wait_until='load'); page.wait_for_timeout(300)
-    IMG_WAIT = "() => { document.querySelectorAll('img[loading=lazy]').forEach(i => i.loading = 'eager'); return true; }"
-    page.evaluate(IMG_WAIT)
-    try: page.wait_for_function("[...document.images].every(i => i.complete)", timeout=20000)
-    except Exception: pass   # 아래 그림 크기 검사가 실패로 알림
+    bk_img_settle(page, 20000)
     r = page.evaluate("""() => {
       const q = s => [...document.querySelectorAll(s)], first = document.querySelector('.bk-stage'), disc = document.getElementById('bk-disc');
       const ld = q('script[type="application/ld+json"]').map(s => { try { return JSON.parse(s.textContent); } catch (e) { return 'ERR'; } }).flat();
@@ -1780,9 +1810,7 @@ def books_check(page, base, fail, local):
         hs = page.evaluate("[...document.querySelectorAll('a[href^=\"/books/#b-\"]')].map(a => a.getAttribute('href').slice(10))")
         want = [b['id'] for b in src['books'] if slug in b.get('learn', [])][:4]
         if hs != want or any(h not in ids for h in hs): fail('learn/' + slug, "'이 글과 함께 읽으면 좋은 책' 이상: %s (기대 %s)" % (hs, want))
-        page.evaluate(IMG_WAIT)
-        try: page.wait_for_function("[...document.images].every(i => i.complete)", timeout=15000)
-        except Exception: pass
+        bk_img_settle(page, 15000)
         th = page.evaluate("[...document.querySelectorAll('a[href^=\"/books/#b-\"]')].map(a => { const i = a.querySelector('img'); return [a.getAttribute('href').slice(10), i ? i.naturalWidth : -1]; })")
         badt = [x for x in th if (x[0] in has_cv) != (x[1] > 0)]
         if badt: fail('learn/' + slug, "'함께 읽으면 좋은 책' 작은 표지 이상(-1 = 그림 없음 · 0 = 안 열림): %s" % badt)
