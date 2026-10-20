@@ -17,6 +17,8 @@
      원화 환산 · 주소(#e=…) 복원 · 묶음 버튼 · 자료 없음 표시 · 영어판
      (로컬 검사는 Worker /etf 와 국내 분배 이력 묶음을 합성 자료로 대신해 숫자까지 맞춰 봄 — 네이버 수정주가의 반올림·조정 오차까지 넣어 역산하면 틀리게 만듦)
   7. --etf-audit (배포된 사이트 · 매일 Actions) — ETF 차트 비교 화면의 기준·끝 가격을 독립 출처의 실제 가격(네이버 일별 시세 · 야후 일봉)과 맞춰 봄
+  8. 투자전략 시뮬레이터 — 계산 기준값(tests/stratsim_test.cjs · 고정 구간) · 라이브러리 써 보기(격리 Worker) · 분석 표 · 공유 링크 복원 ·
+     9sig/SMA 과최적화 탐색기(탭·행 수 · '열기' 링크 숫자 일치) · TQQQ 장중 흐름
 
 사용법
   pip install playwright && python -m playwright install chromium
@@ -2640,6 +2642,101 @@ def share_all_check(br, base, local, fail):
     ctx.close()
 
 
+SS_GOLD_JS = """() => { const m = SSM.R.metrics; return { ready: SSM.ready(), n: SSM.R.labels.length, l0: SSM.R.labels[0], l1: SSM.R.labels[SSM.R.labels.length - 1],
+  bh: [m.bh.cagr, m.bh.maxDD], inv: [m.invested.cagr], cfg: SSM.S.saved.map(c => { const x = m['cfg:' + c.id] || {}; return [c.type, x.cagr, x.maxDD, !!x.pending, x.error || null]; }) }; }"""
+
+
+def stratsim_check(br, base, fail, ignorable):
+    """[STRATSIM] 투자전략 시뮬레이터(/strategy-simulator/) · 9sig/SMA 과최적화 탐색기 · TQQQ 장중 흐름
+    · 고정 구간(2010 1분기~2025 4분기) 9sig·SMA 기본 숫자 = tests/stratsim_test.cjs 기준값(화면 코드가 Node 계산과 같은지)
+    · 전략 라이브러리 44개 · 써 보기(사용자 코드 전략은 격리 Worker 에서 계산 끝) · 분석 표 열림 · 링크 복사 → 새 창 같은 숫자
+    · 탐색기: 탭 6개 · 첫 탭 행 수 · '열기' 링크로 연 시뮬레이터(청산 2025 4분기)가 표의 연평균과 같음 · 장중 흐름 그려짐"""
+    import base64
+    ctx = br.new_context(viewport={'width': 1400, 'height': 900})
+    try:
+        ctx.grant_permissions(['clipboard-read', 'clipboard-write'], origin=base.rstrip('/'))
+    except Exception:
+        pass
+    pg = ctx.new_page()
+    errs = []
+    pg.on('pageerror', lambda e: errs.append(('스크립트 오류 ' + str(e)[:200], '')))
+    pg.on('console', lambda m: errs.append((m.text, m.location.get('url', '') if m.location else '')) if m.type == 'error' else None)
+    tok = lambda o: 'j' + base64.urlsafe_b64encode(json.dumps(o, ensure_ascii=False).encode()).decode().rstrip('=')
+    try:
+        # 1) 고정 구간 기준값 (tests/stratsim_test.cjs '9sig·SMA 기본')
+        st = {'v': 1, 'i': 333, 'm': 500, 'a': '0', 'r': 4, 'e': 228, 'x': 291, 'hd': [], 'sc': [{'t': '9sig', 'n': '9sig', 'p': {}, 'c': '#e879f9'}, {'t': 'sma', 'n': 'SMA', 'p': {}, 'c': '#f59e0b'}]}
+        pg.goto(base + 'strategy-simulator/#ss=' + tok(st), wait_until='load'); pg.wait_for_timeout(3500)
+        g = pg.evaluate(SS_GOLD_JS)
+        want = [[40.2731878649, 81.6150703134], [39.0547580275, 59.6674], [45.1095, 46.2812]]
+        ok = g['ready'] and g['n'] == 65 and g['l0'] == '2009-12-31' and g['l1'] == '2025-12-31' and abs(g['bh'][0] - want[0][0]) < 1e-6 and abs(g['bh'][1] - want[0][1]) < 1e-6 \
+            and len(g['cfg']) == 2 and abs(g['cfg'][0][1] - want[1][0]) < 1e-6 and abs(g['cfg'][1][1] - want[2][0]) < 1e-3
+        if not ok:
+            fail('strategy-simulator', '고정 구간 숫자가 기준값과 다름: %s' % json.dumps(g, ensure_ascii=False)[:300])
+        # 2) 라이브러리 · 써 보기 (사용자 코드 전략)
+        pg.evaluate("() => { for (const k of Object.keys(localStorage)) if (k.startsWith('dc_ss_')) localStorage.removeItem(k); }")
+        pg.goto(base + 'strategy-simulator/', wait_until='load'); pg.wait_for_timeout(2500)
+        pg.click('#ss-libbtn'); pg.wait_for_timeout(1200)
+        lib = pg.evaluate("() => ({ cards: document.querySelectorAll('.ss-lib-card').length, tries: [...document.querySelectorAll('.ss-lib-try')].map(b => +b.dataset.try) })")
+        if lib['cards'] < 1 or not lib['tries']:
+            fail('strategy-simulator', '전략 라이브러리 카드·써 보기 없음: %s' % lib)
+        else:
+            pg.click('.ss-lib-try[data-try="%d"]' % lib['tries'][-1]); pg.wait_for_timeout(5000)
+            c = pg.evaluate(SS_GOLD_JS)['cfg']
+            if len(c) != 1 or c[0][3] or c[0][4] or c[0][1] is None:
+                fail('strategy-simulator', '라이브러리 써 보기 결과 이상: %s' % c)
+        # 3) 분석 표
+        pg.keyboard.press('Escape'); pg.wait_for_timeout(300)
+        pg.click('#ss-an-open'); pg.wait_for_timeout(6000)
+        an = pg.evaluate("() => ({ open: SSM.S.an.open, cells: document.querySelectorAll('[data-an-cell], .ss-an-cell, .ssa-cell').length })")
+        if not an['open']:
+            fail('strategy-simulator', '분석 표가 열리지 않음: %s' % an)
+        pg.keyboard.press('Escape'); pg.wait_for_timeout(400)
+        # 4) 링크 복사 → 새 창
+        pg.click('#ss-share'); pg.wait_for_timeout(700)
+        url = pg.evaluate("() => navigator.clipboard.readText().catch(() => '')")
+        if '#ss=' not in (url or ''):
+            fail('strategy-simulator', '링크 복사 결과 이상: %s' % (url or '')[:120])
+        else:
+            a1 = pg.evaluate(SS_GOLD_JS)
+            p2 = ctx.new_page()
+            p2.goto(base + 'strategy-simulator/' + url[url.index('#'):], wait_until='load'); p2.wait_for_timeout(6000)
+            a2 = p2.evaluate(SS_GOLD_JS)
+            if json.dumps(a1['cfg']) != json.dumps(a2['cfg']) or a1['bh'] != a2['bh']:
+                fail('strategy-simulator', '공유 링크로 연 화면 숫자가 다름: %s / %s' % (a1['cfg'], a2['cfg']))
+            p2.close()
+        # 5) 과최적화 탐색기
+        for path, n0 in (('9sig-overfit/', 168), ('sma-overfit/', 1512)):
+            pg.goto(base + path, wait_until='load'); pg.wait_for_timeout(2500)
+            t = pg.evaluate("() => ({ tabs: document.querySelectorAll('.ssf-tab').length, rows: document.querySelectorAll('#ssf-tbl tbody tr').length, "
+                            "href: (document.querySelector('#ssf-tbl tbody tr a.ssf-go') || {}).getAttribute ? document.querySelector('#ssf-tbl tbody tr a.ssf-go').getAttribute('href') : '', "
+                            "cagr: (document.querySelector('#ssf-tbl tbody tr td:nth-child(3)') || {}).innerText })")
+            if t['tabs'] != 6 or t['rows'] != n0:
+                fail(path, '탭 %d개 · 첫 탭 %d행 (기대 6 · %d)' % (t['tabs'], t['rows'], n0))
+                continue
+            o = json.loads(base64.urlsafe_b64decode(t['href'].split('#ss=j')[1] + '=='))
+            o['x'] = 291
+            # 앞 단계(라이브러리 써 보기)가 이 브라우저에 저장한 전략이 목록 앞에 남지 않게 — 링크로 받은 전략만 보이도록
+            pg.evaluate("() => { for (const k of Object.keys(localStorage)) if (k.startsWith('dc_ss_')) localStorage.removeItem(k); }")
+            p3 = ctx.new_page()
+            p3.goto(base + 'strategy-simulator/#ss=' + tok(o), wait_until='load'); p3.wait_for_timeout(4000)
+            c3 = p3.evaluate(SS_GOLD_JS)['cfg']
+            p3.close()
+            if not c3 or ('+%.1f%%' % c3[0][1]) != t['cagr']:
+                fail(path, "'열기'로 연 시뮬레이터 연평균 %s 가 표(%s)와 다름" % (c3[0][1] if c3 else None, t['cagr']))
+        # 6) 장중 흐름
+        pg.goto(base + 'tqqq-intraday/', wait_until='load'); pg.wait_for_timeout(4000)
+        ii = pg.evaluate("() => { const r = document.getElementById('ssi-app'); return r ? { svg: r.querySelectorAll('svg path, svg polyline').length, txt: r.innerText.length } : null; }")
+        if not ii or ii['svg'] < 5:
+            fail('tqqq-intraday', '장중 흐름이 그려지지 않음: %s' % ii)
+    except Exception as ex:
+        fail('strategy-simulator', '화면 검사 실행 오류: %s' % str(ex)[:300])
+    for t, u in errs:
+        if not ignorable(t, u):
+            fail('strategy-simulator', '콘솔 오류: ' + t[:200])
+            break
+    ctx.close()
+
+
 def serve(root):
     handler = functools.partial(Quiet, directory=root)
     httpd = socketserver.ThreadingTCPServer(('127.0.0.1', 0), handler)
@@ -2949,6 +3046,13 @@ def main():
         print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'worker_visit_test: 출력 없음', flush=True)
         if _r.returncode != 0:
             fail('worker', '방문자 수(/hit) 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:300])
+
+    # [STRATSIM] 투자전략 시뮬레이터 계산(고정 구간 기준값 — 원본과 대조 끝난 엔진) · 과최적화 탐색기 자료(행 수 · 다시 계산 일치) — node 가 있으면
+    if not a.etf_audit and shutil.which('node'):
+        _r = subprocess.run(['node', os.path.join(ROOT, 'tests', 'stratsim_test.cjs')], capture_output=True, text=True, timeout=300)
+        print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'stratsim_test: 출력 없음', flush=True)
+        if _r.returncode != 0:
+            fail('stratsim', '계산·탐색기 자료 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:400])
 
     # 외부 광고·방문 분석 서버(일시 오류가 잦고 사이트 기능과 무관) — 실패해도 사이트 오류로 보지 않음
     THIRD = ('clarity.ms', 'bing.com', 'naver.com', 'naver.net', 'pstatic.net', 'googlesyndication', 'doubleclick',
@@ -3968,6 +4072,10 @@ def main():
         if 'suggest/' in paths:
             print('[6] 건의 게시판', flush=True)
             board_check(ctx, base, fail, local, attach)
+        # [STRATSIM] 투자전략 시뮬레이터 + 자료실 3쪽 — 고정 구간 숫자 · 라이브러리 · 분석 표 · 공유 링크 · 탐색기 표·열기 · 장중 흐름
+        if 'strategy-simulator/' in paths:
+            print('[7] 투자전략 시뮬레이터', flush=True)
+            stratsim_check(br, base, fail, ignorable)
         # 영어판 무한매수법 — 가이드북·3-6·자동 숫자가 영어로, 일부러 남긴 원어(translate=no) 밖에는 한글 없음
         if os.path.isdir(os.path.join(ROOT, 'en', 'muhan')):
             errs.clear()

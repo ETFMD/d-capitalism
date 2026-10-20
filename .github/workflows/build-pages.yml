@@ -15,7 +15,7 @@ on:
     types: [completed]
   push:
     branches: [main]
-    paths: ['src/index.html', 'scripts/routes.json', 'scripts/build_pages.py', 'scripts/build_learn.py', 'scripts/data_facts.py', 'content/**', 'scripts/joblife_snapshot.js', 'scripts/i18n/**', 'assets/**', 'CNAME', '.github/workflows/build-pages.yml']
+    paths: ['src/index.html', 'src/stratsim/**', 'src/ssfit/**', 'src/ssintra/**', 'scripts/routes.json', 'scripts/build_pages.py', 'scripts/build_learn.py', 'scripts/data_facts.py', 'content/**', 'scripts/joblife_snapshot.js', 'scripts/i18n/**', 'assets/**', 'CNAME', '.github/workflows/build-pages.yml']
 
 permissions:
   contents: write
@@ -40,7 +40,7 @@ jobs:
         run: |
           git config user.name  'github-actions[bot]'
           git config user.email '41898099+github-actions[bot]@users.noreply.github.com'
-          git add -A -- index.html '*/index.html' 'assets/app.*' sitemap.xml robots.txt 404.html
+          git add -A -- index.html '*/index.html' 'assets/app.*' 'assets/stratsim.*' 'assets/ssfit.*' 'assets/ssintra.*' sitemap.xml robots.txt 404.html   # [MOD] 화면별 코드 묶음도
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
           git commit -m "chore: 도구별 주소 페이지 갱신"
           for i in 1 2 3; do git pull --rebase --autostash && git push && exit 0; sleep 5; done

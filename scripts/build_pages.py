@@ -328,6 +328,53 @@ def make_assets(src):
             print('  삭제', f'assets/{f}')
 
 
+MODS = {}    # [MOD] 화면 하나만 쓰는 큰 코드 — 이름 → {'js': assets/<이름>.<해시>.js, 'css': …} (make_mod_assets)
+MOD_RE = re.compile(r'<!--MOD:([a-z0-9]+)-->')
+
+
+def make_mod_assets(src):
+    """[MOD] src/<이름>/ 폴더의 *.js 를 파일 이름 순서로 이어 즉시 실행 함수 하나로 감싸고(전역 오염 없음) *.css 도 이어서
+    assets/<이름>.<해시>.js · .css 로 저장 → 그 화면 원본의 <!--MOD:이름--> 자리에만 넣음 (다른 화면은 받지 않음)"""
+    keep = set()
+    for name in sorted(set(MOD_RE.findall(src))):
+        d = os.path.join(ROOT, 'src', name)
+        if not os.path.isdir(d):
+            sys.exit(f'<!--MOD:{name}--> 의 코드 폴더 src/{name}/ 이 없습니다')
+        files = sorted(os.listdir(d))
+        js = [f for f in files if f.endswith('.js')]
+        if not js:
+            sys.exit(f'src/{name}/ 에 .js 파일이 없습니다')
+        out = {}
+        body = (f"/* 자동 생성 — src/{name}/*.js 를 이은 것 (scripts/build_pages.py [MOD]) · 직접 고치지 말고 src/{name}/ 을 고칠 것 */\n"
+                "(function () {\n'use strict';\n"
+                + ''.join(f'\n/* ═══ {f} ═══ */\n' + open(os.path.join(d, f), encoding='utf-8').read() for f in js) + '\n})();\n')
+        css = ''.join(open(os.path.join(d, f), encoding='utf-8').read() + '\n' for f in files if f.endswith('.css'))
+        for kind, text in (('js', body), ('css', css)):
+            if not text.strip():
+                continue
+            path = f"assets/{name}.{hashlib.sha256(text.encode('utf-8')).hexdigest()[:10]}.{kind}"
+            write_if_changed(path, text)
+            out[kind] = path
+            keep.add(os.path.basename(path))
+        MODS[name] = out
+    for f in os.listdir(os.path.join(ROOT, 'assets')):   # 예전 해시 파일 정리 (빠진 화면 코드 포함)
+        m = re.fullmatch(r'([a-z0-9]+)\.[0-9a-f]{10}\.(css|js)', f)
+        if m and m.group(1) != 'app' and f not in keep:
+            os.remove(os.path.join(ROOT, 'assets', f))
+            print('  삭제', f'assets/{f}')
+
+
+def mod_tags(html_text):
+    """그 화면에 남은 <!--MOD:이름--> → <script defer> (그 자리) + <link rel=stylesheet> (</head> 앞)"""
+    names = MOD_RE.findall(html_text)
+    for name in names:
+        m = MODS[name]
+        html_text = html_text.replace(f'<!--MOD:{name}-->', f'<script defer src="{m["js"]}"></script>', 1)
+        if m.get('css'):
+            html_text = html_text.replace('</head>', f'<link rel="stylesheet" href="{m["css"]}">\n</head>', 1)
+    return html_text
+
+
 def footmap(en=False):
     """모든 페이지 맨 아래 사이트맵 — 영역별 열(도구) + 투자 공부 열 + 아래 '지수 성장률' 한 줄 묶음 (긴 지수 목록을 열에서 빼서 깔끔하게)"""
     T = tr_text if en else (lambda t: t)
@@ -435,6 +482,7 @@ def finalize(html_text, tab, en=False):
     html_text = html_text[:a] + f'<script src="{ASSET["js"]}"></script>' + html_text[b:]
     a, b = style_span(html_text)
     html_text = html_text[:a] + f'<link rel="stylesheet" href="{ASSET["css"]}">' + html_text[b:]
+    html_text = mod_tags(html_text)   # [MOD] 이 화면만 쓰는 코드(투자전략 시뮬레이터 등)
     html_text = re.sub(r'<!--HUBGRID:([a-z]+)-->.*?<!--/HUBGRID-->', lambda m: f'<!--HUBGRID:{m.group(1)}-->' + hub_grid(m.group(1), en) + '<!--/HUBGRID-->', html_text, flags=re.S)
     if en:   # 투자 공부 글은 한국어만 — 영어판 상단 메뉴에서 뺌
         html_text, k = re.subn(r'\s*<!-- \[LEARN\] 투자 공부 글 모음.*?<div class="tab-group" id="grp-learn">.*?</div>', '', html_text, count=1, flags=re.S)
@@ -649,6 +697,7 @@ def main():
     load_drop_tree(src)
     # 원본에 이미 들어 있는 하위 페이지 표시(앞선 빌드 결과)가 있으면 루트 기준으로 되돌린 뒤 시작
     make_assets(src)
+    make_mod_assets(src)
     home = with_head(src, HOME)
     write_if_changed('index.html', finalize(home, HOME['tab']))
     paths = set()

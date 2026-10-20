@@ -12739,6 +12739,203 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
     </section>
     <!-- [/GUIDE:vrbt] -->
   </div><!-- /page-vrbt -->
+  <!-- ───────────────────────────────────────────── page-stratsim ── -->
+  <!-- [STRATSIM] 투자전략 시뮬레이터 — 화면은 JS(src/stratsim/*.js → assets/stratsim.<해시>.js)가 #ss-app 에 그림 · 자료 data/stratsim/ (scripts/update_stratsim.py 가 매일 갱신) -->
+  <div class="app-page" id="page-stratsim">
+    <div class="header"><div class="header-left">
+      <span class="badge">STRATEGY SIMULATOR</span>
+      <h1>투자전략 <span>시뮬레이터</span></h1>
+      <p class="subtitle">9sig·이동평균(SMA)·그냥 보유·현금 복리와 내가 만든 코드 전략, 전략 라이브러리를 같은 돈·같은 기간으로 겨뤄 봅니다 — 1953년부터의 TQQQ·QQQ·SPY 등 일봉, 적립식·실제 거래내역·시작 시점별 분석 표까지</p>
+    </div></div>
+    <div id="ss-app" class="ss-app" data-share-skip><noscript>투자전략 시뮬레이터는 자바스크립트가 필요합니다.</noscript></div>
+    <!--MOD:stratsim-->
+    <!-- [GUIDE:stratsim] 사용법 · 전략 규칙 · 계산 가정 · 자료 출처 · 자주 묻는 질문 (검색엔진·이용자용 설명글) -->
+    <section class="guide" aria-labelledby="g-stratsim-h">
+      <h2 id="g-stratsim-h">투자전략 시뮬레이터, 같은 돈으로 여러 매매 규칙을 한 차트에서 비교하기</h2>
+      <p class="g-lead">같은 시작 금액과 매달 적립금을 여러 매매 규칙에 똑같이 넣고 돌려, 어느 전략이 언제 얼마나 벌었고 얼마나 크게 잃었는지 한 차트에서 비교하는 백테스트 도구입니다. 나스닥100 3배 ETF 인 TQQQ 를 중심으로 QQQ·SPY·QLD·SSO·SPXL·SQQQ 일봉을 1953년부터 쓰며, 각 ETF 가 상장하기 전 기간은 지수와 그 시대 단기 금리로 재현한 가격입니다. 처음 화면은 'TQQQ 그냥 보유'와 '현금 복리' 두 선이고, 왼쪽에서 9sig·SMA 전략을 더하거나 전략 라이브러리에서 골라 겹쳐 보면 됩니다. 같은 TQQQ 로 하는 다른 방법은 <a href="muhan-backtest/">무한매수법 백테스트</a>·<a href="vr-backtest/">밸류리밸런싱 VR 5.0 백테스트</a>에서 볼 수 있습니다.</p>
+      <div class="g-grid">
+        <article class="g-card"><h3>사용법</h3><ul class="g-list">
+<li><b>돈</b> — 왼쪽 '시작 금액'과 '매달 적립'(해마다 늘리는 비율 선택)이 모든 선에 똑같이 들어갑니다 · '매달 적립' 옆 단추로 슬라이더 대신 내 실제 입금·출금 기록을 쓸 수도 있습니다</li>
+<li><b>기간</b> — 차트 아래 막대의 '진입'·'청산' 손잡이를 끌어 분기 단위로 고르고, 달력 단추로 정확한 날짜를 고릅니다 · ◀ ▶ 를 누르면 한 분기씩 자동으로 움직이고 다시 누르면 멈춥니다</li>
+<li><b>구간 수익률</b> — 차트 위를 마우스로 끌면 두 날짜 사이의 수익률·낙폭이 범례에 선마다 나옵니다 · Shift 를 누른 채 놓으면 고정되고 링크에도 담깁니다</li>
+<li><b>전략 설정</b> — 범례 칩을 누르면 선을 숨기거나 보이고, 칩의 ⋯ 나 왼쪽 저장 전략을 누르면 왼쪽에서 설정 창이 열립니다 · 설정 칸을 누르면 값마다 결과가 막대로 미리 보여 가장 좋은 값을 바로 찾을 수 있습니다</li>
+<li><b>보기</b> — '로그'(세로축 로그 눈금) · '물가 반영'(모든 선을 연 3% 물가로 할인한 첫날 기준 실질 금액)</li>
+<li><b>분석 표</b> — 왼쪽 맨 위 '분석 표'를 누르면 시작 연도(세로) × 보유 기간(가로) 칸마다 한 전략의 끝 금액을 비교 대상(현금 복리·다른 전략·목표 금액·목표 성장률)과 견준 색 표가 열립니다 · 칸에 마우스를 올리거나 누르면 그 기간의 낙폭과 작은 차트, 열 머리에는 그 보유 기간의 중앙값·최악·최선과 십분위가 나옵니다 · '목표 성장률'을 고르면 해마다의 수익률이 나선으로 그려지고, 그림(PNG) 받기·링크 복사도 됩니다</li>
+<li><b>링크 복사</b> — 지금 전략·코드·기간·거래내역 그대로 열리는 주소를 복사합니다 · 설정은 이 브라우저에도 저장되어 다음에 그대로 열립니다</li></ul></article>
+        <article class="g-card"><h3>전략 규칙</h3><ul class="g-list">
+<li><b>9sig</b> — 시작 금액의 60%로 TQQQ 를, 40%는 현금(연 4% 이자)으로 둡니다. 분기마다 목표 = 직전 보유액 × 1.09 + 그 분기 새 돈의 절반. 보유액이 목표보다 많으면 넘는 만큼 팔아 현금으로, 적으면 모자란 만큼 현금의 90% 안에서 삽니다. 최근 2년 고점보다 30% 넘게 떨어져 있으면 매도 신호를 두 번까지 건너뛰고, 한 분기에 100% 넘게 오르면 주식 비중을 60%로 되돌립니다</li>
+<li><b>SMA(이동평균 추세)</b> — QQQ 종가가 200일 이동평균 위면 TQQQ, 아래면 현금(연 4%). 15거래일에 나눠 사고, RSI(9) 90 이상이면 팔며, RSI(7) 80 미만일 때만 삽니다. TQQQ 가 자기 200일선보다 40% 넘게 위면 '버블 보험'으로 전부 현금. 버퍼·확인 일수·결제일·대기 종목도 바꿀 수 있습니다</li>
+<li><b>그냥 보유</b> — 진입일에 사고 적립금도 같은 종목을 계속 사며 팔지 않습니다 (TQQQ·QLD·QQQ·SPY·SSO·SPXL·SQQQ)</li>
+<li><b>현금 복리</b> — 같은 돈을 주식 대신 연 4%(조절 가능) 이자 현금으로만 모았을 때의 기준선</li>
+<li><b>사용자 전략</b> — 원하는 규칙을 말로 적으면 AI 에게 줄 설명서가 만들어지고, AI 가 써 준 코드를 붙여 넣으면 다른 선과 함께 그려집니다 · <b>전략 라이브러리</b>에는 이렇게 만든 40여 개 전략이 성과와 함께 들어 있습니다</li></ul></article>
+        <article class="g-card"><h3>계산 가정</h3><ul class="g-list">
+<li>체결은 리밸런스·신호가 나온 날 종가 · 사고팔 때마다 수수료·슬리피지 기본 0.02% (전략마다 조절)</li>
+<li>적립금은 진입한 달 다음 달부터 매달 첫 거래일에 들어옴 · '해마다 늘림'을 고르면 새해가 될 때마다 그 비율만큼 커짐</li>
+<li><b>연평균 수익률</b> — 돈이 들어온 날짜·금액을 모두 반영한 돈 가중 수익률(IRR, 엑셀 XIRR 과 같은 방식) · 적립이 없으면 보통의 연평균 수익률(CAGR)과 같음</li>
+<li><b>최대 낙폭</b> — 날마다의 평가액(보유 수량 × 그날 종가 + 현금)으로 계산</li>
+<li>세금·환전 수수료·배당 원천징수는 넣지 않음 · 가격은 분배금을 재투자한 수정주가라 배당이 들어 있음</li>
+<li>지난 결과는 미래 수익을 보장하지 않으며, 특히 상장 전 재현 구간은 실제 거래가 아니라 계산한 값입니다</li></ul></article>
+      </div>
+      <div class="g-card g-faqs"><h3>자주 묻는 질문</h3>
+<details class="g-faq"><summary>TQQQ 가 없던 2010년 이전 가격은 어떻게 만들었나요?</summary><div class="g-ans"><p>TQQQ 는 나스닥100 지수의 <b>하루</b> 등락을 3배로 따라가는 상품이라, 상장 전 기간은 그날 지수 등락 × 3 에서 운용보수(연 0.88%)와 빌린 2배분의 이자(그날 단기 금리 + 연 0.65%)를 빼는 식으로 하루씩 거꾸로 이어 붙였습니다. 이자 비용이 생각보다 커서 금리가 높던 1970~80년대에는 연 15~35%p 를 깎습니다. 1999~2010년은 배당을 포함한 실제 나스닥100, 1985~1999년은 배당이 빠진 지수(3배 상품 기준 연 2%p 가량 낮게 나옴), 1971~1985년은 나스닥 종합지수에 맞춘 재현값이고, 나스닥 지수가 아예 없던 1953~1971년은 참고용 가상값입니다. SPY·SSO·SPXL 은 S&amp;P 500(1988년부터 배당 포함, 그 전은 가격 지수)으로 같은 방식입니다. 각 ETF 상장일(SPY 1993년, QQQ 1999년, QLD·SSO 2006년, SPXL 2008년, TQQQ·SQQQ 2010년)부터는 실제 수정주가입니다.</p></div></details>
+<details class="g-faq"><summary>9sig 는 어떤 전략인가요?</summary><div class="g-ans"><p>제이슨 켈리(Jason Kelly)가 책 『The 3% Signal』에서 소개한 '분기마다 목표선까지 사고파는' 기계적 리밸런싱(3Sig)을, 그가 운영하는 투자 레터에서 3배 레버리지용으로 키운 9Sig 를 따른 것으로 목표선이 분기마다 9%씩 올라갑니다. 오르면 목표를 넘는 몫을 팔아 현금을 쌓고, 떨어지면 그 현금으로 싸게 사서 감정 없이 '싸게 사고 비싸게 팔기'를 되풀이합니다. 폭락 중에는 팔지 않고 버티는 규칙(최근 고점 대비 30% 하락)과 급등 뒤 비중을 되돌리는 규칙이 함께 들어 있고, 설정 창에서 주기(매주·매달·매 분기·매년)·목표 성장률·현금 비중·현금을 둘 종목·적립금 바로 투자 비율·리밸런스 시점까지 바꿔 볼 수 있습니다.</p></div></details>
+<details class="g-faq"><summary>설정을 이것저것 바꿔 가장 좋은 값을 고르면 되나요?</summary><div class="g-ans"><p>과거에 가장 잘 맞았던 설정이 앞으로도 가장 좋다는 보장은 없습니다. 지나간 가격에 딱 맞춘 설정일수록 다른 기간에서는 크게 무너지기 쉬운데, 이를 과최적화라고 합니다. 설정 창의 '과최적화 탐색기'에서 1953·1990·2010년부터 기간을 나눠 같은 설정이 얼마나 꾸준했는지 확인하고, 아래 기간 막대로 진입 시점을 여러 번 바꿔 보거나 '분석 표'로 시작 시점마다의 결과를 함께 보는 것이 좋습니다.</p></div></details>
+<details class="g-faq"><summary>연평균 수익률과 낙폭 옆의 숫자는 무엇인가요?</summary><div class="g-ans"><p>범례 칩의 첫 숫자는 진입부터 청산까지의 연평균 수익률(돈 가중), 두 번째는 그 사이 고점 대비 가장 크게 떨어졌던 비율(최대 낙폭)입니다. 차트를 끌어 구간을 고르면 그 구간의 수익률로 바뀝니다. 설정 창에는 연평균 수익률·시작 금액·끝 금액·최대 낙폭(언제부터 언제까지였는지)과 리밸런스·매매 기록이 나오고, 기록은 CSV 로 내려받을 수 있습니다.</p></div></details>
+<details class="g-faq"><summary>사용자 전략 코드는 어떻게 만들고, 안전한가요?</summary><div class="g-ans"><p>'+ 사용자 전략'을 눌러 원하는 규칙을 말로 적으면(예: "QQQ 가 50일선 위면 TQQQ, 아래면 SPY") AI 에게 그대로 붙여 넣을 설명서가 만들어집니다. ChatGPT·Claude 등이 돌려준 코드를 붙여 넣으면 바로 계산됩니다. 코드는 이 브라우저 안의 격리된 작업 공간(Web Worker)에서만 돌고, 그 안에서는 인터넷 요청·저장소·다른 창 접근이 모두 막혀 있으며 4초 안에 끝나지 않으면 멈춥니다. 공유 링크로 받은 남의 코드도 같은 격리 공간에서만 돌아가고, '저장'을 누르기 전에는 내 전략 목록에 남지 않습니다.</p></div></details>
+<details class="g-faq"><summary>내 실제 거래내역으로 계산하려면?</summary><div class="g-ans"><p>'매달 적립' 옆 단추를 눌러 날짜·금액(인출은 음수) 두 열, 또는 계좌 평가액까지 세 열을 붙여 넣거나 CSV 파일을 올립니다. 구글 시트를 '웹에 게시(CSV)'한 주소를 연결하면 열 때마다 새로 읽어 옵니다. 첫 줄이 시작 금액·진입일이 되고, 주말·휴장일 입금은 다음 거래일로 옮겨 모든 전략이 같은 날 같은 돈을 받은 것으로 계산합니다. 평가액 열이 있으면 '내 계좌' 선이 함께 그려져 전략과 실제 결과를 나란히 볼 수 있습니다. 거래내역은 이 브라우저에 저장되며, 링크를 복사·공유하면 그 링크 안에 함께 담깁니다.</p></div></details>
+<details class="g-faq"><summary>위쪽 '자료실'에는 무엇이 있나요?</summary><div class="g-ans"><p><a href="tqqq-intraday/">TQQQ 장중 흐름</a>은 날마다 시가부터 마감까지 5분 단위 경로를 겹쳐 비슷한 날의 평균 흐름과 사고팔기 좋았던 시각을 보여 주고, <a href="9sig-overfit/">9sig 과최적화 탐색기</a>·<a href="sma-overfit/">SMA 과최적화 탐색기</a>는 구간마다 가장 잘 맞았던 설정 후보가 맞추지 않은 구간(2026년 이후·1990~2010년·1990년~최신)에서도 통했는지 표로 보여 줍니다. 탐색기 표의 '열기'를 누르면 이 시뮬레이터가 그 설정으로 열립니다.</p></div></details>
+<details class="g-faq"><summary>자료는 어디서 오고, 언제 갱신되나요?</summary><div class="g-ans"><p>상장 후 가격은 야후 파이낸스 수정주가(분할·분배금 반영), 상장 전 재현 가격은 <a href="https://github.com/bumbeishvili/tqqq.networthcast.com/blob/main/data/README.md" target="_blank" rel="noopener">networthcast 의 공개 장기 가격 자료</a>(직접 백테스트에 쓰라고 공개한 자료 — 재현 방법과 오차가 자세히 적혀 있음), 금융 여건 지수(NFCI)는 미국 시카고 연은 자료(FRED)입니다. 이 사이트 서버가 미국 장이 열린 동안 한 시간마다(마감 뒤 한 번 더) 새 일봉을 받아 붙이며 — 장중에는 아직 끝나지 않은 오늘 값이 들어가고 마감 뒤 확정값으로 바뀝니다 — 화면 위쪽에 마지막 갱신 시각이 나옵니다.</p></div></details>
+      </div>
+    </section>
+    <!-- [/GUIDE:stratsim] -->
+  </div><!-- /page-stratsim -->
+
+  <!-- ───────────────────────────────────────────── page-ssintra ── -->
+  <!-- [STRATSIM-INTRA] TQQQ 장중 흐름 (투자전략 시뮬레이터 자료실) — 화면은 JS(src/ssintra/*.js)가 #ssi-app 에 그림 · 자료 data/stratsim/intraday-*.csv -->
+  <div class="app-page" id="page-ssintra">
+    <div class="header"><div class="header-left">
+      <span class="badge">TQQQ INTRADAY</span>
+      <h1>TQQQ <span>장중 흐름</span></h1>
+      <p class="subtitle">TQQQ 가 장 시작부터 마감까지 날마다 어떻게 움직였는지 5분 단위 경로를 겹쳐 보고, 비슷한 날만 골라 평균·중앙값 흐름과 사고팔기 좋았던 시각을 찾습니다</p>
+    </div></div>
+    <div id="ssi-app" class="ssi-app" data-share-skip><noscript>TQQQ 장중 흐름은 자바스크립트가 필요합니다.</noscript></div>
+    <!--MOD:ssintra-->
+    <!-- [GUIDE:ssintra] 화면 읽는 법 · 고르는 법 · 계산 방법 · 자료 · 자주 묻는 질문 (검색엔진·이용자용 설명글) -->
+    <section class="guide" aria-labelledby="g-ssintra-h">
+      <h2 id="g-ssintra-h">TQQQ 장중 흐름 — 하루 중 언제 쌌고 언제 비쌌나</h2>
+      <p class="g-lead">TQQQ(나스닥100 지수 하루 등락의 3배를 따라가는 ETF)가 미국 정규장 6시간 30분 동안 날마다 어떻게 움직였는지, 2023년 9월부터의 거래일을 모두 5분 단위 경로로 겹쳐 보여 줍니다. 모든 점은 '전 거래일 종가 대비 %'라서 하루는 0이 아니라 시가 갭에서 시작하고, 가운데 0% 선이 어제 종가입니다. 시각마다 평균·중앙값을 이은 굵은 선과 그 선이 가장 낮았던 시각(매수)·가장 높았던 시각(매도)을 표시하고, 미국 장중에는 오늘 지금까지의 경로와 가장 비슷하게 움직였던 날들만 골라 볼 수 있습니다. 같은 TQQQ 로 장기 전략을 시험하는 <a href="strategy-simulator/">투자전략 시뮬레이터</a>, 날마다 정해진 방식으로 주문을 넣는 <a href="muhan/">무한매수법</a>과 함께 보면 '하루 중 언제 주문을 넣을지'를 정하는 데 참고가 됩니다.</p>
+      <div class="g-grid">
+        <article class="g-card"><h3>화면 읽는 법</h3><ul class="g-list">
+<li><b>옅은 선 하나 = 하루</b> — 많이 겹친 곳일수록 진하게 보임 · 보이는 날이 적으면 선이 저절로 진해짐</li>
+<li><b>청록 실선 = 시각별 평균</b>, <b>주황 점선 = 중앙값</b> — 선 이름은 오른쪽 끝에</li>
+<li><b>빨간 원 '매수'</b> = 평균(또는 중앙값)이 가장 낮았던 시각, <b>파란 원 '매도'</b> = 가장 높았던 시각 · 평균과 중앙값이 같은 시각을 가리키면 상자 하나로 합침</li>
+<li><b>보라 굵은 선 = 오늘</b> (미국 장이 열려 있고 오늘 자료가 들어왔을 때) · 위쪽 짧은 눈금 '지금' = 지금 시각</li>
+<li>가로축은 보는 사람의 시간대 — 한국에서는 미국 서머타임 기간 22:30~5:00, 그 밖에는 23:30~6:00 (아래 줄에 표시)</li>
+<li>그림 위에 마우스를 올리거나 휴대폰에서 탭(옆으로 끌면 따라감)하면 가장 가까운 5분 시각의 평균·중앙값과 커서에 가장 가까운 날의 값, 그날 날짜와 종가가 나옴</li></ul></article>
+        <article class="g-card"><h3>고르는 법</h3><ul class="g-list">
+<li><b>비슷한 날만</b> — 마지막 날(장중이면 오늘 지금까지)과 같은 시각들로 경로를 견줘 가장 가까운 8%만 남김 · 견준 구간은 옅은 보라로 칠함 · 미국 장중에는 처음부터 켜짐</li>
+<li><b>시가·종가 막대</b> — 날마다 시가와 종가를 전일 종가 대비 %로 모은 분포 · 막대 위를 끌면 그 범위의 날만 남음 · 손잡이로 넓히고 좁히거나 고른 범위를 통째로 옮김 · 바깥을 한 번 누르거나 '전체 보기'로 해제 · 손잡이를 고른 뒤 키보드 화살표(0.1%p, Shift 는 1%p)</li>
+<li><b>기간 막대</b> — 두 손잡이로 기간을 고름 · 위 숫자는 지금 그림에 들어간 날 수와 첫날·마지막 날</li>
+<li>가장 최근 날은 막대 필터로 빠지지 않음 (비슷한 날을 고르는 기준이라서)</li>
+<li><b>로그·직선</b> — 로그는 ±0.1% 안은 직선, 바깥은 로그라 0 근처를 넓게 보면서 큰 날도 한 화면에 들어감 · 직선은 보이는 날들의 범위에 맞춰 축이 바뀜</li>
+<li>고른 상태는 이 브라우저에 저장 · 끝에 닿은 손잡이는 새 날이 붙어도 끝을 따라감</li></ul></article>
+        <article class="g-card"><h3>숫자는 이렇게 계산합니다</h3><ul class="g-list">
+<li><b>점의 값</b> = (그 봉의 종가 ÷ 전 거래일 마지막 5분봉 종가 − 1) × 100 · 9:30 의 첫 점은 그날 첫 봉의 시가</li>
+<li>봉의 시각은 봉이 끝나는 시각 (9:30~9:35 봉 → 9:35) · 평균·중앙값은 9:30부터 16:00까지 5분마다, 그 시각 값이 있는 날로만 (조기 폐장일은 13:00에서 끝나 그 뒤 시각에서 빠짐) · 중앙값은 날 수가 짝수면 가운데 두 값의 한가운데</li>
+<li><b>비슷한 날의 거리</b> — 기준일과 같은 5분 시각들(시가 포함)에서 두 경로의 차이를 제곱해, 뒤 시각일수록 무겁게(첫 시각 1배 → 마지막 시각 3배) 평균 낸 뒤 제곱근 · 가까운 순서로 8%(반올림, 최소 1일) · 그 시각 중 하나라도 없는 날은 뺌</li>
+<li>오늘(장중)은 1분봉으로 그리고, 평균·비교에는 5분 시각(9:35, 9:40 …)의 값만 씀</li>
+<li>원본인 networthcast 의 <a href="https://tqqq.networthcast.com/experiments/tqqq-intraday.html" target="_blank" rel="noopener">TQQQ intraday 화면</a>과 같은 숫자가 나오도록 계산 규칙을 맞추고, 같은 자료로 평균·중앙값·매수/매도 시각·필터 결과를 자동으로 대조했습니다</li></ul></article>
+        <article class="g-card"><h3>자료와 갱신</h3><ul class="g-list">
+<li>2023-09-25 ~ 2026-10-19 — networthcast 가 공개한 TQQQ 5분봉 기록(<a href="https://github.com/bumbeishvili/tqqq.networthcast.com/tree/main/data/intraday" target="_blank" rel="noopener">공개 자료</a> · Alpaca 미국 통합 체결 자료, 분할 반영)을 시작 자료로 씀</li>
+<li>그 뒤 — 이 사이트 서버가 미국 장이 열린 동안 한 시간마다(마감 뒤 한 번 더) 야후 파이낸스에서 최근 60거래일치 5분봉을 받아 새 날을 붙이고, 겹치는 봉은 새 값으로 바꿈 · 가장 최근 거래일의 1분봉도 함께 받아 장중에는 오늘 경로로 그림</li>
+<li>정규장(뉴욕 9:30~16:00)만 · 시간외 거래는 뺌 · 주식 분할은 반영(2025-11-20 2:1 포함), 분배금은 반영하지 않음 — 석 달에 한 번 분배락일에는 분배금(2023~2026년 주가의 0.1~0.4%)만큼 시가 갭이 더 낮게 나옴</li>
+<li>받은 자료가 비었거나 시각 순서·가격이 이상하면 저장하지 않고 직전 자료를 그대로 둠 · 위쪽 '자료 갱신'에 마지막으로 바뀐 시각</li>
+<li>화면은 열려 있는 동안 10분마다 새 자료를 확인하고, '지금' 표시는 30초마다 옮김</li></ul></article>
+      </div>
+      <div class="g-card g-faqs"><h3>자주 묻는 질문</h3>
+<details class="g-faq"><summary>왜 시가가 아니라 전일 종가를 기준으로 하나요?</summary><div class="g-ans"><p>증권사 시세 화면의 등락률과 같은 기준이라 읽기 쉽고, 밤사이 벌어진 갭(시가)도 그날 움직임의 일부로 함께 볼 수 있기 때문입니다. 그래서 하루는 0%가 아니라 시가 갭에서 시작하고, 0% 선을 넘었는지가 곧 '어제 종가보다 높은지'입니다. 갭은 빼고 장중 움직임만 보고 싶다면 시가 막대에서 0 근처 좁은 범위만 골라 갭이 거의 없던 날만 남기면 됩니다.</p></div></details>
+<details class="g-faq"><summary>매수 시각에 사서 매도 시각에 팔면 돈을 버나요?</summary><div class="g-ans"><p>그렇게 단정할 수 없습니다. 2023-09-26 ~ 2026-10-19, 769거래일 전체로 보면 평균 경로는 뉴욕 9:45(한국 서머타임 기준 22:45)에 전일 대비 +0.17%로 가장 낮고 14:40(3:40)에 +0.27%로 가장 높아 둘의 차이가 0.1%p 남짓이며, 중앙값도 10:30 +0.16% → 16:00 +0.39%로 0.24%p 정도입니다. 하루 안에서 몇 %씩 오르내리는 흔들림에 비하면 아주 작은 차이라, 호가 차이·수수료·환전 비용을 빼면 남지 않을 수 있습니다. 같은 기간 장이 끝까지 열린 762거래일 가운데 5분봉으로 본 하루 최저점이 장 시작 30분 안(시가 포함)에 나온 날은 약 35%, 최고점이 마지막 30분에 나온 날은 약 16%로, 날마다 실제 저점·고점 시각은 크게 다릅니다. 표시는 '고른 날들의 평균적인 모양'일 뿐이니 기간·필터를 바꿔도 같은 시각이 유지되는지, 평균과 중앙값이 같은 쪽을 가리키는지 함께 확인하세요.</p></div></details>
+<details class="g-faq"><summary>'비슷한 날만'은 어떻게 고르나요? 앞으로를 예측하나요?</summary><div class="g-ans"><p>지금 고른 기간·필터 안에서 가장 마지막 날을 기준으로, 그날의 시가부터 마지막 시각까지 5분마다의 경로를 다른 모든 날의 같은 시각 경로와 견줍니다. 차이를 제곱해 뒤쪽 시각일수록 무겁게 평균 낸 거리가 가장 짧은 8%를 남기므로, 시가 갭의 크기와 그 뒤 움직임의 높이·크기·타이밍이 비슷했던 날들이 뽑힙니다. 장중에는 기준이 '오늘 지금까지'라서, 비슷하게 시작했던 날들이 그 뒤 어떻게 움직였는지를 보여 줄 뿐 앞으로를 예측하지는 않습니다. 장이 끝난 뒤에는 기준이 끝난 하루 전체가 되어 하루 모양이 닮은 날들을 찾는 데 씁니다.</p></div></details>
+<details class="g-faq"><summary>시각이 왜 22:30 또는 23:30부터 시작하나요?</summary><div class="g-ans"><p>시각은 보는 사람의 시간대로 바꿔 보여 줍니다. 미국 정규장은 뉴욕 시각 9:30~16:00 이고, 한국은 서머타임이 없어 미국 서머타임 기간(3월 둘째 일요일 ~ 11월 첫 일요일)에는 22:30~5:00, 그 밖에는 23:30~6:00 입니다. 지난 날들도 지금의 서머타임 상태로 바꿔 한 축에 겹쳐 그리므로, 겨울에 보면 여름에 거래된 날도 23:30 에 시작하는 것으로 보입니다(같은 '개장 후 몇 분'끼리 겹치게 하려는 것). 다른 나라에서 열면 그 나라 시각으로 나오고, 아래 줄에 어느 시간대인지 적혀 있습니다.</p></div></details>
+<details class="g-faq"><summary>오늘 선(보라색)이 안 보여요.</summary><div class="g-ans"><p>오늘 선은 미국 정규장이 열려 있는 동안, 그리고 서버가 오늘 자료를 받아 둔 경우에만 나옵니다. 서버는 장중 한 시간마다 자료를 받으므로 최대 한 시간쯤 늦고(실시간 시세가 아님), 화면은 10분마다 새 자료를 확인합니다. 장이 끝나면 오늘도 다른 날과 같은 옅은 선 하나가 됩니다. 미국 휴장일은 화면이 알 수 없어 '지금' 표시만 나오고 오늘 선은 나오지 않을 수 있습니다.</p></div></details>
+<details class="g-faq"><summary>평균과 중앙값이 왜 다르게 움직이나요?</summary><div class="g-ans"><p>3배 레버리지 ETF 라 하루에 ±10%를 넘는 날이 가끔 있고, 평균은 이런 큰 날 몇 개에 크게 끌려갑니다. 중앙값은 그 시각 값을 줄 세웠을 때 가운데 날이라 큰 날의 영향을 덜 받아 '보통 날'에 가깝습니다. 둘이 같은 방향·같은 시각을 가리킬 때 더 믿을 만하고, 갈리면 몇몇 큰 날이 평균을 만든 것일 수 있으니 막대 필터로 그런 날을 빼고 다시 보세요.</p></div></details>
+<details class="g-faq"><summary>자료는 정확한가요? 투자 판단에 써도 되나요?</summary><div class="g-ans"><p>시작 자료(Alpaca)와 야후 파이낸스 5분봉을 겹치는 59거래일 4,602개 봉으로 견줘 보면 종가의 83%가 같고 가장 큰 차이도 6센트(약 0.08%)였습니다. 다만 체결 집계 방식이 달라 봉마다 아주 작은 차이가 있고, 최근 60거래일은 갱신 때마다 야후 값으로 바뀝니다. 모든 계산은 과거 자료를 정리한 참고용이며, 실제 주문은 호가 차이·체결 지연·수수료·세금·환율의 영향을 받습니다. 과거의 하루 중 패턴이 앞으로도 이어진다는 보장은 없으니 투자 판단과 책임은 본인에게 있습니다.</p></div></details>
+      </div>
+    </section>
+    <!-- [/GUIDE:ssintra] -->
+  </div><!-- /page-ssintra -->
+
+  <!-- ───────────────────────────────────────────── page-ss9fit ── -->
+  <!-- [STRATSIM-FIT9] 9sig 과최적화 탐색기 — 화면은 JS(src/ssfit/*.js)가 #ssf-app 에 그림 · 자료 data/stratsim/fit-9sig.json (scripts/stratsim_fit.cjs) -->
+  <div class="app-page" id="page-ss9fit">
+    <div class="header"><div class="header-left">
+      <span class="badge">9SIG OVERFIT EXPLORER</span>
+      <h1>9sig <span>과최적화 탐색기</span></h1>
+      <p class="subtitle">기간마다 가장 잘 맞았던 9sig 설정을 모아, 그 설정이 다른 기간·앞으로의 구간에서도 통했는지 함께 보여 줍니다 — 수익 최대·낙폭 최소 × 2010·1990·1953년부터</p>
+    </div></div>
+    <div id="ssf-app" class="ssf-app" data-kind="9sig" data-share-skip><noscript>9sig 과최적화 탐색기는 자바스크립트가 필요합니다.</noscript></div>
+    <!--MOD:ssfit-->
+    <!-- [GUIDE:ss9fit] 표 읽는 법 · 계산 방법 · 과최적화 가려내기 · 자주 묻는 질문 -->
+    <section class="guide" aria-labelledby="g-ss9fit-h">
+      <h2 id="g-ss9fit-h">9sig 과최적화 탐색기, 과거에 가장 잘 맞았던 설정이 앞으로도 통할까</h2>
+      <p class="g-lead">9sig 전략은 종목·현금 둘 곳·리밸런스 주기·목표 성장률·현금 비중과 폭락 버티기·급등 되돌림·매수 한도·적립금 바로 투자·리밸런스 시점·목표 기준처럼 손잡이가 많아서, 지난 가격에 딱 맞는 조합을 찾으면 백테스트 수익률은 얼마든지 높게 만들 수 있습니다. 이 표는 2010·1990·1953년부터 2025년 말까지 구간마다 <b>끝 금액이 가장 크도록</b>, 또는 <b>연평균 하한을 지키며 최대 낙폭이 가장 작도록</b> 찾은 설정 후보를 모아, 그 설정이 맞추는 데 쓰지 않은 구간(2026년 이후·1990~2010년·1990년~최신)에서도 통했는지 함께 보여 줍니다. 맞춘 구간 수익은 높은데 바깥 구간에서 무너지는 설정이 바로 '과최적화'된 설정입니다. 숫자는 <a href="strategy-simulator/">투자전략 시뮬레이터</a>와 똑같은 계산으로 매일 다시 구합니다.</p>
+      <div class="g-grid">
+        <article class="g-card"><h3>표 읽는 법</h3><ul class="g-list">
+<li><b>맞춘 구간</b> — 연평균(돈 가중)·끝 금액·최대 낙폭: 시작 연도부터 2025년 12월 31일까지</li>
+<li><b>진단</b> — 샤프·소르티노(변동 대비 수익)·칼마(낙폭 대비 수익)·쏠림(좋았던 몇 달에 기댄 정도)·보유 대비(그냥 들고 있었을 때보다 연평균이 얼마나 나은지)·작동 규칙(기본 손잡이 5개 + 규칙 6개 = 11개 가운데 결과를 바꾸는 손잡이 수)·강건성(손잡이를 한 칸씩 바꿔도 끝 금액이 ±25% 안에 드는 비율)</li>
+<li><b>바깥 시험</b> — 26년 이후(2026년 1월부터 최신까지, 매일 늘어나는 진짜 시험)·1990–2010(2010년 탭만, 거꾸로 시험)·1990–최신(30년 넘는 장기 성적)</li>
+<li>열 이름의 ? 에 마우스를 올리거나(휴대폰은 누르면) 자세한 설명이 나오고, 열 이름을 누르면 정렬, '필터'로 열마다 구간을 골라 좁힐 수 있습니다</li>
+<li><b>열기 ↗</b> — 투자전략 시뮬레이터가 그 설정 그대로 새 탭에서 열립니다(그 구간 시작부터 최신까지 · 시작 $10,000 + 매달 $500)</li></ul></article>
+        <article class="g-card"><h3>계산 방법</h3><ul class="g-list">
+<li>모든 후보에 같은 돈: 시작 $10,000 + 매달 첫 거래일 $500 — 끝 금액을 그대로 비교할 수 있음</li>
+<li>현금 이자 연 4% · 사고팔 때마다 거래 비용 0.02% · 체결은 신호·리밸런스 날 종가</li>
+<li>샤프·소르티노·쏠림은 날마다 평가액을 달 말일마다 뽑아, 그 달 들어온 적립금을 뺀 달별 수익률로 계산 (무위험 수익 0, √12 로 연환산)</li>
+<li>작동 규칙: 규칙을 꺼 봤을 때 끝 금액이 달라지면 셈 · 강건성: 조절 손잡이마다 선택지 한 칸 위·아래(이웃)를 다시 돌려 끝 금액이 ±25% 안에 드는 이웃의 비율</li>
+<li>가격 자료와 계산 코드가 시뮬레이터와 같아, 열기로 연 화면에서 기간 끝을 2025년 4분기로 두면 표의 맞춘 구간 숫자와 같습니다</li>
+<li>미국 장 마감 뒤 매일 '26년 이후'·'1990–최신'을 다시 계산합니다</li></ul></article>
+        <article class="g-card"><h3>과최적화 가려내기</h3><ul class="g-list">
+<li><b>강건성이 높은가</b> — 70% 넘으면 손잡이를 조금 바꿔도 결과가 비슷한 넓은 고원, 40% 미만이면 칼날 위</li>
+<li><b>작동 규칙이 적은가</b> — 결과를 바꾸는 손잡이가 많을수록 지난 가격에 맞출 여지가 큼</li>
+<li><b>쏠림이 낮은가</b> — 가장 좋았던 상위 1% 달이 수익의 40% 넘게 만들었다면 되풀이되기 어려움</li>
+<li><b>바깥 시험이 맞춘 구간과 비슷한가</b> — 1990–2010·1990–최신 연평균이 맞춘 구간에 가깝고 낙폭이 폭발하지 않으면 다른 시대에도 통한 것</li>
+<li>맨 위 설정일수록 그 구간에 가장 잘 맞춘 것이지, 앞으로 가장 좋을 설정이라는 뜻이 아닙니다</li></ul></article>
+      </div>
+      <div class="g-card g-faqs"><h3>자주 묻는 질문</h3>
+<details class="g-faq"><summary>후보 설정은 어디서 왔나요?</summary><div class="g-ans"><p>networthcast(tqqq.networthcast.com)가 공개한 과최적화 탐색 결과의 후보 설정(9sig 168개 후보, 구간·목표별 목록)을 그대로 씁니다. 다만 표의 모든 숫자는 그쪽 숫자를 옮긴 것이 아니라, 이 사이트의 시뮬레이터 계산으로 처음부터 다시 구한 값입니다. 원래 탐색 때와 계산 방식·자료가 조금 달라 연평균이 달라지고 순위가 바뀐 설정도 있으며(특히 1953년 탭), 그런 차이까지 그대로 보여 주는 것이 이 표의 목적과도 맞습니다.</p></div></details>
+<details class="g-faq"><summary>낙폭 최소 탭의 '조건을 만족하는 것'은 무엇인가요?</summary><div class="g-ans"><p>낙폭 최소 탭은 '연평균이 하한(예: 30%) 이상인 설정 가운데 최대 낙폭이 가장 작은 것'을 찾은 목록입니다. 처음 찾을 때 하한을 넘었던 설정을 모두 보여 주고, 표 아래에 지금 계산으로도 하한을 넘는 설정이 몇 개인지 적어 둡니다.</p></div></details>
+<details class="g-faq"><summary>'26년 이후'가 0%인 설정은 왜 그런가요?</summary><div class="g-ans"><p>매년 리밸런스하면서 리밸런스 시점을 주기 안쪽으로 옮긴 설정은 마지막 리밸런스가 2025년 12월 이전에 끝나, 그 뒤로는 계산 기록이 없습니다. 투자전략 시뮬레이터도 이런 설정은 마지막 리밸런스 값에서 선이 멈추므로, 표도 같은 기준으로 0%로 둡니다. 다음 리밸런스 날짜가 지나면 값이 생깁니다.</p></div></details>
+<details class="g-faq"><summary>시뮬레이터에서 연 숫자가 표와 다른데요?</summary><div class="g-ans"><p>열기로 열면 기간이 그 구간 시작부터 최신 자료일까지라서, 2025년 말에서 끝나는 표의 맞춘 구간보다 길어집니다. 아래 기간 막대의 청산을 2025년 4분기로 옮기면 표와 같은 숫자가 나옵니다. 또 '26년 이후'는 맞춘 구간부터 이어서 돌린 값이라, 2026년에 새로 시작하면(현금에서 출발) 다른 값이 나옵니다.</p></div></details>
+<details class="g-faq"><summary>다른 전략도 같은 방법으로 볼 수 있나요?</summary><div class="g-ans"><p><a href="sma-overfit/">SMA 과최적화 탐색기</a>에서 같은 방식으로 볼 수 있고, <a href="strategy-simulator/">투자전략 시뮬레이터</a>의 '분석 표'로 시작 연도·보유 기간마다 결과가 얼마나 달라지는지도 확인할 수 있습니다.</p></div></details>
+      </div>
+    </section>
+    <!-- [/GUIDE:ss9fit] -->
+  </div><!-- /page-ss9fit -->
+
+  <!-- ───────────────────────────────────────────── page-sssmafit ── -->
+  <!-- [STRATSIM-FITSMA] SMA 과최적화 탐색기 — 화면은 JS(src/ssfit/*.js)가 #ssf-app 에 그림 · 자료 data/stratsim/fit-sma.json (scripts/stratsim_fit.cjs) -->
+  <div class="app-page" id="page-sssmafit">
+    <div class="header"><div class="header-left">
+      <span class="badge">SMA OVERFIT EXPLORER</span>
+      <h1>SMA <span>과최적화 탐색기</span></h1>
+      <p class="subtitle">기간마다 가장 잘 맞았던 이동평균(SMA) 추세 전략 설정을 모아, 그 설정이 다른 기간·앞으로의 구간에서도 통했는지 함께 보여 줍니다 — 수익 최대·낙폭 최소 × 2010·1990·1953년부터</p>
+    </div></div>
+    <div id="ssf-app" class="ssf-app" data-kind="sma" data-share-skip><noscript>SMA 과최적화 탐색기는 자바스크립트가 필요합니다.</noscript></div>
+    <!--MOD:ssfit-->
+    <!-- [GUIDE:sssmafit] 표 읽는 법 · 계산 방법 · 과최적화 가려내기 · 자주 묻는 질문 -->
+    <section class="guide" aria-labelledby="g-sssmafit-h">
+      <h2 id="g-sssmafit-h">SMA 과최적화 탐색기, 과거에 가장 잘 맞았던 설정이 앞으로도 통할까</h2>
+      <p class="g-lead">SMA(이동평균 추세) 전략은 주 종목·신호 종목·대기 종목·이동평균 기간·살 때/팔 때 버퍼와 확인 일수·결제 대기·RSI 과열 매도·RSI 식으면 매수·나눠 사기·나눠 옮기기·버블 보험처럼 손잡이가 많아서, 지난 가격에 딱 맞는 조합을 찾으면 백테스트 수익률은 얼마든지 높게 만들 수 있습니다. 이 표는 2010·1990·1953년부터 2025년 말까지 구간마다 <b>끝 금액이 가장 크도록</b>, 또는 <b>연평균 하한을 지키며 최대 낙폭이 가장 작도록</b> 찾은 설정 후보를 모아, 그 설정이 맞추는 데 쓰지 않은 구간(2026년 이후·1990~2010년·1990년~최신)에서도 통했는지 함께 보여 줍니다. 맞춘 구간 수익은 높은데 바깥 구간에서 무너지는 설정이 바로 '과최적화'된 설정입니다. 숫자는 <a href="strategy-simulator/">투자전략 시뮬레이터</a>와 똑같은 계산으로 매일 다시 구합니다.</p>
+      <div class="g-grid">
+        <article class="g-card"><h3>표 읽는 법</h3><ul class="g-list">
+<li><b>맞춘 구간</b> — 연평균(돈 가중)·끝 금액·최대 낙폭: 시작 연도부터 2025년 12월 31일까지</li>
+<li><b>진단</b> — 샤프·소르티노(변동 대비 수익)·칼마(낙폭 대비 수익)·쏠림(좋았던 몇 달에 기댄 정도)·보유 대비(그냥 들고 있었을 때보다 연평균이 얼마나 나은지)·작동 규칙(기본 손잡이 6개 + 규칙 7개 = 13개 가운데 결과를 바꾸는 손잡이 수)·강건성(손잡이를 한 칸씩 바꿔도 끝 금액이 ±25% 안에 드는 비율)</li>
+<li><b>바깥 시험</b> — 26년 이후(2026년 1월부터 최신까지, 매일 늘어나는 진짜 시험)·1990–2010(2010년 탭만, 거꾸로 시험)·1990–최신(30년 넘는 장기 성적)</li>
+<li>열 이름의 ? 에 마우스를 올리거나(휴대폰은 누르면) 자세한 설명이 나오고, 열 이름을 누르면 정렬, '필터'로 열마다 구간을 골라 좁힐 수 있습니다</li>
+<li><b>열기 ↗</b> — 투자전략 시뮬레이터가 그 설정 그대로 새 탭에서 열립니다(그 구간 시작부터 최신까지 · 시작 $10,000 + 매달 $500)</li></ul></article>
+        <article class="g-card"><h3>계산 방법</h3><ul class="g-list">
+<li>모든 후보에 같은 돈: 시작 $10,000 + 매달 첫 거래일 $500 — 끝 금액을 그대로 비교할 수 있음</li>
+<li>현금 이자 0% · 사고팔 때마다 거래 비용 0.02% · 체결은 신호·리밸런스 날 종가</li>
+<li>샤프·소르티노·쏠림은 날마다 평가액을 달 말일마다 뽑아, 그 달 들어온 적립금을 뺀 달별 수익률로 계산 (무위험 수익 0, √12 로 연환산)</li>
+<li>작동 규칙: 규칙을 꺼 봤을 때 끝 금액이 달라지면 셈 · 강건성: 조절 손잡이마다 선택지 한 칸 위·아래(이웃)를 다시 돌려 끝 금액이 ±25% 안에 드는 이웃의 비율</li>
+<li>가격 자료와 계산 코드가 시뮬레이터와 같아, 열기로 연 화면에서 기간 끝을 2025년 4분기로 두면 표의 맞춘 구간 숫자와 같습니다</li>
+<li>미국 장 마감 뒤 매일 '26년 이후'·'1990–최신'을 다시 계산합니다</li></ul></article>
+        <article class="g-card"><h3>과최적화 가려내기</h3><ul class="g-list">
+<li><b>강건성이 높은가</b> — 70% 넘으면 손잡이를 조금 바꿔도 결과가 비슷한 넓은 고원, 40% 미만이면 칼날 위</li>
+<li><b>작동 규칙이 적은가</b> — 결과를 바꾸는 손잡이가 많을수록 지난 가격에 맞출 여지가 큼</li>
+<li><b>쏠림이 낮은가</b> — 가장 좋았던 상위 1% 달이 수익의 40% 넘게 만들었다면 되풀이되기 어려움</li>
+<li><b>바깥 시험이 맞춘 구간과 비슷한가</b> — 1990–2010·1990–최신 연평균이 맞춘 구간에 가깝고 낙폭이 폭발하지 않으면 다른 시대에도 통한 것</li>
+<li>맨 위 설정일수록 그 구간에 가장 잘 맞춘 것이지, 앞으로 가장 좋을 설정이라는 뜻이 아닙니다</li></ul></article>
+      </div>
+      <div class="g-card g-faqs"><h3>자주 묻는 질문</h3>
+<details class="g-faq"><summary>후보 설정은 어디서 왔나요?</summary><div class="g-ans"><p>networthcast(tqqq.networthcast.com)가 공개한 과최적화 탐색 결과의 후보 설정(SMA 1,512개 후보, 구간·목표별 목록)을 그대로 씁니다. 다만 표의 모든 숫자는 그쪽 숫자를 옮긴 것이 아니라, 이 사이트의 시뮬레이터 계산으로 처음부터 다시 구한 값입니다. 원래 탐색 때와 계산 방식·자료가 조금 달라 연평균이 달라지고 순위가 바뀐 설정도 있으며(특히 1953년 탭), 그런 차이까지 그대로 보여 주는 것이 이 표의 목적과도 맞습니다.</p></div></details>
+<details class="g-faq"><summary>낙폭 최소 탭의 '조건을 만족하는 것'은 무엇인가요?</summary><div class="g-ans"><p>낙폭 최소 탭은 '연평균이 하한(예: 30%) 이상인 설정 가운데 최대 낙폭이 가장 작은 것'을 찾은 목록입니다. 처음 찾을 때 하한을 넘었던 설정을 모두 보여 주고, 표 아래에 지금 계산으로도 하한을 넘는 설정이 몇 개인지 적어 둡니다.</p></div></details>
+<details class="g-faq"><summary>대기 종목이 TQQQ 같은 3배 ETF인 설정이 많은 이유는?</summary><div class="g-ans"><p>2010년 이후처럼 큰 하락이 짧게 끝난 기간에서는 추세가 꺾였을 때도 3배 ETF를 들고 있는 편이 끝 금액을 키웠기 때문에, 끝 금액 최대를 목표로 찾으면 이런 설정이 위로 올라옵니다. 하락이 길었던 2000~2002년·2008년이 들어가는 '1990–2010'·'1990–최신' 열에서 대부분 크게 무너지는 것이 바로 과최적화의 모습입니다.</p></div></details>
+<details class="g-faq"><summary>시뮬레이터에서 연 숫자가 표와 다른데요?</summary><div class="g-ans"><p>열기로 열면 기간이 그 구간 시작부터 최신 자료일까지라서, 2025년 말에서 끝나는 표의 맞춘 구간보다 길어집니다. 아래 기간 막대의 청산을 2025년 4분기로 옮기면 표와 같은 숫자가 나옵니다. 또 '26년 이후'는 맞춘 구간부터 이어서 돌린 값이라, 2026년에 새로 시작하면(현금에서 출발) 다른 값이 나옵니다.</p></div></details>
+<details class="g-faq"><summary>다른 전략도 같은 방법으로 볼 수 있나요?</summary><div class="g-ans"><p><a href="9sig-overfit/">9sig 과최적화 탐색기</a>에서 같은 방식으로 볼 수 있고, <a href="strategy-simulator/">투자전략 시뮬레이터</a>의 '분석 표'로 시작 연도·보유 기간마다 결과가 얼마나 달라지는지도 확인할 수 있습니다.</p></div></details>
+      </div>
+    </section>
+    <!-- [/GUIDE:sssmafit] -->
+  </div><!-- /page-sssmafit -->
 
   <!-- ───────────────────────────────────────────── page-muhanbt ── -->
   <!-- [MUHAN-BT] 무한매수법 백테스트 시뮬레이터 — 화면은 JS가 #mb-root 에 그림 (계산 MHV · 자료 MBT) -->
@@ -39128,6 +39325,15 @@ var YE = (function () {
     <button class="drop-item" id="drop-muhanbt" onclick="switchSubTab('muhanbt','invest',this)"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;"><path d="M2.5 15.5h13" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M3 12.5l3.2-3.4 2.6 2 3.4-4.6 2.8 1.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12.2" cy="6.5" r="1.4" fill="currentColor"/></svg>무한매수법 백테스트</button>
     <button class="drop-item" id="drop-vr" onclick="switchSubTab('vr','invest',this)"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;"><path d="M2 12.5 L16 5.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M2 9 L16 2M2 16 L16 9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-dasharray="2 1.6" opacity="0.6"/><circle cx="9" cy="9" r="1.6" fill="currentColor"/></svg>밸류리밸런싱 VR 5.0</button>
     <button class="drop-item" id="drop-vrbt" onclick="switchSubTab('vrbt','invest',this)"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;"><path d="M2.5 15.5h13" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M3 9.5 L15 3.5M3 13.5 L15 7.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-dasharray="2 1.6" opacity="0.6"/><path d="M3 12l3-2.6 2.6 1.4 3.2-3.6 3.2 0.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>밸류리밸런싱 VR 5.0 백테스트</button>
+    <button class="drop-item" id="drop-stratsim" onclick="switchSubTab('stratsim','invest',this)"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;"><path d="M2.5 15.5h13" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M3 13l3-3.2 2.4 1.6 3.4-4.4 3.2 1.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 10.5l3-1.6 2.4-.4 3.4-3.4 3.2-2.6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 1.6" opacity="0.6"/></svg>투자전략 시뮬레이터</button>
+    <div class="drop-parent" data-sub="ssres">
+      <button type="button" class="drop-item drop-parent-btn" aria-haspopup="true" aria-expanded="false"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;"><path d="M2.5 4.5h4l1.5 1.5h7.5v8.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M5 12l2-2 1.6 1.2 2.6-3 1.8 1.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="drop-parent-label">투자전략 자료실</span><svg class="drop-caret" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="drop-sub"><div class="drop-sub-in">
+        <button class="drop-item" id="drop-ssintra" onclick="switchSubTab('ssintra','invest',this)"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;"><path d="M2.5 9h13" stroke="currentColor" stroke-width="1" stroke-dasharray="1.6 1.4" opacity=".6"/><path d="M2.5 9.5c1.5-.3 2-3 3.5-3s1.6 4.5 3.2 4.5 1.8-6 3.4-6 1.4 2 2.9 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="2.8" cy="9.4" r="1.1" fill="currentColor"/></svg>TQQQ 장중 흐름</button>
+        <button class="drop-item" id="drop-ss9fit" onclick="switchSubTab('ss9fit','invest',this)"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;"><rect x="2" y="3" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M2 7h14M7 7v8" stroke="currentColor" stroke-width="1.1" opacity=".7"/><circle cx="11.5" cy="11" r="1.3" fill="currentColor"/></svg>9sig 과최적화 탐색기</button>
+        <button class="drop-item" id="drop-sssmafit" onclick="switchSubTab('sssmafit','invest',this)"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;"><rect x="2" y="3" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M2 7h14M7 7v8" stroke="currentColor" stroke-width="1.1" opacity=".7"/><circle cx="11.5" cy="11" r="1.3" fill="currentColor"/></svg>SMA 과최적화 탐색기</button>
+      </div></div>
+    </div>
     <div class="drop-label">지수 성장률</div>
     <div class="drop-parent" data-sub="us">
       <button type="button" class="drop-item drop-parent-btn" aria-haspopup="true" aria-expanded="false"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;"><rect x="1.5" y="3.5" width="15" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/><rect x="1.5" y="3.5" width="7" height="5.5" rx="1.5" fill="currentColor" opacity=".35"/><circle cx="3.6" cy="5.3" r=".6" fill="currentColor"/><circle cx="6.2" cy="5.3" r=".6" fill="currentColor"/><circle cx="4.9" cy="7.2" r=".6" fill="currentColor"/><path d="M9.5 6.2h6.3M9.5 8.9h6.3M2.5 11.6h13.3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg><span class="drop-parent-label">미국 지수 성장률</span><svg class="drop-caret" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>

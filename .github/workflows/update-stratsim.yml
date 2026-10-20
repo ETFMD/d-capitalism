@@ -1,0 +1,97 @@
+name: 투자전략 시뮬레이터 자료 갱신
+
+# 투자전략 시뮬레이터(/strategy-simulator/)와 자료실 3쪽이 쓰는 data/stratsim/
+#  · 미국 장이 열린 동안 한 시간마다 + 마감 뒤 한 번: 일봉(야후 수정주가)·NFCI(FRED)·TQQQ 5분/1분봉
+#    (장중 실행은 오늘의 아직 끝나지 않은 일봉도 넣음 — 화면이 '아직 끝나지 않은 값'으로 표시, 마감 뒤 실행이 확정값으로 바꿈)
+#  · 마감 뒤 실행(ET 16:00~17:30)에서만 과최적화 탐색기 표의 2026년 이후·1990~최신 지표를 다시 계산(후보 6,293개 — 약 10~20분)
+#  · 계산 코드(src/stratsim/00-core·05-params·10-engine.js)·후보·STATIC_VER 이 바뀌면 탐색기 전체를 다시 계산(약 40~80분)
+#    (fit-*.json 의 engine 해시가 지금 코드와 다를 때 저절로 — 시간 제한을 넉넉히 둠)
+#  · 손으로 돌릴 때(workflow_dispatch) '전체 다시 계산'을 켜면 탐색기 전체를 다시 계산
+on:
+  schedule:
+    - cron: '35 13-22 * * 1-5'   # UTC — 여름(EDT) 09:35~18:35 ET · 겨울(EST) 08:35~17:35 ET → 아래 시간 검사로 09:00~17:30 ET 만
+  workflow_dispatch:
+    inputs:
+      full:
+        description: '과최적화 탐색기 전체 다시 계산 (약 40~80분)'
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/stratsim_fit.cjs'
+      - 'scripts/stratsim_fit_seed.json'
+      - 'scripts/update_stratsim.py'
+      - 'scripts/update_stratsim_intraday.py'
+      - 'src/stratsim/00-core.js'
+      - 'src/stratsim/05-params.js'
+      - 'src/stratsim/10-engine.js'
+      - '.github/workflows/update-stratsim.yml'
+
+permissions:
+  contents: write
+
+# 늦어진 실행이 다음 실행과 겹치지 않게 줄 세움 (같은 파일을 서로 덮지 않게)
+concurrency:
+  group: update-stratsim
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: 미국 장 시간 확인 (ET)
+        id: gate
+        run: |
+          now=$(TZ=America/New_York date +%H%M)
+          echo "지금 $(TZ=America/New_York date '+%Y-%m-%d %H:%M %Z')"
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; echo "fit=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$now" -ge 900 ] && [ "$now" -le 1730 ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; echo "장 시간 밖 — 건너뜀"; fi
+          if [ "$now" -ge 1600 ] && [ "$now" -le 1730 ]; then echo "fit=true" >> "$GITHUB_OUTPUT"; else echo "fit=false" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/checkout@v5
+        if: steps.gate.outputs.run == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.fit == 'true'
+        with:
+          node-version: '20'
+
+      # 야후가 공용 IP 를 잠깐 막는 경우가 있어 한 번 더 시도
+      - name: 일봉·NFCI
+        if: steps.gate.outputs.run == 'true'
+        run: python3 scripts/update_stratsim.py || (sleep 90 && python3 scripts/update_stratsim.py)
+
+      # 장중 흐름 쪽 자료 — 실패해도 일봉 갱신은 그대로 커밋
+      - name: TQQQ 5분·1분봉
+        if: steps.gate.outputs.run == 'true'
+        continue-on-error: true
+        run: python3 scripts/update_stratsim_intraday.py || (sleep 60 && python3 scripts/update_stratsim_intraday.py)
+
+      - name: 과최적화 탐색기 표
+        if: steps.gate.outputs.fit == 'true'
+        run: node scripts/stratsim_fit.cjs ${{ inputs.full && '--full' || '' }}
+
+      - name: 바뀐 경우에만 커밋
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898099+github-actions[bot]@users.noreply.github.com'
+          git add data/stratsim/
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git commit -m "chore: 투자전략 시뮬레이터 자료 갱신"
+          # 다른 봇이 그사이 올린 커밋 위로 다시 쌓음 (이 작업은 data/stratsim/ 만 바꾸므로 겹치지 않음)
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main && git push origin HEAD:main && exit 0
+            git rebase --abort 2>/dev/null || true
+            sleep $((i * 5))
+          done
+          exit 1
