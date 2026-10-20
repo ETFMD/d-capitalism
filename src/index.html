@@ -1726,7 +1726,21 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .ap-range .chart-tab { padding:4px 12px; font-size:12px; }
   .ap-prog { font-size:11px; color:var(--text3); }
   .ap-hist-msg { padding:24px 0; text-align:center; color:var(--text3); font-size:12px; }
+  /* 가격 구간(최소~최대 억 원) — 2026-10-20 */
+  .ap-pr { display:flex; align-items:center; flex-wrap:wrap; gap:6px; font-size:12px; color:var(--text2); }
+  .ap-pr-l { font-weight:600; }
+  .ap-pr-in { width:72px; font-family:var(--mono); font-size:13px; color:var(--text); background:var(--bg3); border:1px solid var(--card-border); border-radius:10px; padding:8px 8px; text-align:right; -moz-appearance:textfield; appearance:textfield; }
+  .ap-pr-in::-webkit-outer-spin-button, .ap-pr-in::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .ap-pr-in:focus { outline:none; border-color:rgba(49,130,246,0.55); }
+  .ap-pr-in::placeholder { color:var(--text3); font-family:var(--font); }
+  .ap-pr-pre { display:flex; flex-wrap:wrap; gap:6px; margin-left:4px; }
+  .ap-pr-pre .dv-chip { padding:5px 9px; }
+  #ap-pr-note b { font-family:var(--mono); color:var(--text); }
+  #ap-pr-note button { white-space:nowrap; flex:none; }
   @media (max-width: 860px) {
+    .ap-pr { width:100%; } .ap-pr-in { flex:1 1 0; min-width:0; width:auto; }
+    .ap-pr-pre { width:100%; margin-left:0; display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:5px; }   /* 휴대폰: 구간 단추 6개를 같은 폭으로 한 줄에 */
+    .ap-pr-pre .dv-chip { padding:6px 0; font-size:11px; text-align:center; }
     .ap-tbl tr.dv-row { grid-template-columns:1fr 1fr; }
     .ap-tbl tr.dv-row td.ap-c-n { grid-column:1 / 2; order:-2; min-width:0; }
     .ap-tbl tr.dv-row td.ap-c-r { order:-1; flex-direction:row; align-items:baseline; justify-content:flex-end; gap:1px; width:auto; }
@@ -13509,8 +13523,19 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           <input type="search" class="dv-search" id="ap-search" placeholder="아파트 이름·주소 검색 (예: 래미안, 반포동, 해운대구)" aria-label="아파트 이름 또는 주소 검색" autocomplete="off">
         </div>
+        <div class="ap-pr" role="group" aria-label="가격 구간 (단위: 억 원)">
+          <span class="ap-pr-l">가격</span>
+          <input type="number" class="ap-pr-in" id="ap-pmin" inputmode="decimal" min="0" step="0.1" placeholder="최소" aria-label="최소 가격 (억 원)">
+          <span>억 ~</span>
+          <input type="number" class="ap-pr-in" id="ap-pmax" inputmode="decimal" min="0" step="0.1" placeholder="최대" aria-label="최대 가격 (억 원)">
+          <span>억</span>
+          <div class="ap-pr-pre" role="group" aria-label="가격 구간 빠르게 고르기">
+            <button type="button" class="dv-chip" data-pmin="" data-pmax="3">~3억</button><button type="button" class="dv-chip" data-pmin="3" data-pmax="6">3~6억</button><button type="button" class="dv-chip" data-pmin="6" data-pmax="9">6~9억</button><button type="button" class="dv-chip" data-pmin="9" data-pmax="15">9~15억</button><button type="button" class="dv-chip" data-pmin="15" data-pmax="30">15~30억</button><button type="button" class="dv-chip" data-pmin="30" data-pmax="">30억~</button>
+          </div>
+        </div>
         <div class="dv-chips" id="ap-chips" role="group" aria-label="지역 선택"></div>
       </div>
+      <div class="dv-filter" id="ap-pr-note" hidden><span id="ap-pr-txt"></span><button type="button" id="ap-pr-x">가격 구간 지우기</button></div>
       <div class="dv-tbl-wrap">
         <table class="dv-tbl ap-tbl">
           <thead><tr>
@@ -13531,7 +13556,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <h2 id="g-aptrank-h">아파트 시세 순위는 이렇게 매깁니다</h2>
       <p class="g-lead">아파트를 사고팔면 계약일로부터 30일 안에 실거래 신고를 해야 하고, 국토교통부는 이 신고 자료를 공개합니다. 이 페이지는 최근 1년 동안 한 번이라도 매매된 전국 아파트 단지를 모아, 단지마다 가장 최근 실거래 금액이 높은 순서로 순위를 매깁니다.</p>
       <div class="g-grid">
-        <article class="g-card"><h3>계산 원리</h3><ul class="g-list"><li><b>실거래가</b> = 그 단지에서 가장 최근에 계약된 매매 금액 (계약이 해제된 거래는 뺌)</li><li><b>순위</b> = 실거래가가 높은 순 · 같은 금액이면 같은 순위</li><li><b>평당가</b> = 실거래가 ÷ (전용면적 ÷ 3.3058) · <b>평수</b> = 전용면적 ÷ 3.3058 — 실거래 신고에는 전용면적만 있어 공급면적(분양 평형)이 아닌 전용 기준</li><li><b>세대수</b> = 한국부동산원 공동주택 단지 식별정보의 단지 세대수 (필지번호로 연결)</li></ul></article>
+        <article class="g-card"><h3>계산 원리</h3><ul class="g-list"><li><b>실거래가</b> = 그 단지에서 가장 최근에 계약된 매매 금액 (계약이 해제된 거래는 뺌)</li><li><b>순위</b> = 실거래가가 높은 순 · 같은 금액이면 같은 순위</li><li><b>평당가</b> = 실거래가 ÷ (전용면적 ÷ 3.3058) · <b>평수</b> = 전용면적 ÷ 3.3058 — 실거래 신고에는 전용면적만 있어 공급면적(분양 평형)이 아닌 전용 기준</li><li><b>세대수</b> = 한국부동산원 공동주택 단지 식별정보의 단지 세대수 (필지번호로 연결)</li><li><b>가격 구간</b> = 최소·최대(억 원)를 넣거나 구간 단추를 누르면 실거래가가 그 사이(최소 이상 · 최대 이하)인 단지만 · 지역·검색·정렬과 함께 걸리고 순위는 전국 순위 그대로</li></ul></article>
         <article class="g-card"><h3>자료와 갱신</h3><ul class="g-list"><li>자료: 국토교통부 아파트 매매 실거래가 (공공데이터포털) · 한국부동산원 공동주택 단지 식별정보</li><li>단지 그래프는 실거래 공개가 시작된 2006년부터 전체 기간을 보여 줍니다 (1·3·5·10년으로 좁혀 보기 가능).</li><li>2시간마다 이번 달·지난달 신고분을 전국 252개 시군구에서 다시 받아 순위를 새로 매기고, 새벽에는 그 전달까지 확인합니다 (늦은 신고·계약 해제 반영).</li><li>계약 후 신고까지 최대 30일이 걸려 최근 몇 주 거래는 나중에 더 들어올 수 있습니다.</li></ul></article>
       </div>
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>왜 같은 단지인데 평형에 따라 순위가 크게 달라지나요?</summary><div class="g-ans"><p>순위는 단지에서 '가장 최근에 계약된 한 건'의 금액이라, 그 거래가 작은 평형이면 낮게, 큰 평형이면 높게 나옵니다. 면적과 관계없이 비교하려면 '평당가순'으로 정렬해 보세요. 단지를 누르면 1년 동안의 모든 거래를 면적별로 볼 수 있습니다.</p></div></details><details class="g-faq"><summary>우리 아파트가 목록에 없어요.</summary><div class="g-ans"><p>최근 1년 동안 매매 거래가 한 건도 신고되지 않은 단지는 순위에 들어가지 않습니다. 분양권·입주권 거래와 전월세 거래도 포함되지 않습니다.</p></div></details><details class="g-faq"><summary>세대수가 비어 있는 단지가 있어요.</summary><div class="g-ans"><p>실거래 신고의 지번과 공동주택 단지 정보의 대표 지번이 다르면 자동으로 연결되지 않을 수 있습니다. 이런 단지는 세대수를 '—'로 표시합니다.</p></div></details><details class="g-faq"><summary>실거래가가 시세와 다른데요?</summary><div class="g-ans"><p>실거래가는 실제 계약된 금액이라 층·향·수리 상태나 가족 간 거래 등에 따라 그 시점의 호가·시세와 다를 수 있습니다. 그래프에서 최근 여러 거래를 함께 보면 흐름을 판단하는 데 도움이 됩니다.</p></div></details></div>
@@ -21441,7 +21466,7 @@ var TAX = (function () {
   function ymd(d) { return d ? d.slice(2).replace(/-/g, '.') : ''; }
   function hid(k) { var h = 5381; for (var i = 0; i < k.length; i++) h = ((h << 5) + h + k.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }   // 단지키(한글 포함) → 요소 id
   var PER = 50, SIDO_ORDER = ['서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
-  var S = { data: null, rows: null, sort: 'price', q: '', sido: '', page: 1, open: {}, loading: false };
+  var S = { data: null, rows: null, sort: 'price', q: '', sido: '', pmin: null, pmax: null, prSwap: false, page: 1, open: {}, loading: false };   /* pmin·pmax: 가격 구간(만원 · 최소 이상 · 최대 이하 · 없으면 null) */
   var charts = {}, hist = {};
 
   function prep(d) {
@@ -21455,8 +21480,30 @@ var TAX = (function () {
     rows.forEach(function (r, i) { r.rank = (prev && prev.p === r.p) ? prev.rank : i + 1; prev = r; });   // 같은 금액은 같은 순위
     return rows;
   }
+  /* 가격 구간 (2026-10-20) — 입력칸은 억 원(소수 가능 · 3.5 = 3억 5천만원) · 안에서는 만원 · 빈칸 = 끝없음 · 최소 > 최대면 바꿔 적용(입력칸은 그대로 — 치는 중에 바꾸지 않게) */
+  var PR_ON = function () { return S.pmin != null || S.pmax != null; };
+  function inRange(r) { return (S.pmin == null || r.p >= S.pmin) && (S.pmax == null || r.p <= S.pmax); }
+  function prRead() {
+    var f = function (id) { var el = $(id), t = el ? String(el.value).trim() : ''; if (t === '') return null; var v = parseFloat(t); return isFinite(v) && v >= 0 ? Math.round(v * 1e4) : null; };
+    var a = f('ap-pmin'), b = f('ap-pmax'); S.prSwap = a != null && b != null && a > b;
+    S.pmin = S.prSwap ? b : a; S.pmax = S.prSwap ? a : b;
+  }
+  function prLabel() {
+    return S.pmin != null && S.pmax != null ? man(S.pmin) + ' ~ ' + man(S.pmax) : S.pmin != null ? man(S.pmin) + ' 이상' : man(S.pmax) + ' 이하';
+  }
+  function prNote() {   /* 표 위 안내줄: 지금 구간 · 그 구간의 단지 수(전국) · 빠른 단추 표시 */
+    var on = PR_ON(), el = $('ap-pr-note'), eo = function (v) { return v == null ? '' : String(Math.round(v / 1e3) / 10); };
+    document.querySelectorAll('#page-aptrank .ap-pr-pre .dv-chip').forEach(function (b) {
+      var a = b.getAttribute('data-pmin'), z = b.getAttribute('data-pmax');
+      b.classList.toggle('active', on && a === eo(S.pmin) && z === eo(S.pmax)); b.setAttribute('aria-pressed', b.classList.contains('active'));
+    });
+    if (!el) return; el.hidden = !on; if (!on || !S.rows) return;
+    var n = S.rows.filter(inRange).length, N = S.rows.length, pc = N ? n / N * 100 : 0;
+    $('ap-pr-txt').innerHTML = '가격 <b>' + prLabel() + '</b> · 전국 ' + n.toLocaleString('ko-KR') + '개 단지 (전체의 ' + (pc < 1 && pc > 0 ? pc.toFixed(2) : pc.toFixed(1)) + '%)' + (S.prSwap ? ' · 최소가 최대보다 커서 바꿔 적용' : '');
+  }
+  function prApply() { prRead(); S.page = 1; if (S.rows) { chips(); table(); } prNote(); }
   function list() {
-    var q = S.q.toLowerCase().replace(/\s+/g, ''), out = S.rows.filter(function (r) { return (!S.sido || r.sido === S.sido) && (!q || r.s.indexOf(q) >= 0); });
+    var q = S.q.toLowerCase().replace(/\s+/g, ''), out = S.rows.filter(function (r) { return (!S.sido || r.sido === S.sido) && (!q || r.s.indexOf(q) >= 0) && inRange(r); });
     if (S.sort === 'pyeong') out = out.slice().sort(function (a, b) { return b.py - a.py; });
     else if (S.sort === 'recent') out = out.slice().sort(function (a, b) { return a.d < b.d ? 1 : a.d > b.d ? -1 : b.p - a.p; });
     else if (S.sort === 'hh') out = out.slice().sort(function (a, b) { return (b.hh || 0) - (a.hh || 0) || b.p - a.p; });
@@ -21471,11 +21518,11 @@ var TAX = (function () {
     $('ap-k-last').textContent = last ? +last.slice(5, 7) + '월 ' + (+last.slice(8, 10)) + '일' : '—';
     $('ap-k-last-sub').textContent = '신고 기한 30일 — 최근 거래는 더 늘어날 수 있음';
   }
-  function chips() {
-    var cnt = {}; S.rows.forEach(function (r) { cnt[r.sido] = (cnt[r.sido] || 0) + 1; });
-    var keys = SIDO_ORDER.filter(function (k) { return cnt[k]; }).concat(Object.keys(cnt).filter(function (k) { return SIDO_ORDER.indexOf(k) < 0 && k; }));
+  function chips() {   /* 지역별 단지 수 = 가격 구간 안의 수 (구간을 넣으면 0 인 지역도 칩은 그대로 — 고른 지역이 사라지지 않게) */
+    var all = {}, cnt = {}; S.rows.forEach(function (r) { all[r.sido] = 1; if (inRange(r)) cnt[r.sido] = (cnt[r.sido] || 0) + 1; });
+    var keys = SIDO_ORDER.filter(function (k) { return all[k]; }).concat(Object.keys(all).filter(function (k) { return SIDO_ORDER.indexOf(k) < 0 && k; }));
     $('ap-chips').innerHTML = '<button type="button" class="dv-chip' + (!S.sido ? ' active' : '') + '" data-sido="">전체</button>' + keys.map(function (k) {
-      return '<button type="button" class="dv-chip' + (S.sido === k ? ' active' : '') + '" data-sido="' + esc(k) + '">' + esc(k) + '<small>' + cnt[k].toLocaleString('ko-KR') + '</small></button>';
+      return '<button type="button" class="dv-chip' + (S.sido === k ? ' active' : '') + '" data-sido="' + esc(k) + '">' + esc(k) + '<small>' + (cnt[k] || 0).toLocaleString('ko-KR') + '</small></button>';
     }).join('');
   }
   function pager(total, pages) {
@@ -21512,7 +21559,7 @@ var TAX = (function () {
         '<td class="ap-c-sido" data-l="지역">' + esc(r.sido) + '</td>' +
         '<td class="ap-c-gu" data-l="구">' + esc(r.gu) + '</td></tr>' +
         (open ? '<tr class="dv-hist"><td colspan="9"><div id="ap-h-' + hid(r.k) + '"></div></td></tr>' : '');
-    }).join('') : '<tr><td colspan="9" class="dv-empty">' + (S.q ? '‘' + esc(S.q) + '’에 맞는 아파트가 없습니다.' : '자료가 없습니다.') + '</td></tr>';
+    }).join('') : '<tr><td colspan="9" class="dv-empty">' + (S.q || PR_ON() ? [PR_ON() ? '가격 ' + prLabel() : '', S.sido, S.q ? '‘' + esc(S.q) + '’' : ''].filter(Boolean).join(' · ') + ' 조건에 맞는 아파트가 없습니다.' : '자료가 없습니다.') + '</td></tr>';
     pager(all.length, pages);
     rows.forEach(function (r) { if (S.open[r.k]) histDraw(r); });
   }
@@ -21599,7 +21646,7 @@ var TAX = (function () {
   }
   function render() {
     if (!S.rows) { load(); return; }
-    kpis(); chips(); table(); note();
+    kpis(); chips(); table(); note(); prNote();
     document.querySelectorAll('#page-aptrank .ap-sort .chart-tab').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-sort') === S.sort); });
   }
   function load() {
@@ -21624,6 +21671,7 @@ var TAX = (function () {
       source: '국토교통부 아파트 매매 실거래가 · 계약 ' + ymd(r.d) + ' 기준' });
   }
   window.apRender = function () { var pg = $('page-aptrank'); if (pg && pg.classList.contains('active')) render(); };
+  window.APdebug = { get S() { return S; }, list: function () { return S.rows ? list() : []; } };   /* 회귀 시험용(가격 구간 등 화면 결과 = 자료 대조) */
 
   document.addEventListener('click', function (e) {
     if (!e.target.closest || !e.target.closest('#page-aptrank')) return;
@@ -21631,6 +21679,9 @@ var TAX = (function () {
     if (t) { S.sort = t.getAttribute('data-sort'); S.page = 1; render(); return; }
     var c = e.target.closest('#ap-chips .dv-chip');
     if (c) { S.sido = c.getAttribute('data-sido'); S.page = 1; render(); return; }
+    var pre = e.target.closest('.ap-pr-pre .dv-chip');   /* 가격 구간 빠른 단추 — 한 번 더 누르면 지움 */
+    if (pre) { var on = pre.classList.contains('active'); $('ap-pmin').value = on ? '' : pre.getAttribute('data-pmin'); $('ap-pmax').value = on ? '' : pre.getAttribute('data-pmax'); clearTimeout(pT); prApply(); return; }
+    if (e.target.closest('#ap-pr-x')) { $('ap-pmin').value = ''; $('ap-pmax').value = ''; clearTimeout(pT); prApply(); return; }
     var pgb = e.target.closest('#ap-pager .dv-pg');
     if (pgb && !pgb.disabled) { S.page = +pgb.getAttribute('data-pg'); table(); var top = $('ap-body').closest('.dv-card'); if (top) top.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     var sh = e.target.closest('.ap-share');
@@ -21643,9 +21694,13 @@ var TAX = (function () {
   document.addEventListener('keydown', function (e) {
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('#ap-body tr.dv-row')) { e.preventDefault(); e.target.click(); }
   });
-  var qT = null;
+  var qT = null, pT = null;
   document.addEventListener('input', function (e) {
     if (e.target && e.target.id === 'ap-search') { clearTimeout(qT); var v = e.target.value; qT = setTimeout(function () { S.q = v.trim(); S.page = 1; if (S.rows) table(); }, 150); }
+    if (e.target && (e.target.id === 'ap-pmin' || e.target.id === 'ap-pmax')) { clearTimeout(pT); pT = setTimeout(prApply, 300); }   /* 치는 동안은 잠깐 기다렸다 */
+  });
+  document.addEventListener('change', function (e) {   /* 칸을 벗어나거나 Enter — 바로 */
+    if (e.target && (e.target.id === 'ap-pmin' || e.target.id === 'ap-pmax')) { clearTimeout(pT); prApply(); }
   });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.apRender); else window.apRender();
 })();

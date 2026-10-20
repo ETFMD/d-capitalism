@@ -7888,7 +7888,7 @@ var TAX = (function () {
   function ymd(d) { return d ? d.slice(2).replace(/-/g, '.') : ''; }
   function hid(k) { var h = 5381; for (var i = 0; i < k.length; i++) h = ((h << 5) + h + k.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }   // 단지키(한글 포함) → 요소 id
   var PER = 50, SIDO_ORDER = ['서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
-  var S = { data: null, rows: null, sort: 'price', q: '', sido: '', page: 1, open: {}, loading: false };
+  var S = { data: null, rows: null, sort: 'price', q: '', sido: '', pmin: null, pmax: null, prSwap: false, page: 1, open: {}, loading: false };   /* pmin·pmax: 가격 구간(만원 · 최소 이상 · 최대 이하 · 없으면 null) */
   var charts = {}, hist = {};
 
   function prep(d) {
@@ -7902,8 +7902,30 @@ var TAX = (function () {
     rows.forEach(function (r, i) { r.rank = (prev && prev.p === r.p) ? prev.rank : i + 1; prev = r; });   // 같은 금액은 같은 순위
     return rows;
   }
+  /* 가격 구간 (2026-10-20) — 입력칸은 억 원(소수 가능 · 3.5 = 3억 5천만원) · 안에서는 만원 · 빈칸 = 끝없음 · 최소 > 최대면 바꿔 적용(입력칸은 그대로 — 치는 중에 바꾸지 않게) */
+  var PR_ON = function () { return S.pmin != null || S.pmax != null; };
+  function inRange(r) { return (S.pmin == null || r.p >= S.pmin) && (S.pmax == null || r.p <= S.pmax); }
+  function prRead() {
+    var f = function (id) { var el = $(id), t = el ? String(el.value).trim() : ''; if (t === '') return null; var v = parseFloat(t); return isFinite(v) && v >= 0 ? Math.round(v * 1e4) : null; };
+    var a = f('ap-pmin'), b = f('ap-pmax'); S.prSwap = a != null && b != null && a > b;
+    S.pmin = S.prSwap ? b : a; S.pmax = S.prSwap ? a : b;
+  }
+  function prLabel() {
+    return S.pmin != null && S.pmax != null ? man(S.pmin) + ' ~ ' + man(S.pmax) : S.pmin != null ? man(S.pmin) + ' 이상' : man(S.pmax) + ' 이하';
+  }
+  function prNote() {   /* 표 위 안내줄: 지금 구간 · 그 구간의 단지 수(전국) · 빠른 단추 표시 */
+    var on = PR_ON(), el = $('ap-pr-note'), eo = function (v) { return v == null ? '' : String(Math.round(v / 1e3) / 10); };
+    document.querySelectorAll('#page-aptrank .ap-pr-pre .dv-chip').forEach(function (b) {
+      var a = b.getAttribute('data-pmin'), z = b.getAttribute('data-pmax');
+      b.classList.toggle('active', on && a === eo(S.pmin) && z === eo(S.pmax)); b.setAttribute('aria-pressed', b.classList.contains('active'));
+    });
+    if (!el) return; el.hidden = !on; if (!on || !S.rows) return;
+    var n = S.rows.filter(inRange).length, N = S.rows.length, pc = N ? n / N * 100 : 0;
+    $('ap-pr-txt').innerHTML = '가격 <b>' + prLabel() + '</b> · 전국 ' + n.toLocaleString('ko-KR') + '개 단지 (전체의 ' + (pc < 1 && pc > 0 ? pc.toFixed(2) : pc.toFixed(1)) + '%)' + (S.prSwap ? ' · 최소가 최대보다 커서 바꿔 적용' : '');
+  }
+  function prApply() { prRead(); S.page = 1; if (S.rows) { chips(); table(); } prNote(); }
   function list() {
-    var q = S.q.toLowerCase().replace(/\s+/g, ''), out = S.rows.filter(function (r) { return (!S.sido || r.sido === S.sido) && (!q || r.s.indexOf(q) >= 0); });
+    var q = S.q.toLowerCase().replace(/\s+/g, ''), out = S.rows.filter(function (r) { return (!S.sido || r.sido === S.sido) && (!q || r.s.indexOf(q) >= 0) && inRange(r); });
     if (S.sort === 'pyeong') out = out.slice().sort(function (a, b) { return b.py - a.py; });
     else if (S.sort === 'recent') out = out.slice().sort(function (a, b) { return a.d < b.d ? 1 : a.d > b.d ? -1 : b.p - a.p; });
     else if (S.sort === 'hh') out = out.slice().sort(function (a, b) { return (b.hh || 0) - (a.hh || 0) || b.p - a.p; });
@@ -7918,11 +7940,11 @@ var TAX = (function () {
     $('ap-k-last').textContent = last ? +last.slice(5, 7) + '월 ' + (+last.slice(8, 10)) + '일' : '—';
     $('ap-k-last-sub').textContent = '신고 기한 30일 — 최근 거래는 더 늘어날 수 있음';
   }
-  function chips() {
-    var cnt = {}; S.rows.forEach(function (r) { cnt[r.sido] = (cnt[r.sido] || 0) + 1; });
-    var keys = SIDO_ORDER.filter(function (k) { return cnt[k]; }).concat(Object.keys(cnt).filter(function (k) { return SIDO_ORDER.indexOf(k) < 0 && k; }));
+  function chips() {   /* 지역별 단지 수 = 가격 구간 안의 수 (구간을 넣으면 0 인 지역도 칩은 그대로 — 고른 지역이 사라지지 않게) */
+    var all = {}, cnt = {}; S.rows.forEach(function (r) { all[r.sido] = 1; if (inRange(r)) cnt[r.sido] = (cnt[r.sido] || 0) + 1; });
+    var keys = SIDO_ORDER.filter(function (k) { return all[k]; }).concat(Object.keys(all).filter(function (k) { return SIDO_ORDER.indexOf(k) < 0 && k; }));
     $('ap-chips').innerHTML = '<button type="button" class="dv-chip' + (!S.sido ? ' active' : '') + '" data-sido="">전체</button>' + keys.map(function (k) {
-      return '<button type="button" class="dv-chip' + (S.sido === k ? ' active' : '') + '" data-sido="' + esc(k) + '">' + esc(k) + '<small>' + cnt[k].toLocaleString('ko-KR') + '</small></button>';
+      return '<button type="button" class="dv-chip' + (S.sido === k ? ' active' : '') + '" data-sido="' + esc(k) + '">' + esc(k) + '<small>' + (cnt[k] || 0).toLocaleString('ko-KR') + '</small></button>';
     }).join('');
   }
   function pager(total, pages) {
@@ -7959,7 +7981,7 @@ var TAX = (function () {
         '<td class="ap-c-sido" data-l="지역">' + esc(r.sido) + '</td>' +
         '<td class="ap-c-gu" data-l="구">' + esc(r.gu) + '</td></tr>' +
         (open ? '<tr class="dv-hist"><td colspan="9"><div id="ap-h-' + hid(r.k) + '"></div></td></tr>' : '');
-    }).join('') : '<tr><td colspan="9" class="dv-empty">' + (S.q ? '‘' + esc(S.q) + '’에 맞는 아파트가 없습니다.' : '자료가 없습니다.') + '</td></tr>';
+    }).join('') : '<tr><td colspan="9" class="dv-empty">' + (S.q || PR_ON() ? [PR_ON() ? '가격 ' + prLabel() : '', S.sido, S.q ? '‘' + esc(S.q) + '’' : ''].filter(Boolean).join(' · ') + ' 조건에 맞는 아파트가 없습니다.' : '자료가 없습니다.') + '</td></tr>';
     pager(all.length, pages);
     rows.forEach(function (r) { if (S.open[r.k]) histDraw(r); });
   }
@@ -8046,7 +8068,7 @@ var TAX = (function () {
   }
   function render() {
     if (!S.rows) { load(); return; }
-    kpis(); chips(); table(); note();
+    kpis(); chips(); table(); note(); prNote();
     document.querySelectorAll('#page-aptrank .ap-sort .chart-tab').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-sort') === S.sort); });
   }
   function load() {
@@ -8071,6 +8093,7 @@ var TAX = (function () {
       source: '국토교통부 아파트 매매 실거래가 · 계약 ' + ymd(r.d) + ' 기준' });
   }
   window.apRender = function () { var pg = $('page-aptrank'); if (pg && pg.classList.contains('active')) render(); };
+  window.APdebug = { get S() { return S; }, list: function () { return S.rows ? list() : []; } };   /* 회귀 시험용(가격 구간 등 화면 결과 = 자료 대조) */
 
   document.addEventListener('click', function (e) {
     if (!e.target.closest || !e.target.closest('#page-aptrank')) return;
@@ -8078,6 +8101,9 @@ var TAX = (function () {
     if (t) { S.sort = t.getAttribute('data-sort'); S.page = 1; render(); return; }
     var c = e.target.closest('#ap-chips .dv-chip');
     if (c) { S.sido = c.getAttribute('data-sido'); S.page = 1; render(); return; }
+    var pre = e.target.closest('.ap-pr-pre .dv-chip');   /* 가격 구간 빠른 단추 — 한 번 더 누르면 지움 */
+    if (pre) { var on = pre.classList.contains('active'); $('ap-pmin').value = on ? '' : pre.getAttribute('data-pmin'); $('ap-pmax').value = on ? '' : pre.getAttribute('data-pmax'); clearTimeout(pT); prApply(); return; }
+    if (e.target.closest('#ap-pr-x')) { $('ap-pmin').value = ''; $('ap-pmax').value = ''; clearTimeout(pT); prApply(); return; }
     var pgb = e.target.closest('#ap-pager .dv-pg');
     if (pgb && !pgb.disabled) { S.page = +pgb.getAttribute('data-pg'); table(); var top = $('ap-body').closest('.dv-card'); if (top) top.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     var sh = e.target.closest('.ap-share');
@@ -8090,9 +8116,13 @@ var TAX = (function () {
   document.addEventListener('keydown', function (e) {
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('#ap-body tr.dv-row')) { e.preventDefault(); e.target.click(); }
   });
-  var qT = null;
+  var qT = null, pT = null;
   document.addEventListener('input', function (e) {
     if (e.target && e.target.id === 'ap-search') { clearTimeout(qT); var v = e.target.value; qT = setTimeout(function () { S.q = v.trim(); S.page = 1; if (S.rows) table(); }, 150); }
+    if (e.target && (e.target.id === 'ap-pmin' || e.target.id === 'ap-pmax')) { clearTimeout(pT); pT = setTimeout(prApply, 300); }   /* 치는 동안은 잠깐 기다렸다 */
+  });
+  document.addEventListener('change', function (e) {   /* 칸을 벗어나거나 Enter — 바로 */
+    if (e.target && (e.target.id === 'ap-pmin' || e.target.id === 'ap-pmax')) { clearTimeout(pT); prApply(); }
   });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.apRender); else window.apRender();
 })();

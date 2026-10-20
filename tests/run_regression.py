@@ -2064,6 +2064,74 @@ def mh_zoom_check(pg, base, path, fail):
         if vp0: pg.set_viewport_size(vp0)
 
 
+APR_JS = """async () => {
+  const W = ms => new Promise(r => setTimeout(r, ms)), $ = q => document.querySelector(q), R = [], ok = (name, c, info) => R.push({ name, ok: !!c, info });
+  for (let i = 0; i < 160 && !(window.APdebug && APdebug.S.rows && document.querySelector('#ap-body tr.dv-row')); i++) await W(250);
+  if (!window.APdebug || !APdebug.S.rows) return [{ name: '자료를 불러오지 못함', ok: false }];
+  const S = APdebug.S, all = S.rows, N = all.length, PER = 50;
+  const ord = a => a.slice().sort((x, y) => y.p - x.p || (y.d < x.d ? -1 : y.d > x.d ? 1 : 0)).slice(0, PER).map(r => r.k);   // 실거래가순 첫 쪽 (같은 금액은 최근 계약 먼저)
+  const want = (lo, hi, sido, q) => { q = (q || '').toLowerCase().replace(/\\s+/g, ''); return all.filter(r => (lo == null || r.p >= lo) && (hi == null || r.p <= hi) && (!sido || r.sido === sido) && (!q || r.s.indexOf(q) >= 0)); };
+  const shown = () => [...document.querySelectorAll('#ap-body tr.dv-row')].map(t => t.getAttribute('data-k'));
+  const cnt = () => { const m = /\\/\\s*([\\d,]+)단지/.exec(($('#ap-pager .dv-pg-info') || {}).textContent || ''); return m ? +m[1].replace(/,/g, '') : shown().length; };
+  const note = () => $('#ap-pr-note').hidden ? '' : $('#ap-pr-txt').textContent;
+  const put = async (a, b, how) => { $('#ap-pmin').value = a; $('#ap-pmax').value = b; $(how === 'input' ? '#ap-pmin' : '#ap-pmax').dispatchEvent(new Event(how || 'change', { bubbles: true })); await W(how === 'input' ? 600 : 120); };
+  const same = (lo, hi, sido, q) => { const w = want(lo, hi, sido, q), s = shown(), o = ord(w); return { ok: cnt() === w.length && s.length === Math.min(PER, w.length) && s.join() === o.join(), n: cnt(), w: w.length, first: s.slice(0, 3), wfirst: o.slice(0, 3) }; };
+  const fmt = n => n.toLocaleString('ko-KR');
+  try {
+    $('#ap-search').value = ''; $('#ap-search').dispatchEvent(new Event('input', { bubbles: true })); await W(250);
+    const c0 = $('#ap-chips .dv-chip[data-sido=""]'); if (c0) { c0.click(); await W(80); }
+    const so = $('#page-aptrank .ap-sort [data-sort="price"]'); if (so) { so.click(); await W(80); }
+    let x = await put('5', '10'); x = same(50000, 100000);
+    ok('직접 입력 5억~10억 → 그 사이 단지만 · 단지 수 · 첫 쪽 순서 = 자료', x.ok && /5억원 ~ 10억원/.test(note()) && note().indexOf('전국 ' + fmt(x.w) + '개 단지') >= 0, [x, note()]);
+    ok('표의 모든 줄 실거래가가 구간 안 · 순위는 전국 순위 그대로', APdebug.list().slice(0, PER).every(r => r.p >= 50000 && r.p <= 100000) && APdebug.list()[0].rank === all.filter(r => r.p > APdebug.list()[0].p).length + 1, APdebug.list()[0] && [APdebug.list()[0].p, APdebug.list()[0].rank]);
+    await put('10', '5'); x = same(50000, 100000);
+    ok('최소가 최대보다 크면 바꿔 적용 · 안내', x.ok && /바꿔 적용/.test(note()), [x, note()]);
+    await put('', '3'); x = same(null, 30000); ok('최대만 3억 → 3억원 이하', x.ok && /3억원 이하/.test(note()), [x, note()]);
+    await put('30', ''); x = same(300000, null); ok('최소만 30억 → 30억원 이상', x.ok && /30억원 이상/.test(note()), [x, note()]);
+    await put('3.5', '3.5'); x = same(35000, 35000); ok('소수 3.5억 = 3억 5,000만원 정확히', x.ok && /3억 5,000만원 ~ 3억 5,000만원/.test(note()), [x, note()]);
+    await put('7', '8', 'input'); x = same(70000, 80000); ok('치는 동안(input)도 잠시 뒤 적용', x.ok, x);
+    const pre = $('.ap-pr-pre .dv-chip[data-pmin="15"]'); pre.click(); await W(120); x = same(150000, 300000);
+    ok('빠른 단추 15~30억 → 칸에 15·30 · 단추 켜짐 · 결과', x.ok && $('#ap-pmin').value === '15' && $('#ap-pmax').value === '30' && pre.classList.contains('active'), [x, $('#ap-pmin').value, $('#ap-pmax').value]);
+    pre.click(); await W(120);
+    ok('같은 단추를 한 번 더 → 지움(전체)', $('#ap-pmin').value === '' && $('#ap-pmax').value === '' && cnt() === N && $('#ap-pr-note').hidden && !pre.classList.contains('active'), [cnt(), N]);
+    await put('5', '10');
+    const se = $('#ap-chips .dv-chip[data-sido="서울"]'), ws = want(50000, 100000, '서울');
+    ok('지역 칩 숫자 = 가격 구간 안의 단지 수', se && +se.querySelector('small').textContent.replace(/,/g, '') === ws.length, se && [se.textContent, ws.length]);
+    se.click(); await W(120); x = same(50000, 100000, '서울'); ok('가격 구간 + 지역(서울) 함께', x.ok, x);
+    $('#ap-search').value = '래미안'; $('#ap-search').dispatchEvent(new Event('input', { bubbles: true })); await W(300);
+    x = same(50000, 100000, '서울', '래미안'); ok('가격 구간 + 지역 + 검색(래미안) 함께', x.ok, x);
+    $('#ap-search').value = ''; $('#ap-search').dispatchEvent(new Event('input', { bubbles: true })); await W(250);
+    $('#ap-chips .dv-chip[data-sido=""]').click(); await W(80);
+    $('#page-aptrank .ap-sort [data-sort="pyeong"]').click(); await W(120);
+    const L = APdebug.list(); ok('정렬(평당가순)을 바꿔도 구간 유지', cnt() === want(50000, 100000).length && L.every(r => r.p >= 50000 && r.p <= 100000) && L.every((r, i) => !i || L[i - 1].py >= r.py), cnt());
+    $('#page-aptrank .ap-sort [data-sort="price"]').click(); await W(80);
+    await put('1000', ''); ok('맞는 단지가 없으면 안내', !shown().length && /조건에 맞는 아파트가 없습니다/.test($('#ap-body').textContent) && $('#ap-pager').hidden, $('#ap-body').textContent.slice(0, 80));
+    $('#ap-pr-x').click(); await W(120);
+    const se2 = $('#ap-chips .dv-chip[data-sido="서울"]');
+    ok('[가격 구간 지우기] → 칸 비움 · 안내 숨김 · 전체 · 지역 칩 숫자 원래대로', $('#ap-pmin').value === '' && $('#ap-pmax').value === '' && $('#ap-pr-note').hidden && cnt() === N && +se2.querySelector('small').textContent.replace(/,/g, '') === all.filter(r => r.sido === '서울').length, [cnt(), N]);
+  } catch (e) { ok('검사 중 오류', false, String(e).slice(0, 200)); }
+  return R;
+}"""
+
+
+def apt_range_check(page, base, fail):
+    """국내 나의 아파트 시세 순위 — 가격 구간(최소~최대 억 원) 필터 (2026-10-20): 화면 결과 = 자료(APdebug.S.rows)로 따로 거른 결과 · 휴대폰 폭 넘침 없음"""
+    page.set_viewport_size({'width': 1280, 'height': 900})
+    page.goto(base + 'apt-rank/', wait_until='load')
+    for t in page.evaluate(APR_JS):
+        if not t['ok']:
+            fail('apt-rank', '가격 구간 %s%s' % (t['name'], (' — ' + str(t.get('info'))[:300]) if t.get('info') else ''))
+    page.set_viewport_size({'width': 360, 'height': 780}); page.wait_for_timeout(300)
+    page.evaluate("() => { const a = document.getElementById('ap-pmin'), b = document.getElementById('ap-pmax'); a.value = '12.5'; b.value = '30'; b.dispatchEvent(new Event('change', { bubbles: true })); }")
+    page.wait_for_timeout(300)
+    w = page.evaluate("""() => { const m = document.querySelector('#page-aptrank .dv-card').getBoundingClientRect(), bad = [...document.querySelectorAll('#page-aptrank .ap-pr *, #ap-pr-note *')].filter(e => { const r = e.getBoundingClientRect(); return r.width && (r.right > m.right + 1 || r.left < m.left - 1); }).map(e => e.id || e.className || e.tagName).slice(0, 4);
+        return { sw: document.documentElement.scrollWidth, iw: innerWidth, bad }; }""")
+    if w['sw'] > w['iw'] or w['bad']:
+        fail('apt-rank', '가격 구간: 휴대폰(360px)에서 칸·안내가 카드 밖으로 넘침 %s' % w)
+    page.evaluate("() => { const x = document.getElementById('ap-pr-x'); if (x) x.click(); }")
+    page.set_viewport_size({'width': 1440, 'height': 900})
+
+
 def serve(root):
     handler = functools.partial(Quiet, directory=root)
     httpd = socketserver.ThreadingTCPServer(('127.0.0.1', 0), handler)
@@ -2623,6 +2691,8 @@ def main():
         aspeed_check(apage, base, fail, local)
         print('[2-2] 커버드콜 코스피 비교 — 실제 종가(분배금 미반영)', flush=True)
         kcmp_check(page, base, fail, local)
+        print('[2-5] 아파트 시세 순위 — 가격 구간', flush=True)
+        apt_range_check(page, base, fail)
         for pth in ['compound/', 'earnings-calendar/', 'fire/']:
             page.goto(base + pth, wait_until='load'); page.wait_for_timeout(300)
             k = page.evaluate("[...document.querySelectorAll('.learn-rel .lr-card')].filter(a => a.offsetParent).length")

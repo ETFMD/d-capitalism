@@ -271,7 +271,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script>(function(){try{var m=localStorage.getItem("site-theme")||"dark";var l=m==="light"||(m==="auto"&&window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches);document.documentElement.setAttribute("data-theme",l?"light":"dark");}catch(e){}})();</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link rel="stylesheet" href="assets/app.25f764233a.css">
+<link rel="stylesheet" href="assets/app.6d474874a6.css">
 </head>
 <body>
 <div class="wrap">
@@ -608,8 +608,19 @@
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
           <input type="search" class="dv-search" id="ap-search" placeholder="아파트 이름·주소 검색 (예: 래미안, 반포동, 해운대구)" aria-label="아파트 이름 또는 주소 검색" autocomplete="off">
         </div>
+        <div class="ap-pr" role="group" aria-label="가격 구간 (단위: 억 원)">
+          <span class="ap-pr-l">가격</span>
+          <input type="number" class="ap-pr-in" id="ap-pmin" inputmode="decimal" min="0" step="0.1" placeholder="최소" aria-label="최소 가격 (억 원)">
+          <span>억 ~</span>
+          <input type="number" class="ap-pr-in" id="ap-pmax" inputmode="decimal" min="0" step="0.1" placeholder="최대" aria-label="최대 가격 (억 원)">
+          <span>억</span>
+          <div class="ap-pr-pre" role="group" aria-label="가격 구간 빠르게 고르기">
+            <button type="button" class="dv-chip" data-pmin="" data-pmax="3">~3억</button><button type="button" class="dv-chip" data-pmin="3" data-pmax="6">3~6억</button><button type="button" class="dv-chip" data-pmin="6" data-pmax="9">6~9억</button><button type="button" class="dv-chip" data-pmin="9" data-pmax="15">9~15억</button><button type="button" class="dv-chip" data-pmin="15" data-pmax="30">15~30억</button><button type="button" class="dv-chip" data-pmin="30" data-pmax="">30억~</button>
+          </div>
+        </div>
         <div class="dv-chips" id="ap-chips" role="group" aria-label="지역 선택"></div>
       </div>
+      <div class="dv-filter" id="ap-pr-note" hidden><span id="ap-pr-txt"></span><button type="button" id="ap-pr-x">가격 구간 지우기</button></div>
       <div class="dv-tbl-wrap">
         <table class="dv-tbl ap-tbl">
           <thead><tr>
@@ -633,7 +644,7 @@
       <h2 id="g-aptrank-h">아파트 시세 순위는 이렇게 매깁니다</h2>
       <p class="g-lead">아파트를 사고팔면 계약일로부터 30일 안에 실거래 신고를 해야 하고, 국토교통부는 이 신고 자료를 공개합니다. 이 페이지는 최근 1년 동안 한 번이라도 매매된 전국 아파트 단지를 모아, 단지마다 가장 최근 실거래 금액이 높은 순서로 순위를 매깁니다.</p>
       <div class="g-grid">
-        <article class="g-card"><h3>계산 원리</h3><ul class="g-list"><li><b>실거래가</b> = 그 단지에서 가장 최근에 계약된 매매 금액 (계약이 해제된 거래는 뺌)</li><li><b>순위</b> = 실거래가가 높은 순 · 같은 금액이면 같은 순위</li><li><b>평당가</b> = 실거래가 ÷ (전용면적 ÷ 3.3058) · <b>평수</b> = 전용면적 ÷ 3.3058 — 실거래 신고에는 전용면적만 있어 공급면적(분양 평형)이 아닌 전용 기준</li><li><b>세대수</b> = 한국부동산원 공동주택 단지 식별정보의 단지 세대수 (필지번호로 연결)</li></ul></article>
+        <article class="g-card"><h3>계산 원리</h3><ul class="g-list"><li><b>실거래가</b> = 그 단지에서 가장 최근에 계약된 매매 금액 (계약이 해제된 거래는 뺌)</li><li><b>순위</b> = 실거래가가 높은 순 · 같은 금액이면 같은 순위</li><li><b>평당가</b> = 실거래가 ÷ (전용면적 ÷ 3.3058) · <b>평수</b> = 전용면적 ÷ 3.3058 — 실거래 신고에는 전용면적만 있어 공급면적(분양 평형)이 아닌 전용 기준</li><li><b>세대수</b> = 한국부동산원 공동주택 단지 식별정보의 단지 세대수 (필지번호로 연결)</li><li><b>가격 구간</b> = 최소·최대(억 원)를 넣거나 구간 단추를 누르면 실거래가가 그 사이(최소 이상 · 최대 이하)인 단지만 · 지역·검색·정렬과 함께 걸리고 순위는 전국 순위 그대로</li></ul></article>
         <article class="g-card"><h3>자료와 갱신</h3><ul class="g-list"><li>자료: 국토교통부 아파트 매매 실거래가 (공공데이터포털) · 한국부동산원 공동주택 단지 식별정보</li><li>단지 그래프는 실거래 공개가 시작된 2006년부터 전체 기간을 보여 줍니다 (1·3·5·10년으로 좁혀 보기 가능).</li><li>2시간마다 이번 달·지난달 신고분을 전국 252개 시군구에서 다시 받아 순위를 새로 매기고, 새벽에는 그 전달까지 확인합니다 (늦은 신고·계약 해제 반영).</li><li>계약 후 신고까지 최대 30일이 걸려 최근 몇 주 거래는 나중에 더 들어올 수 있습니다.</li></ul></article>
       </div>
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3><details class="g-faq"><summary>왜 같은 단지인데 평형에 따라 순위가 크게 달라지나요?</summary><div class="g-ans"><p>순위는 단지에서 '가장 최근에 계약된 한 건'의 금액이라, 그 거래가 작은 평형이면 낮게, 큰 평형이면 높게 나옵니다. 면적과 관계없이 비교하려면 '평당가순'으로 정렬해 보세요. 단지를 누르면 1년 동안의 모든 거래를 면적별로 볼 수 있습니다.</p></div></details><details class="g-faq"><summary>우리 아파트가 목록에 없어요.</summary><div class="g-ans"><p>최근 1년 동안 매매 거래가 한 건도 신고되지 않은 단지는 순위에 들어가지 않습니다. 분양권·입주권 거래와 전월세 거래도 포함되지 않습니다.</p></div></details><details class="g-faq"><summary>세대수가 비어 있는 단지가 있어요.</summary><div class="g-ans"><p>실거래 신고의 지번과 공동주택 단지 정보의 대표 지번이 다르면 자동으로 연결되지 않을 수 있습니다. 이런 단지는 세대수를 '—'로 표시합니다.</p></div></details><details class="g-faq"><summary>실거래가가 시세와 다른데요?</summary><div class="g-ans"><p>실거래가는 실제 계약된 금액이라 층·향·수리 상태나 가족 간 거래 등에 따라 그 시점의 호가·시세와 다를 수 있습니다. 그래프에서 최근 여러 거래를 함께 보면 흐름을 판단하는 데 도움이 됩니다.</p></div></details></div>
@@ -652,7 +663,7 @@
 
 </div>
 
-<script src="assets/app.2176df5034.js"></script>
+<script src="assets/app.c7e90ff04f.js"></script>
   <!-- ── 카카오톡 바로가기 (오른쪽 아래 공유 버튼 위, 같은 원형 버튼) — 오픈채팅 커뮤니티 · 후원 및 문의 1:1 채팅 ── -->
   <div class="kk-fabs">
     <button type="button" class="kk-fab" id="kk-fab" aria-label="카카오 오픈채팅" aria-expanded="false" aria-controls="kk-pop"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 4.5c-6.08 0-11 3.86-11 8.62 0 3.03 2 5.7 5.03 7.23l-1.08 3.95c-.1.36.31.65.62.44l4.7-3.12c.56.07 1.14.11 1.73.11 6.08 0 11-3.86 11-8.61S20.08 4.5 14 4.5z" fill="#191919"/><circle cx="9.6" cy="13.1" r="1.45" fill="#FEE500"/><circle cx="14" cy="13.1" r="1.45" fill="#FEE500"/><circle cx="18.4" cy="13.1" r="1.45" fill="#FEE500"/></svg></button>

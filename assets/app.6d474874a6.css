@@ -1453,7 +1453,21 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .ap-range .chart-tab { padding:4px 12px; font-size:12px; }
   .ap-prog { font-size:11px; color:var(--text3); }
   .ap-hist-msg { padding:24px 0; text-align:center; color:var(--text3); font-size:12px; }
+  /* 가격 구간(최소~최대 억 원) — 2026-10-20 */
+  .ap-pr { display:flex; align-items:center; flex-wrap:wrap; gap:6px; font-size:12px; color:var(--text2); }
+  .ap-pr-l { font-weight:600; }
+  .ap-pr-in { width:72px; font-family:var(--mono); font-size:13px; color:var(--text); background:var(--bg3); border:1px solid var(--card-border); border-radius:10px; padding:8px 8px; text-align:right; -moz-appearance:textfield; appearance:textfield; }
+  .ap-pr-in::-webkit-outer-spin-button, .ap-pr-in::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .ap-pr-in:focus { outline:none; border-color:rgba(49,130,246,0.55); }
+  .ap-pr-in::placeholder { color:var(--text3); font-family:var(--font); }
+  .ap-pr-pre { display:flex; flex-wrap:wrap; gap:6px; margin-left:4px; }
+  .ap-pr-pre .dv-chip { padding:5px 9px; }
+  #ap-pr-note b { font-family:var(--mono); color:var(--text); }
+  #ap-pr-note button { white-space:nowrap; flex:none; }
   @media (max-width: 860px) {
+    .ap-pr { width:100%; } .ap-pr-in { flex:1 1 0; min-width:0; width:auto; }
+    .ap-pr-pre { width:100%; margin-left:0; display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:5px; }   /* 휴대폰: 구간 단추 6개를 같은 폭으로 한 줄에 */
+    .ap-pr-pre .dv-chip { padding:6px 0; font-size:11px; text-align:center; }
     .ap-tbl tr.dv-row { grid-template-columns:1fr 1fr; }
     .ap-tbl tr.dv-row td.ap-c-n { grid-column:1 / 2; order:-2; min-width:0; }
     .ap-tbl tr.dv-row td.ap-c-r { order:-1; flex-direction:row; align-items:baseline; justify-content:flex-end; gap:1px; width:auto; }
