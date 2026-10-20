@@ -8,6 +8,13 @@
    "v": "9de03389",
    "check": "same"
   },
+  "dual-brain": {
+   "w": 320,
+   "h": 480,
+   "from": "yes24:142876017",
+   "v": "691db7ec",
+   "check": "same"
+  },
   "ai-superpowers": {
    "w": 320,
    "h": 447,
@@ -41,6 +48,13 @@
    "h": 475,
    "from": "yes24:14156539",
    "v": "9409e105",
+   "check": "same"
+  },
+  "ebs-capitalism": {
+   "w": 320,
+   "h": 473,
+   "from": "yes24:11081680",
+   "v": "60b3d5ac",
    "check": "same"
   },
   "rich-dad-poor-dad": {
@@ -92,6 +106,13 @@
    "v": "e1a14f05",
    "check": "same"
   },
+  "etf-step-by-step": {
+   "w": 320,
+   "h": 412,
+   "from": "yes24:126710907",
+   "v": "b859689b",
+   "check": "same"
+  },
   "giants-portfolio": {
    "w": 320,
    "h": 472,
@@ -125,6 +146,13 @@
    "h": 472,
    "from": "yes24:147069298",
    "v": "9883a534",
+   "check": "same"
+  },
+  "real-estate-basics": {
+   "w": 320,
+   "h": 454,
+   "from": "yes24:142786602",
+   "v": "93bd1f46",
    "check": "same"
   },
   "salaryman-retire-rich": {
@@ -209,6 +237,13 @@
    "h": 473,
    "from": "yes24:167644862",
    "v": "f9dfc1b5",
+   "check": "same"
+  },
+  "die-with-zero": {
+   "w": 320,
+   "h": 480,
+   "from": "yes24:123802664",
+   "v": "b7f40950",
    "check": "same"
   }
  }

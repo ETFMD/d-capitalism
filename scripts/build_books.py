@@ -11,7 +11,7 @@
   · 링크가 없는 책은 단추를 그리지 않음 (준비 중)
 · 책 정보(제목·저자·옮긴이·출판사·출간 연도·ISBN)는 교보문고·예스24 등 판매 페이지로 확인한 값만 (src 출처 주소를 자료에 남김)
 · 책 표지: scripts/fetch_book_covers.py 가 받아 둔 books/cover/<id>.webp + content/books/covers.json(가로·세로·버전)
-  · 단계마다 표지 책장(6권을 한눈에) + 책 카드 왼쪽에 큰 표지 · 글 아래 '함께 읽으면 좋은 책'에도 작은 표지(build_learn)
+  · 단계마다 표지 책장(단계의 책 7권을 PC 한 줄에 · 휴대폰 3칸씩, 남는 칸은 가운데로) + 책 카드 왼쪽에 큰 표지 · 글 아래 '함께 읽으면 좋은 책'에도 작은 표지(build_learn)
   · 표지가 아직 없는 책은 순위 숫자 상자로 대신 그리고 빌드 기록에 알림 (Actions '자본가 서재 책 표지 갱신'이 받아 오면 다시 빌드됨)
 · 표준 라이브러리만
 """
@@ -132,8 +132,8 @@ CSS = '''
   .bk-tbl td small { display:block; color:var(--text3); font-size:12.5px; }
   .bk-tbl a.bk-row { color:var(--text); text-decoration:none; } .bk-tbl a.bk-row:hover { color:var(--accent); }
   .bk-lv { white-space:nowrap; color:var(--text2); }
-  .bk-shelf { list-style:none; margin:8px 0 22px; padding:0; display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:20px 16px; }
-  .bk-shelf li { min-width:0; }
+  .bk-shelf { list-style:none; margin:8px 0 22px; padding:0; display:flex; flex-wrap:wrap; justify-content:center; gap:20px 14px; }
+  .bk-shelf li { min-width:0; flex:0 0 calc((100% - 6 * 14px) / 7); }
   .bk-shelf a { display:block; color:var(--text); text-decoration:none; }
   .bk-im { display:block; position:relative; aspect-ratio:2/3; }
   .bk-im img { position:absolute; left:0; right:0; bottom:0; margin:0 auto; max-width:100%; max-height:100%; width:auto; height:auto; transition:transform .15s ease; }
@@ -169,8 +169,12 @@ CSS = '''
   .bk-buy { font-size:13.5px; font-weight:700; color:#fff !important; background:var(--accent); border-radius:9px; padding:7px 14px; text-decoration:none; margin-left:auto; }
   .bk-buy:hover { filter:brightness(1.08); }
   .bk-rule ol { padding-left:22px; margin:8px 0 0; color:var(--text2); } .bk-rule li { margin:5px 0; }
-  @media (max-width:760px) {
-    .bk-shelf { grid-template-columns:repeat(3, minmax(0,1fr)); gap:18px 14px; }
+  @media (max-width:899px) {
+    .bk-shelf li { flex-basis:calc((100% - 3 * 14px) / 4); }
+  }
+  @media (max-width:599px) {
+    .bk-shelf { gap:18px 12px; }
+    .bk-shelf li { flex-basis:calc((100% - 2 * 12px) / 3); }
   }
   @media (max-width:640px) {
     .bk-card { padding:14px; grid-template-columns:112px minmax(0,1fr); grid-template-areas:"cv hd" "dt dt"; grid-template-rows:auto auto; column-gap:14px; }
@@ -182,6 +186,7 @@ CSS = '''
   @media (max-width:360px) {
     .bk-card { grid-template-columns:96px minmax(0,1fr); column-gap:12px; }
     .bk-shelf { gap:16px 10px; }
+    .bk-shelf li { flex-basis:calc((100% - 2 * 10px) / 3); }
   }
 '''
 
