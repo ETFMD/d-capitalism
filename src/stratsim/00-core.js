@@ -254,30 +254,38 @@ function ssRateToPos(r) { return r <= 0 ? 0 : Math.round(Math.sqrt(Math.max(0, M
 
 // ── 수익률·낙폭 ──────────────────────────────────────────────────────
 // 돈 가중 연수익률(IRR, %) — 이분법. 흐름 [{t(년), cf}] (넣은 돈 −, 마지막 평가액 +)
+// 끝 시점 가치 Σ cf·(1+r)^(T−t) 가 0 이 되는 r — 현재가치(÷(1+r)^t)와 0 의 위치는 같지만 지수가 0 이상이라
+// 50년 넘는 기간에도 넘치지 않음 (현재가치로 풀면 r≈−100% 끝에서 무한대가 나와 풀지 못하고 대략식으로 떨어졌음)
 function ssIrr(flows) {
   if (!flows || flows.length < 2 || !flows.some((f) => f.cf > 0) || !flows.some((f) => f.cf < 0)) return null;
-  // 현재가치 합 (흐름 순서대로 더함)
-  const pv = (rate) => flows.reduce((acc, f) => acc + f.cf / Math.pow(1 + rate, f.t), 0);
-  // 구간 [a, b] 를 반씩 줄임 — 연 −99.9999% ~ +100,000%, 최대 300번
-  let a = -0.999999, b = 1000, pa = pv(a);
-  const pb = pv(b);
+  let T = 0;
+  for (const f of flows) if (f.t > T) T = f.t;
+  const fv = (rate) => { let s = 0; for (const f of flows) s += f.cf * Math.pow(1 + rate, T - f.t); return s; };
+  // 구간 [a, b] 를 반씩 줄임 — 연 −99.9999% ~ +100,000% (단 (1+b)^T 가 1e300 을 넘지 않게), 폭 1e−13 까지
+  let a = -0.999999, b = Math.min(1000, Math.pow(10, 300 / Math.max(T, 1)) - 1), pa = fv(a);
+  const pb = fv(b);
   if (pa === 0) return a * 100;
+  if (pb === 0) return b * 100;
   if (!(Number.isFinite(pa) && Number.isFinite(pb)) || pa * pb > 0) return null;
-  for (let left = 300; left > 0; left--) {
-    const c = (a + b) / 2, pc = pv(c);
+  for (let left = 200; left > 0 && b - a > 1e-13; left--) {
+    const c = (a + b) / 2, pc = fv(c);
     if (!Number.isFinite(pc)) return null;
-    if (b - a < 1e-12 || Math.abs(pc) < 1e-9) return c * 100;
+    if (pc === 0) return c * 100;
     if (pa * pc > 0) { a = c; pa = pc; } else b = c;
   }
   return (a + b) / 2 * 100;
 }
 const SS_YEAR_MS = 365.25 * 86400000;
-// 넣은 돈의 흐름: 시작 −initial, 그 뒤 적립(일정 있으면 일정 날짜, 없으면 월말 공식)
-function ssFlows(initial, monthly, raise, d0, d1, sched) {
+// 넣은 돈의 흐름: 시작 −initial, 그 뒤 적립 — 계산 엔진이 실제로 돈을 넣은 날짜 그대로
+//  · 일정(sched — 실제 거래내역)이 있으면 그 날짜
+//  · daily(날마다 걷는 SMA·사용자 코드 전략)면 달이 바뀐 첫 거래일 = 그 엔진이 쓰는 ssSchedule 의 list (d0·d1 도 엔진과 같게 넘길 것)
+//  · 아니면(9sig·그냥 보유·현금 복리) 월말 거래일
+function ssFlows(initial, monthly, raise, d0, d1, sched, daily) {
   const t0 = Date.parse(d0 + 'T00:00:00Z');
   const flows = [{ t: 0, cf: -initial }];
-  if (sched && sched.list) {
-    for (const r of sched.list) if (r.date > d0 && r.date <= d1 && r.amount !== 0) flows.push({ t: (Date.parse(r.date + 'T00:00:00Z') - t0) / SS_YEAR_MS, cf: -r.amount });
+  const s = sched && sched.list ? sched : daily && monthly > 0 ? ssSchedule(monthly, raise, d0, d1) : null;
+  if (s) {
+    for (const r of s.list) if (r.date > d0 && r.date <= d1 && r.amount !== 0) flows.push({ t: (Date.parse(r.date + 'T00:00:00Z') - t0) / SS_YEAR_MS, cf: -r.amount });
     return flows;
   }
   if (monthly > 0 && DS.m) {
@@ -287,9 +295,9 @@ function ssFlows(initial, monthly, raise, d0, d1, sched) {
   return flows;
 }
 // 돈 가중 CAGR(%) — 못 풀면 (평가액/넣은 돈)^(1/년) − 1
-function ssCagrMW(initial, monthly, raise, d0, d1, years, finalV, contributed, sched) {
+function ssCagrMW(initial, monthly, raise, d0, d1, years, finalV, contributed, sched, daily) {
   if (!(finalV > 0) || !(years > 0)) return 0;
-  const flows = ssFlows(initial, monthly, raise, d0, d1, sched);
+  const flows = ssFlows(initial, monthly, raise, d0, d1, sched, daily);
   flows.push({ t: years, cf: finalV });
   const r = ssIrr(flows);
   if (r != null && Number.isFinite(r)) return r;

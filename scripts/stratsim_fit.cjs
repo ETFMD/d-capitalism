@@ -13,7 +13,7 @@ const fs = require('fs'), path = require('path'), vm = require('vm'), crypto = r
 const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(ROOT, 'src', 'stratsim');
 const ENGINE_FILES = ['00-core.js', '05-params.js', '10-engine.js', '40-state.js', '41-render.js'];
-const HASH_FILES = ['00-core.js', '05-params.js', '10-engine.js'];   // 계산 결과를 바꾸는 파일 (41-render 의 ssCfgSeries 를 바꾸면 --full 로 다시)
+const HASH_FILES = ['00-core.js', '05-params.js', '10-engine.js', '41-render.js'];   // 계산 결과를 바꾸는 파일 (41-render = ssCfgSeries·연평균) — 바뀌면 다음 실행이 맞춘 구간 지표를 전부 다시 계산
 const FIT_END = '2025-12-31';
 const args = process.argv.slice(2);
 const FULL = args.includes('--full');
@@ -42,7 +42,7 @@ function loadEngine() {
 }
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
 // 맞춘 구간(고정) 지표의 정의가 바뀌면 이 숫자를 올림 → 다음 실행이 전체를 다시 계산
-const STATIC_VER = 2;   // 2: 연평균·낙폭을 소수 넷째 자리까지 (화면에서 한 번만 반올림되게)
+const STATIC_VER = 3;   // 2: 연평균·낙폭을 소수 넷째 자리까지 (화면에서 한 번만 반올림되게) · 3: 연평균을 엔진이 실제로 넣은 돈의 날짜와 끝 값이 나온 날로 (SMA 달 첫 거래일 · 리밸런스 시점 옮긴 9sig 끝 날짜)
 const engineHash = sha(HASH_FILES.map((f) => fs.readFileSync(path.join(SRC, f), 'utf8')).join('\n') + '|static-v' + STATIC_VER);
 
 const M = loadEngine();

@@ -457,6 +457,8 @@ function ssRunSma(o) {
     if (qEnd.has(d) || (o.sampleW && ssWeekLast(d, steps[m + 1] && steps[m + 1][0]))) points.push({ date: d, value: value(row), state });
   }
   const last = steps[b];
+  // 청산일이 분기말이 아니면(정확한 날짜) 그날 값도 점으로 — 없으면 화면 끝 값이 직전 분기말 값으로 남았음
+  if (last && points[points.length - 1].date !== last[0]) points.push({ date: last[0], value: value(last), state });
   if (last && (!log.length || log[log.length - 1].date !== last[0])) {
     log.push({ date: last[0], state, held: biggest(last), action: 'END', fee: 0, price: last[ul] || 0, shares: shSum(), stockVal: value(last) - cash, cash, total: value(last), invested });
   }

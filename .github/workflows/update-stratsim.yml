@@ -4,7 +4,7 @@ name: 투자전략 시뮬레이터 자료 갱신
 #  · 미국 장이 열린 동안 한 시간마다 + 마감 뒤 한 번: 일봉(야후 수정주가)·NFCI(FRED)·TQQQ 5분/1분봉
 #    (장중 실행은 오늘의 아직 끝나지 않은 일봉도 넣음 — 화면이 '아직 끝나지 않은 값'으로 표시, 마감 뒤 실행이 확정값으로 바꿈)
 #  · 마감 뒤 실행(ET 16:00~17:30)에서만 과최적화 탐색기 표의 2026년 이후·1990~최신 지표를 다시 계산(후보 6,293개 — Actions 에서 약 5분)
-#  · 계산 코드(src/stratsim/00-core·05-params·10-engine.js)·후보·STATIC_VER 이 바뀌면 탐색기 전체를 다시 계산(Actions 에서 약 20~40분)
+#  · 계산 코드(src/stratsim/00-core·05-params·10-engine·41-render.js)·후보·STATIC_VER 이 바뀌면 탐색기 전체를 다시 계산(Actions 에서 약 20~40분)
 #    (fit-*.json 의 engine 해시가 지금 코드와 다를 때 저절로 — 시간 제한을 넉넉히 둠)
 #  · 손으로 돌릴 때(workflow_dispatch) '전체 다시 계산'을 켜면 탐색기 전체를 다시 계산
 on:
@@ -26,6 +26,7 @@ on:
       - 'src/stratsim/00-core.js'
       - 'src/stratsim/05-params.js'
       - 'src/stratsim/10-engine.js'
+      - 'src/stratsim/41-render.js'
       - '.github/workflows/update-stratsim.yml'
 
 permissions:

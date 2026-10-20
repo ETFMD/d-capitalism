@@ -1744,7 +1744,7 @@ function slRunPreset(pr, qa, qb) {
     };
   }
   const r = ssRunSma(Object.assign({}, base, { dd: true }, ssOptsSma(p)));
-  return { points: r.points.map((pt) => ({ date: pt.date, value: pt.value })), multi: r.dd || null, start: d0, end: d1 };
+  return { points: r.points.map((pt) => ({ date: pt.date, value: pt.value })), multi: r.dd || null, start: d0, end: d1, daily: true };
 }
 // 한 전략의 실행기: (구간 시작, 끝) → 결과
 function slRunner(e) {
@@ -1755,7 +1755,8 @@ function slRunner(e) {
   return (from, to) => {
     const si = slDayAtOrBefore(slQDate(slEntryQ(from), from));
     const ei = to === null ? DS.days.length - 1 : slDayAtOrBefore(slQDate(slQAtOrBefore(to), to));
-    return { points: slRunCode(mod, si, ei) };
+    // 시작 금액은 진입일에, 적립은 달이 바뀐 첫 거래일에 들어감(slRunCode 의 contributions) → 연평균도 그 날짜로
+    return { points: slRunCode(mod, si, ei), start: DS.days[si].date, daily: true };
   };
 }
 // 돈 가중 연수익률(IRR) + 최대 낙폭 — 매달 새 돈이 들어가므로 단순 시작/끝 비율이면 적립금을 수익으로 셈
@@ -1777,7 +1778,7 @@ function slMeasure(res) {
     for (const r of pts) { if (r.value > top) top = r.value; if (top > 0) dd = Math.max(dd, 1 - r.value / top); }
   }
   const paid = SL_START + SL_MONTH * Math.max(0, Math.round(yrs * 12));
-  const cagr = yrs > 0 ? ssCagrMW(SL_START, SL_MONTH, 0, d0, d1, yrs, v1, paid) : 0;
+  const cagr = yrs > 0 ? ssCagrMW(SL_START, SL_MONTH, 0, d0, d1, yrs, v1, paid, null, !!res.daily) : 0;
   return { cagr, dd: dd * 100 };
 }
 // 기록을 분기 점에 맞춤 (그 분기 날짜까지의 마지막 값 · 첫 기록 전은 시작 금액)

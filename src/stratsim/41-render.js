@@ -151,7 +151,7 @@ function ssRender() {
     const fv = pts[pts.length - 1].value;
     const flows = [{ date: eff.entryDate || S.tx.entryDate, amount: eff.initial }].concat(eff.schedule.list);
     const dd = ssFlowAdjDD(pts, flows);
-    R.actual = { cagr: ssCfgCagr(ctx, fv), maxDD: dd.pct * 100, ddPeak: dd.peakDate, ddTrough: dd.troughDate, start: pts[0].value, end: fv };
+    R.actual = { cagr: ssCfgCagr(ctx, fv, false, eff.entryDate || ctx.entryDate, String(pts[pts.length - 1].date)), maxDD: dd.pct * 100, ddPeak: dd.peakDate, ddTrough: dd.troughDate, start: pts[0].value, end: fv };
     metrics.actual = R.actual;
     datasets.push(ssDs('actual', '내 계좌', ser, SS_ACTUAL_COLOR, { borderWidth: 2.5 }));
   }
@@ -185,11 +185,25 @@ function ssSubLabel(key, p) {
   return park === 'cash' ? '현금' : park.toUpperCase();
 }
 
-// 저장 전략의 돈 가중 CAGR — 같은 적립 일정, 이 전략의 최종값만 다름
-function ssCfgCagr(ctx, finalV) {
+// 저장 전략의 돈 가중 CAGR — 그 전략이 실제로 돈을 넣은 날짜·금액과 끝 값이 나온 날로 (분석 표 풍선과 같은 계산)
+//  · d0 = 시작 금액을 넣은 날: 날마다 걷는 계산(daily — SMA·사용자 코드)은 진입일, 나머지는 계산의 첫 점
+//    (주 단위 화면의 첫 눈금은 진입일 전 주말일 수 있어 눈금으로 세면 진입 전 월말 적립이 하나 더 들어갔었음)
+//  · d1 = 끝 값이 나온 점의 날짜 · 적립: daily 는 달이 바뀐 첫 거래일, 나머지는 월말 (실제 거래내역이 있으면 그 날짜)
+function ssCfgCagr(ctx, finalV, daily, d0, d1) {
   const L = ctx.labels;
+  if (L.length && d0 && d1 && d1 > d0) {
+    const yrs = (Date.parse(d1) - Date.parse(d0)) / SS_YEAR_MS;
+    return ssCagrMW(ctx.initial, ctx.monthly, ctx.raise, d0, d1, yrs, finalV, ctx.contributed, ctx.sched, !!daily);
+  }
   if (L.length) return ssCagrMW(ctx.initial, ctx.monthly, ctx.raise, L[0], L[L.length - 1], ctx.years, finalV, ctx.contributed, ctx.sched);
   return ctx.years > 0 && ctx.contributed > 0 && finalV > 0 ? (Math.pow(finalV / ctx.contributed, 1 / ctx.years) - 1) * 100 : 0;
+}
+// 날짜 d 에 쓰인 값의 점 날짜 (ssResample 과 같은 규칙: d 이하 마지막 점, 없으면 첫 점)
+function ssSrcDate(points, d) {
+  if (!points || !points.length) return null;
+  let j = 0;
+  while (j + 1 < points.length && points[j + 1].date <= d) j++;
+  return String(points[j].date);
 }
 
 // 저장 전략 한 개 → 라벨에 맞춘 선 + 지표 (lite: 끝 금액만 빨리 — 낙폭·보유 선 계산 생략, 과최적화 탐색기 자료 계산용)
@@ -258,7 +272,9 @@ function ssCfgSeries(cfg, ctx, lite) {
   const finalV = data.length ? data[data.length - 1] : 0, startV = data.length ? data[0] : 0;
   if (lite) return { data, end: finalV, start: startV };
   const dd = ddMulti && ddMulti.length ? ssDailyDDMulti(ddMulti) : ddc && ddc.length ? ssDailyDD(ddc, ddKey) : ssSeriesDD(data, L);
-  return { data, cagr: ssCfgCagr(ctx, finalV), maxDD: dd.pct * 100, start: startV, end: finalV, sub, ddPeak: dd.peakDate, ddTrough: dd.troughDate, yday: yd };
+  const daily = cfg.type === 'sma', cd0 = daily ? ctx.entryDate : points && points.length ? String(points[0].date) : null;
+  const cagr = ssCfgCagr(ctx, finalV, daily, cd0, L.length ? ssSrcDate(points, L[L.length - 1]) : null);
+  return { data, cagr, maxDD: dd.pct * 100, start: startV, end: finalV, sub, ddPeak: dd.peakDate, ddTrough: dd.troughDate, yday: yd };
 }
 
 // 사용자 전략: 격리 실행 결과(캐시)로 선을 만듦 — 없으면 실행을 걸어 두고, 돌아오면 다시 그림
@@ -301,5 +317,9 @@ function ssCustomResult(log, ctx, error, stale) {
   const ctrl = ssCustomCtrl(log);
   let dd = ctrl ? ssDailyDDMulti(ctrl) : null;
   if (!dd) dd = pts.length ? ssSeriesDD(pts.map((p) => p.value), pts.map((p) => p.date)) : ssSeriesDD(data, L);
-  return { data, cagr: ssCfgCagr(ctx, fv), maxDD: dd.pct * 100, start: sv, end: fv, ddPeak: dd.peakDate, ddTrough: dd.troughDate };
+  // 끝 값이 나온 점: 값이 있는 마지막 눈금에 쓰인 기록 날짜
+  let li = -1;
+  for (let i = data.length - 1; i >= 0; i--) if (data[i] != null) { li = i; break; }
+  const cagr = ssCfgCagr(ctx, fv, true, ctx.entryDate, li >= 0 ? ssSrcDate(pts, L[li]) : null);
+  return { data, cagr, maxDD: dd.pct * 100, start: sv, end: fv, ddPeak: dd.peakDate, ddTrough: dd.troughDate };
 }
