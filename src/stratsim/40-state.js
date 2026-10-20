@@ -90,6 +90,8 @@ function ssLoadStorage() {
   try {
     const arr = JSON.parse(localStorage.getItem(SS_LS.saved) || '[]');
     if (Array.isArray(arr)) S.saved = arr.map(ssCleanCfg).filter(Boolean);
+    // 예전(고치기 전) 라이브러리 코드로 저장된 사본은 지금 코드로 바꿔 다시 저장
+    if (typeof ssUpgradeLibCode === 'function' && S.saved.filter(ssUpgradeLibCode).length) ssPersistSaved();
   } catch (e) {}
 }
 
@@ -208,6 +210,7 @@ function ssImportShared(arr) {
     }
     const c = ssCleanCfg({ type: raw.t, name: raw.n, params: raw.p, color: raw.c, code, desc, subShown: raw.ss, lib: raw.lib });
     if (!c) { mapped.push(null); continue; }
+    if (typeof ssUpgradeLibCode === 'function') ssUpgradeLibCode(c);   // 예전 라이브러리 코드가 담긴 링크 → 지금 코드
     if (!have.has(sig(c))) { c.id = ssNewId(); c.name = ssUniqueName(c.name); c._tr = true; S.saved.push(c); have.add(sig(c)); }
     mapped.push(c);
   }

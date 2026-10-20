@@ -3,6 +3,8 @@
    · 화면 계산 코드(src/stratsim/*.js)를 그대로 불러와(scripts/stratsim_fit.cjs 와 같은 방법) 고정 구간 5가지의 기준값과 대조
      (기준값 = 원본 Strategies Simulator 와 무작위 3,800번·화면 12가지 대조를 마친 엔진으로 2026-10-20 에 계산 — 구간이 고정이라 새 자료가 붙어도 그대로)
    · 과최적화 탐색기 자료(data/stratsim/fit-*.json): 탭·행 수가 후보와 같고, 무작위 행의 맞춘 구간 지표를 다시 계산하면 저장된 값과 같음
+   · 전략 라이브러리 코드 전략(2026-10-21 고친 것): 어느 날 들어온 돈도 사라지지 않음(특히 파는 날) · #1 Faber 는 달의 마지막
+     거래일에만 판단(주 단위 화면에서도 같은 거래) · #18 은 주의 마지막 거래일에만 · #26 중심선 = 마지막 W 거래일로 직접 계산한 값
    실패하면 'FAIL …' 줄과 종료 코드 1 */
 'use strict';
 const path = require('path'), fs = require('fs');
@@ -57,6 +59,65 @@ for (const kind of ['9sig', 'sma']) {
     n++;
     const same = st.every((v, j) => (typeof v === 'number' ? close(v, r[j], 1e-9) : v === r[j]));
     if (!same) fail(kind + ' ' + t.key + ': 다시 계산한 맞춘 구간 지표가 다름 ' + JSON.stringify(st) + ' ≠ ' + JSON.stringify(r.slice(0, st.length)));
+  }
+}
+// 전략 라이브러리 코드 전략 — 고친 버그가 되살아나지 않게
+{
+  const vm = require('vm');
+  const lctx = { console, Math, Date, JSON, Number, String, Array, Object, Boolean, RegExp, Error, Map, Set, parseFloat, parseInt, isFinite, Infinity, NaN,
+    document: { getElementById() { return null; }, addEventListener() {}, querySelector() { return null; }, querySelectorAll() { return []; } }, window: { addEventListener() {} } };
+  vm.createContext(lctx);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'stratsim', '30-library.js'), 'utf8') + ';globalThis.__L = { lib: SS_LIBRARY };', lctx);
+  const LIB = lctx.__L.lib.filter((e) => e.code);
+  const DSd = M.DS.days, ND = DSd.length;
+  const data = { dates: DSd.map((d) => d.date), nfci: Array.from(M.DS.nfci) };
+  for (const k of ['tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq']) data[k] = DSd.map((d) => d[k]);
+  const at = new Map(data.dates.map((d, i) => [d, i]));
+  const firstAt = (d) => data.dates.findIndex((x) => x >= d);
+  const monthly = (s, e) => { const c = {}; let lm = data.dates[s].slice(0, 7); for (let i = s + 1; i <= e; i++) { const m = data.dates[i].slice(0, 7); if (m !== lm) { lm = m; c[data.dates[i]] = 1000; } } return c; };
+  const run = (e, s, x, weekly, contributions, extra) => {
+    const mod = (0, eval)('(' + e.code + ')');
+    const p = { initial: 10000, contributions, monthly: 1000, annualRaise: 0, startIdx: s, endIdx: x, entryDate: data.dates[s], exitDate: data.dates[x], weeklyDisplay: weekly };
+    for (const sp of mod.params || []) if (sp && sp.id) p[sp.id] = sp.default;
+    const r = mod.run(data, Object.assign(p, extra || {}));
+    return { log: Array.isArray(r) ? r : r.log, cost: (p.tradeCost || 0) / 100 };
+  };
+  const isTrade = (a) => !/^(hold|contribution|start|end)\b/.test(String(a)) && String(a) !== 'hold';
+  // ① 들어온 돈이 사라지지 않음: 거래한 날에 X 를 더 넣으면 그날 평가액이 X 만큼(거래 비용만큼 덜) 커짐
+  const X = 777;
+  for (const e of LIB) {
+    for (const [d0, d1, weekly] of [['1999-06-01', '2009-12-31', false], ['2018-01-02', '2024-06-28', true]]) {
+      const s = firstAt(d0), x = firstAt(d1), c = monthly(s, x), A = run(e, s, x, weekly, c);
+      for (const r of A.log.filter((q) => isTrade(q.action) && q.date !== data.dates[s] && q.date !== data.dates[x]).slice(0, 8)) {
+        const c2 = Object.assign({}, c); c2[r.date] = (c2[r.date] || 0) + X;
+        const rb = run(e, s, x, weekly, c2).log.find((q) => q.date === r.date);
+        const dv = rb ? rb.value - r.value : NaN, tol = 1e-6 * Math.max(1, r.value);
+        n++;
+        if (!(dv >= X * (1 - 2 * A.cost) - tol && dv <= X + tol)) fail('라이브러리 #' + e.n + ': ' + r.date + ' ' + String(r.action).slice(0, 16) + ' 날 들어온 ' + X + ' 가 평가액에 ' + (Number.isFinite(dv) ? dv.toFixed(2) : dv) + ' 만 반영');
+      }
+    }
+  }
+  // ② #1 은 달의 마지막 거래일에만 판단 — 주 단위·달 단위 화면에서 거래가 같음 · ③ #18 은 주의 마지막 거래일에만
+  const wk = (d) => Math.floor((Date.parse(d) / 864e5 + 3) / 7);
+  const e1 = LIB.find((e) => e.n === 1), e18 = LIB.find((e) => e.n === 18);
+  for (const [d0, d1] of [['2016-01-04', '2023-08-16'], ['1987-03-02', '1992-11-11'], ['2019-02-01', '2026-01-14']]) {
+    const s = firstAt(d0), x = firstAt(d1), c = monthly(s, x);
+    const tw = run(e1, s, x, true, c).log.filter((q) => isTrade(q.action)), tm = run(e1, s, x, false, c).log.filter((q) => isTrade(q.action));
+    n++;
+    if (tw.map((q) => q.date + q.action).join() !== tm.map((q) => q.date + q.action).join()) fail('라이브러리 #1: 주 단위 화면의 거래가 달 단위와 다름 ' + d0);
+    for (const q of tm) { const i = at.get(q.date); n++; if (!(i + 1 < ND && data.dates[i + 1].slice(0, 7) !== q.date.slice(0, 7))) fail('라이브러리 #1: 달의 마지막 거래일이 아닌 ' + q.date + ' 에 거래'); }
+    for (const q of run(e18, s, x, true, c).log.filter((q) => isTrade(q.action))) { const i = at.get(q.date); n++; if (!(i + 1 < ND && wk(data.dates[i + 1]) !== wk(q.date))) fail('라이브러리 #18: 주의 마지막 거래일이 아닌 ' + q.date + ' 에 거래'); }
+  }
+  // ④ #26 중심선 = 마지막 W 거래일(양수 가격)로 직접 계산한 중앙값·평균 — 창 밖 첫날 가격과 같은 값이 창 안에 있는 시작일 포함
+  const e26 = LIB.find((e) => e.n === 26), med = (a) => { const b = a.slice().sort((u, v) => u - v), m = b.length; return m % 2 ? b[(m - 1) / 2] : (b[m / 2 - 1] + b[m / 2]) / 2; };
+  for (const [d0, W, stat] of [['2012-06-01', 250, 'median'], ['1999-03-15', 250, 'median'], ['2020-04-01', 100, 'sma'], ['1975-01-02', 40, 'median']]) {
+    let s = firstAt(d0);
+    for (let t = 0; t < 400; t++, s++) { const v = data.tqqq[s - W]; let dup = false; for (let j = s - W + 1; j <= s; j++) if (data.tqqq[j] === v) { dup = true; break; } if (dup) break; }
+    const x = Math.min(ND - 1, s + 260), log = run(e26, s, x, false, {}, { window: W, stat, asset: 'tqqq' }).log;
+    let wrong = 0;
+    for (const r of log) { const i = at.get(r.date), v = []; for (let j = Math.max(0, i - W + 1); j <= i; j++) if (data.tqqq[j] > 0) v.push(data.tqqq[j]); const want = stat === 'median' ? med(v) : v.reduce((a, b) => a + b, 0) / v.length; if (Math.abs(r.medianPrice - want) > 1e-9 * Math.max(1, want)) wrong++; }
+    n++;
+    if (wrong) fail('라이브러리 #26: 중심선이 마지막 ' + W + '거래일로 직접 계산한 값과 ' + wrong + '줄 다름 (' + data.dates[s] + ' 시작)');
   }
 }
 console.log('stratsim_test: 검사 ' + n + '개 · 실패 ' + bad + '개');
