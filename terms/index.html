@@ -53,6 +53,14 @@
   footer a, footer .fc { white-space:nowrap; }
   @media (max-width:640px) { footer .fc { display:block; margin-top:6px; } footer .fd { display:none; } }
   .links { margin-top:10px; font-size:13px; }
+  /* [SNS-LINKS] 하단 SNS 바로가기 — 빌드가 채움(scripts/social.py CSS) */
+  /*SNSCSS*/
+  .sns-links { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin:0 0 14px; }
+  .sns-links a { display:inline-flex; align-items:center; gap:6px; padding:6px 12px 6px 10px; border:1px solid var(--border); border-radius:999px; font-size:12.5px; line-height:1.2; color:var(--text2); text-decoration:none; white-space:nowrap; }
+  .sns-links a:hover, .sns-links a:focus-visible { color:var(--accent); border-color:rgba(49,130,246,.5); }
+  .sns-links svg { flex:none; }
+  @media (max-width:480px) { .sns-links { display:grid; grid-template-columns:repeat(2, 130px); justify-content:center; } .sns-links a { justify-content:center; } }
+  /*/SNSCSS*/
 </style>
 <link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
@@ -129,7 +137,7 @@
   <h2>8. 문의</h2>
   <p>이메일: <a href="mailto:gusrudgma@gmail.com">gusrudgma@gmail.com</a></p>
 
-  <footer><a href="/">홈</a> · <a href="/about/">소개</a> · <a href="/terms/">이용약관</a> · <a href="/disclaimer/">투자 면책</a> · <a href="/privacy/">개인정보처리방침</a><span class="fd"> · </span><span class="fc">© 디코딩 자본주의</span></footer>
+  <footer><!-- [SNS-LINKS] 빌드가 채움(scripts/social.py) --><!--SNSLINKS--><nav class="sns-links" aria-label="디코딩 자본주의 SNS"><a href="https://www.youtube.com/@d-capitalism" target="_blank" rel="noopener me" data-sns="yt" aria-label="유튜브 — 디코딩 자본주의 (새 창)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l5.5-3.5z" fill="currentColor" stroke="none"/></svg><span>유튜브</span></a><a href="https://www.instagram.com/decoding_capitalism/" target="_blank" rel="noopener me" data-sns="ig" aria-label="인스타그램 — 디코딩 자본주의 (새 창)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 8.5h3l1.6-2.5h6.8L17 8.5h3v10H4z"/><circle cx="12" cy="13" r="3.2"/></svg><span>인스타그램</span></a><a href="https://www.threads.com/@decoding_capitalism" target="_blank" rel="noopener me" data-sns="th" aria-label="스레드 — 디코딩 자본주의 (새 창)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3.6"/><path d="M15.6 9v4.3a2.4 2.4 0 0 0 4.8 0V12a8.4 8.4 0 1 0-3.3 6.7"/></svg><span>스레드</span></a><a href="https://www.facebook.com/profile.php?id=61595395597682" target="_blank" rel="noopener me" data-sns="fb" aria-label="페이스북 — 디코딩 자본주의 (새 창)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="9" cy="8.5" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9.5" r="2.4"/><path d="M15.5 14.4a4.4 4.4 0 0 1 5 4.6"/></svg><span>페이스북</span></a></nav><!--/SNSLINKS--><a href="/">홈</a> · <a href="/about/">소개</a> · <a href="/terms/">이용약관</a> · <a href="/disclaimer/">투자 면책</a> · <a href="/privacy/">개인정보처리방침</a><span class="fd"> · </span><span class="fc">© 디코딩 자본주의</span></footer>
 </main>
 </body>
 </html>

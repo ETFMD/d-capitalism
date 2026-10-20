@@ -15,6 +15,7 @@
 import html, json, os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import data_facts as DF   # 본문 {{키}} → data/*.json 최신 값 (자동 갱신)
+import social as SO       # 하단 공식 SNS 바로가기 [SNS-LINKS] (routes.json "social")
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 SRC_DIR = os.path.join(ROOT, 'content', 'learn')
@@ -198,7 +199,7 @@ CSS = '''
     .top-in { gap:8px; }
     .logo span { display:none; }
   }
-'''
+''' + SO.CSS   # [SNS-LINKS] 하단 SNS 바로가기 모양
 
 NAV = [('', '홈'), ('learn/', '투자 공부'), ('books/', '자본가 서재'), ('my-position/', '내 위치'), ('labor/', '노동자'), ('invest/', '투자'),
        ('real-estate/', '부동산'), ('capitalist/', '자본가'), ('passive-income/', '불로소득'), ('suggest/', '커뮤니티')]
@@ -248,7 +249,7 @@ def _top(active):
             f'<span>디코딩 자본주의</span></a><nav class="tnav" aria-label="사이트 메뉴">{links}</nav></div></header>\n')
 
 
-FOOT = ('<footer><a href="/">홈</a> · <a href="/learn/">투자 공부</a> · <a href="/about/">소개</a> · <a href="/terms/">이용약관</a> · '
+FOOT = ('<footer>' + SO.links() + '<a href="/">홈</a> · <a href="/learn/">투자 공부</a> · <a href="/about/">소개</a> · <a href="/terms/">이용약관</a> · '
         '<a href="/disclaimer/">투자 면책</a> · <a href="/privacy/">개인정보처리방침</a><br>© 디코딩 자본주의 · 운영자 아키텍트 · '
         '문의 <a href="mailto:gusrudgma@gmail.com">gusrudgma@gmail.com</a></footer>')
 
@@ -298,7 +299,8 @@ def write_all(arts, site, routes, analytics, write, books=None):
         ld = [{'@context': 'https://schema.org', '@type': 'Article', 'headline': a['title'], 'description': a['desc'],
                'datePublished': a['date'], 'dateModified': a['mod'], 'inLanguage': 'ko-KR', 'mainEntityOfPage': url,
                'author': {'@type': 'Person', 'name': AUTHOR, 'url': f'{site}about/'},
-               'publisher': {'@type': 'Organization', 'name': '디코딩 자본주의', 'logo': {'@type': 'ImageObject', 'url': f'{site}assets/logo-512.png'}}},
+               'publisher': {'@type': 'Organization', 'name': '디코딩 자본주의', 'url': site, 'logo': {'@type': 'ImageObject', 'url': f'{site}assets/logo-512.png'},
+                             **({'sameAs': SO.urls()} if SO.urls() else {})}},
               {'@context': 'https://schema.org', '@type': 'BreadcrumbList', 'itemListElement': [
                   {'@type': 'ListItem', 'position': 1, 'name': '홈', 'item': site},
                   {'@type': 'ListItem', 'position': 2, 'name': '투자 공부', 'item': f'{site}learn/'},

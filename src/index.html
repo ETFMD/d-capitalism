@@ -3257,6 +3257,12 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .site-footer .sf-in > a, .site-footer .sf-copy { white-space:nowrap; }   /* 항목 안에서는 줄을 나누지 않음 — '© 디코딩 자본주의'가 두 줄로 갈라지지 않게 */
   @media (max-width:640px) { .site-footer .sf-dot-c { display:none; } .site-footer .sf-copy { display:block; margin-top:6px; } }   /* 휴대폰: 저작권 표시는 둘째 줄에 따로 */
   .site-footer .sf-note { margin:8px 0 0; font-size:11px; line-height:1.5; opacity:.85; }
+  /* [SNS-LINKS] 하단 공식 SNS 바로가기 (scripts/social.py CSS 와 같은 값 — 독립 페이지·투자 공부·서재도 같은 모양) */
+  .site-footer .sns-links { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin:0 0 14px; }
+  .site-footer .sns-links a { display:inline-flex; align-items:center; gap:6px; padding:6px 12px 6px 10px; border:1px solid var(--card-border); border-radius:999px; font-size:12.5px; line-height:1.2; color:var(--text2); text-decoration:none; white-space:nowrap; }
+  .site-footer .sns-links a:hover, .site-footer .sns-links a:focus-visible { color:var(--accent); border-color:rgba(49,130,246,.5); text-decoration:none; }
+  .site-footer .sns-links svg { flex:none; }
+  @media (max-width:480px) { .site-footer .sns-links { display:grid; grid-template-columns:repeat(2, 130px); justify-content:center; } .site-footer .sns-links a { justify-content:center; } }   /* 휴대폰: 2×2 로 가지런히 (3+1 로 갈라지지 않게) */
   .visit-bar b { font-family:var(--mono); font-weight:600; color:var(--text2); }
   .visit-dot { width:6px; height:6px; border-radius:50%; background:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,0.15); }
   /* 평소엔 전체 방문자 수만 · 마우스를 올리거나(휴대폰은 누르면) 오늘·어제·최대·전체 */
@@ -38652,6 +38658,8 @@ var YE = (function () {
 
   <!-- [FOOTER] 모든 화면 하단 공통: 저작권 · 개인정보처리방침 · 문의 -->
   <footer class="site-footer"><!--FOOTMAP--><!--/FOOTMAP--><div class="sf-in">
+    <!-- [SNS-LINKS] 공식 SNS 바로가기 — scripts/routes.json "social" → scripts/social.py 가 빌드 때 채움(원본은 빈 표시) -->
+    <!--SNSLINKS--><!--/SNSLINKS-->
     <a href="about/">소개</a><span class="sf-dot">·</span><wbr><a href="terms/">이용약관</a><span class="sf-dot">·</span><wbr><a href="disclaimer/">투자 면책</a><span class="sf-dot">·</span><wbr><a href="privacy/">개인정보처리방침</a><span class="sf-dot">·</span><wbr><a href="mailto:gusrudgma@gmail.com">문의</a><span class="sf-dot sf-dot-c">·</span><span class="sf-copy">© 디코딩 자본주의</span>
     <p class="sf-note">이 사이트의 모든 계산 결과와 자료는 참고용이며 투자 판단의 책임은 이용자 본인에게 있습니다.</p>
   </div></footer>

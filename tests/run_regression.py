@@ -26,7 +26,7 @@
   python tests/run_regression.py --base https://d-capitalism.com/ --etf-audit   # ETF 차트 비교 실제 가격 점검만
 실패가 하나라도 있으면 종료 코드 1
 """
-import re, argparse, functools, http.server, json, os, shutil, socketserver, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
+import re, argparse, html, functools, http.server, json, os, shutil, socketserver, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
 
 from playwright.sync_api import sync_playwright
 
@@ -1113,6 +1113,11 @@ AUTOSUM_OF = {'mcap': 'mcap', 'fx': 'fx', 'aptrank': 'apt', 'earn': 'earn'}   # 
 HUB_GUIDE = ('me', 'pay', 'realty', 'capital')                              # 단계 해설 [HUB-GUIDE] 을 넣은 허브(영역)
 
 
+def social_cfg():
+    """routes.json "social" — 하단 공식 SNS 바로가기 [SNS-LINKS] 기준 주소"""
+    return json.load(open(os.path.join(ROOT, 'scripts', 'routes.json'), encoding='utf-8')).get('social', [])
+
+
 def raw_body(raw):
     return re.sub(r'<script\b.*?</script>|<style\b.*?</style>|<!--.*?-->', '', raw, flags=re.S)
 
@@ -1143,6 +1148,24 @@ def seo_raw_check(path, raw, fail, route):
         fail(path, '공유 미리보기 이미지(og:image) 없음')
     if re.search(r'\{\{[a-zA-Z0-9_.]+\}\}', body):
         fail(path, '채우지 않은 자동 값 {{…}} 이 HTML 에 남음')
+    soc = social_cfg()   # [SNS-LINKS] 모든 페이지 하단: routes.json 순서·주소 그대로 · 새 창 · rel=me
+    if soc:
+        nav = re.findall(r'<nav class="sns-links"[^>]*>(.*?)</nav>', raw, re.S)
+        got = re.findall(r'<a href="([^"]+)" target="_blank" rel="noopener me" data-sns="([a-z]+)"', nav[0]) if len(nav) == 1 else []
+        if [(x['url'], x['id']) for x in soc] != [(html.unescape(u), i) for u, i in got]:
+            fail(path, '하단 SNS 바로가기가 routes.json "social" 과 다름 (줄 %d개 · 링크 %s)' % (len(nav), got))
+        objs = []
+        def walk(o):
+            if isinstance(o, list):
+                for x in o: walk(x)
+            elif isinstance(o, dict):
+                objs.append(o); walk(o.get('@graph', []))
+        for x in re.findall(r'<script type="application/ld\+json">(.*?)</script>', raw, re.S):
+            try: walk(json.loads(x))
+            except ValueError: pass
+        ours = [o['publisher'] for o in objs if isinstance(o.get('publisher'), dict) and o['publisher'].get('name') in ('디코딩 자본주의', 'Decoding Capitalism')]
+        if any(p_.get('sameAs') != [x['url'] for x in soc] for p_ in ours):
+            fail(path, '구조화 데이터(사이트 publisher)의 sameAs 가 공식 SNS 주소와 다름')
     key = AUTOSUM_OF.get(r.get('tab'))
     if key and not path.startswith('en/'):
         b = re.search(r'<!--AUTOSUM:%s-->(.*?)<!--/AUTOSUM-->' % key, raw, re.S)
@@ -1187,6 +1210,15 @@ def static_pages_check(page, base, fail, widths, routes, local):
             idx = len([r for r in routes if r['tab'] in IDX_KEYS])
             if got + idx != want:
                 fail(p, '소개 페이지 도구 목록 %d개 + 지수 %d개 (routes.json 공개 도구 %d개) — 빌드의 [ABOUTMAP] 이 메뉴와 어긋남' % (got, idx, want))
+    for p in ('fx/', 'about/', 'learn/', 'books/', 'en/compound/'):   # 하단 SNS 바로가기: 4개 모두 보이고 화면 안 · 휴대폰 폭에서도
+        for w in (320, 1440):
+            page.set_viewport_size({'width': w, 'height': 900}); page.goto(base + p, wait_until='load'); page.wait_for_timeout(150)
+            r = page.evaluate("""() => { const a = [...document.querySelectorAll('.sns-links a')];
+                return { n: a.length, vis: a.filter(x => { const b = x.getBoundingClientRect(); return x.offsetParent && b.width > 40 && b.left >= 0 && b.right <= innerWidth; }).length,
+                         txt: a.map(x => x.innerText.trim()).join(',') }; }""")
+            if r['n'] != len(social_cfg()) or r['vis'] != r['n'] or not all(r['txt'].split(',')):
+                fail(p, '%dpx 하단 SNS 바로가기 이상: %s' % (w, r))
+    page.set_viewport_size({'width': 1440, 'height': 900})
     page.goto(base + 'learn/', wait_until='load'); page.wait_for_timeout(150)
     if not page.evaluate("() => !!document.querySelector('a[href=\"/about/#operator\"]')"):
         fail('learn/', "글쓴이(운영자) 링크가 소개 페이지 '운영자'(#operator)로 가지 않음")

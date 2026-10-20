@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import build_learn as BL   # '투자 공부' 글 모음 (content/learn → learn/)
 import build_books as BB   # '자본가 서재' 단계별 추천 도서 (content/books/books.json → books/)
 import data_facts as DF    # 자동 갱신 숫자 (data/*.json) · 지수 고유 해설 [IDXNOTE]
+import social as SO        # 하단 공식 SNS 바로가기 [SNS-LINKS] (routes.json "social")
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 SRC = os.path.join(ROOT, 'src', 'index.html')
@@ -139,6 +140,8 @@ def head_block(r, lang='ko'):
     }
     ld['publisher'] = {'@type': 'Organization', 'name': BRAND_EN if en else BRAND, 'url': SITE,
                        'logo': {'@type': 'ImageObject', 'url': SITE + 'assets/logo-512.png', 'width': 512, 'height': 512}}
+    if SO.urls():   # 공식 SNS 계정 — 검색엔진이 사이트와 같은 운영자의 계정으로 묶도록
+        ld['publisher']['sameAs'] = SO.urls()
     if r.get('hub'):
         ld['@type'] = 'CollectionPage'
         ld['mainEntity'] = {'@type': 'ItemList', 'itemListElement': [
@@ -451,6 +454,9 @@ def finalize(html_text, tab, en=False):
     html_text, n = re.subn(r'<!--FOOTMAP-->.*?<!--/FOOTMAP-->', lambda m: '<!--FOOTMAP-->' + footmap(en) + '<!--/FOOTMAP-->', html_text, count=1, flags=re.S)
     if n != 1:
         sys.exit('<!--FOOTMAP--> 표시를 찾지 못했습니다')
+    html_text, n = re.subn(r'<!--SNSLINKS-->.*?<!--/SNSLINKS-->', lambda m: '<!--SNSLINKS-->' + SO.links(en) + '<!--/SNSLINKS-->', html_text, count=1, flags=re.S)
+    if n != 1:
+        sys.exit('<!--SNSLINKS--> 표시(하단 SNS 바로가기)를 찾지 못했습니다')
     if tab in NOADS:
         html_text, n = ADS_RE.subn('', html_text, count=1)
         if n != 1:
@@ -612,6 +618,10 @@ def static_pages():
         s, n = re.subn(r'<!--OG-->.*?<!--/OG-->', lambda m: og, s, flags=re.S)
         if n != 1:
             sys.exit(f'{d}/index.html: <!--OG--><!--/OG--> 표시가 1개가 아닙니다 ({n}개)')
+        s, n = re.subn(r'<!--SNSLINKS-->.*?<!--/SNSLINKS-->', lambda m: '<!--SNSLINKS-->' + SO.links() + '<!--/SNSLINKS-->', s, flags=re.S)
+        s, k = re.subn(r'/\*SNSCSS\*/.*?/\*/SNSCSS\*/', lambda m: '/*SNSCSS*/\n' + SO.CSS + '  /*/SNSCSS*/', s, flags=re.S)
+        if n != 1 or k != 1:
+            sys.exit(f'{d}/index.html: 하단 SNS 바로가기 표시(<!--SNSLINKS-->)·CSS 표시(/*SNSCSS*/)가 1개씩이 아닙니다 ({n}·{k})')
         if d == 'about':
             s, n = re.subn(r'<!--ABOUTMAP-->.*?<!--/ABOUTMAP-->', lambda m: '<!--ABOUTMAP-->' + about_map() + '<!--/ABOUTMAP-->', s, flags=re.S)
             if n != 1:
