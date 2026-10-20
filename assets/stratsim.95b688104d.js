@@ -271,38 +271,66 @@ function ssIrr(flows) {
   const pb = fv(b);
   if (pa === 0) return a * 100;
   if (pb === 0) return b * 100;
-  if (!(Number.isFinite(pa) && Number.isFinite(pb)) || pa * pb > 0) return null;
+  // 부호는 곱이 아니라 직접 비교 (아주 작은 두 값의 곱은 0 으로 떨어져 부호가 틀림)
+  if (!(Number.isFinite(pa) && Number.isFinite(pb)) || (pa > 0) === (pb > 0)) return null;
   for (let left = 200; left > 0 && b - a > 1e-13; left--) {
     const c = (a + b) / 2, pc = fv(c);
     if (!Number.isFinite(pc)) return null;
     if (pc === 0) return c * 100;
-    if (pa * pc > 0) { a = c; pa = pc; } else b = c;
+    if ((pc > 0) === (pa > 0)) { a = c; pa = pc; } else b = c;
   }
   return (a + b) / 2 * 100;
 }
 const SS_YEAR_MS = 365.25 * 86400000;
-// 넣은 돈의 흐름: 시작 −initial, 그 뒤 적립 — 계산 엔진이 실제로 돈을 넣은 날짜 그대로
-//  · 일정(sched — 실제 거래내역)이 있으면 그 날짜
-//  · daily(날마다 걷는 SMA·사용자 코드 전략)면 달이 바뀐 첫 거래일 = 그 엔진이 쓰는 ssSchedule 의 list (d0·d1 도 엔진과 같게 넘길 것)
-//  · 아니면(9sig·그냥 보유·현금 복리) 월말 거래일
-function ssFlows(initial, monthly, raise, d0, d1, sched, daily) {
-  const t0 = Date.parse(d0 + 'T00:00:00Z');
-  const flows = [{ t: 0, cf: -initial }];
-  const s = sched && sched.list ? sched : daily && monthly > 0 ? ssSchedule(monthly, raise, d0, d1) : null;
-  if (s) {
-    for (const r of s.list) if (r.date > d0 && r.date <= d1 && r.amount !== 0) flows.push({ t: (Date.parse(r.date + 'T00:00:00Z') - t0) / SS_YEAR_MS, cf: -r.amount });
+// d 이하 마지막 거래일 ('YYYY-MM-DD' 뒤에 붙은 시각 등은 무시) — 없으면 null
+function ssDayOnOrBefore(d) {
+  if (!d || !DS.days || !DS.days.length) return null;
+  const s = String(d).slice(0, 10);
+  if (DS.idx.has(s)) return s;
+  let lo = 0, hi = DS.days.length - 1, at = null;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (DS.days[m].date <= s) { at = DS.days[m].date; lo = m + 1; } else hi = m - 1; }
+  return at;
+}
+// 넣은 돈의 흐름 [{t(년), cf, d(그 돈의 날짜)}] — 시작 −initial(d0) + 계산 엔진이 d1 의 값에 실제로 넣은 적립을 그 돈의 날짜로
+// 적립 일정: 실제 거래내역(sched.list)이 있으면 그 날짜, 없으면 공식 ssSchedule(d0 뒤 달이 바뀐 첫 거래일 · 금액 = 매달 × (1+인상률)^(그해 − d0 해))
+// mode — 어느 계산의 값인지 (d0 = 그 계산이 시작 금액을 넣은 날로 넘길 것):
+//  'day'    SMA·사용자 코드(날마다 걷는 계산): 일정 날짜에 바로 들어감 → d0 < 날짜 ≤ d1 인 것 모두
+//  'r9'     9sig·그냥 보유(ssRun9): 그달 월말 행을 처리할 때 넣되 가격은 일정 날짜 — 그달 일정 날짜가 없으면(달 중간 진입의 첫 달 등) 월말에 그달 금액
+//           → 그달 월말 ≤ d1 인 달 것 · final(그 계산의 마지막 행)이면 d1 이 달 중간이어도 그달 d1 까지의 일정 날짜 것도(ssRun9 tailDays)
+//  'r9base' 현금 복리 선(같은 엔진의 base): 달마다 이자를 먼저 붙이고 그달 돈을 더함 = 그달 월말에 넣은 것 → 날짜는 월말(마지막 행의 덜 찬 달은 d1)
+//  (예전 호출의 true = 'day')
+function ssFlows(initial, monthly, raise, d0, d1, sched, mode, final) {
+  const t0 = Date.parse(d0 + 'T00:00:00Z'), tOf = (d) => (Date.parse(String(d).slice(0, 10) + 'T00:00:00Z') - t0) / SS_YEAR_MS;
+  const flows = [{ t: 0, cf: -initial, d: String(d0) }], add = (d, a) => flows.push({ t: tOf(d), cf: -a, d: String(d).slice(0, 10) });
+  const m = mode === true ? 'day' : mode || 'r9';
+  // 공식 일정은 거래일 사이로 만들어야 함 — 사용자 코드가 기록한 날짜가 거래일 모양이 아니어도(시각 붙음 등) 그 날 이하 마지막 거래일로
+  const s = sched && sched.list ? sched : monthly > 0 ? ssSchedule(monthly, raise, d0, ssDayOnOrBefore(d1) || d1) : null;
+  if (!s) return flows;
+  if (m === 'day') {
+    for (const r of s.list) if (r.date > d0 && r.date <= d1 && r.amount) add(r.date, r.amount);
     return flows;
   }
-  if (monthly > 0 && DS.m) {
-    const y0 = +d0.slice(0, 4);
-    for (const r of DS.m) if (r[0] > d0 && r[0] <= d1) flows.push({ t: (Date.parse(r[0] + 'T00:00:00Z') - t0) / SS_YEAR_MS, cf: -monthly * Math.pow(1 + (raise || 0), +r[0].slice(0, 4) - y0) });
+  const base = m === 'r9base', d1s = String(d1).slice(0, 10), byMk = new Map();
+  for (const r of s.list) if (DS.idx.has(r.date)) { const mk = r.date.slice(0, 7); if (!byMk.has(mk)) byMk.set(mk, new Set()); byMk.get(mk).add(r.date); }
+  for (const row of DS.m || []) {
+    const me = row[0];
+    if (me <= d0) continue;
+    const mk = me.slice(0, 7), days = byMk.has(mk) ? [...byMk.get(mk)].sort() : null;
+    if (me <= d1s) {
+      if (days) { for (const d of days) { const a = s.byDate.get(d) || 0; if (a) add(base ? me : d, a); } }
+      else { const a = s.byMonth.get(mk) || 0; if (a) add(me, a); }
+      continue;
+    }
+    // 그달 월말이 d1 뒤 = d1 이 그달 중간: 마지막 행이면 그달 d1 까지의 일정 날짜 것만 (그 뒤 달은 없음)
+    if (final !== false && days && mk === d1s.slice(0, 7)) for (const d of days) if (d <= d1s && d > d0) { const a = s.byDate.get(d) || 0; if (a) add(base ? d1s : d, a); }
+    break;
   }
   return flows;
 }
-// 돈 가중 CAGR(%) — 못 풀면 (평가액/넣은 돈)^(1/년) − 1
-function ssCagrMW(initial, monthly, raise, d0, d1, years, finalV, contributed, sched, daily) {
+// 돈 가중 CAGR(%) — 못 풀면 (평가액/넣은 돈)^(1/년) − 1 · mode·final 은 ssFlows 와 같음
+function ssCagrMW(initial, monthly, raise, d0, d1, years, finalV, contributed, sched, mode, final) {
   if (!(finalV > 0) || !(years > 0)) return 0;
-  const flows = ssFlows(initial, monthly, raise, d0, d1, sched, daily);
+  const flows = ssFlows(initial, monthly, raise, d0, d1, sched, mode, final);
   flows.push({ t: years, cf: finalV });
   const r = ssIrr(flows);
   if (r != null && Number.isFinite(r)) return r;
@@ -699,6 +727,13 @@ function ssRun9(o) {
   };
   const daysOf = (mk) => (sched.list && sched.list.length && DS.days)
     ? [...new Set(sched.list.filter(r => r.date.slice(0, 7) === mk).map(r => r.date))].filter(d => DS.idx.has(d)).sort() : [];
+  // 마지막 행 날짜가 달 중간(그달 거래일이 더 남음)이면 그달 실제 거래내역 입금일 중 그 날까지 — 월말 행이 그 뒤라 달 처리에서 빠지는 것
+  const tailDays = (qDate) => {
+    if (!(sched.list && sched.list.length) || !DS.days) return [];
+    const i = DS.idx.get(qDate), nx = i != null ? DS.days[i + 1] : null, mk = qDate.slice(0, 7);
+    if (!nx || nx.date.slice(0, 7) !== mk) return [];
+    return daysOf(mk).filter((d) => d <= qDate && d > S[0][0]);
+  };
 
   for (let qi = 0; qi < S.length; qi++) {
     const qDate = S[qi][0], qPx = S[qi][ul];
@@ -764,6 +799,17 @@ function ssRun9(o) {
     };
     if (fastMonths) for (const mi of monthsOf[qi0 + qi]) doMonth(DS.m[mi]);
     else for (const r of DS.m) if (r[0] > prevDate && r[0] <= qDate) doMonth(r);
+    // 마지막 행이 달 중간(정확한 청산일 · 주 단위 · 리밸런스 시점 옮김)이면 그달 월말 행은 위에서 안 돎 →
+    // 실제 거래내역의 그달 입금 중 이 날까지 것을 그날 가격으로 넣음 (이자는 달마다라 덜 찬 달은 없음 · 공식 적립은 월말 금액이라 없음)
+    if (qi === S.length - 1) for (const d of tailDays(qDate)) {
+      fillWeeks(d);
+      const row = DS.rows[DS.idx.get(d)], dp = ulKey ? DS.days[DS.idx.get(d)][ulKey] : 0;
+      putMoney(dp > 0 ? dp : qPx, d, row);
+      if ((sampleW || sampleQ) && dp > 0) {
+        const c = cashPark ? cash : (row[parkCol] > 0 ? parkSh * row[parkCol] : cash);
+        samples.push(snap(d, dp, sh * dp, c));
+      }
+    }
     fillWeeks(qDate);
     if (!cashPark) { const pp = parkPx(S[qi]); if (pp > 0) cash = parkSh * pp; }
 
@@ -847,6 +893,13 @@ function ssRun9(o) {
       if (qi > 0 && (!needPx || qp)) {
         if (fastMonths) for (const mi of monthsOf[qi0 + qi]) month(DS.m[mi]);
         else for (const r of DS.m) if (r[0] > pd && r[0] <= qd) month(r);
+        // 마지막 행이 달 중간이면 실제 거래내역의 그달 그 날까지 입금도 (9sig 쪽과 같은 규칙)
+        if (qi === S.length - 1) for (const d of tailDays(qd)) {
+          weeks(d);
+          const dp = key ? DS.days[DS.idx.get(d)][key] : null, px = dp > 0 ? dp : qp, amt = sched.byDate.get(d) || 0;
+          if (needPx ? px : true) n += amt / px;
+          if ((sampleW || sampleQ) && dp > 0) smp.push({ date: d, value: n * dp });
+        }
         weeks(qd);
         if (sampleW && qp) smp.push({ date: qd, value: n * qp });
       }
@@ -3092,8 +3145,8 @@ function slMeasure(res) {
   const pts = res && res.points;
   if (!pts || pts.length < 2 || !(pts[0].value > 0)) return null;
   const v1 = pts[pts.length - 1].value;
-  // 프리셋 점은 리밸런스 날에만 있어 구간 끝보다 짧을 수 있음 → 연수는 앱과 같은 '구간'으로
-  const d0 = res.start || pts[0].date, d1 = res.end || pts[pts.length - 1].date;
+  // 끝 = 마지막 값이 나온 점의 날짜 (리밸런스 시점을 옮긴 프리셋은 구간 끝보다 앞일 수 있음 — 본 화면 연평균과 같은 규칙)
+  const d0 = res.start || pts[0].date, d1 = String(pts[pts.length - 1].date);
   const yrs = (Date.parse(d1) - Date.parse(d0)) / (365.25 * 864e5);
   // 낙폭: 앱처럼 매일 종가로 다시 평가 (엔진 기준점 → 없으면 코드 기록으로 기준점을 만듦 → 그래도 없으면 기록 값으로)
   let dd = null;
@@ -3106,7 +3159,8 @@ function slMeasure(res) {
     for (const r of pts) { if (r.value > top) top = r.value; if (top > 0) dd = Math.max(dd, 1 - r.value / top); }
   }
   const paid = SL_START + SL_MONTH * Math.max(0, Math.round(yrs * 12));
-  const cagr = yrs > 0 ? ssCagrMW(SL_START, SL_MONTH, 0, d0, d1, yrs, v1, paid, null, !!res.daily) : 0;
+  // 적립 날짜·장부 규칙은 그 계산과 같게: 코드 전략·SMA = 'day', 9sig 프리셋 = 'r9' (ssFlows)
+  const cagr = yrs > 0 ? ssCagrMW(SL_START, SL_MONTH, 0, d0, d1, yrs, v1, paid, null, res.daily ? 'day' : 'r9', true) : 0;
   return { cagr, dd: dd * 100 };
 }
 // 기록을 분기 점에 맞춤 (그 분기 날짜까지의 마지막 값 · 첫 기록 전은 시작 금액)
@@ -3787,7 +3841,8 @@ function ssRender() {
   const years = log.length > 1 ? (Date.parse(fin.date) - Date.parse(log[0].date)) / SS_YEAR_MS : 1;
   ctx.labels = labels; ctx.years = years; ctx.d0 = log[0].date; ctx.d1 = fin.date;
   const onLabels = (arr, f) => (sameGrain ? arr.map(f) : ssResample((arr || []).map((a) => ({ date: a.date, value: f(a) })), labels));
-  const mw = (v) => ssCagrMW(initial, monthly, raise, log[0].date, fin.date, years, v, base.contributed, sched);
+  // 연평균(돈 가중): 그냥 보유 = ssRun9 의 적립 규칙('r9'), 현금 복리 = 달마다 이자 뒤 더하는 base('r9base') — ssFlows
+  const mw = (v, mode) => ssCagrMW(initial, monthly, raise, log[0].date, fin.date, years, v, base.contributed, sched, mode);
 
   const metrics = {}, yday = {}, datasets = [];
   const defl = S.infl ? ssInflFactor(prevDay, labels[0]) : 1;
@@ -3797,13 +3852,13 @@ function ssRender() {
   const bhD = onLabels(sampleW ? (base.bhS[bhKey] || []) : bhPts, (p) => p.value);
   const bhFinal = bhPts.length ? bhPts[bhPts.length - 1].value : 0;
   const bhDD = bhPts.length && bhPts[0].shares != null ? ssDailyDD(bhPts.map((p) => ({ date: p.date, shares: p.shares, cash: 0 })), bhKey) : ssSeriesDD(bhD, labels);
-  metrics.bh = { cagr: mw(bhFinal), start: bhD[0], end: bhD[bhD.length - 1], maxDD: bhDD.pct * 100, ddPeak: bhDD.peakDate, ddTrough: bhDD.troughDate };
+  metrics.bh = { cagr: mw(bhFinal, 'r9'), start: bhD[0], end: bhD[bhD.length - 1], maxDD: bhDD.pct * 100, ddPeak: bhDD.peakDate, ddTrough: bhDD.troughDate };
   if (latest && bhPts.length && bhPts[bhPts.length - 1].shares > 0) { const y = ssRepriceYesterday({ [bhKey]: bhPts[bhPts.length - 1].shares }, 0); if (y != null) yday.bh = y * defl; }
   datasets.push(ssDs('bh', '그냥 보유 ' + bhKey.toUpperCase(), bhD, ssBaseColor('bh'), { borderWidth: 2, borderDash: [6, 3], hidden: S.hide.bh }));
   // ── 현금 복리 (모든 적립을 이자 붙는 현금으로)
   const invD = onLabels(sampleW ? base.samples : log, (l) => l.base);
   const invDD = ssSeriesDD(invD, labels);
-  metrics.invested = { cagr: mw(fin.base), start: invD[0], end: invD[invD.length - 1], maxDD: invDD.pct * 100, ddPeak: invDD.peakDate, ddTrough: invDD.troughDate };
+  metrics.invested = { cagr: mw(fin.base, 'r9base'), start: invD[0], end: invD[invD.length - 1], maxDD: invDD.pct * 100, ddPeak: invDD.peakDate, ddTrough: invDD.troughDate };
   datasets.push(ssDs('invested', '현금 복리', invD, ssBaseColor('invested'), { borderWidth: 1.5, borderDash: [3, 3], tension: 0, hidden: S.hide.invested }));
 
   // ── 저장 전략
@@ -3830,7 +3885,7 @@ function ssRender() {
     const fv = pts[pts.length - 1].value;
     const flows = [{ date: eff.entryDate || S.tx.entryDate, amount: eff.initial }].concat(eff.schedule.list);
     const dd = ssFlowAdjDD(pts, flows);
-    R.actual = { cagr: ssCfgCagr(ctx, fv, false, eff.entryDate || ctx.entryDate, String(pts[pts.length - 1].date)), maxDD: dd.pct * 100, ddPeak: dd.peakDate, ddTrough: dd.troughDate, start: pts[0].value, end: fv };
+    R.actual = { cagr: ssCfgCagr(ctx, fv, 'day', eff.entryDate || ctx.entryDate, String(pts[pts.length - 1].date)), maxDD: dd.pct * 100, ddPeak: dd.peakDate, ddTrough: dd.troughDate, start: pts[0].value, end: fv };
     metrics.actual = R.actual;
     datasets.push(ssDs('actual', '내 계좌', ser, SS_ACTUAL_COLOR, { borderWidth: 2.5 }));
   }
@@ -3864,17 +3919,18 @@ function ssSubLabel(key, p) {
   return park === 'cash' ? '현금' : park.toUpperCase();
 }
 
-// 저장 전략의 돈 가중 CAGR — 그 전략이 실제로 돈을 넣은 날짜·금액과 끝 값이 나온 날로 (분석 표 풍선과 같은 계산)
-//  · d0 = 시작 금액을 넣은 날: 날마다 걷는 계산(daily — SMA·사용자 코드)은 진입일, 나머지는 계산의 첫 점
-//    (주 단위 화면의 첫 눈금은 진입일 전 주말일 수 있어 눈금으로 세면 진입 전 월말 적립이 하나 더 들어갔었음)
-//  · d1 = 끝 값이 나온 점의 날짜 · 적립: daily 는 달이 바뀐 첫 거래일, 나머지는 월말 (실제 거래내역이 있으면 그 날짜)
-function ssCfgCagr(ctx, finalV, daily, d0, d1) {
+// 저장 전략의 돈 가중 CAGR — 그 전략의 계산이 실제로 넣은 돈(날짜·금액)과 끝 값이 나온 날로 (분석 표 풍선과 같은 계산)
+//  · mode = ssFlows 의 'day'(SMA·사용자 코드·내 계좌) / 'r9'(9sig·그냥 보유) / 'r9base'(현금 복리)
+//  · d0 = 시작 금액을 넣은 날: 날마다 걷는 계산은 진입일, 나머지는 계산의 첫 점
+//    (주 단위 화면의 첫 눈금은 진입일 전 주말일 수 있어 눈금으로 세면 진입 전 적립이 하나 더 들어갔었음)
+//  · d1 = 끝 값이 나온 점의 날짜 (그 계산의 마지막 행)
+function ssCfgCagr(ctx, finalV, mode, d0, d1) {
   const L = ctx.labels;
   if (L.length && d0 && d1 && d1 > d0) {
     const yrs = (Date.parse(d1) - Date.parse(d0)) / SS_YEAR_MS;
-    return ssCagrMW(ctx.initial, ctx.monthly, ctx.raise, d0, d1, yrs, finalV, ctx.contributed, ctx.sched, !!daily);
+    return ssCagrMW(ctx.initial, ctx.monthly, ctx.raise, d0, d1, yrs, finalV, ctx.contributed, ctx.sched, mode, true);
   }
-  if (L.length) return ssCagrMW(ctx.initial, ctx.monthly, ctx.raise, L[0], L[L.length - 1], ctx.years, finalV, ctx.contributed, ctx.sched);
+  if (L.length) return ssCagrMW(ctx.initial, ctx.monthly, ctx.raise, L[0], L[L.length - 1], ctx.years, finalV, ctx.contributed, ctx.sched, mode, true);
   return ctx.years > 0 && ctx.contributed > 0 && finalV > 0 ? (Math.pow(finalV / ctx.contributed, 1 / ctx.years) - 1) * 100 : 0;
 }
 // 날짜 d 에 쓰인 값의 점 날짜 (ssResample 과 같은 규칙: d 이하 마지막 점, 없으면 첫 점)
@@ -3951,8 +4007,8 @@ function ssCfgSeries(cfg, ctx, lite) {
   const finalV = data.length ? data[data.length - 1] : 0, startV = data.length ? data[0] : 0;
   if (lite) return { data, end: finalV, start: startV };
   const dd = ddMulti && ddMulti.length ? ssDailyDDMulti(ddMulti) : ddc && ddc.length ? ssDailyDD(ddc, ddKey) : ssSeriesDD(data, L);
-  const daily = cfg.type === 'sma', cd0 = daily ? ctx.entryDate : points && points.length ? String(points[0].date) : null;
-  const cagr = ssCfgCagr(ctx, finalV, daily, cd0, L.length ? ssSrcDate(points, L[L.length - 1]) : null);
+  const mode = cfg.type === 'sma' ? 'day' : cfg.type === 'invested' ? 'r9base' : 'r9', cd0 = mode === 'day' ? ctx.entryDate : points && points.length ? String(points[0].date) : null;
+  const cagr = ssCfgCagr(ctx, finalV, mode, cd0, L.length ? ssSrcDate(points, L[L.length - 1]) : null);
   return { data, cagr, maxDD: dd.pct * 100, start: startV, end: finalV, sub, ddPeak: dd.peakDate, ddTrough: dd.troughDate, yday: yd };
 }
 
@@ -3999,7 +4055,7 @@ function ssCustomResult(log, ctx, error, stale) {
   // 끝 값이 나온 점: 값이 있는 마지막 눈금에 쓰인 기록 날짜
   let li = -1;
   for (let i = data.length - 1; i >= 0; i--) if (data[i] != null) { li = i; break; }
-  const cagr = ssCfgCagr(ctx, fv, true, ctx.entryDate, li >= 0 ? ssSrcDate(pts, L[li]) : null);
+  const cagr = ssCfgCagr(ctx, fv, 'day', ctx.entryDate, li >= 0 ? ssSrcDate(pts, L[li]) : null);
   return { data, cagr, maxDD: dd.pct * 100, start: sv, end: fv, ddPeak: dd.peakDate, ddTrough: dd.troughDate };
 }
 
@@ -7243,7 +7299,11 @@ function ssAnSimPoints(sim, k) {
 function ssAnCfgPoints(cfg, inp, qi0, qi1) {
   const p = cfg.params || {}, base = { initial: inp.initial, monthly: inp.monthly, raise: inp.raise, qi0, qi1 };
   if (cfg.type === '9sig') {
-    const r = ssRun9(Object.assign(base, { rate: ssRate9(p), period: p.per || 'quarterly', noBH: true }, ssOpts9(p)));
+    // 리밸런스 시점을 옮긴 설정(rp)은 본 화면(ssCfgSeries)과 같은 옮긴 행으로 — 행이 진입일부터 같은 간격이라 칸의 값·날짜가 본 화면과 같음
+    const per = p.per || 'quarterly', rp = +p.rp || 0;
+    let rows = null;
+    if (rp > 0) { const off = Math.round(rp / 100 * ((SS_PERIOD_DAYS[per] || 63) - 1)); const q = ssShiftRows(per, off, DS.q[qi0][0], DS.q[qi1][0]); if (q && q.length >= 2) rows = q; }
+    const r = ssRun9(Object.assign(base, { rate: ssRate9(p), period: per, rows, noBH: true }, ssOpts9(p)));
     return r.log.map((l) => ({ date: l.date, value: l.total }));
   }
   if (cfg.type === 'sma') return ssRunSma(Object.assign(base, { rate: ssRate9(p) }, ssOptsSma(p))).points.map((pt) => ({ date: pt.date, value: pt.value }));
@@ -7299,26 +7359,28 @@ async function ssAnRowSeries(k, ctx) {
   }
   out.src = src;
   out.d0 = ssAnStartDate(k, ctx.e, pts);
+  out.dl = String(pts[pts.length - 1].date);   // 그 계산의 마지막 행 (ssRun9 은 마지막 행에서만 달 중간 적립까지 넣음)
   return out;
 }
-// 날마다 걷는 계산(SMA · 사용자 코드)인지 — 적립이 '달이 바뀐 첫 거래일'에 들어감. 나머지(9sig·그냥 보유·현금 복리)는 월말
-function ssAnDaily(k) {
-  if (k === 'sma') return true;
+// 적립 규칙(ssFlows mode): SMA·사용자 코드 = 'day'(날마다 계산 — 달이 바뀐 첫 거래일에 바로) · 현금 복리 = 'r9base' · 9sig·그냥 보유 = 'r9'
+function ssAnMode(k) {
+  if (k === 'sma') return 'day';
+  if (k === 'compounded') return 'r9base';
   const c = ssAnIsCfg(k) ? ssAnCfg(k) : null;
-  return !!c && (c.type === 'sma' || c.type === 'custom');
+  return !c ? 'r9' : c.type === 'sma' || c.type === 'custom' ? 'day' : c.type === 'invested' ? 'r9base' : 'r9';
 }
 // 시작 금액을 넣은 날: 날마다 걷는 계산은 진입 분기말(엔진·코드가 받는 진입일), 나머지는 계산의 첫 점(주 단위 9sig 는 그 전 주말일 수 있음)
-const ssAnStartDate = (k, e, pts) => (ssAnDaily(k) ? DS.q[e][0] : pts && pts.length ? String(pts[0].date) : null);
-// 기간 연평균(%, 돈 가중) — 그 전략이 실제로 돈을 넣은 날짜·금액(시작 금액 d0 · 적립 d0 다음 ~ d1)과 d1 의 평가액 v 로 푼 IRR.
-// 본 화면 '연평균 수익률'과 같은 계산(ssCagrMW). 못 구하면 null
-function ssAnCagr(daily, d0, d1, v, inp) {
+const ssAnStartDate = (k, e, pts) => (ssAnMode(k) === 'day' ? DS.q[e][0] : pts && pts.length ? String(pts[0].date) : null);
+// 기간 연평균(%, 돈 가중) — 그 전략의 계산이 d1 의 값 v 에 실제로 넣은 돈(시작 금액 d0 · 적립 — 날짜·금액)으로 푼 IRR.
+// 본 화면 '연평균 수익률'과 같은 계산(ssCagrMW). final = d1 이 그 계산의 마지막 행인지. 못 구하면 null
+function ssAnCagr(mode, d0, d1, v, inp, final) {
   if (!d0 || !d1 || !(d1 > d0) || !(v > 0)) return null;
-  const key = (daily ? 'd' : 'm') + d0 + d1 + '|' + v + '|' + inp.initial + '|' + inp.monthly + '|' + inp.raise;
+  const key = mode + (final ? 'F' : '') + d0 + d1 + '|' + v + '|' + inp.initial + '|' + inp.monthly + '|' + inp.raise;
   if (SAN.cg.has(key)) return SAN.cg.get(key);
   const years = (Date.parse(d1) - Date.parse(d0)) / SS_YEAR_MS;
   let paid = 0;
-  for (const f of ssFlows(inp.initial, inp.monthly, inp.raise, d0, d1, null, daily)) paid -= f.cf;
-  const r = paid > 0 ? ssCagrMW(inp.initial, inp.monthly, inp.raise, d0, d1, years, v, paid, null, daily) : null;
+  for (const f of ssFlows(inp.initial, inp.monthly, inp.raise, d0, d1, null, mode, !!final)) paid -= f.cf;
+  const r = paid > 0 ? ssCagrMW(inp.initial, inp.monthly, inp.raise, d0, d1, years, v, paid, null, mode, !!final) : null;
   const out = Number.isFinite(r) ? { pct: r, years } : null;
   if (SAN.cg.size > 20000) SAN.cg.clear();
   SAN.cg.set(key, out);
@@ -7636,9 +7698,11 @@ async function ssAnHeat(epoch) {
         // 연평균용: 시작 금액 넣은 날 · 이 칸 값이 나온 날 (전략 / 비교)
         td.setAttribute('data-s0', ss.d0 || '');
         td.setAttribute('data-sd', (ss.src && ss.src[off]) || '');
+        td.setAttribute('data-sf', ss.src && ss.src[off] && ss.src[off] === ss.dl ? '1' : '');
         td.setAttribute('data-bv', String(b));
         td.setAttribute('data-b0', bs.d0 || '');
         td.setAttribute('data-bd', (bs.src && bs.src[off]) || '');
+        td.setAttribute('data-bf', bs.src && bs.src[off] && bs.src[off] === bs.dl ? '1' : '');
       }
       done++;
     }
@@ -7865,9 +7929,9 @@ function ssAnCellTipHtml(td) {
   const Y = ssAnYears(), xi = Y.last.get(ey), xd = xi != null ? DS.q[xi][0] : '';
   const endTxt = xd && !(+xd.slice(5, 7) === 12 && +xd.slice(8, 10) >= 28) ? ssDate(xd) + ' 기준' : ey + '년 말';
   // 기간 연평균 (돈 가중 — 본 화면 '연평균 수익률'과 같은 계산) · 비교 대상도 같은 방법
-  const inp = ssAnInputs(), cg = ssAnCagr(ssAnDaily(st), td.getAttribute('data-s0'), td.getAttribute('data-sd'), v, inp);
+  const inp = ssAnInputs(), cg = ssAnCagr(ssAnMode(st), td.getAttribute('data-s0'), td.getAttribute('data-sd'), v, inp, td.getAttribute('data-sf') === '1');
   const bAmt = +td.getAttribute('data-bv') > 0 ? +td.getAttribute('data-bv') : bv;
-  const bcg = bl !== 'custom' && dv > 0 ? ssAnCagr(ssAnDaily(bl), td.getAttribute('data-b0'), td.getAttribute('data-bd'), bAmt, inp) : null;
+  const bcg = bl !== 'custom' && dv > 0 ? ssAnCagr(ssAnMode(bl), td.getAttribute('data-b0'), td.getAttribute('data-bd'), bAmt, inp, td.getAttribute('data-bf') === '1') : null;
   const cagrRow = '<div class="ss-an-tc">연평균 ' + (cg ? '<b class="' + (cg.pct >= 0 ? 'up' : 'dn') + '">' + ssAnCgPct(cg.pct) + '</b> <i>' + cg.years.toFixed(1) + '년 · 넣은 날짜별 돈 가중</i>' : '<b>—</b>') + '</div>';
   const ratio = bl !== 'custom' && dv > 0 ? '<div class="ss-an-tr">' + ssEsc(ssAnLabel(bl)) + ' ' + ssMoney(Math.round(bAmt)) + (bcg ? ' <span class="cg">(연 ' + ssAnCgPct(bcg.pct) + ')</span>' : '') + ' 의 <b>' + (dv >= 10 ? dv.toFixed(1) : dv.toFixed(2)) + '배</b></div>'
     : bl === 'custom' ? '<div class="ss-an-tr">목표 ' + ssMoney(S.an.target) + ' ' + (v >= S.an.target ? '<b class="up">달성</b>' : '<b class="dn">미달</b>') + '</div>' : '';
@@ -7882,12 +7946,12 @@ function ssAnColStats(period) {
   tds.forEach((td) => {
     const v = +td.getAttribute('data-v'), sy = +td.getAttribute('data-r');
     if (Number.isFinite(v) && v > 0 && Number.isFinite(sy)) smp.push({ year: sy, value: v, dd: +td.getAttribute('data-dd'), ddPeak: td.getAttribute('data-dp') || null, ddTrough: td.getAttribute('data-dt') || null,
-      s0: td.getAttribute('data-s0'), sd: td.getAttribute('data-sd') });
+      s0: td.getAttribute('data-s0'), sd: td.getAttribute('data-sd'), sf: td.getAttribute('data-sf') === '1' });
   });
   if (!smp.length) return null;
   // 연평균: 칸마다 칸 풍선과 같은 돈 가중 연수익률 (실제 넣은 날짜·금액 · 실제 기간 — 올해처럼 덜 찬 해도 그대로)
-  const inp = ssAnInputs(), daily = ssAnDaily(S.an.strategy);
-  for (const s of smp) { const g = ssAnCagr(daily, s.s0, s.sd, s.value, inp); s.cagr = g ? g.pct : null; }
+  const inp = ssAnInputs(), mode = ssAnMode(S.an.strategy);
+  for (const s of smp) { const g = ssAnCagr(mode, s.s0, s.sd, s.value, inp, s.sf); s.cagr = g ? g.pct : null; }
   const asc = (a) => a.slice().sort((x, y) => x - y);
   const med = (s) => { const n = s.length; return n === 0 ? 0 : n % 2 ? s[(n - 1) >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2; };
   const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
@@ -7954,7 +8018,7 @@ function ssAnSpiralTipHtml(d) {
     later = endY - d.year;
     // 그해 시작 → 최신 연평균 (칸 풍선과 같은 돈 가중 계산)
     const rng = ssAnYearRange(d.year), k = S.an.strategy;
-    const cg = rng ? ssAnCagr(ssAnDaily(k), ssAnStartDate(k, rng.e, ser), String(ser[ser.length - 1].date), today, ssAnInputs()) : null;
+    const cg = rng ? ssAnCagr(ssAnMode(k), ssAnStartDate(k, rng.e, ser), String(ser[ser.length - 1].date), today, ssAnInputs(), true) : null;
     if (cg) cagrRow = '<div class="ss-an-tc">연평균 <b class="' + (cg.pct >= 0 ? 'up' : 'dn') + '">' + ssAnCgPct(cg.pct) + '</b> <i>' + cg.years.toFixed(1) + '년 · 넣은 날짜별 돈 가중</i></div>';
   }
   return '<button type="button" class="x" data-x aria-label="닫기">×</button>'
