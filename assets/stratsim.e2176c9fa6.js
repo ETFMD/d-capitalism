@@ -1403,9 +1403,9 @@ const slkMoneyHeld = (traded) => `      const amt = p.contributions ? p.contribu
       }`;
 const SLK_LOG1 = `      if (contributed !== 0 || action === "buy" || action === "sell" || tick)
         log.push({ date: data.dates[i], value: sh * px + cash, price: px, contributed: contributed, action: action });`;
-// 매일 판단 — up 이면 lev 보유, 아니면 현금
+// 매일 판단 — up 이면 lev 보유, 아니면 현금 (팔 때 판 금액을 현금에 더함 — 그날 들어온 적립금이 사라지지 않게)
 const SLK_DAILY = `      if (up && !inMkt && px > 0) { sh = cash / px; cash = 0; inMkt = true; action = "buy"; }
-      else if (!up && inMkt) { cash = sh * px; sh = 0; inMkt = false; action = "sell"; }
+      else if (!up && inMkt) { cash += sh * px; sh = 0; inMkt = false; action = "sell"; }
       else if (inMkt && cash > 0 && px > 0) { sh += cash / px; cash = 0; }`;
 // 와일더 RSI 를 시작 전 back 거래일부터 데움 (sig 기준)
 const slkRsiSeed = (RW, back) => `    // RSI(${RW}) — 시작 ${back}거래일 전부터 와일더 방식으로 미리 데움
@@ -1448,7 +1448,7 @@ const SLK_SIG_LINE = '      const c = line(i), px = lev[i], up = c > 0 && sig[i]
 
 const SL_CODE = {};
 
-// #1 Faber — QQQ 를 중심선과 비교, 기록 줄 날(달의 마지막 거래일)에만 판단
+// #1 Faber — QQQ 를 중심선과 비교, 달의 마지막 거래일에만 판단
 SL_CODE[1] = `{
   name: "Faber 10개월·200일 (월말 판단) → TQQQ/현금",
   params: [
@@ -1456,21 +1456,21 @@ SL_CODE[1] = `{
     ${SLK_STAT_SMA}
   ],
   run(data, p) {
-    // QQQ 종가가 중심선 위면 TQQQ, 아래면 현금(이자 없음). 판단은 기록 줄 날에만 —
-    // 달의 마지막 거래일 (차트 가로축이 주 단위일 때는 주의 마지막 거래일)
+    // QQQ 종가가 중심선 위면 TQQQ, 아래면 현금(이자 없음). 판단은 달의 마지막 거래일(다음 거래일이 다른 달)에만 —
+    // 차트 가로축이 주 단위여도, 계산이 달 중간에 끝나도 그대로 (기록 줄 간격과는 따로)
     const log = [], sig = data.qqq, lev = data.tqqq;
 ${SLK_LINE}
     const line = lineOf(sig, p.window);
     let cash = p.initial, sh = 0, inMkt = false;
     for (let i = p.startIdx; i <= p.endIdx; i++) {
 ${SLK_MONEY1}
-      const px = lev[i];
-${SLK_TICK}
-      if (tick) {
+      const px = lev[i], nx = data.dates[i + 1];
+      if (nx !== undefined && nx.slice(0, 7) !== data.dates[i].slice(0, 7)) {
         const c = line(i), up = c > 0 && sig[i] > c;
         if (up && !inMkt && px > 0) { sh = cash / px; cash = 0; inMkt = true; action = "buy"; }
-        else if (!up && inMkt) { cash = sh * px; sh = 0; inMkt = false; action = "sell"; }
+        else if (!up && inMkt) { cash += sh * px; sh = 0; inMkt = false; action = "sell"; }
       }
+${SLK_TICK}
       if (inMkt && cash > 0 && px > 0) { sh += cash / px; cash = 0; }
 ${SLK_LOG1}
     }
@@ -1514,7 +1514,7 @@ ${SLK_MONEY1}
       const c = line(i), px = lev[i], s = sig[i];
       if (c > 0 && s > 0) {
         if (!inMkt && s >= c * hiK && px > 0) { sh = cash / px; cash = 0; inMkt = true; action = "buy"; }
-        else if (inMkt && s <= c * loK) { cash = sh * px; sh = 0; inMkt = false; action = "sell"; }
+        else if (inMkt && s <= c * loK) { cash += sh * px; sh = 0; inMkt = false; action = "sell"; }
       }
       if (inMkt && cash > 0 && px > 0) { sh += cash / px; cash = 0; }
 ${SLK_TICK}
@@ -1630,7 +1630,7 @@ ${SLK_MONEY1}
       const stop = inMkt && trail > 0 && px > 0 && px < peak * (1 - trail);
       let traded = false;
       if (up && !inMkt && px > 0) { sh = cash / px; cash = 0; inMkt = true; peak = px; action = "buy"; traded = true; }
-      else if ((!up || stop) && inMkt) { cash = sh * px; sh = 0; inMkt = false; action = stop ? "추적 손절 매도" : "sell"; traded = true; }
+      else if ((!up || stop) && inMkt) { cash += sh * px; sh = 0; inMkt = false; action = stop ? "추적 손절 매도" : "sell"; traded = true; }
       else if (inMkt && cash > 0 && px > 0) { sh += cash / px; cash = 0; }
 ${SLK_TICK}
       if (contributed !== 0 || traded || tick)
@@ -1648,20 +1648,20 @@ SL_CODE[18] = `{
     ${SLK_STAT_SMA}
   ],
   run(data, p) {
-    // 주의 마지막 거래일에만: QQQ 가 중심선 위면 TQQQ, 아래면 현금(이자 없음)
+    // 주의 마지막 거래일(다음 거래일이 다른 주 — 월요일에 바뀌는 주)에만: QQQ 가 중심선 위면 TQQQ, 아래면 현금(이자 없음)
+    // 계산이 주 중간에 끝나도 그날은 판단하지 않음
     const log = [], sig = data.qqq, lev = data.tqqq;
 ${SLK_LINE}
     const line = lineOf(sig, p.window);
-    const dow = (s) => new Date(Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10))).getUTCDay();
+    const weekNo = (s) => Math.floor((Date.parse(s) / 864e5 + 3) / 7);
     let cash = p.initial, sh = 0, inMkt = false;
     for (let i = p.startIdx; i <= p.endIdx; i++) {
 ${SLK_MONEY1}
-      const px = lev[i];
-      const weekLast = i === p.endIdx || dow(data.dates[i + 1]) <= dow(data.dates[i]);
-      if (weekLast) {
+      const px = lev[i], nx = data.dates[i + 1];
+      if (nx !== undefined && weekNo(nx) !== weekNo(data.dates[i])) {
         const c = line(i), up = c > 0 && sig[i] > c;
         if (up && !inMkt && px > 0) { sh = cash / px; cash = 0; inMkt = true; action = "buy"; }
-        else if (!up && inMkt) { cash = sh * px; sh = 0; inMkt = false; action = "sell"; }
+        else if (!up && inMkt) { cash += sh * px; sh = 0; inMkt = false; action = "sell"; }
       }
       if (inMkt && cash > 0 && px > 0) { sh += cash / px; cash = 0; }
 ${SLK_TICK}
@@ -1736,7 +1736,7 @@ ${SLK_MONEY1}
 ${SLK_RSI_STEP}
       const c = line(i), px = lev[i], trend = c > 0 && sig[i] > c;
       if (trend && !inMkt && rsi < p.buy && px > 0) { sh = cash / px; cash = 0; inMkt = true; action = "buy"; }
-      else if (inMkt && (!trend || rsi > p.sell)) { cash = sh * px; sh = 0; inMkt = false; action = "sell"; }
+      else if (inMkt && (!trend || rsi > p.sell)) { cash += sh * px; sh = 0; inMkt = false; action = "sell"; }
       else if (inMkt && cash > 0 && px > 0) { sh += cash / px; cash = 0; }
 ${SLK_TICK}
 ${SLK_LOG1}
@@ -1868,11 +1868,12 @@ SL_CODE[26] = `{
     const pos = (v) => { let lo = 0, hi = win.length; while (lo < hi) { const m = (lo + hi) >> 1; if (win[m] < v) lo = m + 1; else hi = m; } return lo; };
     const put = (v) => { win.splice(pos(v), 0, v); total += v; };
     const take = (v) => { const k = pos(v); if (k < win.length && win[k] === v) { win.splice(k, 1); total -= v; } };
-    for (let k = Math.max(0, p.startIdx - W + 1); k < p.startIdx; k++) if (px[k] > 0) put(px[k]);
+    const from = Math.max(0, p.startIdx - W + 1);
+    for (let k = from; k < p.startIdx; k++) if (px[k] > 0) put(px[k]);
     let cash = p.initial, shares = 0, held = "cash", invested = p.initial, mid = 0, over = 0;
     for (let i = p.startIdx; i <= p.endIdx; i++) {
       if (px[i] > 0) put(px[i]);
-      if (i - W >= 0 && px[i - W] > 0) take(px[i - W]);
+      if (i - W >= from && px[i - W] > 0) take(px[i - W]);   // 창에서 빠지는 날 (데울 때 넣은 날부터만 — 늘 정확히 W 거래일)
       const n = win.length;
       mid = n === 0 ? 0 : (useMed ? (n % 2 ? win[(n - 1) >> 1] : (win[n / 2 - 1] + win[n / 2]) / 2) : total / n);
       over = mid > 0 && px[i] > 0 ? px[i] / mid - 1 : 0;
@@ -2745,7 +2746,7 @@ const SS_LIBRARY = [
       '들어감: 월말 종가가 평균 위 → 보유.',
       '나감: 월말 종가가 평균 아래 → 단기 국채.',
       '주기: 매달(마지막 거래일).',
-      '이 앱 구현: QQQ 와 200일 중심선 → TQQQ ↔ 현금(이자 없음). 판단은 달의 마지막 거래일에만 — 단, 차트가 주 단위로 그려지는 짧은 기간(약 10년 미만)에서는 주의 마지막 거래일마다.'),
+      '이 앱 구현: QQQ 와 200일 중심선 → TQQQ ↔ 현금(이자 없음). 판단은 달의 마지막 거래일에만 (기간 길이·차트 눈금과 상관없이 — 계산이 달 중간에 끝나면 그날은 판단 안 함).'),
     reported: '연 10.2% vs 매수 후 보유 9.3% (S&P, 1901–2012)', code: SL_CODE[1] },
   { n: 2, name: 'Gayed & Bilello LRS 3배 — 장기 레버리지', tag: 'academic', src: 'GB',
     rules: sll('신호: S&P 500 총수익 지수와 200일 이동평균.',
@@ -2847,7 +2848,7 @@ const SS_LIBRARY = [
     rules: sll('신호: 나스닥100 과 40주 이동평균(약 200일, 주봉).',
       '들어감: 주말 종가가 평균 위 → TQQQ. 나감: 평균 아래 → 현금.',
       '주기: 매주.',
-      '이 앱 구현: QQQ 와 200일 중심선을 주의 마지막 거래일에만 비교 → TQQQ ↔ 현금(이자 없음).'),
+      '이 앱 구현: QQQ 와 200일 중심선을 주의 마지막 거래일에만 비교 → TQQQ ↔ 현금(이자 없음). 계산이 주 중간에 끝나면 그날은 판단 안 함.'),
     reported: '+2,800% (Petrou 비교 기간)', code: SL_CODE[18] },
   { n: 19, name: '골든·데드 크로스 50/200', tag: 'crossover', src: 'GS',
     rules: sll('들어감: 50일 평균이 200일 평균 위로 올라섬(골든 크로스) → 레버리지 ETF.',
@@ -2934,6 +2935,33 @@ const SS_LIBRARY = [
   slFit(38, 'sma', 'dd', '1953–2025', '18', '51.79', { sig: 'spxl', win: '20', ul: 'qld', cr: '0', eb: '0.5', xb: '0.3', oh: '85', cool: '75', ohw: '8', coolw: '25', cb: '0', cs: '0', settle: '1', out: 'cash', din: '0', dout: '5', bg: '20', bga: 'qqq', bgw: '250', cost: '0.02' }),
 ];
 const slRunnable = (e) => !!(e && (e.preset || e.code));
+
+// ── 저장·공유된 예전 라이브러리 코드 → 지금 코드 (2026-10-21 버그 고침) ─────────
+// 고치기 전 코드의 지문(FNV-1a 32비트 · 글자 수). '써 보기'로 저장했거나 링크로 받은 사본이 손대지 않은 예전 코드면
+// 지금 코드로 바꿈 — 사용자가 고친 코드(지문이 다름)는 그대로 둠
+//   #1 Faber: 차트가 주 단위면 매주 판단하던 것 → 달의 마지막 거래일에만 · #18: 계산 끝 날(주 중간)에 판단하던 것
+//   #2 #3 #8 #9 #10 #11 #12 #15 #17 #18 #19 #22 #23: 파는 날 들어온 적립금이 사라지던 것 · #26: 첫날 창이 하나 짧아질 수 있던 것
+const SS_LIB_OLD = { 1: '9398d0d5:3065', 2: '69d110b3:2973', 3: '62609f35:2970', 8: 'b69ecf43:3155', 9: '5dd45200:3108', 10: '57a3b329:3298',
+  11: '4775b483:2974', 12: '78c98b65:2938', 15: '5f6a2ba5:3747', 17: 'c99f178f:2353', 18: 'aac02be6:3205', 19: '99d2dda8:3082',
+  22: 'b0ac78a6:3799', 23: 'c428c6db:3811', 26: '071d71cc:7489' };
+function ssLibFingerprint(code) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < code.length; i++) { h ^= code.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16).padStart(8, '0') + ':' + code.length;
+}
+// 사용자 전략(cfg) 한 개 — 예전 라이브러리 코드면 지금 코드·설명으로 바꾸고 true
+function ssUpgradeLibCode(cfg) {
+  if (!cfg || cfg.type !== 'custom' || !cfg.code) return false;
+  const f = ssLibFingerprint(cfg.code);
+  for (const n in SS_LIB_OLD) {
+    if (SS_LIB_OLD[n] !== f) continue;
+    const L = SS_LIBRARY.find((e) => e.n === +n);
+    if (!L || !L.code) return false;
+    cfg.code = L.code; cfg.desc = L.rules || cfg.desc; cfg.lib = L.n;
+    return true;
+  }
+  return false;
+}
 
 // ── 카드 숫자 (열 때 계산 · 보이는 카드만 · 한 번 계산하면 기억) ─────────────
 const SL_SPARK_FROM = '1995-01-01';   // 작은 곡선의 왼쪽 끝
@@ -3502,6 +3530,8 @@ function ssLoadStorage() {
   try {
     const arr = JSON.parse(localStorage.getItem(SS_LS.saved) || '[]');
     if (Array.isArray(arr)) S.saved = arr.map(ssCleanCfg).filter(Boolean);
+    // 예전(고치기 전) 라이브러리 코드로 저장된 사본은 지금 코드로 바꿔 다시 저장
+    if (typeof ssUpgradeLibCode === 'function' && S.saved.filter(ssUpgradeLibCode).length) ssPersistSaved();
   } catch (e) {}
 }
 
@@ -3620,6 +3650,7 @@ function ssImportShared(arr) {
     }
     const c = ssCleanCfg({ type: raw.t, name: raw.n, params: raw.p, color: raw.c, code, desc, subShown: raw.ss, lib: raw.lib });
     if (!c) { mapped.push(null); continue; }
+    if (typeof ssUpgradeLibCode === 'function') ssUpgradeLibCode(c);   // 예전 라이브러리 코드가 담긴 링크 → 지금 코드
     if (!have.has(sig(c))) { c.id = ssNewId(); c.name = ssUniqueName(c.name); c._tr = true; S.saved.push(c); have.add(sig(c)); }
     mapped.push(c);
   }
