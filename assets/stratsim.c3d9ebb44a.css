@@ -277,6 +277,15 @@ html[data-theme="light"] .ss-an-tip { box-shadow: 0 12px 32px rgba(0,27,55,.16);
 .ss-an-tip .tf b { color: var(--text); font-family: var(--mono); }
 .ss-an-tip .tf span:last-child { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
 .ss-an-tmsg { font-size: 12px; color: var(--text3); margin: 8px 0 2px; }
+/* 기간 연평균 줄 · 비교 대상 연평균 */
+.ss-an-tc { font-size: 12px; color: var(--text2); margin-bottom: 2px; }
+.ss-an-tc b { font: 600 13px var(--mono); }
+.ss-an-tc i { font-style: normal; font-size: 11px; color: var(--text3); margin-left: 2px; }
+.ss-an-tr .cg { font: 400 11.5px var(--mono); color: var(--text3); }
+/* 로그 단추 · 로그 표시 */
+.ss-an-lgb { width: auto; padding: 0 10px; font-size: 12px; font-weight: 600; letter-spacing: .02em; }
+.ss-an-mlg { font-size: 10.5px; color: var(--text3); text-align: right; margin: -1px 0 1px; }
+.ss-an-dt .lgt { font-size: 10.5px; color: var(--text3); margin-left: 6px; white-space: nowrap; }
 /* 작은 차트 */
 .ss-an-mc { display: block; margin: 6px 0 2px; max-width: 100%; height: auto; overflow: visible; }
 .ss-an-mc text { font-family: var(--mono); paint-order: stroke; stroke: var(--an-tip); stroke-linejoin: round; }
