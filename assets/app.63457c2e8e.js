@@ -1441,7 +1441,7 @@ function zpHint() {
 }
 window.chartZoom = (function () {
   function isFull(st) { return st.min <= st.fullMin + 1e-9 && st.max >= st.fullMax - 1e-9; }
-  function yRange(st) {
+  function yRange(st, pos) {   /* pos: 로그 눈금 — 빈 점(null)·0 이하는 빼고 */
     var ch = st.chart, lo = Infinity, hi = -Infinity;
     ch.data.datasets.forEach(function (ds, i) {
       if (!ch.isDatasetVisible(i)) return;
@@ -1449,7 +1449,7 @@ window.chartZoom = (function () {
       if (st.cat) {
         for (k = Math.max(0, Math.floor(st.min)); k <= Math.min(d.length - 1, Math.ceil(st.max)); k++) { v = d[k]; if (v != null && isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; } }
       } else {
-        for (k = 0; k < d.length; k++) { var p = d[k]; if (p.x >= st.min && p.x <= st.max) { v = p.y; if (v < lo) lo = v; if (v > hi) hi = v; } }
+        for (k = 0; k < d.length; k++) { var p = d[k]; if (p.x >= st.min && p.x <= st.max) { v = p.y; if (pos && !(v > 0)) continue; if (v < lo) lo = v; if (v > hi) hi = v; } }
       }
     });
     return lo === Infinity ? null : [lo, hi];
@@ -1460,8 +1460,11 @@ window.chartZoom = (function () {
     if (full) { st.min = st.fullMin; st.max = st.fullMax; }
     sx.min = st.cat ? Math.round(st.min) : st.min;
     sx.max = st.cat ? Math.round(st.max) : st.max;
-    var r = full ? null : yRange(st);
-    if (r) {   /* 보이는 값 범위를 1·2·5×10ⁿ 눈금 간격에 맞춰 깔끔한 경계로 */
+    var lgy = sy.type === 'logarithmic', r = full && !lgy ? null : yRange(st, lgy);
+    if (r && lgy) {   /* 로그 눈금(ETF 차트 비교): 보이는 값 범위에 배수로 4% 여백 (전체 보기도 같은 식 — 처음 그릴 때와 같음) · 눈금은 그 차트의 afterBuildTicks */
+      var fl = Math.pow(Math.max(r[1] / r[0], 1.02), 0.04); sy.min = r[0] / fl; sy.max = r[1] * fl;
+    }
+    else if (r) {   /* 보이는 값 범위를 1·2·5×10ⁿ 눈금 간격에 맞춰 깔끔한 경계로 */
       var span = (r[1] - r[0]) || Math.abs(r[0]) * 0.1 || 1, raw = span / 5, mag = Math.pow(10, Math.floor(Math.log10(raw)));
       var step = [1, 2, 2.5, 5, 10].map(function (m) { return m * mag; }).find(function (s) { return s >= raw; });
       sy.min = Math.floor((r[0] - span * 0.04) / step) * step; sy.max = Math.ceil((r[1] + span * 0.04) / step) * step;
@@ -1726,7 +1729,7 @@ window.chartZoom = (function () {
       ds.push({ label: e.tk, data: r.pts, borderColor: e.color, backgroundColor: e.color, borderWidth: LINE_W,
                 pointRadius: 0, pointHoverRadius: 3, tension: 0, fill: false, parsing: false });
     });
-    renderChips(vals);
+    renderChips(vals); S.vals = vals; S.win = w;
     var f = $('ec-from'), t = $('ec-to');
     if (f && !f.min) { var w0 = (function () { var p = S.period; S.period = 'MAX'; var x = windowOf(); S.period = p; return x; })(); f.min = t.min = dayStr(w0[0]); f.max = t.max = dayStr(w0[1]); }
     if (S.chart) { S.chart.destroy(); S.chart = null; }
@@ -1824,6 +1827,33 @@ window.chartZoom = (function () {
     if (err) err.textContent = '';
     if (f != null && t != null && f >= t) { if (err) err.textContent = L('종료일은 시작일보다 뒤여야 합니다.', 'The end date must be after the start date.'); return; }
     S.from = f; S.to = t; S.period = 'CUSTOM'; render();
+  };
+  /* 공유 카드 (2026-10-20): 고른 종목의 기간 끝 CAGR — 큰 숫자 = 가장 높은 것 · 줄 = 높은 순 4개 */
+  (window.dcShareSpec = window.dcShareSpec || {}).etfcagr = function () {
+    if (!S.vals || !S.win) return null;
+    var L = ETFS.filter(function (e) { var v = S.vals[e.tk]; return S.on[e.tk] && v && v.last != null && isFinite(v.last); }).map(function (e) { return { e: e, v: S.vals[e.tk].last }; })
+      .sort(function (a, b) { return b.v - a.v; });
+    if (!L.length) return null;
+    var on = ETFS.filter(function (e) { return S.on[e.tk]; }).map(function (e) { return e.tk; }), b = L[0];
+    var per = S.period === 'MAX' ? '상장 이후 전체' : S.period === 'CUSTOM' ? '기간설정' : '최근 ' + YEARS[S.period] + '년';
+    return { key: 'etfcagr', chip: 'ETF CAGR 비교', title: on.slice(0, 4).join(' · ') + (on.length > 4 ? ' 외 ' + (on.length - 4) + '개' : ''),
+      label: per + ' · ' + dayStr(S.win[0], '.') + ' ~ ' + dayStr(S.win[1], '.') + ' · ' + (S.total ? '분배금 재투자' : '주가 기준'),
+      big: pct(b.v), sub: (L.length > 1 ? '최고 ' : '') + b.e.tk + ' (' + T(b.e.index) + ' ' + b.e.lev + '배) 연평균 성장률',
+      rows: L.slice(0, 4).map(function (x) { return [x.e.tk + ' · ' + x.e.lev + '배', pct(x.v), false]; }), source: 'Yahoo Finance 일봉 · 과거 수익률은 미래를 보장하지 않음' };
+  };
+  /* 공유 링크·내 저장함 (2026-10-20): 고른 종목(칩 — 꺼진 것은 class off 라 버튼 묶음으로 안 잡힘)·기간(기간설정 날짜 포함)·주가/분배금 포함 → [SHARE] dcState 고리 */
+  (window.dcStateX = window.dcStateX || {})['etfcagr'] = {
+    def: { on: ETFS.map(function (e) { return e.tk; }), p: 'MAX', f: null, t: null, tot: false },
+    get: function () { return { on: ETFS.filter(function (e) { return S.on[e.tk]; }).map(function (e) { return e.tk; }), p: S.period, f: S.period === 'CUSTOM' ? S.from : null, t: S.period === 'CUSTOM' ? S.to : null, tot: !!S.total }; },
+    set: function (v) {
+      if (!v || typeof v !== 'object') return;
+      if (Array.isArray(v.on)) { var want = {}, ch = false; v.on.forEach(function (t) { want[t] = true; });
+        ETFS.forEach(function (e) { var on = !!want[e.tk]; if (!!S.on[e.tk] !== on) { S.on[e.tk] = on; ch = true; } }); if (ch) render(); }
+      if (typeof v.tot === 'boolean' && v.tot !== !!S.total) window.ecSetMode(v.tot);
+      if (v.p === 'CUSTOM' && typeof v.f === 'number' && typeof v.t === 'number' && v.f < v.t) {
+        if (S.period !== 'CUSTOM' || S.from !== v.f || S.to !== v.t) { var fe = $('ec-from'), te = $('ec-to'); if (fe && te) { fe.value = dayStr(v.f); te.value = dayStr(v.t); } window.ecSetPeriod('CUSTOM'); }
+      } else if (typeof v.p === 'string' && v.p !== 'CUSTOM' && v.p !== S.period && (v.p === 'MAX' || YEARS[v.p])) window.ecSetPeriod(v.p);
+    }
   };
 })();
 
@@ -5209,6 +5239,26 @@ var TAX = (function () {
     var d = e.target.closest && e.target.closest('#ost-rows .ost-del');
     if (d) { var row = d.closest('.ost-row'); if (document.querySelectorAll('#ost-rows .ost-row').length > 1) row.remove(); else row.querySelectorAll('input').forEach(function (i) { i.value = ''; }); ost(); }
   });
+  /* 공유 링크·내 저장함 (2026-10-20): 종목 줄(이름·매수/매도 금액·환율·수수료)은 id 가 없어 [SHARE] dcState 고리로 함께 담음 — 줄 수까지 그대로 */
+  (window.dcStateX = window.dcStateX || {})['stocktax'] = {
+    get: function () {
+      return Array.prototype.map.call(document.querySelectorAll('#ost-rows .ost-row'), function (tr) {
+        return [tr.querySelector('.ost-name').value].concat(['buy', 'buyfx', 'sell', 'sellfx', 'fee'].map(function (k) { var e = tr.querySelector('[data-k="' + k + '"]'); return e ? e.value : ''; }));
+      });
+    },
+    set: function (rows) {
+      var box = $('ost-rows'); if (!box || !Array.isArray(rows) || !rows.length) return;
+      rows = rows.slice(0, 50);
+      while (box.querySelectorAll('.ost-row').length < rows.length) box.insertAdjacentHTML('beforeend', ROW());
+      while (box.querySelectorAll('.ost-row').length > rows.length) { var all = box.querySelectorAll('.ost-row'); all[all.length - 1].remove(); }
+      box.querySelectorAll('.ost-row').forEach(function (tr, i) {
+        var r = Array.isArray(rows[i]) ? rows[i] : [];
+        var nm = tr.querySelector('.ost-name'); if (nm) nm.value = String(r[0] == null ? '' : r[0]);
+        ['buy', 'buyfx', 'sell', 'sellfx', 'fee'].forEach(function (k, j) { var e = tr.querySelector('[data-k="' + k + '"]'); if (e) e.value = String(r[j + 1] == null ? '' : r[j + 1]); });
+      });
+      ost();
+    }
+  };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { window.fcRender(); }); else window.fcRender();
 })();
 
@@ -5533,6 +5583,31 @@ var TAX = (function () {
     if (r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); var k = r.getAttribute('data-t'); S.open[k] = !S.open[k]; table(); var n = document.querySelector('tr.dv-row[data-t="' + k + '"]'); if (n) n.focus(); }
   });
   document.addEventListener('input', function (e) { if (e.target && e.target.id === 'dv-search') { S.q = e.target.value; S.page = 1; if (S.data) table(); } });
+  /* 공유 링크·내 저장함 (2026-10-20): 달력에서 고른 날·보는 달·쪽 (운용사 칩·정렬은 버튼 묶음, 검색어는 입력칸으로 [SHARE] 가 담음) */
+  (window.dcStateX = window.dcStateX || {})['dividend-calendar'] = {
+    def: { m: null, d: null, p: 1 },
+    get: function () { var t = todayStr(), m0 = [+t.slice(0, 4), +t.slice(5, 7)], m = S.month && (S.month[0] !== m0[0] || S.month[1] !== m0[1]) ? S.month : null; return { m: m, d: S.day || null, p: S.page || 1 }; },
+    set: function (v) {
+      if (!v || typeof v !== 'object') return;
+      var ch = false;
+      if (Array.isArray(v.m) && v.m.length === 2 && v.m[1] >= 1 && v.m[1] <= 12 && (!S.month || S.month[0] !== +v.m[0] || S.month[1] !== +v.m[1])) { S.month = [+v.m[0], +v.m[1]]; ch = true; }
+      var d = typeof v.d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.d) ? v.d : null; if (d !== (S.day || null)) { S.day = d; ch = true; }
+      var pgn = Math.max(1, Math.round(+v.p) || 1); if (pgn !== S.page) { S.page = pgn; ch = true; }
+      if (ch && S.data) { cal(); table(); }
+    }
+  };
+  /* 공유 카드: 지금 표(고른 날·운용사·검색·정렬) 위 4개 — 큰 숫자 = 맨 위 종목의 분배율(연 분배율 정렬이면 연 분배율) */
+  (window.dcShareSpec = window.dcShareSpec || {})['dividend-calendar'] = function () {
+    if (!S.data || !S.rows || !S.rows.length) return null;
+    var rows = rowsNow(); if (!rows.length) return null;
+    var y = function (r) { return S.sort === 'ttm' ? (r.ttm != null ? r.ttm.toFixed(2) + '%' : '—') : (r.y != null ? r.y.toFixed(2) + '%' : '—'); };
+    var ab = document.querySelector('#page-etfdiv .dv-sort .chart-tab.active'), top = rows[0];
+    return { key: 'dividend-calendar', chip: 'ETF 월분배 달력', title: (S.day ? md(S.day) + ' 분배 일정' : '국내 월분배 ETF') + (S.brand !== 'all' ? ' · ' + S.brand : '') + (S.q ? ' · “' + S.q + '”' : ''),
+      label: (ab ? ab.textContent.trim() : '') + ' · ' + rows.length + '개 종목 · ' + todayStr().replace(/-/g, '.') + ' 기준',
+      big: y(top), sub: top.n + (top.amt != null ? ' · 분배금 ' + num(top.amt) + '원' : '') + (S.sort === 'ttm' ? ' · 최근 1년 분배율' : ' · 최근 분배율'),
+      rows: rows.slice(0, 4).map(function (r) { return [r.n, (r.y != null ? r.y.toFixed(2) + '%' : '—') + (r.ttm != null ? ' · 연 ' + r.ttm.toFixed(1) + '%' : ''), false]; }),
+      source: '운용사 공시·한국거래소 · 분배율 = 분배금 ÷ 종가 · 참고용' };
+  };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.dvRender); else window.dvRender();
 })();
 
@@ -5636,7 +5711,7 @@ var TAX = (function () {
     $('mc-chips').innerHTML = '<button class="mc-chip' + (S.cty === 'all' ? ' active' : '') + '" data-cty="all">전체<small>' + rows.length + '</small></button>' +
       list.map(function (c) { return '<button class="mc-chip' + (S.cty === c ? ' active' : '') + '" data-cty="' + esc(c) + '">' + esc(cty(c)) + '<small>' + cnt[c] + '</small></button>'; }).join('');
   }
-  function table() {
+  function view() {   /* 지금 표의 줄 (나라 칩·검색·정렬) — 표와 공유 카드가 함께 씀 */
     var rows = S.data.rows.slice(), q = S.q.trim().toLowerCase();
     if (S.cty !== 'all') rows = rows.filter(function (r) { return r.c === S.cty; });
     if (q) rows = rows.filter(function (r) { return (koName(r) + ' ' + r.n + ' ' + r.s).toLowerCase().indexOf(q) >= 0; });
@@ -5645,6 +5720,22 @@ var TAX = (function () {
       if (x == null || y == null) return (x == null) - (y == null) || a.r - b.r;
       return S.sort === 'up' ? y - x || a.r - b.r : x - y || a.r - b.r;
     });
+    return rows;
+  }
+  /* 공유 카드 (2026-10-20): 지금 보는 표(나라·검색·정렬·달러/원화) 위 4개 — 큰 숫자 = 맨 위 기업의 시가총액(등락률 정렬이면 등락률) */
+  (window.dcShareSpec = window.dcShareSpec || {}).marketcap = function () {
+    if (!S.data || !S.data.rows) return null;
+    var rows = view(); if (!rows.length) return null;
+    var ch = function (x) { return x == null || isNaN(x) ? '—' : (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x).toFixed(2) + '%'; }, top = rows[0], q = S.q.trim();
+    var srt = S.sort === 'up' ? '상승률 순' : S.sort === 'down' ? '하락률 순' : '순위';
+    return { key: 'marketcap', chip: '시가총액 TOP 100', title: (S.cty === 'all' ? '전세계' : cty(S.cty)) + ' 시가총액 ' + srt + (q ? ' · “' + q + '”' : ''),
+      label: S.data.asOf + ' 종가 기준 · ' + (S.cur === 'krw' && S.fx ? '원화 환산' : '달러 환산') + ' · ' + rows.length + '개 기업',
+      big: S.sort === 'rank' ? fmtCap(top.m) : ch(top.ch), sub: top.r + '위 ' + koName(top) + ' (' + top.s + ' · ' + cty(top.c) + ')' + (S.sort === 'rank' ? ' · 전일 대비 ' + ch(top.ch) : ' · ' + fmtCap(top.m)),
+      rows: rows.slice(0, 4).map(function (r) { return [r.r + '위 ' + koName(r), fmtCap(r.m) + ' · ' + ch(r.ch), false]; }),
+      source: (S.data.source || 'companiesmarketcap.com · Yahoo Finance') + ' · 참고용' };
+  };
+  function table() {
+    var rows = view();
     $('mc-body').innerHTML = rows.length ? rows.map(function (r) {
       var ko = koName(r), en = ko !== r.n ? '<span class="mc-en">' + esc(r.n) + ' · </span>' : '', mv = fmtMove(r);
       return '<tr' + (r.c === 'South Korea' ? ' class="mc-kr"' : '') + '><td class="mc-c-r">' + r.r + '<span class="mc-rmv">' + mv + '</span></td><td class="mc-c-d">' + mv + '</td>' +
@@ -6243,6 +6334,43 @@ var TAX = (function () {
     }, 10 * 60 * 1000);
   };
   window.ERdebug = { S: S, rows: rows, events: events, listRows: listRows, nyToKst: nyToKst, openCo: openCo, closeCo: closeCo };
+  /* 공유 링크·내 저장함 (2026-10-20): 달력에서 고른 날·보는 달·쪽 (시장·보기·정렬은 버튼 묶음, 검색어는 입력칸, 연 기업은 주소 #co= 로 [SHARE] 가 담음) */
+  (window.dcStateX = window.dcStateX || {})['earnings-calendar'] = {
+    def: { sel: null, ym: null, p: 1 },
+    get: function () { var t = today('kr').split('-'), cur = S.ym && (S.ym[0] !== +t[0] || S.ym[1] !== +t[1] - 1) ? S.ym : null; return { sel: S.sel || null, ym: cur, p: S.page || 1 }; },
+    set: function (v) {
+      if (!v || typeof v !== 'object' || !S.d) return;
+      var ch = false, sel = typeof v.sel === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.sel) ? v.sel : null;
+      if (sel !== (S.sel || null)) { S.sel = sel; ch = true; }
+      if (Array.isArray(v.ym) && v.ym.length === 2 && v.ym[1] >= 0 && v.ym[1] <= 11 && (!S.ym || S.ym[0] !== +v.ym[0] || S.ym[1] !== +v.ym[1])) { S.ym = [+v.ym[0], +v.ym[1]]; ch = true; }
+      var pgn = Math.max(1, Math.round(+v.p) || 1); if (pgn !== S.page) { S.page = pgn; ch = true; }
+      if (ch) render();
+    }
+  };
+  /* 공유 카드: 기업을 열었으면 그 기업(다음 발표일·PER·ROE·지난 실적), 아니면 지금 목록(고른 날·시장·보기·정렬·검색) 위 4곳 */
+  (window.dcShareSpec = window.dcShareSpec || {})['earnings-calendar'] = function () {
+    if (!S.d) return null;
+    var pl = function (v) { return isNum(v) ? (v > 0 ? '+' : v < 0 ? '−' : '') + comma(Math.abs(v), 1) + '%' : '—'; }, mkn = function (r) { return r.mk === 'kr' ? '국내' : '미국'; };
+    var src = '기업 공시·컨센서스(네이버·Yahoo 등) · 일정은 바뀔 수 있음 · 참고용';
+    if (S.open) {
+      var r = find(S.open); if (!r) return null;
+      var nx = r.nx, ls = r.ls, per = function (k) { var v = r.per && r.per[k], e = r.eps && r.eps[k]; return isNum(v) ? comma(v, v >= 100 ? 0 : 1) : isNum(e) && e <= 0 ? '적자' : '—'; };
+      var rows = [['PER 후행 · ★선행', per('t') + ' · ' + per('f'), false], ['ROE · ROIC', pl(r.k && r.k.roe) + ' · ' + pl(r.k && r.k.roic), false]];
+      if (r.k && isNum(r.k.debt)) rows.push(['부채비율', comma(r.k.debt, 0) + '%', false]);
+      if (ls && isNum(ls.eps)) rows.push(['지난 실적 (' + (ls.pd || '') + ')', 'EPS ' + comma(ls.eps, 2) + (isNum(ls.epsE) ? ' (예상 ' + comma(ls.epsE, 2) + ')' : ''), false]);
+      return { key: 'earnings-calendar', chip: '실적발표 캘린더', title: r.name + ' 실적발표', label: mkn(r) + ' · ' + (r.sub || r.code) + ' · 시가총액 ' + capTxt(r),
+        big: nx && nx.d ? md(nx.d) : '일정 미정', sub: nx && nx.d ? (nx.d < today(r.mk) ? '지난 발표' : confOf(nx) ? '확정' : '예상') + (timeTxt(r, true) ? ' · ' + timeTxt(r, true) : '') + (isNum(nx.epsE) ? ' · EPS 예상 ' + comma(nx.epsE, 2) : '') : '',
+        rows: rows.slice(0, 4), source: src };
+    }
+    var L = listRows(); if (!L.length) return null;
+    var mb = document.querySelector('#page-earn .er-mode .chart-tab.active'), kb = document.querySelector('#page-earn .er-mk .chart-tab.active'), sb = document.querySelector('#page-earn .er-sort .er-chip.active');
+    var first = L[0];
+    return { key: 'earnings-calendar', chip: '실적발표 캘린더', title: (S.sel ? md(S.sel) + ' 실적발표' : '실적발표 · ' + (mb ? mb.textContent.trim() : '목록')) + (kb && S.mk !== 'all' ? ' · ' + kb.textContent.trim() : '') + (S.q ? ' · “' + S.q + '”' : ''),
+      label: (sb ? sb.textContent.trim().replace(/^★\s*/, '') + ' · ' : '') + '국내 KOSPI 100 · 미국 100 중 ' + L.length + '곳',
+      big: L.length + '곳', sub: '맨 위: ' + first.r.name + (first.d ? ' · ' + md(first.d) : ''),
+      rows: L.slice(0, 4).map(function (x) { return [x.r.name + ' (' + mkn(x.r) + ')', (x.d ? md(x.d) : '미정') + (x.t === 'next' && timeTxt(x.r, true) ? ' · ' + timeTxt(x.r, true) : x.t === 'past' ? ' · 발표' : ''), false]; }),
+      source: src };
+  };
 
   /* ── 이벤트 ── */
   document.addEventListener('click', function (e) {
@@ -7028,7 +7156,7 @@ var TAX = (function () {
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var Lx = typeof L === 'function' ? L : function (ko) { return ko; };
   var TABS = { 1: Lx('국내 시장지수', 'Korea market index'), 2: Lx('국내 업종·테마', 'Korea sector/theme'), 3: Lx('국내 파생', 'Korea derivatives'), 4: Lx('해외 주식', 'Overseas equity'), 5: Lx('원자재', 'Commodities'), 6: Lx('채권', 'Bonds'), 7: Lx('기타', 'Other') };
-  var S = { L: null, by: {}, sel: [], per: 'MAX', from: null, to: null, fx: false, mode: 'px', feeK: FEE_K, feeU: FEE_U, sort: null,
+  var S = { L: null, by: {}, sel: [], per: 'MAX', from: null, to: null, fx: false, mode: 'px', feeK: FEE_K, feeU: FEE_U, sort: null, log: false,
             data: {}, err: {}, pend: {}, dist: {}, distP: {}, distErr: {}, ex: {}, exP: {}, exErr: {}, pgP: {}, pgDone: {}, pgG: {}, pgN: {}, pgQ: [], pgRun: 0, pgT: null, bt: true, btS: {}, btP: {}, btErr: {}, btMemo: {}, dep: {}, depP: {}, depErr: {}, fxd: null, fxp: null, prep: {}, chart: null, mk: 'all', sugs: [], sugIdx: -1,
             ready: false, listErr: false, last: null, hash: null };
   var PRESETS = [
@@ -7394,6 +7522,7 @@ var TAX = (function () {
     S.fx = o.fx === '1';
     S.bt = o.bt !== '0';                                                     /* 상장 전 백테스트: 기본 켬 · bt=0 이면 끔 */
     S.mode = o.m === 'nav' || o.m === 'tr' ? 'nav' : 'px';
+    S.log = o.lg === '1';                                                    /* 그래프 세로축 로그 눈금 (2026-10-20) */
     var fk = parseFloat(o.fk), fu = parseFloat(o.fu);
     S.feeK = feeOk(fk) ? fk : FEE_K; S.feeU = feeOk(fu) ? fu : FEE_U;
     return S.sel.length > 0;
@@ -7402,7 +7531,7 @@ var TAX = (function () {
     if (!$('page-etfcmp').classList.contains('active')) return;
     var p = S.per === 'C' && S.from != null && S.to != null ? 'C' + ymdOf(S.from).replace(/-/g, '') + '-' + ymdOf(S.to).replace(/-/g, '') : S.per === 'C' ? 'MAX' : S.per;
     var h = S.sel.length ? '#e=' + S.sel.map(function (s) { return s.k + s.c; }).join(',') + '&p=' + p + (S.fx ? '&fx=1' : '') + (S.bt ? '' : '&bt=0') + (S.mode === 'nav' ? '&m=nav' : '')
-      + (S.feeK !== FEE_K ? '&fk=' + S.feeK : '') + (S.feeU !== FEE_U ? '&fu=' + S.feeU : '') : '';
+      + (S.feeK !== FEE_K ? '&fk=' + S.feeK : '') + (S.feeU !== FEE_U ? '&fu=' + S.feeU : '') + (S.log ? '&lg=1' : '') : '';
     S.hash = h;
     try { if (location.hash !== h) history.replaceState(history.state, '', location.pathname + location.search + h); } catch (e) {}
   }
@@ -7446,7 +7575,7 @@ var TAX = (function () {
   function renderPer() {
     document.querySelectorAll('#ecx-per .chart-tab').forEach(function (b) { var on = b.getAttribute('data-per') === S.per; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
     document.querySelectorAll('#ecx-mode button').forEach(function (b) { var on = b.getAttribute('data-m') === S.mode; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
-    $('ecx-custom').hidden = S.per !== 'C'; $('ecx-fx').checked = S.fx; $('ecx-bt').checked = S.bt; $('ecx-fees').hidden = S.mode !== 'nav';
+    $('ecx-custom').hidden = S.per !== 'C'; $('ecx-fx').checked = S.fx; $('ecx-bt').checked = S.bt; $('ecx-log').checked = S.log; $('ecx-fees').hidden = S.mode !== 'nav';
     var fk = $('ecx-fk'), fu = $('ecx-fu');
     if (document.activeElement !== fk) fk.value = String(S.feeK); if (document.activeElement !== fu) fu.value = String(S.feeU);
   }
@@ -7454,6 +7583,41 @@ var TAX = (function () {
   function cell(x, k) {
     if (k === 'vol') return x == null ? '—' : (x * 100).toFixed(1) + '%';
     return pct(x);
+  }
+  /* 로그 눈금 세로축: 범위 = 보이는 값의 최소·최대에 배수로 여백 · 눈금 = 기준(100 = 0%)의 깔끔한 배수
+     (범위가 2.5배 안쪽이면 수익률 간격 1·2·2.5·5×10ⁿ%p, 넓으면 1·1.5·2·3·5·7 → 1·2·5 → 1·3 → 1 ×10ⁿ 배 중 개수 안에 드는 것) */
+  function logTicks(lo, hi, lim) {
+    var out = [];
+    if (!(lo > 0) || !(hi > lo)) return out;
+    if (hi / lo < 2.5) {
+      var raw = (hi - lo) / Math.max(2, lim - 1), mag = Math.pow(10, Math.floor(Math.log10(raw)));
+      var step = [1, 2, 2.5, 5, 10].map(function (m) { return m * mag; }).filter(function (x) { return x >= raw; })[0];
+      for (var v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(9));
+    } else {
+      var sets = [[1, 1.5, 2, 3, 5, 7], [1, 2, 5], [1, 3], [1]];
+      for (var i = 0; i < sets.length; i++) {
+        out = [];
+        for (var e = Math.floor(Math.log10(lo)); e <= Math.ceil(Math.log10(hi)); e++) sets[i].forEach(function (m) { var x = +(m * Math.pow(10, e)).toPrecision(12); if (x >= lo && x <= hi) out.push(x); });
+        if (out.length <= lim) break;
+      }
+    }
+    return out.map(function (x) { return { value: x }; });
+  }
+  function logLab(v) { var r = v - 100, a = Math.abs(r), t = a >= 1000 ? Math.round(a).toLocaleString('en-US') : String(+a.toFixed(a >= 100 ? 0 : a >= 10 ? 1 : 2)); return (r < 0 && +t ? '-' : '') + t + '%'; }
+  function logBounds(ds) {   /* 보이는 점의 최소·최대 (배수 여백 4%) — chartZoom 이 확대·되돌리기 때도 같은 식(로그 갈래)으로 다시 잡음 */
+    var lo = Infinity, hi = -Infinity;
+    ds.forEach(function (d) { d.data.forEach(function (p) { if (p.y != null && p.y > 0) { if (p.y < lo) lo = p.y; if (p.y > hi) hi = p.y; } }); });
+    if (lo === Infinity) return null;
+    var f = Math.pow(Math.max(hi / lo, 1.02), 0.04);
+    return [lo / f, hi * f];
+  }
+  function logY(lg, ds, narrow, y) {
+    if (!lg) return y;
+    var b = logBounds(ds);
+    y.type = 'logarithmic';
+    if (b) { y.min = b[0]; y.max = b[1]; }
+    y.afterBuildTicks = function (ax) { ax.ticks = logTicks(ax.min, ax.max, narrow ? 6 : 8); };
+    return y;
   }
   function render() {
     if (!S.ready) return;
@@ -7499,8 +7663,10 @@ var TAX = (function () {
     else {
       var tick = getComputedStyle(document.documentElement).getPropertyValue('--text3').trim() || '#888';
       /* 상장 전 백테스트 구간은 점선(상장 첫날까지) · 세로 점선으로 상장일 표시 */
+      /* 로그 눈금(S.log): 점 = 100 × 성장 배수(기준 100 = 0%) → 같은 높이 = 같은 배수 · 눈금·풍선은 수익률(%)로 (2026-10-20) */
+      var lg = S.log, yv = lg ? function (y) { return y == null || !(y > -100) ? null : 100 + y; } : function (y) { return y; };
       var ds = R.list.map(function (o, k) { var it = items[o.i].it, lx = o.st.bt > 0 ? o.st.list : null;
-        return { label: labelOf(it), data: R.pts.x.map(function (x, t) { return { x: x, y: R.pts.y[k][t] }; }), borderColor: it.color, backgroundColor: it.color, borderWidth: 1, pointRadius: 0, pointHoverRadius: 3, tension: 0, spanGaps: false, fill: false,
+        return { label: labelOf(it), data: R.pts.x.map(function (x, t) { return { x: x, y: yv(R.pts.y[k][t]) }; }), borderColor: it.color, backgroundColor: it.color, borderWidth: 1, pointRadius: 0, pointHoverRadius: 3, tension: 0, spanGaps: false, fill: false,
           lx: lx, segment: lx == null ? undefined : { borderDash: function (c) { return c.p1.parsed.x <= lx ? [4, 3] : undefined; } } }; });
       S.chart = new Chart(canvas, {
         type: 'line', data: { datasets: ds }, plugins: [LISTLINE],
@@ -7509,7 +7675,7 @@ var TAX = (function () {
           interaction: { mode: 'index', intersect: false },
           plugins: { legend: { display: false },
             tooltip: { itemSort: function (a, b) { return b.parsed.y - a.parsed.y; }, filter: function (c) { return c.parsed.y != null; },
-              callbacks: { title: function (it) { if (!it.length) return ''; var x = it[0].parsed.x; return x % 1 ? fmtD(Math.ceil(x)) + Lx(' 시가', ' open') : fmtD(x); }, label: function (c) { var y = c.parsed.y; return ' ' + c.dataset.label + '  ' + (y > 0 ? '+' : y < 0 ? '−' : '') + Math.abs(y).toFixed(2) + '%' + (c.dataset.lx != null && c.parsed.x < c.dataset.lx ? Lx(' (백테스트)', ' (backtest)') : ''); } } } },
+              callbacks: { title: function (it) { if (!it.length) return ''; var x = it[0].parsed.x; return x % 1 ? fmtD(Math.ceil(x)) + Lx(' 시가', ' open') : fmtD(x); }, label: function (c) { var y = lg ? c.parsed.y - 100 : c.parsed.y; return ' ' + c.dataset.label + '  ' + (y > 0 ? '+' : y < 0 ? '−' : '') + Math.abs(y).toFixed(2) + '%' + (c.dataset.lx != null && c.parsed.x < c.dataset.lx ? Lx(' (백테스트)', ' (backtest)') : ''); } } } },
           scales: {
             x: { type: 'linear', min: xmin, max: xmax, grid: { display: false }, border: { color: fgA(0.25) },
                  /* 눈금: 2년 넘으면 1월 1일(1·2·5·10년 간격) · 2개월~2년은 매월 1일(1·2·3·6개월 간격) · 그보다 짧으면 월요일 */
@@ -7523,9 +7689,9 @@ var TAX = (function () {
                  },
                  ticks: { color: tick, maxRotation: 0, autoSkip: false, font: { size: narrow ? 10 : 11 },
                           callback: function (v) { var s = ymdOf(v).replace(/-/g, '.'); return s.slice(5) === '01.01' ? s.slice(0, 4) : s.slice(8) === '01' ? s.slice(2, 7) : s.slice(5); } } },
-            y: { position: 'right', border: { display: false },
-                 grid: { color: function (c) { return c.tick && c.tick.value === 0 ? fgA(0.28) : fgA(0.07); } },
-                 ticks: { color: tick, maxTicksLimit: 8, font: { size: narrow ? 10 : 11 }, callback: function (v) { return v + '%'; } } }
+            y: logY(lg, ds, narrow, { position: 'right', border: { display: false },
+                 grid: { color: function (c) { return c.tick && c.tick.value === (lg ? 100 : 0) ? fgA(0.28) : fgA(0.07); } },
+                 ticks: { color: tick, maxTicksLimit: 8, font: { size: narrow ? 10 : 11 }, callback: function (v) { return lg ? logLab(v) : v + '%'; } } })
           }
         }
       });
@@ -7709,6 +7875,7 @@ var TAX = (function () {
       S.per = 'C'; S.from = f; S.to = t; render();
     });
     $('ecx-fx').addEventListener('change', function () { S.fx = this.checked; render(); });
+    $('ecx-log').addEventListener('change', function () { S.log = this.checked; render(); });
     $('ecx-bt').addEventListener('change', function () { S.bt = this.checked; render(); });
     var rt = null; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { if ($('page-etfcmp').classList.contains('active')) render(); }, 250); });
     window.addEventListener('hashchange', function () { if (S.ready && newHash()) render(); });   /* 주소창에서 직접 바꾼 경우 */
@@ -8111,7 +8278,24 @@ var TAX = (function () {
       source: '국토교통부 아파트 매매 실거래가 · 계약 ' + ymd(r.d) + ' 기준' });
   }
   window.apRender = function () { var pg = $('page-aptrank'); if (pg && pg.classList.contains('active')) render(); };
-  window.APdebug = { get S() { return S; }, list: function () { return S.rows ? list() : []; } };   /* 회귀 시험용(가격 구간 등 화면 결과 = 자료 대조) */
+  window.APdebug = { get S() { return S; }, list: function () { return S.rows ? list() : []; } };
+  /* 공유 링크·내 저장함 (2026-10-20): 쪽 번호 (지역 칩·정렬은 버튼 묶음, 가격 구간·검색어는 입력칸으로 [SHARE] 가 담음) */
+  (window.dcStateX = window.dcStateX || {})['apt-rank'] = {
+    def: { p: 1 }, get: function () { return { p: S.page || 1 }; },
+    set: function (v) { var n = Math.max(1, Math.round(+(v && v.p)) || 1); if (n !== S.page) { S.page = n; if (S.rows) table(); } }
+  };
+  /* 공유 카드: 지금 표(지역·가격 구간·검색·정렬) 위 4개 — 큰 숫자 = 맨 위 단지의 실거래가 (단지 하나를 공유하는 '순위 공유' 카드는 그대로) */
+  (window.dcShareSpec = window.dcShareSpec || {})['apt-rank'] = function () {
+    if (!S.rows || !S.rows.length) return null;
+    var L = list(); if (!L.length) return null;
+    var top = L[0], ab = document.querySelector('#page-aptrank .ap-sort .chart-tab.active'), pr = '';
+    if (S.pmin != null && S.pmax != null) pr = man(S.pmin) + ' ~ ' + man(S.pmax); else if (S.pmin != null) pr = man(S.pmin) + ' 이상'; else if (S.pmax != null) pr = man(S.pmax) + ' 이하';
+    return { key: 'apt-rank', chip: '아파트 시세 순위', title: (S.sido || '전국') + ' 아파트 시세 순위' + (pr ? ' · ' + pr : '') + (S.q ? ' · “' + S.q + '”' : ''),
+      label: (ab ? ab.textContent.trim() + ' · ' : '') + L.length.toLocaleString('ko-KR') + '개 단지 · 최근 1년 실거래',
+      big: man(top.p), sub: top.n + ' · ' + top.sido + ' ' + top.gu + ' · 전용 ' + top.a + '㎡',
+      rows: L.slice(0, 4).map(function (r, i) { return [(i + 1) + '. ' + r.n + ' (' + r.gu + ')', man(r.p) + (r.py ? ' · 평당 ' + man(Math.round(r.py)) : ''), false]; }),
+      source: '국토교통부 아파트 매매 실거래가 · 매일 갱신' };
+  };   /* 회귀 시험용(가격 구간 등 화면 결과 = 자료 대조) */
 
   document.addEventListener('click', function (e) {
     if (!e.target.closest || !e.target.closest('#page-aptrank')) return;
@@ -8372,10 +8556,26 @@ function fxRenderUnits(fromCode, toCode) {
   [['fx-in-units', fromCode, _fxInUnit, 'in'], ['fx-out-units', toCode, _fxOutUnit, 'out']].forEach(([id, code, cur, side]) => {
     const box = document.getElementById(id);
     if (!box) return;
-    box.innerHTML = FX_UNITS.map(u => '<button type="button" class="fx-unit' + (u.m === cur ? ' on' : '') + '" aria-pressed="' + (u.m === cur) + '" onclick="fxSetUnit(\'' + side + '\',' + u.m + ')">' + u.p + (FX_UNIT_NAME[code] || code) + '</button>').join('');
+    box.innerHTML = FX_UNITS.map(u => '<button type="button" class="fx-unit' + (u.m === cur ? ' on' : '') + '" data-m="' + u.m + '" aria-pressed="' + (u.m === cur) + '" onclick="fxSetUnit(\'' + side + '\',' + u.m + ')">' + u.p + (FX_UNIT_NAME[code] || code) + '</button>').join('');
   });
 }
 function fxSetUnit(side, m) { if (side === 'in') _fxInUnit = m; else _fxOutUnit = m; fxConvert(); }
+/* 공유 카드 (2026-10-20): 지금 환산 — 큰 숫자 = 결과 · 줄 = 적용 환율 · 같은 금액의 주요 통화 3개 (단위 버튼 data-m 은 공유 링크가 단위를 그대로 담는 값) */
+(window.dcShareSpec = window.dcShareSpec || {}).fx = function () {
+  const f = document.getElementById('fx-from'), t = document.getElementById('fx-to'), a = document.getElementById('fx-amount'), r = document.getElementById('fx-result');
+  if (!f || !t || !a || !r) return null;
+  const from = f.value, to = t.value, num = parseFloat(String(a.value).replace(/,/g, '')) || 0, raw = num * _fxInUnit;
+  const krw = (v, c) => c === 'KRW' ? v : _fxRates[c] ? v * _fxRates[c] : null, out = (k, c) => k == null ? null : c === 'KRW' ? k : _fxRates[c] ? k / _fxRates[c] : null;
+  const k0 = krw(raw, from), res = out(k0, to);
+  if (!(raw > 0) || res == null || !isFinite(res)) return null;
+  const nm = c => { const x = FX_CURRENCIES.find(z => z.code === c); return x ? x.name : c === 'KRW' ? '원화' : c; };
+  const rows = [['적용 환율', '1 ' + from + ' = ' + fxFmt(res / raw, to)]];
+  ['USD', 'JPY', 'EUR', 'CNY', 'KRW'].filter(c => c !== from && c !== to).slice(0, 3).forEach(c => { const v = out(k0, c); if (v != null) rows.push([nm(c), fxFmt(v, c) + (c === 'KRW' ? '' : ' ' + (FX_UNIT_NAME[c] || c))]); });
+  const st = document.getElementById('fx-status-label');
+  return { key: 'fx', chip: '환율 계산기', title: (num.toLocaleString('ko-KR', { maximumFractionDigits: 4 }) + fxUnitLabel(from, _fxInUnit)) + ' → ' + (FX_UNIT_NAME[to] || to),
+    label: nm(from) + '(' + from + ') → ' + nm(to) + '(' + to + ')' + (st && /\d/.test(st.textContent) ? ' · ' + st.textContent.replace(/^최종 갱신:\s*/, '') + ' 기준' : ''),
+    big: fxFmtUnit(res, to, _fxOutUnit), sub: '', rows: rows.slice(0, 4).map(x => [x[0], x[1], false]), source: '실시간 환율 (Yahoo Finance 등) · 은행 고시 환율·수수료와 다를 수 있음' };
+};
 /* 단위로 나눈 값 표시: 1(기본)은 기존 형식, 만·억은 소수 4자리까지 + 단위 이름 */
 function fxFmtUnit(v, code, m) {
   if (m === 1) return code === 'KRW' ? fxFmt(v, code) : fxFmt(v, code) + ' ' + (FX_UNIT_NAME[code] || code);
@@ -8945,6 +9145,16 @@ function fearColor(s) {
   if (s <= 75) return '#3182f6';
   return '#3182f6';
 }
+/* 공유 카드 (2026-10-20): 지금 지수 · 전일/1주/1달/1년 전 */
+(window.dcShareSpec = window.dcShareSpec || {}).fear = function () {
+  var v = _fearData; if (!v || v.score == null || !isFinite(v.score)) return null;
+  var sc = Math.round(v.score), p = v.prev || {}, ts = v.time ? new Date(v.time) : null, k = ts && !isNaN(ts) ? new Date(ts.getTime() + 9 * 3600e3).toISOString() : '';
+  var row = function (lab, x) { return x == null || !isFinite(x) ? null : [lab, Math.round(x) + ' · ' + fearLabel(Math.round(x)), false]; };
+  return { key: 'fear', chip: '공포 & 탐욕 지수', title: 'CNN 공포 & 탐욕 지수', label: (k ? k.slice(0, 10) + ' ' + k.slice(11, 16) + ' (한국 시간) 기준 · ' : '') + '0 극도의 공포 ~ 100 극도의 탐욕',
+    big: String(sc), sub: fearLabel(sc), gauge: sc, gaugeLabels: ['극도의 공포', '중립', '극도의 탐욕'],
+    rows: [row('전일', p.close), row('1주 전', p.w1), row('1달 전', p.m1), row('1년 전', p.y1)].filter(Boolean),
+    source: v.source === 'CNN' ? 'CNN Business Fear & Greed Index · 투자 참고용' : 'feargreedchart.com (CNN 대체 지표) · 투자 참고용' };
+};
 function fearLabel(s) {
   if (s <= 24) return L('극도의 공포', 'Extreme fear');
   if (s <= 44) return L('공포', 'Fear');
@@ -11282,6 +11492,25 @@ function renderCagrChart(cache) {
    기간: 현재 ~ 15년 전
 ════════════════════════════════════════ */
 
+/* 공유 카드 (2026-10-20): 요약 표(돈·근로소득·부동산·귀금속·주가지수)의 연평균 상승률 — 큰 숫자 = 가장 빠른 자산 · 줄 = 그다음 둘 + 시간당 임금(노동 속도 비교) */
+(window.dcShareSpec = window.dcShareSpec || {}).moneyspeed = function () {
+  var c = document.getElementById('ms-gold-cagr'), tb = c && c.closest('table'); if (!tb) return null;
+  var rows = [];
+  tb.querySelectorAll('tbody tr').forEach(function (tr) {
+    var td = tr.children; if (td.length !== 5) return;
+    var nm = td[0].textContent.replace(/\s+/g, ' ').trim(), cg = td[3].textContent.trim(), x = parseFloat(cg.replace(/[^\d.\-+−]/g, '').replace('−', '-'));
+    if (nm && isFinite(x)) rows.push({ n: nm, c: cg, x: x, m: td[4].textContent.trim() });
+  });
+  if (rows.length < 3) return null;
+  var wage = rows.filter(function (r) { return /임금/.test(r.n); }).sort(function (a, b) { return b.x - a.x; })[0];
+  var top = rows.slice().sort(function (a, b) { return b.x - a.x; }), best = top[0];
+  var list = top.slice(1, 4).filter(function (r) { return r !== wage; }).slice(0, wage ? 2 : 3).map(function (r) { return [r.n, r.c + ' · ' + r.m, false]; });
+  if (wage) list.push([wage.n, wage.c + ' · ' + wage.m, false]);
+  var dt = document.getElementById('ms-sum-status');
+  return { key: 'moneyspeed', chip: '가치 속도', title: '돈·자산·노동의 가치 속도', label: '연평균 상승률(CAGR) · 배수' + (dt && /\d/.test(dt.textContent) ? ' · ' + dt.textContent.replace(/\s*갱신 완료/, '') : ''),
+    big: best.c, sub: best.n + (wage ? ' — 시간당 임금은 연 ' + wage.c : ''), rows: [[best.n, best.c + ' · ' + best.m, false]].concat(list).slice(0, 4),
+    source: '한국은행 ECOS·국토교통부 실거래가·Yahoo Finance · 가격지수(배당 미포함)' };
+};
 var _msFetching = false;
 var _msIndexData = {}; /* {ticker: {cur, hist15, histDate}} */
 var _msMetalData = {}; /* {gold: {cur, hist15}, silver: {cur, hist15}} */
@@ -16063,7 +16292,7 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
     var tk = tkOf(); if (!/^[A-Z0-9.^-]{1,12}$/.test(tk)) { msg('종목 티커를 확인해 주세요.', 'bad'); return; }
     if (S.from && S.to && S.from >= S.to) { msg('시작일이 종료일보다 앞이어야 합니다.', 'bad'); return; }
     BUSY = true; renderSet(); msg('<div class="mb-spin"></div>' + esc(tk) + ' 일봉을 받는 중…' + (S.pre ? ' (상장 전 재현 자료도 받아요 — 처음엔 몇 초 걸릴 수 있어요)' : ''));
-    try { history.replaceState(null, '', hashOf()); } catch (e) {}
+    try { history.replaceState(null, '', location.pathname + location.search + hashOf()); } catch (e) {}   /* 주소는 이 화면 그대로 (<base href="../"> 때문에 '#…' 만 주면 사이트 첫 화면 주소가 되어 공유·저장·새로고침이 홈으로 감 — 2026-10-20) */
     var want = S.tax ? B.fxData().catch(function () { return null; }) : Promise.resolve(null), RJ = RJ_NM[S.rej] ? { mode: S.rej, cap: 1.2 } : null, FL = fillOn(S.fill) ? S.fill : null;
     Promise.all([B.load(tk), want, S.pre ? B.preload(tk) : Promise.resolve(null)]).then(function (a) {
       return RJ || FL ? B.withOpen(a[0]).then(function () { return a; }) : a;   /* 증권사 주문 거부: 그날 시가 = 주문 넣는 시점 가격 · 주문 넣는 때 비교: 시가로 갭 상승 체결 */
@@ -16180,6 +16409,17 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
     if (r.rev) a.push('리버스 진입');
     return a.join(' + ') || (r.dv > 0 ? '분배금' : '—');
   }
+  /* 공유 카드 (2026-10-20): 지금 결과(보기: 세금·수수료 포함/미포함) — 큰 숫자 = 연평균(CAGR) · 금액 줄은 '금액 공개'를 끄면 가림 (설정은 주소 #v=… 와 버튼·입력칸으로 [SHARE] 가 담음) */
+  (window.dcShareSpec = window.dcShareSpec || {})['muhan-backtest'] = function () {
+    if (!R) return null;
+    var X = VIEW === 'net' ? R.net : R.gross, st = VIEW === 'net' ? R.sn : R.sg, D = R.D, vi = VERS.filter(function (v) { return v[0] === R.S.ver; })[0];
+    if (!X || !st || !vi || !isFinite(st.cagr)) return null;
+    return { key: 'muhan-backtest', chip: '무한매수법 백테스트', title: vi[1] + ' ' + vi[2] + ' · ' + R.tk,
+      label: R.S.splits + '분할 · 목표 ' + R.S.target + '% · ' + D.d[X.from] + ' ~ ' + D.d[X.to] + ' (' + st.years.toFixed(1) + '년) · ' + (VIEW === 'net' ? '세금·수수료 포함' : '세금·수수료 미포함'),
+      big: pct(st.cagr, 2), sub: '연평균 수익률(CAGR) · 그냥 보유 ' + pct(st.bh.cagr, 2),
+      rows: [['원금 대비 총수익률', pct(st.ret), false], ['최종 자산', usd(st.final), true], ['최대 낙폭 (MDD)', pct(st.mdd), false], ['원금', usd(R.S.cap), true]],
+      source: '실제 일봉 기준 백테스트 · 과거 결과는 미래를 보장하지 않음' };
+  };
   function renderRes() {
     if (!R) return;
     var X = VIEW === 'net' ? R.net : R.gross, st = VIEW === 'net' ? R.sn : R.sg, D = R.D, n = X.n, tk = R.tk, vi = VERS.filter(function (v) { return v[0] === R.S.ver; })[0];
@@ -17696,7 +17936,7 @@ var VBD = (function () {
     if (S.from && S.to && S.from >= S.to) { msg('시작일이 종료일보다 앞이어야 합니다.', 'bad'); return; }
     if (!(S.band > 0 && S.band < 100) || !(S.G > 0)) { msg('G 는 0보다 크고, 밴드는 0.1~99% 사이여야 해요.', 'bad'); return; }
     BUSY = true; renderSet(); msg('<div class="mb-spin"></div>' + esc(tk) + ' 일봉을 받는 중…' + (S.pre ? ' (상장 전 재현 자료도 받아요 — 처음엔 몇 초 걸릴 수 있어요)' : ''));
-    try { history.replaceState(null, '', hashOf()); } catch (e) {}
+    try { history.replaceState(null, '', location.pathname + location.search + hashOf()); } catch (e) {}   /* 주소는 이 화면 그대로 (<base href="../"> 때문에 '#…' 만 주면 사이트 첫 화면 주소가 되어 공유·저장·새로고침이 홈으로 감 — 2026-10-20) */
     var want = S.tax ? B.fxData().catch(function () { return null; }) : Promise.resolve(null);
     Promise.all([VBD.load(tk), want, S.pre ? B.preload(tk) : Promise.resolve(null)]).then(function (a) {
       var D0 = a[0], F = a[1], P = a[2], D = D0, note = [];
@@ -17756,6 +17996,19 @@ var VBD = (function () {
     if (r.hv) a.push('연말 절세 매도·재매수');
     return a.join(' · ') || (r.dv > 0 ? '분배금' : '—');
   }
+  /* 공유 카드 (2026-10-20): 지금 결과 — 큰 숫자 = 연평균(CAGR) · 적립/인출이면 내 돈 기준 연수익(IRR) · 금액 줄은 '금액 공개'를 끄면 가림 */
+  (window.dcShareSpec = window.dcShareSpec || {})['vr-backtest'] = function () {
+    if (!R) return null;
+    var X = VIEW === 'net' ? R.net : R.gross, st = VIEW === 'net' ? R.sn : R.sg, D = R.D, SS = R.S, tyi = TYS.filter(function (x) { return x[0] === SS.type; })[0], fl = st && st.flows;
+    if (!X || !st || !tyi) return null;
+    var big = fl ? st.irr : st.cagr; if (big == null || !isFinite(big)) return null;
+    return { key: 'vr-backtest', chip: 'VR 5.0 백테스트', title: tyi[1] + ' · ' + R.tk,
+      label: 'G ' + nm(SS.G) + ' · ±' + nm(SS.band) + '% · 한도 ' + nm(SS.limit) + '% · ' + D.d[X.from] + ' ~ ' + D.d[X.to] + ' (' + st.years.toFixed(1) + '년) · ' + (VIEW === 'net' ? '세금·수수료 포함' : '세금·수수료 미포함'),
+      big: pct(big, 2), sub: (fl ? '내 돈 기준 연수익(IRR) · 그냥 ' + pct(st.bh.irr, 2) : '연평균 수익률(CAGR) · 그냥 보유 ' + pct(st.bh.cagr, 2)),
+      rows: [[fl ? '넣은 돈 대비 총수익률' : '원금 대비 총수익률', st.final <= 0 ? '−100% 이하' : pct(st.ret), false], ['최종 자산', usd(st.final), true],
+             ['최대 낙폭 (MDD)', st.mdd < -1 ? '−100% 이하' : pct(st.mdd), false], ['평균 현금 비중', pc0(st.cash), false]],
+      source: '실제 일봉 기준 백테스트 · 과거 결과는 미래를 보장하지 않음' };
+  };
   function renderRes() {
     if (!R) return;
     var X = VIEW === 'net' ? R.net : R.gross, st = VIEW === 'net' ? R.sn : R.sg, D = R.D, tk = R.tk, SS = R.S, tyi = TYS.filter(function (x) { return x[0] === SS.type; })[0];
@@ -20148,7 +20401,7 @@ var JBX = (function () {
   /* ════════ 화면 입력값: 기본값을 기억해 두고, 달라진 것만 담기 · 되돌리기 (공유 링크 · 내 저장함) ════════ */
   var State = (function () {
     function page() { return document.querySelector('.app-page.active') || document.querySelector('.app-page'); }
-    function skip(e) { var t = e.type; return t === 'search' || t === 'file' || t === 'password' || t === 'hidden' || t === 'button' || t === 'submit' || !!(e.closest && e.closest('.site-search, [data-share-skip]')); }
+    function skip(e) { var t = e.type; return (t === 'search' && !e.hasAttribute('data-share-keep')) || t === 'file' || t === 'password' || t === 'hidden' || t === 'button' || t === 'submit' || !!(e.closest && e.closest('.site-search, [data-share-skip]')); }
     function q(s) { return window.CSS && CSS.escape ? CSS.escape(s) : String(s).replace(/["\\]/g, '\\$&'); }
     function norm(v) { return String(v == null ? '' : v).replace(/,/g, '').trim(); }
     /* 버튼 묶음(.mode-btn 의 부모): 이름은 data-name, 없으면 화면 안 순서 */
@@ -20160,16 +20413,47 @@ var JBX = (function () {
       });
     }
     function act(btns) { for (var i = 0; i < btns.length; i++) if (btns[i].classList.contains('active')) return i; return -1; }
+    /* 선택 버튼 묶음 2 (2026-10-20): .mode-btn 밖에서 '켜진 버튼'으로 고르는 것 — 기간 탭(최근 5년·1Y)·통화·정렬·지역 칩·세금 방식·차트 보기 등
+       · 묶음 = 같은 부모 아래 버튼 2개 이상 (부모 id → data-name → 부모 class + 순서 로 이름) · 켜짐 = class active/on 또는 aria-pressed/selected
+       · 값 = 켜진 버튼의 첫 data-* (예 per=5Y · sido=서울) 없으면 글자 · 켜진 것이 여럿이면 목록(여럿 고르는 칩)
+       · 빼는 곳: 단위(.unit-btn — d.u 가 맡음)·.mode-btn·공유 창·메뉴·머리/바닥·표 안(행마다 단추 — 관심 표시 등 받는 사람 기기에 남는 것)·[data-share-skip] */
+    var TG_SKIP = '.dsh-pop, .dsh-fab, .dsh-notice, nav, header, footer, table, .learn-rel, .site-search, [data-share-skip], #dc-auth, .crumbs';
+    function tgOn(b) { var c = b.classList; return c.contains('active') || c.contains('on') || b.getAttribute('aria-pressed') === 'true' || b.getAttribute('aria-selected') === 'true'; }
+    function tgId(b) {
+      for (var i = 0; i < b.attributes.length; i++) { var a = b.attributes[i]; if (/^data-/.test(a.name) && !/^data-(share|tip|tt|i18n|ga)/.test(a.name)) return a.name.slice(5) + '=' + a.value; }
+      return 't=' + String(b.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    }
+    function tgroups(pg) {
+      var list = [], seen = {};
+      if (/^\/(muhan|vr|72|saved|suggest)\/?$/.test(location.pathname)) return list;   /* 개인 기록(무한매수법·VR·72루틴)·저장함·게시판: 받는 사람 기록 화면 설정을 바꾸지 않게 */
+      pg.querySelectorAll('button, [role="tab"]').forEach(function (b) {
+        var c = b.classList, p = b.parentElement;
+        if (!p || c.contains('mode-btn') || c.contains('unit-btn') || b.hasAttribute('data-fc-unit') || b.closest(TG_SKIP)) return;
+        for (var i = 0; i < list.length; i++) if (list[i].g === p) { list[i].btns.push(b); return; }
+        list.push({ g: p, btns: [b] });
+      });
+      return list.filter(function (x) { return x.btns.length >= 2; }).map(function (x) {
+        var g = x.g, k = g.id ? '#' + g.id : g.getAttribute('data-name') ? '@' + g.getAttribute('data-name') : '';
+        if (!k) { k = g.tagName.toLowerCase() + '.' + Array.prototype.slice.call(g.classList).sort().join('.'); seen[k] = (seen[k] || 0) + 1; k += ':' + (seen[k] - 1); }
+        x.k = k; return x;
+      });
+    }
+    function tgVal(x) { var on = x.btns.filter(tgOn).map(tgId); return !on.length ? null : on.length === 1 ? on[0] : on; }
+    /* 화면별 상태 고리 (2026-10-20): 입력칸·버튼으로 다 담기지 않는 것(해외주식 양도세 종목 줄 · ETF CAGR 고른 종목 등)
+       window.dcStateX[주소] = { get: function () { return 값(JSON) }, set: function (값) {}, def: 기본값(없으면 처음 읽은 값) } — d.x 로 함께 담고 되살림 */
+    function hook() { var k = location.pathname.replace(/^\/|\/$/g, ''), h = window.dcStateX && window.dcStateX[k]; return h && typeof h.get === 'function' && typeof h.set === 'function' ? h : null; }
     function defVal(e) {
       if (e.tagName === 'SELECT') { for (var i = 0; i < e.options.length; i++) if (e.options[i].defaultSelected) return e.options[i].value; return e.options.length ? e.options[0].value : ''; }
       return e.defaultValue;
     }
     function capture() {
       document.querySelectorAll('[data-unit]').forEach(function (e) { if (e.__u0 === undefined) e.__u0 = e.getAttribute('data-unit'); });
-      document.querySelectorAll('.app-page').forEach(function (pg) { groups(pg).forEach(function (x) { if (x.g.__a0 === undefined) x.g.__a0 = act(x.btns); }); });
+      document.querySelectorAll('.app-page').forEach(function (pg) { groups(pg).forEach(function (x) { if (x.g.__a0 === undefined) x.g.__a0 = act(x.btns); });
+        tgroups(pg).forEach(function (x) { if (x.g.__t0 === undefined) x.g.__t0 = JSON.stringify(tgVal(x)); }); });
+      var h = hook(); if (h && h.__x0 === undefined) try { h.__x0 = JSON.stringify(h.def !== undefined ? h.def : h.get()); } catch (e) {}
     }
     function snapshot(diff) {
-      var pg = page(), d = { v: {}, g: {}, u: {} };
+      var pg = page(), d = { v: {}, g: {}, u: {}, t: {} };
       if (!pg) return d;
       pg.querySelectorAll('input[id], select[id], textarea[id]').forEach(function (e) {
         if (skip(e)) return;
@@ -20179,10 +20463,14 @@ var JBX = (function () {
         else if (!diff || uch || norm(e.value) !== norm(defVal(e))) d.v[e.id] = e.value;   /* 단위를 바꿨으면 값도 함께 (단위만 바뀌면 뜻이 달라짐) */
       });
       groups(pg).forEach(function (x) { var a = act(x.btns); if (a >= 0 && (!diff || a !== x.g.__a0)) d.g[x.k] = a; });
+      tgroups(pg).forEach(function (x) { var v = tgVal(x); if (v != null && (!diff || JSON.stringify(v) !== x.g.__t0)) d.t[x.k] = v; });
+      var h = hook();
+      if (h) try { var xv = h.get(), xs = JSON.stringify(xv); if (xv != null && xs.length <= 6000 && (!diff || xs !== h.__x0)) d.x = xv; } catch (e) {}
       return d;
     }
     function restore(d) {
       var pg = page(); if (!pg || !d) return;
+      if (d.x !== undefined) { var h = hook(); if (h) try { h.set(d.x); } catch (e) {} }   /* 화면별 상태 먼저 (종목 줄 수 등 — 그 뒤 입력칸) */
       /* 버튼 묶음 먼저 (보이는 입력칸·단위가 달라질 수 있음) — 사용자가 누른 것처럼 click */
       if (d.s) pg.querySelectorAll('.fc-seg[data-name]').forEach(function (s) {        /* 예전 저장 형식: 이름 → data-v */
         var want = d.s[s.getAttribute('data-name')]; if (want == null) return;
@@ -20196,6 +20484,14 @@ var JBX = (function () {
           if (b && !b.classList.contains('active') && !b.disabled) b.click();
         });
       }
+      if (d.t) Object.keys(d.t).forEach(function (k) {                  /* 선택 버튼 묶음 2: 원하는 버튼을 누르고, 여럿 고르는 묶음이면 원하지 않는 켜진 버튼을 끔 */
+        var find = function () { var r = null; tgroups(pg).forEach(function (y) { if (y.k === k) r = y; }); return r; };
+        var x = find(), want = [].concat(d.t[k]).map(String); if (!x) return;
+        x.btns.forEach(function (b) { if (want.indexOf(tgId(b)) >= 0 && !tgOn(b) && !b.disabled) b.click(); });
+        x = find(); if (!x) return;
+        var on = x.btns.filter(tgOn), hit = on.filter(function (b) { return want.indexOf(tgId(b)) >= 0; });
+        if (hit.length === want.length && on.length > want.length) on.forEach(function (b) { if (want.indexOf(tgId(b)) < 0 && !b.disabled) b.click(); });
+      });
       Object.keys(d.v || {}).forEach(function (id) {
         var e = document.getElementById(id);
         if (!e || !pg.contains(e) || !/^(INPUT|SELECT|TEXTAREA)$/.test(e.tagName) || skip(e)) return;
@@ -20218,7 +20514,8 @@ var JBX = (function () {
     function apply(d, done) { var n = 0; (function again() { restore(d); if (++n < 4) setTimeout(again, n * 900); else if (done) done(); })(); }
     function enc(d) {
       var o = {};
-      ['v', 'g', 'u'].forEach(function (k) { if (d && d[k] && Object.keys(d[k]).length) o[k] = d[k]; });
+      ['v', 'g', 'u', 't'].forEach(function (k) { if (d && d[k] && Object.keys(d[k]).length) o[k] = d[k]; });
+      if (d && d.x !== undefined) o.x = d.x;
       if (!Object.keys(o).length) return '';
       var bytes = new TextEncoder().encode(JSON.stringify(o)), bin = '';
       for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
@@ -20232,15 +20529,25 @@ var JBX = (function () {
         for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
         var o = JSON.parse(new TextDecoder().decode(bytes)), r = {};
         if (!o || typeof o !== 'object') return null;
-        ['v', 'g', 'u'].forEach(function (k) {
+        ['v', 'g', 'u', 't'].forEach(function (k) {
           if (!o[k] || typeof o[k] !== 'object' || Array.isArray(o[k])) return;
           r[k] = {};
-          Object.keys(o[k]).slice(0, 500).forEach(function (x) { var y = o[k][x]; if (typeof y === 'string') r[k][x] = y.slice(0, 300); else if (typeof y === 'number' && isFinite(y)) r[k][x] = y; });
+          Object.keys(o[k]).slice(0, 500).forEach(function (x) { var y = o[k][x]; if (typeof y === 'string') r[k][x] = y.slice(0, 300); else if (typeof y === 'number' && isFinite(y)) r[k][x] = y;
+            else if (k === 't' && Array.isArray(y)) r[k][x] = y.filter(function (z) { return typeof z === 'string'; }).slice(0, 60).map(function (z) { return z.slice(0, 120); }); });
         });
+        if (o.x !== undefined) { var xx = clean(o.x, 0); if (xx !== undefined) r.x = xx; }   /* 화면별 상태: 글자·숫자·참거짓·목록·묶음만 (깊이 4) */
         return r;
       } catch (e) { return null; }
     }
-    function count(d) { return d ? ['v', 'g', 'u'].reduce(function (n, k) { return n + (d[k] ? Object.keys(d[k]).length : 0); }, 0) : 0; }
+    function clean(v, dp) {
+      if (v === null || typeof v === 'boolean') return v;
+      if (typeof v === 'number') return isFinite(v) ? v : undefined;
+      if (typeof v === 'string') return v.slice(0, 300);
+      if (dp >= 4 || typeof v !== 'object') return undefined;
+      if (Array.isArray(v)) return v.slice(0, 200).map(function (y) { var z = clean(y, dp + 1); return z === undefined ? null : z; });
+      var r = {}; Object.keys(v).slice(0, 100).forEach(function (k) { var z = clean(v[k], dp + 1); if (z !== undefined) r[k] = z; }); return r;
+    }
+    function count(d) { return d ? ['v', 'g', 'u', 't'].reduce(function (n, k) { return n + (d[k] ? Object.keys(d[k]).length : 0); }, 0) + (d.x !== undefined ? 1 : 0) : 0; }
     /* 주소 # 에 둔 화면 상태(이름=값 꼴 — ETF 차트 비교 #e=… 등) · 단순한 자리표(#제목)는 아님 (2026-10-20 · 공유 링크·내 저장함이 함께 담음) */
     function hash() { var h = String(location.hash || '').replace(/^#/, ''); return /=/.test(h) && h.length <= 4000 ? h : ''; }
     return { page: page, snapshot: snapshot, restore: restore, apply: apply, enc: enc, dec: dec, capture: capture, count: count, hash: hash };
@@ -20257,7 +20564,8 @@ var JBX = (function () {
     divcalc: SIM.map(function (x) { return 'divcalc-' + x; }),
     loan: ['loan-s-monthly', 'loan-s-interest', 'loan-s-total'], compound: ['cpd-s-final', 'cpd-s-profit', 'cpd-s-cagr'],
     cagr: ['cagr-result', 'cagr-monthly-rate', 'cagr-daily-rate'],
-    health: ['h-w-total', 'h-w-employer', 'h-w-annual', 'h-l-total', 'h-l-annual']
+    health: ['h-w-total', 'h-w-employer', 'h-w-annual', 'h-l-total', 'h-l-annual'],
+    kospi: ['kospi-annual', 'kospi-monthly', 'kospi-daily'], kospi200: ['k200-annual', 'k200-monthly', 'k200-daily'], kosdaq: ['kosdaq-annual', 'kosdaq-monthly', 'kosdaq-daily']   /* 국내 지수 3개는 큰 숫자 칸 class(idx-rate-num)가 없어서 (2026-10-20) */
   };
   function pageKey() { var m = location.pathname.match(/^\/([a-z0-9\-]+)\/?$/); return m ? m[1] : ''; }
   function route(k) { for (var i = 0; i < REG.length; i++) if (REG[i].path === k) return REG[i]; return null; }
@@ -20273,7 +20581,7 @@ var JBX = (function () {
   function generic() {
     var pg = State.page(), key = pageKey(), r = route(key);
     if (!pg || !key || !r) return null;
-    var o = null, hv = pg.querySelector('.fc-hero-val');
+    var o = null, hv = Array.prototype.filter.call(pg.querySelectorAll('.fc-hero-val'), vis)[0] || null;   /* 보기마다 큰 결과 칸이 따로면 보이는 것 (퇴직금 DC형 등 — 2026-10-20) */
     if (vis(hv) && !empty(txt(hv))) {
       var box = hv.parentElement, hl = box.querySelector('.fc-hero-label'), hs = box.querySelector('.fc-hero-sub');
       o = { big: txt(hv), label: txt(hl), sub: txt(hs), rows: [] };
@@ -20434,7 +20742,10 @@ var JBX = (function () {
     var key = pageKey(), pg = State.page();
     if (!key || !pg) return null;
     var reg = window.dcShareSpec || {};                       /* 계산기가 직접 만들어 둔 카드 (순위·성적표 등) — 결과가 없으면 null */
-    if (Object.prototype.hasOwnProperty.call(reg, key)) return reg[key] && reg[key].big ? reg[key] : null;
+    if (Object.prototype.hasOwnProperty.call(reg, key)) {   /* 카드 객체 · 또는 공유를 누를 때 지금 화면으로 카드를 만드는 함수 (2026-10-20) */
+      var o = reg[key]; if (typeof o === 'function') { try { o = o(); } catch (e) { o = null; } }
+      return o && o.big ? o : null;
+    }
     if (st.override && st.override.key === key) return st.override;
     return generic();
   }

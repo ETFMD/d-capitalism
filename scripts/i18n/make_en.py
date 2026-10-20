@@ -349,6 +349,8 @@ TEXT.update({
     '누적 수익률 비교': 'Cumulative return', '수익률 보기': 'Return view', '시장가': 'Market price', '기준가': 'Reinvested (after tax)',
     '미국 ETF·지수 원화 환산': 'U.S. ETFs & indices in KRW', '분배금 재투자 수수료': 'Reinvestment fee', '국내 ETF': 'Korean ETFs', '미국 ETF': 'U.S. ETFs',
     '상장 전 백테스트': 'Pre-listing backtest',
+    '로그 눈금': 'Log scale',
+    '세로축을 로그 눈금으로 — 같은 높이 = 같은 배수(예: +100%→+300% 와 −50%→0% 가 같은 높이). 오래 비교하거나 수익률 차이가 클 때 구간별 성장 속도를 견주기 좋음': 'Logarithmic vertical axis — equal heights mean equal multiples (e.g. +100%→+300% and −50%→0% look the same). Useful for long periods or very different returns',
     '상장 전 기간을 지수·더 오래된 ETF·보유 종목·금리 중 상장 후 실제 값을 가장 잘 따라간 조합으로 재현한 값(점선)': 'Pre-listing period rebuilt from the indices, older ETFs, holdings or rates that best tracked the real fund after listing (dashed)',
     '국내 ETF 재투자 매수 수수료(%)': 'Korean ETF reinvestment fee (%)', '미국 ETF 재투자 매수 수수료(%)': 'U.S. ETF reinvestment fee (%)',
     '분배금 세금: 국내 ETF 주당 과세표준 × 15.4% · 미국 ETF 배당 × 15.4%(국내 배당소득세율로 보수적 계산)': 'Distribution tax: Korean ETFs 15.4% of the taxable base per share · U.S. ETFs 15.4% of dividends (Korean dividend tax rate, a conservative assumption)',

@@ -2148,12 +2148,9 @@ SH_ETF_STATE = """() => { const S = ECXdebug.S, c = window.shareCard && shareCar
            notice: !!document.getElementById('dsh-notice'), spec: c && { key: c.key, chip: c.chip, title: c.title, label: c.label, big: c.big, sub: c.sub, rows: c.rows } }; }"""
 
 
-def share_hash_check(br, base, local, fail):
-    """[SHARE] 공유 링크·내 저장함이 주소 # 의 화면 상태(ETF 차트 비교 #e=…&p=… 등)까지 담는지 (2026-10-20 — 전에는 기본값으로 열림)
-    · ETF 차트 비교 결과 카드(dcShareSpec) = 화면 표의 수익률 · 카카오톡 공유의 [결과 보기] 링크 = …/?s=입력값&hs=화면상태 (카카오가 # 뒤를 버려도 열리게)
-    · 그 링크로 열면 머리 [SHARE-ARRIVE] 가 ?hs= 를 # 로 → 같은 ETF·기간·보기·수수료·결과 카드 + '공유받은 계산 결과' 안내
-    · 내 저장함: 저장 자료에 h(화면 상태) · ?load=번호 로 열면 한 번 다시 열어(hz=1) 그 상태로 · 화면이 # 를 고쳐 써도 되풀이 없음 · h 없는 예전 저장도 그대로
-    로컬: 실제 도메인을 저장소 파일로 흉내 + 가짜 Worker(로그인·저장함·ETF 합성 일봉) · 배포: ?hs= 링크로 여는 것과 카카오 링크만 (저장함은 실제 계정이 필요해 로컬에서만)"""
+def share_ctx(br, base, local):
+    """공유 검사용 브라우저 묶음: 카카오 SDK 대역(보낸 내용 기록) · 로컬이면 실제 도메인을 저장소 파일로 + 가짜 Worker(로그인·저장함·ETF 합성 일봉 · 나머지 Worker 길은 빈 답)
+    돌려줌: (ctx, SITE, saves{번호: 저장}, gets[읽은 번호])"""
     SITE = 'https://d-capitalism.com/' if local else base
     EPX = 'https://share-test.example.workers.dev'
     ctx = br.new_context(viewport={'width': 1280, 'height': 900}, locale='ko-KR')
@@ -2201,6 +2198,16 @@ def share_hash_check(br, base, local, fail):
         ctx.route(re.compile(r'.*/data/etfdist/\d\.json.*'), etf_dist_route)
         ctx.route(re.compile(r'.*/data/etfbt/.*\.json.*'), etf_bt_route)
         ctx.route(re.compile(r'.*allorigins\.win/.*'), lambda r: r.fulfill(status=200, headers={'Access-Control-Allow-Origin': '*'}, body=''))
+    return ctx, SITE, saves, gets
+
+
+def share_hash_check(br, base, local, fail):
+    """[SHARE] 공유 링크·내 저장함이 주소 # 의 화면 상태(ETF 차트 비교 #e=…&p=… 등)까지 담는지 (2026-10-20 — 전에는 기본값으로 열림)
+    · ETF 차트 비교 결과 카드(dcShareSpec) = 화면 표의 수익률 · 카카오톡 공유의 [결과 보기] 링크 = …/?s=입력값&hs=화면상태 (카카오가 # 뒤를 버려도 열리게)
+    · 그 링크로 열면 머리 [SHARE-ARRIVE] 가 ?hs= 를 # 로 → 같은 ETF·기간·보기·수수료·결과 카드 + '공유받은 계산 결과' 안내
+    · 내 저장함: 저장 자료에 h(화면 상태) · ?load=번호 로 열면 한 번 다시 열어(hz=1) 그 상태로 · 화면이 # 를 고쳐 써도 되풀이 없음 · h 없는 예전 저장도 그대로
+    로컬: 실제 도메인을 저장소 파일로 흉내 + 가짜 Worker(로그인·저장함·ETF 합성 일봉) · 배포: ?hs= 링크로 여는 것과 카카오 링크만 (저장함은 실제 계정이 필요해 로컬에서만)"""
+    ctx, SITE, saves, gets = share_ctx(br, base, local)
     F = lambda m: fail('share-state', m)
     perr = []
     def newpage():
@@ -2379,6 +2386,254 @@ def share_hash_check(br, base, local, fail):
             j = pg.evaluate("() => ({ q: (document.getElementById('jl-q') || {}).value, res: !(document.getElementById('jl-res') || { hidden: true }).hidden, hash: decodeURIComponent(location.hash), n: !!document.getElementById('dsh-notice') })")
             if j['q'] != '간호사' or not j['res'] or j['hash'] != '#job=간호사' or not j['n']:
                 F('④ 받은 직업 수명 링크가 그 직업으로 열리지 않음: %s' % j)
+        pg.close()
+    for e in perr[:3]:
+        F('페이지 오류: ' + e)
+    ctx.close()
+
+
+SHARE_PERTURB = r"""() => {   /* 화면 설정 바꾸기: 켜진 버튼이 하나인 선택 묶음 3개까지 다른 버튼 · 숫자 입력칸 2개까지 1.37배 */
+  const pg = document.querySelector('.app-page.active'), done = [];
+  const skip = e => e.closest('.dsh-pop, .dsh-fab, .dsh-notice, nav, header, footer, table, .learn-rel, .site-search, [data-share-skip], #dc-auth, .crumbs, details:not([open])');
+  const on = b => b.classList.contains('active') || b.classList.contains('on') || b.getAttribute('aria-pressed') === 'true' || b.getAttribute('aria-selected') === 'true';
+  const m = new Map();
+  pg.querySelectorAll('button, [role=tab]').forEach(b => { if (b.classList.contains('unit-btn') || skip(b) || !b.offsetParent || b.disabled) return; const p = b.parentElement; if (!m.has(p)) m.set(p, []); m.get(p).push(b); });
+  let n = 0;
+  m.forEach((bs, p) => { if (n >= 3 || bs.length < 2) return; if (bs.filter(on).length !== 1) return;
+    const t = bs.filter(b => !on(b) && !/전체 보기|초기화|지우기|삭제|×|✕|닫기|갱신|↺/.test(b.textContent))[0]; if (!t) return;
+    t.click(); n++; done.push((p.id || p.className) + ' → ' + t.textContent.trim().slice(0, 14)); });
+  let k = 0;
+  pg.querySelectorAll('input[id]').forEach(e => { if (k >= 2 || skip(e) || !e.offsetParent || e.readOnly || e.disabled || (e.type !== 'text' && e.type !== 'number')) return;
+    const v = parseFloat(String(e.value).replace(/,/g, '')); if (!isFinite(v) || v <= 0) return;
+    e.value = String(Math.round(v * 1.37 * 100) / 100); e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); k++; done.push(e.id); });
+  if (window.fcRender) try { fcRender(); } catch (er) {}
+  return done;
+}"""
+SHARE_SNAP = r"""() => { const d = dcState.snapshot(false), sp = window.shareCard && shareCard.spec(), pg = document.querySelector('.app-page.active'), act = [];
+  Object.keys(d.v || {}).forEach(k => { if (typeof d.v[k] === 'string') d.v[k] = d.v[k].replace(/,/g, '').trim(); });
+  /* 켜진 버튼 목록을 dcState 와 따로 셈 (담기·되살리기 장치가 통째로 빠져도 잡히게) */
+  pg.querySelectorAll('button.active, button.on, button[aria-pressed="true"], [role=tab][aria-selected="true"]').forEach(b => {
+    if (!b.offsetParent || b.closest('.dsh-pop, .dsh-fab, .dsh-notice, nav, header, footer, table, #dc-auth, .crumbs')) return;
+    const id = [...b.attributes].filter(x => /^data-/.test(x.name)).map(x => x.name + '=' + x.value).join(',') || b.textContent.trim().slice(0, 20);
+    act.push((b.parentElement.id || b.parentElement.className) + ' > ' + id); });
+  return { d: d, hash: dcState.hash(), act: act.sort(), card: sp ? { key: sp.key, title: sp.title, big: sp.big, label: sp.label, sub: sp.sub } : null, notice: !!document.getElementById('dsh-notice') }; }"""
+
+
+def share_all_check(br, base, local, fail):
+    """[SHARE] 모든 화면 공유 (2026-10-20 — '같은 문제가 있는 기능 전부'): 설정을 바꾼 뒤 카카오톡 공유 링크로 열면 같은 설정·같은 결과 카드
+    · 버튼 묶음 2(기간 탭·통화 단위·정렬·지역 칩·세금 방식 등 .mode-btn 밖) · 화면별 고리 d.x(해외주식 종목 줄·ETF CAGR 종목·달력 고른 날·쪽)
+    · 목록 검색어(data-share-keep) · 새 카드(환율·공포탐욕·가치 속도·ETF CAGR·시가총액·분배 달력·아파트 순위·실적발표·백테스트 2·국내 지수 3)
+    · ETF 차트 비교 로그 눈금(lg=1 · 축·눈금·확대 되돌리기·링크) · 내 저장함이 버튼 묶음 2 를 담고 되살림"""
+    ctx, SITE, saves, gets = share_ctx(br, base, local)
+    F = lambda m: fail('share-all', m)
+    perr = []
+    def newpage():
+        pg = ctx.new_page()
+        pg.on('pageerror', lambda e: perr.append(str(e)[:200]))
+        pg.on('dialog', lambda d: d.accept('검사 저장') if d.type == 'prompt' else d.accept())
+        return pg
+    def send(pg):
+        pg.click('.dsh-fab'); pg.wait_for_timeout(700)
+        pg.click('#dsh-pop [data-a="kakao"]'); pg.wait_for_timeout(200)
+        s = pg.evaluate("() => window.__ksent.slice(-1)[0] || null")
+        pg.keyboard.press('Escape')
+        return ((s or {}).get('content') or {}).get('link', {}).get('webUrl', '')
+    def cmp(name, a, b, card=True, big=True):
+        bad = []
+        for k in ('v', 'g', 'u', 't'):
+            A, B = a['d'].get(k) or {}, b['d'].get(k) or {}
+            bad += ['%s.%s %r→%r' % (k, x, A.get(x), B.get(x)) for x in sorted(set(A) | set(B)) if A.get(x) != B.get(x)]
+        if json.dumps(a['d'].get('x'), sort_keys=True) != json.dumps(b['d'].get('x'), sort_keys=True):
+            bad.append('x %s→%s' % (json.dumps(a['d'].get('x'), ensure_ascii=False)[:120], json.dumps(b['d'].get('x'), ensure_ascii=False)[:120]))
+        if a['hash'] != b['hash']:
+            bad.append('# %s→%s' % (a['hash'], b['hash']))
+        if a['act'] != b['act']:
+            bad.append('켜진 버튼 %s → %s' % (sorted(set(a['act']) - set(b['act']))[:3], sorted(set(b['act']) - set(a['act']))[:3]))
+        if card:
+            ca, cb = a['card'] or {}, b['card'] or {}
+            if not ca.get('big'):
+                bad.append('보낸 쪽 결과 카드 없음')
+            elif ca.get('title') != cb.get('title') or (big and ca.get('big') != cb.get('big')) or (not big and (ca.get('sub') or '').split(' (')[0] != (cb.get('sub') or '').split(' (')[0]):
+                bad.append('카드 %s|%s|%s → %s|%s|%s' % (ca.get('title'), ca.get('big'), (ca.get('sub') or '')[:20], cb.get('title'), cb.get('big'), (cb.get('sub') or '')[:20]))
+        if not b['notice']:
+            bad.append('공유받은 결과 안내 없음')
+        for m in bad[:4]:
+            F('%s: 공유 링크로 연 화면이 다름 — %s' % (name, m))
+    def trip(path, prep, name, wait=3000, wait2=None, card=True, big=True, need_change=True):
+        """열기 → prep(설정 바꾸기) → 카카오 링크 → 새 창으로 열기 → 같은지"""
+        pg = newpage()
+        try:
+            pg.goto(SITE + path, wait_until='load'); pg.wait_for_timeout(wait)
+            did = prep(pg)
+            pg.wait_for_timeout(1500)
+            a = pg.evaluate(SHARE_SNAP)
+            u = send(pg)
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(u).query)
+            if need_change and not q.get('s') and not q.get('hs'):
+                F('%s: 설정을 바꿨는데 공유 링크에 설정값(s=·hs=)이 없음 (%s · %s)' % (name, u[:120], did))
+            pg2 = newpage()
+            pg2.goto(u, wait_until='load'); pg2.wait_for_timeout(wait2 or wait + 2000)
+            b = pg2.evaluate(SHARE_SNAP)
+            cmp(name, a, b, card, big)
+            pg2.close()
+            return a, b
+        except Exception as ex:
+            F('%s: 검사 실행 실패 %s' % (name, str(ex)[:160]))
+        finally:
+            pg.close()
+    # ① 일반 화면: 아무 선택 묶음·숫자 칸이나 바꿔도 그대로 (환율 단위·차트 탭·세금 방식·지수 기간 탭 등)
+    for path in ('fx/', 'kodex/', 'dividend-calculator/', 'compound/', 'nasdaq/'):
+        trip(path, lambda pg: pg.evaluate(SHARE_PERTURB), path, big=path != 'nasdaq/')   # 지수 화면은 현재 지수를 바깥에서 받아 두 번 연 값이 다를 수 있음
+    # 국내 지수 3개: 결과 카드(전에는 없었음)
+    for path in ('kospi/', 'kospi200/', 'kosdaq/'):
+        pg = newpage(); pg.goto(SITE + path, wait_until='load'); pg.wait_for_timeout(3000)
+        c = pg.evaluate("() => { const s = shareCard.spec(); return s && [s.big, s.label]; }")
+        if not c or '%' not in c[0] or 'CAGR' not in (c[1] or ''):
+            F('%s: 연평균 성장률 결과 카드가 없음 %s' % (path, c))
+        pg.close()
+    # ② 해외주식 양도세: 종목 줄(id 없는 칸) — 줄 추가·값까지
+    def ost(pg):
+        pg.click('#ost-add'); pg.wait_for_timeout(200)
+        return pg.evaluate("""() => { const r = [...document.querySelectorAll('#ost-rows .ost-row')].pop(), v = { buy: '5,000', buyfx: '1,350', sell: '7,500', sellfx: '1,420', fee: '7' };
+          r.querySelector('.ost-name').value = 'TSLA'; Object.keys(v).forEach(k => { const e = r.querySelector('[data-k="' + k + '"]'); e.value = v[k]; e.dispatchEvent(new Event('input', { bubbles: true })); }); fcRender(); return document.querySelectorAll('#ost-rows .ost-row').length; }""")
+    r = trip('stocktax/', ost, '해외주식 양도세 종목 줄')
+    if r and (not isinstance(r[1]['d'].get('x'), list) or len(r[1]['d']['x']) < 2 or r[1]['d']['x'][-1][0] != 'TSLA'):
+        F('해외주식 양도세: 받은 쪽 종목 줄이 다름 %s' % json.dumps(r[1]['d'].get('x'), ensure_ascii=False)[:200])
+    # ③ ETF CAGR: 고른 종목(칩 — 꺼짐 표시가 class off 라 화면별 고리) · 기간설정 날짜 · 분배금 포함
+    def ec(pg):
+        pg.wait_for_function("() => window.dcShareSpec && dcShareSpec.etfcagr && dcShareSpec.etfcagr()", timeout=30000)
+        pg.evaluate("() => { ecToggle('QLD'); ecToggle('TQQQ'); ecSetMode(true); document.getElementById('ec-from').value = '2015-01-02'; document.getElementById('ec-to').value = '2024-12-31'; ecSetPeriod('CUSTOM'); }")
+        return 'ec'
+    r = trip('etfcagr/', ec, 'ETF CAGR 고른 종목·기간설정', wait=2500)
+    if r:
+        x = r[1]['d'].get('x') or {}
+        if 'QLD' in (x.get('on') or ['QLD']) or x.get('p') != 'CUSTOM' or not x.get('tot'):
+            F('ETF CAGR: 받은 쪽 종목·기간·분배금 포함이 다름 %s' % json.dumps(x)[:200])
+        if '기간설정' not in (r[1]['card'] or {}).get('label', '') or '분배금 재투자' not in (r[1]['card'] or {}).get('label', ''):
+            F('ETF CAGR: 카드 설명에 기간설정·분배금 재투자가 없음 %s' % (r[1]['card'] or {}).get('label'))
+    # ④ 목록 화면: 칩·정렬·검색어·고른 날·쪽
+    def mc(pg):
+        pg.wait_for_function("() => document.querySelectorAll('#mc-chips .mc-chip').length > 2", timeout=20000)
+        pg.click('#mc-chips .mc-chip[data-cty="United States"]'); pg.click('#page-mcap .mc-sort .chart-tab[data-sort="up"]')
+        pg.fill('#mc-search', 'a'); return 'mc'
+    r = trip('marketcap/', mc, '시가총액 나라·정렬·검색')
+    if r and (r[1]['card'] or {}).get('title', '').find('미국 시가총액 상승률 순 · “a”') < 0:
+        F('시가총액: 카드 제목에 나라·정렬·검색어가 없음 %s' % (r[1]['card'] or {}).get('title'))
+    def dv(pg):
+        pg.wait_for_function("() => document.querySelectorAll('#dv-chips .dv-chip').length > 2 && document.querySelector('#dv-cal .dv-day[data-day]')", timeout=20000)
+        pg.click('#page-etfdiv .dv-sort .chart-tab[data-sort="ttm"]')
+        pg.locator('#dv-chips .dv-chip').nth(1).click()
+        return pg.evaluate("() => { const d = [...document.querySelectorAll('#dv-cal .dv-day[data-day]')].filter(b => b.querySelector('.dv-ev'))[0]; if (d) d.click(); return d && d.getAttribute('data-day'); }")
+    r = trip('dividend-calendar/', dv, '분배 달력 정렬·운용사·고른 날')
+    if r and not (r[1]['d'].get('x') or {}).get('d'):
+        F('분배 달력: 받은 쪽에 달력에서 고른 날이 없음 %s' % r[1]['d'].get('x'))
+    def ap(pg):
+        pg.wait_for_function("() => document.querySelectorAll('#ap-chips .dv-chip').length > 2", timeout=20000)
+        pg.click('#ap-chips .dv-chip[data-sido="서울"]'); pg.click('#page-aptrank .ap-sort .chart-tab[data-sort="pyeong"]')
+        pg.fill('#ap-pmin', '10'); pg.dispatch_event('#ap-pmin', 'change'); pg.fill('#ap-search', '래미안'); pg.wait_for_timeout(500); return 'ap'
+    r = trip('apt-rank/', ap, '아파트 순위 지역·정렬·가격·검색')
+    if r and (r[1]['card'] or {}).get('title') != '서울 아파트 시세 순위 · 10억원 이상 · “래미안”':
+        F('아파트 순위: 카드 제목에 지역·가격 구간·검색어가 없음 %s' % (r[1]['card'] or {}).get('title'))
+    def er(pg):
+        pg.wait_for_function("() => window.ERdebug && ERdebug.S.d && document.querySelector('#er-cal .er-day[data-d]')", timeout=20000)
+        pg.locator('#page-earn .er-mk .chart-tab[data-mk="us"]').first.click(); pg.click('#page-earn .er-sort .er-chip[data-sort="cap"]')
+        return pg.evaluate("() => { const d = [...document.querySelectorAll('#er-cal .er-day[data-d]')].filter(b => b.querySelector('.er-ev'))[0]; if (d) d.click(); return d && d.getAttribute('data-d'); }")
+    r = trip('earnings-calendar/', er, '실적발표 시장·정렬·고른 날')
+    if r and not (r[1]['d'].get('x') or {}).get('sel'):
+        F('실적발표: 받은 쪽에 달력에서 고른 날이 없음 %s' % r[1]['d'].get('x'))
+    def co(pg):
+        pg.wait_for_function("() => window.ERdebug && ERdebug.S.d", timeout=20000)
+        return pg.evaluate("() => { const k = ERdebug.listRows()[0].r.key; ERdebug.openCo(k, true); return k; }")
+    r = trip('earnings-calendar/', co, '실적발표 기업 상세(#co=)')
+    if r and not (r[1]['card'] or {}).get('title', '').endswith('실적발표'):
+        F('실적발표 기업 상세: 받은 쪽 카드가 그 기업이 아님 %s' % r[1]['card'])
+    # ⑤ 백테스트 2: 실행 → 결과 카드 · 링크로 열면 같은 결과 (#v= · #ty=)
+    for path, nm in (('muhan-backtest/', '무한매수법 백테스트'), ('vr-backtest/', 'VR 백테스트')):
+        def bt(pg):
+            pg.wait_for_selector('.mb-run:not([disabled])', timeout=30000); pg.click('.mb-run')
+            pg.wait_for_function("() => { const s = shareCard.spec(); return s && s.big; }", timeout=90000); return 'run'
+        trip(path, bt, nm, wait=2500, wait2=25000)
+    # ⑥ 새 카드: 공포탐욕(바깥 자료) · 가치 속도 — 자료를 받았을 때만 카드
+    for path, key in (('fear/', 'fear'), ('moneyspeed/', 'moneyspeed')):
+        pg = newpage(); pg.goto(SITE + path, wait_until='load'); pg.wait_for_timeout(6000)
+        c = pg.evaluate("(k) => { const f = window.dcShareSpec && dcShareSpec[k]; const o = typeof f === 'function' ? f() : f; return { has: typeof f === 'function', o: o && { big: o.big, rows: (o.rows || []).length } }; }", key)
+        if not c['has']:
+            F('%s: 결과 카드 함수가 없음' % path)
+        elif key == 'moneyspeed' and not (c['o'] and '%' in c['o']['big'] and c['o']['rows'] >= 3):
+            F('%s: 가치 속도 카드가 비었음 %s' % (path, c))
+        pg.close()
+    # ⑦ ETF 차트 비교 로그 눈금: 축·눈금·끄고 켜기·주소·링크·확대 되돌리기
+    pg = newpage()
+    try:
+        pg.goto(SITE + 'etf-compare/#e=K069500,USPY,UQQQ&p=MAX&lg=1', wait_until='load')
+        pg.wait_for_function(SH_ETF_READY, timeout=60000)
+        Y = "() => { const y = ECXdebug.S.chart.scales.y; return { type: y.type, min: y.min, max: y.max, ticks: y.ticks.map(t => t.label), box: document.getElementById('ecx-log').checked, hash: location.hash, data: ECXdebug.S.chart.data.datasets.every(d => d.data.every(p => p.y == null || p.y > 0)) }; }"
+        a = pg.evaluate(Y)
+        if a['type'] != 'logarithmic' or not a['box'] or not (a['min'] > 0) or len(a['ticks']) < 2 or not all(t.endswith('%') for t in a['ticks']) or not a['data']:
+            F('ETF 로그 눈금: 축·눈금·점이 이상함 %s' % json.dumps(a, ensure_ascii=False)[:300])
+        if '0%' not in a['ticks']:
+            F('ETF 로그 눈금: 0% 눈금(출발선)이 없음 %s' % a['ticks'])
+        tip = pg.evaluate("() => { const c = ECXdebug.S.chart, ds = c.data.datasets[0], i = ds.data.findIndex(p => p.y != null && Math.abs(p.y - 100) > 1); const t = c.options.plugins.tooltip.callbacks.label.call(c.tooltip, { parsed: { x: ds.data[i].x, y: ds.data[i].y }, dataset: ds }); return { t: t, y: ds.data[i].y }; }")
+        exp = tip['y'] - 100
+        if ('%+.2f' % exp).replace('-', '−').lstrip('+') not in tip['t'].replace('+', ''):
+            F('ETF 로그 눈금: 풍선 수익률이 점(100 = 0%%)과 다름 %s (기대 %.2f%%)' % (tip['t'], exp))
+        box = pg.locator('#ecx-chart').bounding_box()
+        pg.mouse.move(box['x'] + box['width'] * 0.7, box['y'] + box['height'] / 2)
+        for _ in range(4):
+            pg.mouse.wheel(0, -300); pg.wait_for_timeout(100)
+        pg.wait_for_timeout(400)
+        z = pg.evaluate(Y)
+        if z['type'] != 'logarithmic' or not (z['min'] > 0) or not (z['max'] / z['min'] < a['max'] / a['min']):
+            F('ETF 로그 눈금: 확대해도 세로 범위가 좁아지지 않음 %s → %s' % ([a['min'], a['max']], [z['min'], z['max']]))
+        pg.locator('#page-etfcmp .zp-reset').first.click(); pg.wait_for_timeout(300)
+        rz = pg.evaluate(Y)
+        if abs(rz['min'] - a['min']) > 1e-9 * a['max'] or abs(rz['max'] - a['max']) > 1e-9 * a['max']:
+            F('ETF 로그 눈금: 전체 보기로 되돌려도 처음 범위가 아님 %s → %s' % ([a['min'], a['max']], [rz['min'], rz['max']]))
+        pg.click('#ecx-log'); pg.wait_for_timeout(500)
+        b = pg.evaluate(Y)
+        if b['type'] != 'linear' or 'lg=1' in b['hash']:
+            F('ETF 로그 눈금: 끄면 보통 눈금·주소에서 lg 빠져야 함 %s %s' % (b['type'], b['hash']))
+        pg.click('#ecx-log'); pg.wait_for_timeout(500)
+        u = send(pg)
+        hs = (urllib.parse.parse_qs(urllib.parse.urlparse(u).query).get('hs') or [''])[0]
+        if 'lg=1' not in hs:
+            F('ETF 로그 눈금: 공유 링크에 lg=1 이 없음 %s' % u[:200])
+        pg2 = newpage(); pg2.goto(u, wait_until='load'); pg2.wait_for_function(SH_ETF_READY, timeout=60000)
+        c = pg2.evaluate(Y)
+        if c['type'] != 'logarithmic' or not c['box']:
+            F('ETF 로그 눈금: 받은 링크로 열면 로그 눈금이 아님 %s' % c['type'])
+        pg2.close()
+    except Exception as ex:
+        F('ETF 로그 눈금 검사 실행: %s' % str(ex)[:200])
+    pg.close()
+    # ⑧ 내 저장함: 버튼 묶음 2(세금 방식 탭)·차트 탭까지 저장하고 되살림 (로컬만 — 가짜 Worker)
+    if local:
+        pg = newpage()
+        try:
+            pg.goto(SITE + 'kodex/', wait_until='load')
+            pg.evaluate("() => localStorage.setItem('dc_auth', JSON.stringify({ token: 'share.test', exp: Math.floor(Date.now() / 1000) + 3600, user: { id: 1, nick: '검사' } }))")
+            pg.goto(SITE + 'kodex/', wait_until='load'); pg.wait_for_timeout(2500)
+            pg.evaluate("() => { const t = [...document.querySelectorAll('#page-simulator .tax-mode-tab')].find(b => !b.classList.contains('active')); t.click(); const c = [...document.querySelectorAll('#page-simulator .chart-tabs .chart-tab')].find(b => /월간/.test(b.textContent)); if (c) c.click(); }")
+            pg.wait_for_timeout(500)
+            a = pg.evaluate(SHARE_SNAP)
+            pg.wait_for_selector('#dca-save', timeout=15000); pg.click('#dca-save')
+            pg.wait_for_function("() => /내 저장함에 저장/.test((document.getElementById('dca-toast') || {}).textContent || '')", timeout=10000)
+            n = max(saves) if saves else None
+            if not n or not (saves[n]['data'] or {}).get('t'):
+                F('내 저장함: 저장 자료에 버튼 묶음 2(t)가 없음 %s' % json.dumps(saves.get(n), ensure_ascii=False)[:200])
+            else:
+                pg.goto(SITE + 'kodex/', wait_until='load'); pg.wait_for_timeout(1500)
+                pg.goto(SITE + 'kodex/?load=%d' % n, wait_until='load')
+                pg.wait_for_function("() => /불러옴/.test((document.getElementById('dca-toast') || {}).textContent || '')", timeout=20000)
+                pg.wait_for_timeout(3500)
+                b = pg.evaluate(SHARE_SNAP)
+                for k in sorted(set(a['d']['t']) | set(b['d']['t'])):
+                    if a['d']['t'].get(k) != b['d']['t'].get(k):
+                        F('내 저장함: 불러온 버튼 묶음이 다름 %s %r→%r' % (k, a['d']['t'].get(k), b['d']['t'].get(k)))
+                if (a['card'] or {}).get('big') != (b['card'] or {}).get('big'):
+                    F('내 저장함: 불러온 결과가 다름 %s → %s' % ((a['card'] or {}).get('big'), (b['card'] or {}).get('big')))
+        except Exception as ex:
+            F('내 저장함(버튼 묶음 2) 검사 실행: %s' % str(ex)[:200])
         pg.close()
     for e in perr[:3]:
         F('페이지 오류: ' + e)
@@ -2948,6 +3203,8 @@ def main():
         apt_range_check(page, base, fail)
         print('[2-6] 공유 링크·내 저장함 — 주소 # 의 화면 상태(ETF 차트 비교 등)', flush=True)
         share_hash_check(br, base, local, fail)
+        print('[2-7] 모든 화면 공유 — 설정값(버튼 묶음·화면별 상태·검색어)·결과 카드 · ETF 로그 눈금', flush=True)
+        share_all_check(br, base, local, fail)
         for pth in ['compound/', 'earnings-calendar/', 'fire/']:
             page.goto(base + pth, wait_until='load'); page.wait_for_timeout(300)
             k = page.evaluate("[...document.querySelectorAll('.learn-rel .lr-card')].filter(a => a.offsetParent).length")
