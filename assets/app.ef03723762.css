@@ -2553,7 +2553,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .dca-menu { min-width:150px !important; }
   .dca-menu a.lang-opt { text-decoration:none; }
   /* [ADMIN] 관리자 전용 화면 잠금 · 계정 메뉴 '관리자 기능' */
-  #page-aspeed:not(.adm-ok) > :not(.adm-lock), #page-t72:not(.adm-ok) > :not(.adm-lock) { display:none !important; }
+  #page-aspeed:not(.adm-ok) > :not(.adm-lock), #page-t72:not(.adm-ok) > :not(.adm-lock), #page-sma200:not(.adm-ok) > :not(.adm-lock) { display:none !important; }
   .adm-ok > .adm-lock { display:none !important; }
   .adm-lock { max-width:520px; margin:48px auto; padding:28px 24px; text-align:center; background:var(--bg2); border:1px solid var(--card-border); border-radius:16px; }
   .adm-t { font-size:18px; font-weight:700; color:var(--text); margin:0 0 8px; } .adm-p { font-size:14px; color:var(--text2); line-height:1.6; margin:0 0 16px; }
@@ -2583,6 +2583,58 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .dcl-b:hover { filter:brightness(.97); }
   .dcl-s { font-size:11.5px; color:var(--text3); margin:16px 0 0; line-height:1.6; text-align:left; }
   @media (max-width: 600px) { .top-bar #dc-auth { order:2; } .top-bar:has(#dc-auth:not([hidden])) .site-search { flex:1 1 150px; } .dca-nm { display:none; } }   /* 좁은 화면: 둘째 줄(방문자 수 · 로그인 · 검색칸)에 넣어 상단이 한 줄 더 늘어나지 않게 */
+
+  /* [SMA200] SMA 200 백테스트 (관리자 /sma200/) — 72루틴 자동매매 프로그램 백테스트 탭과 같은 모양 · 사이트 색 변수 · 오름 빨강/내림 파랑 */
+  #page-sma200 { --s2-up:#f04452; --s2-dn:#3182f6; --s2-warn:#fe9800; }
+  #s2-root { max-width:1100px; margin:0 auto; padding:8px 16px 24px; font-size:14px; line-height:1.55; color:var(--text); }
+  #page-sma200 .s2-card { background:var(--bg2); border:1px solid var(--card-border); border-radius:12px; padding:16px; margin-top:14px; min-width:0; }
+  #page-sma200 .s2-card h3 { margin:0 0 10px; font-size:16px; font-weight:700; display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  #page-sma200 .s2-sub { font-size:12px; font-weight:400; color:var(--text2); }
+  #page-sma200 .s2-card h4 { margin:16px 0 6px; font-size:13px; color:var(--text2); font-weight:600; padding-top:10px; border-top:1px solid var(--card-border); }
+  #page-sma200 .f { display:grid; grid-template-columns:230px minmax(0,1fr); gap:6px 12px; align-items:center; margin:7px 0; }
+  #page-sma200 .f > label { color:var(--text2); font-size:13px; }
+  #page-sma200 .f input[type=number], #page-sma200 .f select { background:var(--bg3); border:1px solid var(--card-border); border-radius:8px; padding:7px 9px; color:var(--text); font:inherit; min-width:0; width:100%; }
+  #page-sma200 .f .hint { grid-column:2; color:var(--text3); font-size:12px; margin-top:-2px; line-height:1.5; }
+  #page-sma200 .f > .cs-wrap { display:block; width:100%; max-width:360px; } #page-sma200 .f > .cs-wrap > .cs-btn { width:100%; }
+  #page-sma200 .f input[type=number] { max-width:360px; } #page-sma200 .f > .cs-wrap.s2-wide, #page-sma200 .f > .cs-wrap:has(#s2-mode) { max-width:620px; }
+  #page-sma200 .s2-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; min-width:0; }
+  #page-sma200 .s2-dates { display:inline-flex; flex-wrap:wrap; align-items:center; gap:6px; }
+  #page-sma200 .s2-dates input[type=date] { background:var(--bg3); border:1px solid var(--card-border); border-radius:8px; padding:6px 8px; color:var(--text); font:inherit; }
+  #page-sma200 .s2-seg { display:inline-flex; flex-wrap:wrap; background:var(--bg3); border-radius:10px; padding:3px; gap:2px; }
+  #page-sma200 .s2-seg button { border:0; background:none; padding:5px 12px; border-radius:8px; color:var(--text2); cursor:pointer; font:inherit; font-size:13px; }
+  #page-sma200 .s2-seg button.on { background:var(--bg2); color:var(--text); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.25); }
+  #page-sma200 .s2-btn { border:1px solid var(--card-border); background:var(--bg3); color:var(--text); padding:7px 14px; border-radius:9px; cursor:pointer; font:inherit; font-size:13.5px; }
+  #page-sma200 .s2-btn:hover { border-color:var(--accent); }
+  #page-sma200 .s2-btn.pri { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  #page-sma200 .s2-msg { font-size:12px; color:var(--text2); }
+  #page-sma200 .s2-msg.bad { color:var(--s2-up); }
+  #page-sma200 .s2-kv { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:8px; }
+  #page-sma200 .s2-kv > div { background:var(--bg3); border-radius:10px; padding:8px 10px; min-width:0; }
+  #page-sma200 .s2-kv small { display:block; color:var(--text2); font-size:11px; line-height:1.45; }
+  #page-sma200 .s2-kv b { display:block; font-family:var(--mono); font-size:15.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:1px 0; }
+  #page-sma200 .s2-ctl { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; margin-top:14px; }
+  #page-sma200 .s2-small { font-size:12px; color:var(--text3); line-height:1.55; }
+  #page-sma200 p.s2-small { margin:6px 0 0; }
+  #page-sma200 .s2-chart { position:relative; height:380px; margin-top:8px; }
+  #page-sma200 .s2-tabs { margin-top:16px; }
+  #page-sma200 #s2-tb { margin-top:8px; }
+  #page-sma200 .s2-tw { overflow-x:auto; }
+  #page-sma200 .s2-t { width:100%; border-collapse:collapse; font-size:13px; }
+  #page-sma200 .s2-t th, #page-sma200 .s2-t td { padding:6px 8px; border-bottom:1px solid var(--card-border); text-align:right; white-space:nowrap; }
+  #page-sma200 .s2-t th { color:var(--text2); font-weight:600; font-size:12px; }
+  #page-sma200 .s2-t td { font-family:var(--mono); font-size:12.5px; }
+  #page-sma200 .s2-t th:first-child, #page-sma200 .s2-t td:first-child, #page-sma200 .s2-t td.s2-l { text-align:left; }
+  #page-sma200 .s2-t td.s2-l { font-family:var(--font); white-space:normal; min-width:220px; }
+  #page-sma200 .up { color:var(--s2-up); } #page-sma200 .dn { color:var(--s2-dn); } #page-sma200 .warn { color:var(--s2-warn); }
+  #page-sma200 .s2-pager { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:4px; margin:12px 0 4px; }
+  #page-sma200 .r7d { --r-tx:var(--text); --r-t2:var(--text2); --r-t3:var(--text3); --r-bd:var(--card-border); --r-s1:var(--bg2); --r-s2:var(--bg3); --r-up:#f04452; --r-dn:#3182f6; --r-ac:var(--accent); --r-acs:var(--accent-dim); --r-acb:rgba(49,130,246,.45); --r-mono:var(--mono); }
+  @media (max-width:640px) {
+    #page-sma200 .f { grid-template-columns:minmax(0,1fr); }
+    #page-sma200 .f .hint { grid-column:1; }
+    #page-sma200 .s2-chart { height:300px; }
+    #s2-root { padding:6px 12px 20px; }
+  }
+  /* [/SMA200] */
 
   /* [BRAND] [SEARCH] 상단 줄: 로고 · 검색 · 테마 · 언어 */
   .brand { display:inline-flex; align-items:center; gap:9px; margin-right:auto; text-decoration:none; color:var(--text); font-size:17px; font-weight:800; letter-spacing:-0.02em; white-space:nowrap; }
