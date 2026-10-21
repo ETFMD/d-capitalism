@@ -27,6 +27,7 @@ DIR = os.environ.get('STRATSIM_DIR') or os.path.join(ROOT, 'data', 'stratsim')  
 PRICES, NFCI, STAMP = os.path.join(DIR, 'prices.csv'), os.path.join(DIR, 'nfci.csv'), os.path.join(DIR, 'updated.txt')
 PRELIST = os.path.join(DIR, 'prelist.csv')
 COLS = ['qqq', 'tqqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq']          # 파일 열 순서 (date 다음)
+DATA_START = '1971-02-05'   # 자료 첫날 = scripts/stratsim_prelist.py START (나스닥 종합지수 첫날) — 바꿀 땐 두 곳 같이
 IPO = {'qqq': '1999-03-10', 'tqqq': '2010-02-11', 'spy': '1993-01-29', 'qld': '2006-06-21', 'sso': '2006-06-21', 'spxl': '2008-11-05', 'sqqq': '2010-02-11'}
 NOISE = 5e-6
 MAX_MOVE = 0.70
@@ -120,6 +121,8 @@ def read_prelist():
         first = max(lv[c])
         if lv[c][first] != 1.0 or first != IPO[c]:
             raise SystemExit(f'prelist.csv: {c} 상장 첫날 {first}(값 {lv[c][first]}) 이 {IPO[c]} 이 아님')
+        if min(lv[c]) != DATA_START:            # 앞이 잘린 파일로 prices.csv 앞줄을 지우지 않게 (지운 줄은 다시 채워지지 않음)
+            raise SystemExit(f'prelist.csv: {c} 첫날 {min(lv[c])} 이 자료 첫날 {DATA_START} 이 아님')
         out[c] = (first, lv[c])
     return out
 

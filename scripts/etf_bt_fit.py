@@ -258,9 +258,16 @@ LEV_RATE = 'R:FF'
 LEV_CATS = ('Trading--Leveraged', 'Trading--Inverse')
 
 
+LEV_PREV = set()      # 지난 실행에서 연방기금 금리(cr)로 맞춘 식 — 이번에 야후 분류를 못 받았을 때만 씀 (main 이 채움)
+
+
 def is_lev_etf(D, tk):
-    """레버리지·인버스 상품인가 — 미국 ETF 의 야후 분류(meta/us · category)로"""
-    return tk.startswith('U:') and str(D.meta(tk).get('category') or '').startswith(LEV_CATS)
+    """레버리지·인버스 상품인가 — 미국 ETF 의 야후 분류(meta/us · category)로 · 분류가 비었으면 지난 식이 그랬는지로
+    (분류 하나를 못 받았다고 그 주에만 단기국채 금리 식으로 바뀌어 상장 전 값이 오락가락하지 않게)"""
+    if not tk.startswith('U:'):
+        return False
+    cat = str(D.meta(tk).get('category') or '')
+    return cat.startswith(LEV_CATS) if cat else tk in LEV_PREV
 
 
 def syn_levels(dates, yields_pct, mat, basis=365):
@@ -587,6 +594,8 @@ class Engine:
                 self._lv[k] = np.zeros(len(self.cal[cal_name]))
             else:
                 s = self.D.series(key)
+                if s is None:                              # 식이 고른 금리(cr)가 캐시에 없음 — 다른 금리로 조용히 바꿔 틀린 값을 내지 않게 멈춤
+                    raise ValueError('금리 자료 없음: %s' % key)
                 lv = align_level(s, self.cal[cal_name], 0)
                 r = rets(lv)
                 # 금리 자료 첫날 전: 첫 금리로 (화면 btCash 와 같음)
@@ -906,8 +915,11 @@ def main():
     cands = sorted(k for k, v in uni.items() if v.get('n', 0) > 30 and not v.get('err') and k not in EXCLUDE and k not in KRX_AUX) + sorted(k for k in SYN if k not in SYN_NOCAND) + ['F:USDKRW', 'X:SPXTR'] \
         + sorted(z for z in ZSIM if D.series(z) is not None)     # 모의 커버드콜 (코스피 200·VKOSPI 가 있을 때)
     log('대상 %d · 후보 %d' % (len(targets), len(cands)))
+    LEV_PREV.update(k for k, r in load_recipes(a.out).items() if isinstance(r, dict) and r.get('cr'))
     if D.series(LEV_RATE) is None:                   # GitHub Actions 화면에 경고로 — 레버리지·인버스 식이 예전 단기국채 금리로 맞춰짐
         log('::warning::연방기금 금리(FRED DFF) 자료가 없어 레버리지·인버스 미국 ETF 식을 단기국채 금리로 맞춤 (scripts/etf_bt_data.py FRED 받기 확인)')
+    elif 'US' in E.cal and int(D.series(LEV_RATE)['d'][-1]) < int(E.cal['US'][-1]) - 10:   # FRED 받기가 여러 번 실패 — 마지막 날 뒤는 현금 수익 0 으로 맞춰짐
+        log('::warning::연방기금 금리(FRED DFF) 마지막 날 %s 이 미국 마지막 거래일 %s 보다 10일 넘게 앞섬 (FRED 받기 확인)' % (ymd(int(D.series(LEV_RATE)['d'][-1])), ymd(int(E.cal['US'][-1]))))
     # 안전장치: 지난 식이 쓰던 옵션 전략 지수(C: Cboe · D: 한국거래소 — 화면이 r/<키>.json 으로 받는 것)의 절반 넘게 이번 자료에 없으면
     #   (받기 막힘 + 캐시 없음) 계산하지 않고 멈춤 — 식·r/*.json 이 지난 것 그대로 남아 화면은 계속 맞고, 다음 실행이 다시 받음
     #   (지수 몇 개만 없어진 경우는 그 지수 없이 다시 고름 · 출처마다 따로 셈 · --force 로 무시)

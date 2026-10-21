@@ -241,6 +241,9 @@ for (const kind of ['9sig', 'sma']) {
   const tabs = [];
   let n = 0, hit = 0;
   for (const t of sd.tabs) {
+    // 진입 분기 번호(e)는 자료 첫 분기부터 센 것 — 자료 시작이 바뀌었는데 씨앗을 옮기지 않으면 다른 해의 구간을 재게 되므로 멈춤
+    const qd = Q[t.e] && Q[t.e][0];
+    if (!qd || qd.slice(0, 4) !== String(t.from)) throw new Error(kind + ' ' + t.key + ': 진입 분기 e=' + t.e + ' 이 ' + (qd || '자료 밖') + ' — 탭 시작 해 ' + t.from + ' 와 다름 (자료 첫 분기 ' + Q[0][0] + ' · stratsim_fit_seed.json 의 e 를 옮길 것)');
     const rows = [];
     for (const raw of (LIMIT ? t.rows.slice(0, LIMIT) : t.rows)) {
       const p = Object.assign({}, fixed);

@@ -594,6 +594,18 @@ def main():
             m = naver_meta(code) if mk == 'kr' else Y.meta(code)
         except Exception as e:
             return 'fail %s' % str(e)[:60]
+        # 미국(야후): 빈 응답(401·404·결과 없음)이나 분류가 빠진 응답으로 지난 값을 덮지 않음 — 분류는 레버리지·인버스 판정(etf_bt_fit.py is_lev_etf)에 씀
+        if mk == 'us' and os.path.exists(p):
+            try:
+                old = json.load(open(p, encoding='utf-8'))
+            except Exception:
+                old = None
+            if isinstance(old, dict) and old:
+                if not m or not any(m.get(k) for k in ('category', 'holdings', 'name', 'er')):
+                    return 'empty-keep'
+                for k in ('category', 'family'):
+                    if not m.get(k) and old.get(k):
+                        m[k] = old[k]
         json.dump(m, open(p, 'w', encoding='utf-8'), ensure_ascii=False)
         return 'ok'
 

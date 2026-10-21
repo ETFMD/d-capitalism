@@ -29,7 +29,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 EPOCH = datetime.date(1970, 1, 1)
 COLS = ['qqq', 'tqqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq']           # prices.csv 열 순서
 IPO = {'qqq': '1999-03-10', 'tqqq': '2010-02-11', 'spy': '1993-01-29', 'qld': '2006-06-21', 'sso': '2006-06-21', 'spxl': '2008-11-05', 'sqqq': '2010-02-11'}   # update_stratsim.py 와 같음
-START = (datetime.date(1971, 2, 5) - EPOCH).days                      # prices.csv 첫날 = 나스닥 종합지수(^IXIC) 첫날
+START = (datetime.date(1971, 2, 5) - EPOCH).days                      # prices.csv 첫날 = 나스닥 종합지수(^IXIC) 첫날 — update_stratsim.py DATA_START 와 같이
 CHAIN_EC = 0.05                                                       # 화면 BT_CHAIN_EC · etf_bt_fit.py CHAIN_EC
 MAX_DEPTH = 3                                                         # 화면 btGet/getF 의 depth 상한
 TOL = 0.005                                                           # 지금 파일과 이보다 크게 다를 때만 씀
