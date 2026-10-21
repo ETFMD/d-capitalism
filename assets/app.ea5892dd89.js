@@ -18512,7 +18512,7 @@ if (typeof module !== 'undefined') module.exports = R72D;
 /* [/T72-DIST] */
 
 /* ════════════════════════════════════════════════════════════
-   [ADMIN] 관리자 전용 화면 (자산 속도 시뮬레이터 /asset-speed/ · 72루틴 /72/ · SMA 200 백테스트 /sma200/) — 사이트 운영자(현경흠) 계정으로 로그인했을 때만 열림
+   [ADMIN] 관리자 전용 화면 (자산 속도 시뮬레이터 /asset-speed/ · 72루틴 /72/ · 72루틴 백테스트 /72-backtest/ · SMA 200 백테스트 /sma200/) — 사이트 운영자(현경흠) 계정으로 로그인했을 때만 열림
    · 판단: Worker /auth/me 의 user.admin (worker/src/auth.js ADMIN_UIDS — 회원 번호로 판단, 닉네임 아님) · 72루틴 계정 기록(/udata/r72)도 Worker 가 관리자만 허용
    · 화면: 처음엔 내용을 감추고(CSS #page-… :not(.adm-ok)) '확인 중' → 관리자면 .adm-ok 를 붙이고 그 화면의 시작 함수(when 으로 맡긴 것)를 실행 · 아니면 안내 상자
    · 지난번 확인 결과(dc_auth.user.admin)가 있으면 바로 열고, 서버 확인이 다르게 오면 다시 닫음 · 서버에 닿지 못하면 지난 결과를 씀
@@ -18520,8 +18520,8 @@ if (typeof module !== 'undefined') module.exports = R72D;
    · 이 사이트 코드는 공개 저장소라 화면 코드 자체를 숨기지는 못함 — 막는 것은 '사용'(화면 열기·계정 기록)이다
 ════════════════════════════════════════════════════════════ */
 window.dcAdmin = (function () {
-  var PAGES = ['page-aspeed', 'page-t72', 'page-sma200'], LINKS = [['asset-speed/', '자산 속도 시뮬레이터'], ['72/', '72루틴'], ['sma200/', 'SMA 200 백테스트']];
-  var NAME = { 'page-aspeed': ['자산 속도 시뮬레이터', '는'], 'page-t72': ['72루틴', '은'], 'page-sma200': ['SMA 200 백테스트', '는'] };   /* 잠금 안내 이름 · 조사 */
+  var PAGES = ['page-aspeed', 'page-t72', 'page-t72bt', 'page-sma200'], LINKS = [['asset-speed/', '자산 속도 시뮬레이터'], ['72/', '72루틴'], ['72-backtest/', '72루틴 백테스트'], ['sma200/', 'SMA 200 백테스트']];
+  var NAME = { 'page-aspeed': ['자산 속도 시뮬레이터', '는'], 'page-t72': ['72루틴', '은'], 'page-t72bt': ['72루틴 백테스트', '는'], 'page-sma200': ['SMA 200 백테스트', '는'] };   /* 잠금 안내 이름 · 조사 */
   var st = null, q = [];                        /* st: null = 확인 중 · true = 관리자 · false = 아님 */
   var TEST = window.__dcAdminTest === 1;        /* 회귀 검사 전용 탭(tests/run_regression.py 가 따로 연 탭의 시작 스크립트)만 — 화면 잠금만 풀고, 계정 기록(/udata/r72)은 Worker 가 관리자만 허용 */
   function cached() { try { var a = JSON.parse(localStorage.getItem('dc_auth') || 'null'); return !!(a && a.token && a.exp * 1000 > Date.now() && a.user && a.user.admin === true); } catch (e) { return false; } }
@@ -18981,6 +18981,55 @@ if (typeof module !== 'undefined') module.exports = SMB;
 /* [/SMA200-ENG] */
 
 /* ════════════════════════════════════════════════════════════
+   [BTUI] 관리자 백테스트 화면 공통 도우미 (SMA 200 백테스트 /sma200/ · 72루틴 백테스트 /72-backtest/) — 72루틴 자동매매 프로그램(routine72-auto) 백테스트 탭과 같은 동작
+   · zoom(): 그래프 휠 확대·축소 · 끌어 옮기기 · 두 손가락 확대 — 프로그램과 같은 chartjs-plugin-zoom 2.2.0(r72 수정판 · 화면 배율 보정) + Hammer.js 2.0.7
+             assets/vendor 에서 처음 쓸 때만 받음(다른 화면 그래프에는 영향 없음 — 이 화면 그래프만 options.plugins.zoom 을 켬) · 못 받으면 확대 없이 그대로 그림
+   · zoomOpts(): 가로(x)만 · 원래 범위 밖으로는 못 나감 · 최소 8일 · 두 번 누르면 전체(dbl) · 보이는 날이 많을수록 매수 표시를 작게(mkR — 확대하면 커짐)
+   · vline(): 그래프에 세로 점선 하나(상장일 등) · sec(): 접는 설정 묶음(제목 줄에 지금 값 요약 · 펼친 묶음은 이 브라우저에 기억)
+════════════════════════════════════════════════════════════ */
+window.BTUI = (function () {
+  var ZP = null;
+  function script(src) { return new Promise(function (ok, no) { var s = document.createElement('script'); s.src = src; s.async = true; s.onload = function () { ok(); }; s.onerror = function () { no(new Error(src)); }; document.head.appendChild(s); }); }
+  function zoom() {
+    if (!ZP) ZP = (window.Hammer ? Promise.resolve() : script('assets/vendor/hammer-2.0.7.min.js')).then(function () {
+      return window.ChartZoom ? null : script('assets/vendor/chartjs-plugin-zoom-2.2.0-r72.min.js');
+    }).then(function () { return !!window.ChartZoom; }, function () { ZP = null; return false; });
+    return ZP;
+  }
+  function zoomOpts() {
+    return { zoom: { wheel: { enabled: true, speed: 0.12 }, pinch: { enabled: true }, mode: 'x' }, pan: { enabled: true, mode: 'x', threshold: 4 },
+             limits: { x: { min: 'original', max: 'original', minRange: 8 } } };
+  }
+  function vis(ctx) { var x = ctx.chart.scales.x; return x ? x.max - x.min + 1 : 999; }
+  function mkR(big) { return function (ctx) { var n = vis(ctx); return big ? (n > 600 ? 5 : 6.5) : n > 600 ? 1.4 : n > 250 ? 2.2 : n > 90 ? 3 : 4.5; }; }
+  function dbl(cv, chart) { cv.ondblclick = function () { if (chart && chart.resetZoom) chart.resetZoom(); }; }
+  /* 세로 점선 — at(): 지금 그래프의 x 인덱스(없으면 그리지 않음) · 보이는 범위 밖이면 그리지 않음 */
+  function vline(id, at, text, color) {
+    return { id: id, afterDatasetsDraw: function (ch) {
+      var i = at(); if (i == null || i < 0) return; var x = ch.scales.x; if (!x || i < x.min || i > x.max) return;
+      var px = x.getPixelForValue(i), a = ch.chartArea, c = ch.ctx; c.save(); c.strokeStyle = color || '#fe9800'; c.lineWidth = 1; c.setLineDash([4, 3]);
+      c.beginPath(); c.moveTo(px, a.top); c.lineTo(px, a.bottom); c.stroke(); c.setLineDash([]);
+      if (text) { c.fillStyle = color || '#fe9800'; c.font = '11px sans-serif'; c.textAlign = px > a.right - 80 ? 'right' : 'left'; c.fillText(text, px + (c.textAlign === 'right' ? -4 : 4), a.top + 12); }
+      c.restore(); } };
+  }
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  /* 접는 묶음: key = localStorage 키(펼친 묶음 id 목록) */
+  function openSet(key) { try { var a = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function sec(key, id, title, sum, body) {
+    return '<details class="s2-sec" data-sec="' + esc(id) + '"' + (openSet(key).indexOf(id) >= 0 ? ' open' : '') + '><summary><span class="s2-sec-t">' + esc(title) + '</span><span class="s2-sec-s" data-sum="' + esc(id) + '">' + esc(sum) + '</span></summary><div class="s2-sec-b">' + body + '</div></details>';
+  }
+  /* 묶음을 열고 닫으면 기억 · 모두 펼치기/접기 단추(data-secall="1"|"0") */
+  function bindSecs(rootEl, key) {
+    var save = function () { var a = []; Array.prototype.forEach.call(rootEl.querySelectorAll('details.s2-sec'), function (d) { if (d.open) a.push(d.getAttribute('data-sec')); }); try { localStorage.setItem(key, JSON.stringify(a)); } catch (e) {} };
+    Array.prototype.forEach.call(rootEl.querySelectorAll('details.s2-sec'), function (d) { d.addEventListener('toggle', save); });
+    Array.prototype.forEach.call(rootEl.querySelectorAll('[data-secall]'), function (b) { b.onclick = function () { var on = b.getAttribute('data-secall') === '1'; Array.prototype.forEach.call(rootEl.querySelectorAll('details.s2-sec'), function (d) { d.open = on; }); save(); }; });
+  }
+  var HINT = '휠: 확대·축소 · 끌기: 옮기기 · 두 번 클릭: 전체';
+  return { zoom: zoom, zoomOpts: zoomOpts, mkR: mkR, dbl: dbl, vline: vline, sec: sec, bindSecs: bindSecs, openSet: openSet, HINT: HINT, esc: esc };
+})();
+/* [/BTUI] */
+
+/* ════════════════════════════════════════════════════════════
    [SMA200] SMA 200 백테스트 — 관리자 전용 화면 (/sma200/ · #s2-root) · 계산은 [SMA200-ENG] SMB
    · 모양: 72루틴 자동매매 프로그램(routine72-auto) '백테스트' 탭과 같은 양식 — 조건 카드(기간·원금·조건·수수료·세금 · [계산]) → 결과 카드(요약 칸 · 그래프 · 시작일별 분포 · 연도별/보유 구간별/일자별 표 · CSV)
    · 조건 = 투자전략 시뮬레이터 라이브러리 'SMA 200' 편집 창의 손잡이 전부(선택지도 같음) + 72루틴 백테스트처럼 수수료·양도세(선입선출/이동평균/미포함) + 현금 이자 세금
@@ -18994,10 +19043,14 @@ if (typeof module !== 'undefined') module.exports = SMB;
   var root = document.getElementById('s2-root'); if (!root || typeof SMB === 'undefined') return;
   var LSK = 's2-set', CAP_DEF = 100000, SEC = 0.0000206, DIV_TAX = 0.15, INT_TAX = 0.154, PER = 50;
   var REAL_ASSETS = ['tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl'];          /* 실제 일봉(etfcagr.json)이 있는 종목 — SQQQ 는 시뮬레이터 자료에만 */
+  var PRE_ASSETS = REAL_ASSETS;   /* 상장 전 포함 = 이 종목들의 실제 일봉 앞에 상장 전 재현을 이어 붙임 (SQQQ 는 실제 일봉이 없어 뺌) */
+  var PRE_HINT = '상장 전은 재현 가격(ETF 차트 비교·72루틴 화면 \'상장 전 포함\'과 같은 식 — 지수나 같은 지수의 다른 ETF × 배수 · 현금 금리 · 상장 뒤 실제와 맞춘 비용) + 상장 뒤 실제 일봉 · 계산은 실전과 같음(1주 단위 · 수수료 · SEC · 분배금 원천징수) · 재현 구간은 분배금을 가격에 넣어 따로 없음';
   var NM = { tqqq: 'TQQQ', qqq: 'QQQ', spy: 'SPY', qld: 'QLD', sso: 'SSO', spxl: 'SPXL', sqqq: 'SQQQ', cash: '현금' };
+  /* 기본값 — '기본값 (실전)'과 '상장 전 포함'은 자료(상장 뒤 실제 일봉 / 상장 전 재현 + 실제 일봉)만 다르고 나머지는 같음 (사용자 지시 2026-10-21)
+     · 'sim'(투자전략 시뮬레이터 검증용)은 자료 칸에서만 고름 — 고를 때 수수료·세금은 그대로(같은 숫자를 보려면 수수료 0.02% · 세금 미포함) */
   function base(mode) {
-    var sim = mode === 'sim', p = {}, k; for (k in SMB.PRESET) p[k] = SMB.PRESET[k];
-    return { per: 'all', from: '', to: '', cap: CAP_DEF, mode: sim ? 'sim' : 'real', lag: 0, fee: sim ? +SMB.PRESET.cost : 0.25, tax: sim ? 'none' : 'fifo', itax: sim ? 'off' : 'on', p: p };
+    var p = {}, k; for (k in SMB.PRESET) p[k] = SMB.PRESET[k];
+    return { per: 'all', from: '', to: '', cap: CAP_DEF, mode: mode === 'pre' || mode === 'sim' ? mode : 'real', lag: 0, fee: 0.25, tax: 'fifo', itax: 'on', p: p };
   }
   function load() {
     var s = base('real');
@@ -19006,11 +19059,11 @@ if (typeof module !== 'undefined') module.exports = SMB;
       if (j.lag === 1) s.lag = 1;
       if (typeof j.cap === 'number' && j.cap >= 100) s.cap = j.cap; if (typeof j.fee === 'number' && j.fee >= 0 && j.fee <= 5) s.fee = j.fee; if (j.p && typeof j.p === 'object') s.p = SMB.clean(j.p);
     } } catch (e) {}
-    if (s.mode !== 'sim') s.mode = 'real'; if (['fifo', 'avg', 'none'].indexOf(s.tax) < 0) s.tax = 'fifo'; if (s.itax !== 'off') s.itax = 'on';
+    if (['real', 'pre', 'sim'].indexOf(s.mode) < 0) s.mode = 'real'; if (['fifo', 'avg', 'none'].indexOf(s.tax) < 0) s.tax = 'fifo'; if (s.itax !== 'off') s.itax = 'on';
     return s;
   }
   function save() { try { localStorage.setItem(LSK, JSON.stringify(S)); } catch (e) {} }
-  var S = load(), DATA = {}, LAST = null, CH = null, scale = 'log', tab = 'year', page = 0, dayF = 'all', started = false;
+  var S = load(), DATA = {}, LAST = null, CH = null, drawSeq = 0, scale = 'log', tab = 'year', page = 0, dayF = 'all', started = false;
   try { var sc0 = localStorage.getItem('s2-scale'); if (sc0 === 'linear') scale = 'linear'; } catch (e) {}
 
   /* ── 글자 ── */
@@ -19027,82 +19080,108 @@ if (typeof module !== 'undefined') module.exports = SMB;
   function msg(t, bad) { var m = $('s2-msg'); if (m) { m.textContent = t || ''; m.classList.toggle('bad', !!bad); } }
 
   /* ── 조건 카드 ── */
-  var KN = [   /* [손잡이, 이름, 설명] — 사진의 'SMA 200' 편집 창 순서 */
-    ['h', '신호'],
-    ['sig', '신호 종목', '이 종목 종가가 아래 기간의 이동평균 위에 있으면 삽니다'],
-    ['win', '이동평균 (일)', ''],
-    ['ul', '사는 종목', ''],
-    ['eb', '살 때: 평균보다 이만큼 위', '0% = 평균 위로 마감하면 바로'],
-    ['xb', '팔 때: 평균보다 이만큼 아래', '0% = 평균 아래로 마감하면 바로'],
-    ['cb', '신호가 며칠 이어져야 사기', ''],
-    ['cs', '신호가 며칠 이어져야 팔기', ''],
-    ['settle', '거래 뒤 다음 거래까지 (거래일)', '샀으면 이 일수가 지나야 팔고, 팔았으면 이 일수가 지나야 삽니다(결제 대기)'],
-    ['h', 'RSI'],
-    ['ohw', '과열 매도 — RSI 기간', ''],
-    ['oh', '과열 매도 — RSI 가 이 값 이상이면 그래도 팜', '신호 종목의 와일더 RSI'],
-    ['coolw', '재진입 — RSI 기간', ''],
-    ['cool', '재진입 — RSI 가 이 값 미만일 때만 삼', ''],
-    ['h', '팔았을 때 들고 있을 것'],
-    ['out', '시장 밖에 있을 땐', ''],
-    ['cr', '그 현금 이자 (연)', '달이 바뀐 첫 거래일에 그때 현금에 붙음 · 2010~2021년 실제 달러 단기 금리는 대부분 0~2%대(라이브러리 기본 4%는 후한 편)'],
-    ['h', '나눠서 사기'],
-    ['din', '살 때 주 종목을 나눠 사는 기간', ''],
-    ['dout', '팔 때 대기 종목으로 나눠 옮기는 기간', '시장 밖 종목이 현금이 아닐 때만'],
-    ['h', '버블 보험'],
-    ['bga', '버블 기준 종목', ''],
-    ['bgw', '버블 이동평균 (일)', ''],
-    ['bg', '평균보다 이만큼 위면 전부 현금', '']
+  var KN = [   /* 접는 묶음 [id, 제목, [[손잡이, 이름, 설명] …]] — 사진의 'SMA 200' 편집 창 순서 */
+    ['sig', '신호', [
+      ['sig', '신호 종목', '이 종목 종가가 아래 기간의 이동평균 위에 있으면 삽니다'],
+      ['win', '이동평균 (일)', ''],
+      ['ul', '사는 종목', ''],
+      ['eb', '살 때: 평균보다 이만큼 위', '0% = 평균 위로 마감하면 바로'],
+      ['xb', '팔 때: 평균보다 이만큼 아래', '0% = 평균 아래로 마감하면 바로'],
+      ['cb', '신호가 며칠 이어져야 사기', ''],
+      ['cs', '신호가 며칠 이어져야 팔기', ''],
+      ['settle', '거래 뒤 다음 거래까지 (거래일)', '샀으면 이 일수가 지나야 팔고, 팔았으면 이 일수가 지나야 삽니다(결제 대기)']]],
+    ['rsi', 'RSI', [
+      ['ohw', '과열 매도 — RSI 기간', ''],
+      ['oh', '과열 매도 — RSI 가 이 값 이상이면 그래도 팜', '신호 종목의 와일더 RSI'],
+      ['coolw', '재진입 — RSI 기간', ''],
+      ['cool', '재진입 — RSI 가 이 값 미만일 때만 삼', '']]],
+    ['out', '팔았을 때 들고 있을 것', [
+      ['out', '시장 밖에 있을 땐', ''],
+      ['cr', '그 현금 이자 (연)', '달이 바뀐 첫 거래일에 그때 현금에 붙음 · 2010~2021년 실제 달러 단기 금리는 대부분 0~2%대(라이브러리 기본 4%는 후한 편)']]],
+    ['ease', '나눠서 사기', [
+      ['din', '살 때 주 종목을 나눠 사는 기간', ''],
+      ['dout', '팔 때 대기 종목으로 나눠 옮기는 기간', '시장 밖 종목이 현금이 아닐 때만']]],
+    ['bub', '버블 보험', [
+      ['bga', '버블 기준 종목', ''],
+      ['bgw', '버블 이동평균 (일)', ''],
+      ['bg', '평균보다 이만큼 위면 전부 현금', '']]]
   ];
+  function avail(mode) { return mode === 'sim' ? SMB.ASSETS : mode === 'pre' ? PRE_ASSETS : REAL_ASSETS; }
   function optsHtml(k, v) {
+    var ok = avail(S.mode);
     return SMB.OPTS[k].map(function (o) {
-      var off = S.mode === 'real' && (k === 'sig' || k === 'ul' || k === 'out' || k === 'bga') && o[0] !== 'cash' && REAL_ASSETS.indexOf(o[0]) < 0;
-      return '<option value="' + esc(o[0]) + '"' + (o[0] === String(v) ? ' selected' : '') + (off ? ' disabled' : '') + '>' + esc(o[1]) + (off ? ' (실제 일봉 없음)' : '') + '</option>';
+      var off = (k === 'sig' || k === 'ul' || k === 'out' || k === 'bga') && o[0] !== 'cash' && ok.indexOf(o[0]) < 0;
+      return '<option value="' + esc(o[0]) + '"' + (o[0] === String(v) ? ' selected' : '') + (off ? ' disabled' : '') + '>' + esc(o[1]) + (off ? ' (자료 없음)' : '') + '</option>';
     }).join('');
   }
+  var MODES = [['real', '실전 — 상장 뒤 실제 일봉 · 1주 단위 · 분배금 원천징수 15% · 매도 SEC'], ['pre', '상장 전 포함 — 상장 전은 재현 가격 + 상장 뒤 실제 일봉 (계산은 실전과 같음)'],
+               ['sim', '투자전략 시뮬레이터 검증용 — 시뮬레이터 자료 · 소수 주 · 수수료 금액 안']];
+  /* 묶음 제목 줄 요약 — 지금 칸의 값으로 (바꾸면 바로) */
+  function lab(k, v) { var o = SMB.OPTS[k].filter(function (x) { return x[0] === String(v); })[0]; return o ? o[1] : String(v); }
+  function sumOf(id, p, x) {
+    var nm = function (k) { return NM[k] || String(k).toUpperCase(); };
+    if (id === 'sig') return nm(p.sig) + ' ' + p.win + '일 평균 → ' + nm(p.ul) + ' · 살 때 +' + lab('eb', p.eb) + ' · 팔 때 −' + lab('xb', p.xb) + ' · 확인 ' + p.cb + '/' + p.cs + '일 · 결제 대기 ' + p.settle + '일';
+    if (id === 'rsi') return (+p.oh > 0 ? '과열 RSI(' + p.ohw + ') ' + p.oh + ' 이상이면 팜' : '과열 매도 끔') + ' · ' + (+p.cool > 0 ? '재진입 RSI(' + p.coolw + ') ' + p.cool + ' 미만' : '재진입 RSI 끔');
+    if (id === 'out') return (p.out === 'cash' ? '현금' : nm(p.out)) + ' · 현금 이자 연 ' + lab('cr', p.cr);
+    if (id === 'ease') return '살 때 ' + lab('din', p.din) + ' · 팔 때 ' + lab('dout', p.dout) + (p.out === 'cash' ? '(현금이면 안 씀)' : '');
+    if (id === 'bub') return +p.bg > 0 ? nm(p.bga) + ' ' + p.bgw + '일 평균보다 +' + p.bg + '% 이상이면 전부 현금' : '끔';
+    if (id === 'cost') return '수수료 ' + x.fee + '% · 양도세 ' + ({ fifo: '선입선출', avg: '이동평균', none: '미포함' }[x.tax] || '') + ' · 현금 이자 세금 ' + (x.itax === 'on' ? '15.4%' : '미포함');
+    return '';
+  }
+  function uiP() { var p = {}; Array.prototype.forEach.call(root.querySelectorAll('select[data-k]'), function (e) { p[e.getAttribute('data-k')] = e.value; }); return p; }
+  function sums() {
+    var p = uiP(), x = { fee: ($('s2-fee') || {}).value, tax: ($('s2-tax') || {}).value, itax: ($('s2-itax') || {}).value };
+    Array.prototype.forEach.call(root.querySelectorAll('[data-sum]'), function (e) { e.textContent = sumOf(e.getAttribute('data-sum'), p, x); });
+  }
   function setHtml() {
-    var h = '<div class="s2-card" id="s2-set"><h3>SMA 200 백테스트 <span class="s2-sub">투자전략 시뮬레이터 \'SMA 200\'과 같은 규칙 · 수수료·양도세 포함</span></h3>' +
+    var SK = 's2-open', h = '<div class="s2-card" id="s2-set"><h3>SMA 200 백테스트 <span class="s2-sub">투자전략 시뮬레이터 \'SMA 200\'과 같은 규칙 · 수수료·양도세 포함</span></h3>' +
       '<div class="f"><label>기간</label><div class="s2-row"><span class="s2-seg" id="s2-per">' + [['1', '1년'], ['3', '3년'], ['5', '5년'], ['10', '10년'], ['all', '전체'], ['rnd', '시작 시점 랜덤']].map(function (p) {
         return '<button type="button" data-p="' + p[0] + '"' + (S.per === p[0] ? ' class="on"' : '') + '>' + p[1] + '</button>'; }).join('') + '</span>' +
       '<span class="s2-dates"><input type="date" id="s2-from" aria-label="시작일"> ~ <input type="date" id="s2-to" aria-label="끝일"></span></div>' +
       '<span class="hint">시작일 = 돈을 넣는 날(그날 종가에 신호가 \'보유\'면 바로 삼) · 끝일 종가로 평가 · 고를 수 있는 첫날 = 쓰는 종목·이동평균·RSI·버블 평균이 모두 나온 날</span></div>' +
       '<div class="f"><label for="s2-cap">원금 ($)</label><input id="s2-cap" type="number" min="100" step="100" value="' + S.cap + '"></div>' +
-      '<div class="f"><label for="s2-mode">계산 방식</label><select id="s2-mode"><option value="real"' + (S.mode === 'real' ? ' selected' : '') + '>실전 — 실제 일봉 · 1주 단위 · 분배금 원천징수 15% · 매도 SEC</option>' +
-        '<option value="sim"' + (S.mode === 'sim' ? ' selected' : '') + '>시뮬레이터와 같게 — 시뮬레이터 자료(상장 전 재현 포함) · 소수 주</option></select>' +
+      '<div class="f s2-wf"><label for="s2-mode">자료 · 계산</label><select id="s2-mode">' + MODES.map(function (m) { return '<option value="' + m[0] + '"' + (S.mode === m[0] ? ' selected' : '') + '>' + m[1] + '</option>'; }).join('') + '</select>' +
         '<span class="hint" id="s2-mode-h"></span></div>' +
-      '<div class="f"><label for="s2-lag">신호 → 체결</label><select id="s2-lag"><option value="0"' + (S.lag ? '' : ' selected') + '>같은 날 종가 — 장 마감 직전 값으로 판단해 종가 주문 (시뮬레이터와 같음)</option>' +
+      '<div class="f s2-wf"><label for="s2-lag">신호 → 체결</label><select id="s2-lag"><option value="0"' + (S.lag ? '' : ' selected') + '>같은 날 종가 — 장 마감 직전 값으로 판단해 종가 주문 (시뮬레이터와 같음)</option>' +
         '<option value="1"' + (S.lag ? ' selected' : '') + '>다음 거래일 종가 — 종가를 본 뒤 다음 날 체결 (하루 늦게)</option></select>' +
-        '<span class="hint">같은 날 종가는 판단에 쓴 바로 그 종가에 사고파는 가정이라, 실제로는 마감 직전(미국 동부 15:50 무렵) 시세로 판단해 장 마감 주문(MOC)을 내야 비슷해집니다 · 하루 늦게로 바꿔 차이를 확인해 보세요</span></div>';
-    KN.forEach(function (x) {
-      if (x[0] === 'h') { h += '<h4>' + esc(x[1]) + '</h4>'; return; }
-      h += '<div class="f"><label for="s2-k-' + x[0] + '">' + esc(x[1]) + '</label><select id="s2-k-' + x[0] + '" data-k="' + x[0] + '">' + optsHtml(x[0], S.p[x[0]]) + '</select>' + (x[2] ? '<span class="hint">' + esc(x[2]) + '</span>' : '') + '</div>';
+        '<span class="hint">같은 날 종가는 판단에 쓴 바로 그 종가에 사고파는 가정이라, 실제로는 마감 직전(미국 동부 15:50 무렵) 시세로 판단해 장 마감 주문(MOC)을 내야 비슷해집니다 · 하루 늦게로 바꿔 차이를 확인해 보세요</span></div>' +
+      '<div class="s2-secs"><button type="button" class="s2-link" data-secall="1">모두 펼치기</button><button type="button" class="s2-link" data-secall="0">모두 접기</button></div>';
+    var x0 = { fee: S.fee, tax: S.tax, itax: S.itax };
+    KN.forEach(function (g) {
+      var body = g[2].map(function (x) {
+        return '<div class="f"><label for="s2-k-' + x[0] + '">' + esc(x[1]) + '</label><select id="s2-k-' + x[0] + '" data-k="' + x[0] + '">' + optsHtml(x[0], S.p[x[0]]) + '</select>' + (x[2] ? '<span class="hint">' + esc(x[2]) + '</span>' : '') + '</div>';
+      }).join('');
+      h += BTUI.sec(SK, g[0], g[1], sumOf(g[0], S.p, x0), body);
     });
-    h += '<h4>거래 비용 · 세금</h4>' +
-      '<div class="f"><label for="s2-fee">매매 수수료·슬리피지 (%)</label><input id="s2-fee" type="number" step="0.01" min="0" max="5" value="' + S.fee + '"><span class="hint">살 때·팔 때마다 · 실전 방식은 체결 금액 × 수수료율(+ 팔 때 SEC 0.00206%) · 시뮬레이터 SMA 200 기본값은 0.02%</span></div>' +
+    h += BTUI.sec(SK, 'cost', '거래 비용 · 세금', sumOf('cost', S.p, x0),
+      '<div class="f"><label for="s2-fee">매매 수수료·슬리피지 (%)</label><input id="s2-fee" type="number" step="0.01" min="0" max="5" value="' + S.fee + '"><span class="hint">살 때·팔 때마다 · 체결 금액 × 수수료율(+ 팔 때 SEC 0.00206%) · 기본 0.25%(국내 증권사 미국 주식 온라인 기본 수준)</span></div>' +
       '<div class="f"><label for="s2-tax">양도세</label><select id="s2-tax"><option value="fifo"' + (S.tax === 'fifo' ? ' selected' : '') + '>포함 — 선입선출</option><option value="avg"' + (S.tax === 'avg' ? ' selected' : '') + '>포함 — 이동평균</option><option value="none"' + (S.tax === 'none' ? ' selected' : '') + '>미포함</option></select>' +
         '<span class="hint">해외주식: 1~12월(결제일 기준)에 판 이익을 원화로 더해 250만 원을 빼고 22% · 다음 해 5월 31일 이후 첫 거래일에 이 계좌 현금으로 냄(모자라면 그날 종가에 보유를 팔아서)</span></div>' +
-      '<div class="f"><label for="s2-itax">현금 이자 세금</label><select id="s2-itax"><option value="on"' + (S.itax === 'on' ? ' selected' : '') + '>이자소득세 15.4% 뗌</option><option value="off"' + (S.itax === 'off' ? ' selected' : '') + '>미포함</option></select></div>' +
-      '<div class="s2-row" style="margin-top:12px"><button type="button" class="s2-btn pri" id="s2-run">계산</button><button type="button" class="s2-btn" id="s2-def">기본값 (실전)</button>' +
-      '<button type="button" class="s2-btn" id="s2-simlike" title="계산 방식 · 조건 · 수수료 0.02% · 세금 미포함 — 투자전략 시뮬레이터 SMA 200 과 같은 숫자">시뮬레이터와 같게</button><span class="s2-msg" id="s2-msg"></span></div></div>' +
+      '<div class="f"><label for="s2-itax">현금 이자 세금</label><select id="s2-itax"><option value="on"' + (S.itax === 'on' ? ' selected' : '') + '>이자소득세 15.4% 뗌</option><option value="off"' + (S.itax === 'off' ? ' selected' : '') + '>미포함</option></select></div>');
+    h += '<div class="s2-row" style="margin-top:12px"><button type="button" class="s2-btn pri" id="s2-run">계산</button><button type="button" class="s2-btn" id="s2-def" title="상장 뒤 실제 일봉 · 라이브러리 SMA 200 조건 · 수수료 0.25% · 양도세 선입선출 · 이자세 15.4%">기본값 (실전)</button>' +
+      '<button type="button" class="s2-btn" id="s2-pre" title="기본값 (실전)과 같은 조건 · 자료만 상장 전 재현 가격 + 실제 일봉">상장 전 포함</button><span class="s2-msg" id="s2-msg"></span></div></div>' +
       '<div id="s2-out"></div>';
     root.innerHTML = h;
+    BTUI.bindSecs(root, SK);
     modeHint();
   }
   function modeHint() {
     var e = $('s2-mode-h'); if (!e) return;
-    e.textContent = S.mode === 'sim' ? '시뮬레이터 자료(data/stratsim/prices.csv — 분배금을 넣은 수정 종가 · 상장 전은 재현) · 소수 주 · 수수료는 매수 금액 안에서 — 수수료 0.02% · 세금 미포함이면 투자전략 시뮬레이터와 같은 숫자'
+    e.textContent = S.mode === 'sim' ? '투자전략 시뮬레이터 자료(data/stratsim/prices.csv) · 소수 주 · 수수료는 매수 금액 안에서 — 수수료 0.02% · 세금 미포함이면 투자전략 시뮬레이터와 같은 숫자(검증용)'
+      : S.mode === 'pre' ? PRE_HINT
       : '실제 일봉(data/etfcagr.json — 주식 분할만 반영한 종가 · 분배금은 분배락일에 현금으로, 미국 세금 15% 뗌) · TQQQ 상장 2010-02 이후 · 1주 단위 · 수수료 = 체결 금액 × 수수료율';
   }
   function readUI() {
     /* 빈칸·범위 밖은 기본값으로 — 계산에 쓴 값을 칸에 다시 적어 보이는 값 = 계산 값 */
     var num = function (id) { var t = String($(id).value).trim(); return t === '' ? NaN : +t; };
     var c = num('s2-cap'); S.cap = c >= 100 && c <= 1e12 ? Math.round(c * 100) / 100 : CAP_DEF; $('s2-cap').value = S.cap;
-    S.mode = $('s2-mode').value === 'sim' ? 'sim' : 'real';
-    var f = num('s2-fee'); S.fee = f >= 0 && f <= 5 ? f : (S.mode === 'sim' ? +SMB.PRESET.cost : 0.25); $('s2-fee').value = S.fee;
+    var md = $('s2-mode').value; S.mode = md === 'pre' || md === 'sim' ? md : 'real';
+    var f = num('s2-fee'); S.fee = f >= 0 && f <= 5 ? f : 0.25; $('s2-fee').value = S.fee;
     S.tax = $('s2-tax').value; S.itax = $('s2-itax').value;
-    var p = {}; Array.prototype.forEach.call(root.querySelectorAll('select[data-k]'), function (e) { p[e.getAttribute('data-k')] = e.value; });
-    S.p = SMB.clean(p);
-    if (S.mode === 'real') ['sig', 'ul', 'bga'].forEach(function (k) { if (REAL_ASSETS.indexOf(S.p[k]) < 0) S.p[k] = SMB.PRESET[k]; });
-    if (S.mode === 'real' && S.p.out !== 'cash' && REAL_ASSETS.indexOf(S.p.out) < 0) S.p.out = 'cash';
+    S.p = SMB.clean(uiP());
+    var ok = avail(S.mode);
+    ['sig', 'ul', 'bga'].forEach(function (k) { if (ok.indexOf(S.p[k]) < 0) S.p[k] = SMB.PRESET[k]; });
+    if (S.p.out !== 'cash' && ok.indexOf(S.p.out) < 0) S.p.out = 'cash';
     S.lag = $('s2-lag').value === '1' ? 1 : 0;
     S.from = $('s2-from').value; S.to = $('s2-to').value;
   }
@@ -19110,6 +19189,7 @@ if (typeof module !== 'undefined') module.exports = SMB;
 
   /* ── 자료 (열 때마다 새로 받음 — 시세 봇이 날마다 갱신) ── */
   function getData(mode) {
+    if (mode === 'pre') mode = 'real';   /* 상장 전 포함도 실제 일봉에서 시작 (재현은 preFor 가 종목마다 붙임) */
     if (DATA[mode]) return DATA[mode];
     var p = mode === 'sim'
       ? fetch('data/stratsim/prices.csv', { cache: 'no-cache' }).then(function (r) { if (!r.ok) throw new Error('시뮬레이터 자료를 받지 못했어요 (' + r.status + ')'); return r.text(); }).then(function (t) { return { D: SMB.fromCsv(t) }; })
@@ -19120,18 +19200,35 @@ if (typeof module !== 'undefined') module.exports = SMB;
           return { X: X, c: {} };
         });
     DATA[mode] = p.then(function (G) {
+      G.P = {}; G.PP = {};
       return window.MBT.fxData().then(function (F) { G.F = F; return G; }, function () { G.F = null; return G; });
     });
     DATA[mode].catch(function () { delete DATA[mode]; });
     return DATA[mode];
   }
-  /* 계산에 쓸 자료 — 실제 일봉은 이 설정이 쓰는 종목만 합쳐 달력을 만듦(쓰지 않는 종목 자료가 늦게 갱신돼도 끝날이 당겨지지 않게) · 원/달러는 그 달력에 맞춤 */
+  /* 상장 전 포함 — 쓰는 종목마다 실제 일봉 앞에 상장 전 재현(MBT.preload · join — 72루틴·무한매수법 백테스트 '상장 전 포함'과 같은 함수)을 이어 붙임
+     · 재현을 못 받거나 못 이으면 그 종목은 실제 일봉만(G.P[k] = 실제 · G.noPre 에 적어 안내) */
+  function preFor(G) {
+    var u = SMB.used(SMB.knobs(S.p)), B = window.MBT;
+    return Promise.all(u.map(function (k) {
+      if (G.P[k]) return null; if (!G.X[k]) return null;
+      if (!G.PP[k]) G.PP[k] = B.preload(NM[k]).catch(function () { return null; }).then(function (PR) {
+        var X = G.X[k], al = X.h ? B.hiAlpha(X, 1) : null, J = PR ? B.join(X, PR, al != null ? al : 0) : null;   /* 고가 추정(al)은 이 계산에 안 씀 — 고가가 없는 종목(QQQ·SPY …)도 잇게 */
+        G.P[k] = J ? { d: J.d, c: J.c, dv: J.dv, L: J.L } : { d: X.d, c: X.c, dv: X.dv, L: 0, no: true };
+      });
+      return G.PP[k];
+    })).then(function () { return G; });
+  }
+  /* 계산에 쓸 자료 — 실제 일봉은 이 설정이 쓰는 종목만 합쳐 달력을 만듦(쓰지 않는 종목 자료가 늦게 갱신돼도 끝날이 당겨지지 않게) · 원/달러는 그 달력에 맞춤
+     · 상장 전 포함이면 재현을 이어 붙인 일봉으로 · D.lst[종목] = 그 종목의 상장 첫날(실제 일봉 첫날) 인덱스 */
   function dataFor(G) {
     var D;
     if (G.D) D = G.D;
     else {
-      var u = SMB.used(SMB.knobs(S.p)).sort(), key = u.join(',');
-      if (!G.c[key]) { var Y = {}; u.forEach(function (k) { if (G.X[k]) Y[k] = G.X[k]; }); G.c[key] = SMB.fromSeries(Y); }
+      var pre = S.mode === 'pre', u = SMB.used(SMB.knobs(S.p)).sort(), key = (pre ? 'pre:' : '') + u.join(',');
+      if (!G.c[key]) { var Y = {}; u.forEach(function (k) { var x = pre ? G.P[k] : G.X[k]; if (x) Y[k] = x; }); G.c[key] = SMB.fromSeries(Y);
+        var D1 = G.c[key]; D1.lst = {}; D1.noPre = [];
+        u.forEach(function (k) { if (!G.X[k]) return; D1.lst[k] = D1.d.indexOf(G.X[k].d[0]); if (pre && G.P[k] && G.P[k].no) D1.noPre.push(NM[k]); }); }
       D = G.c[key];
       var allEnd = Object.keys(G.X).reduce(function (m, k) { var x = G.X[k].d[G.X[k].d.length - 1]; return x > m ? x : m; }, '');
       D.late = D.d[D.d.length - 1] < allEnd ? u.filter(function (k) { return D.ends[k] < allEnd; }).map(function (k) { return NM[k]; }).join('·') + ' 자료가 ' + D.d[D.d.length - 1] + '까지라 그날까지 계산' : '';
@@ -19142,8 +19239,8 @@ if (typeof module !== 'undefined') module.exports = SMB;
   function idxGE(D, s) { if (!s) return -1; for (var i = 0; i < D.d.length; i++) if (D.d[i] >= s) return i; return -1; }
   function idxLE(D, s) { if (!s) return -1; for (var i = D.d.length - 1; i >= 0; i--) if (D.d[i] <= s) return i; return -1; }
   function engOpts(D) {
-    var real = S.mode === 'real', tax = S.tax !== 'none' && D.fx ? { fx: function (i) { return D.fx[i]; }, method: S.tax } : null;
-    return { capital: S.cap, mode: S.mode, lag: S.lag ? 1 : 0, fee: S.fee / 100, sec: real ? SEC : 0, divTax: real ? DIV_TAX : 0, intTax: S.itax === 'on' ? INT_TAX : 0, tax: tax };
+    var real = S.mode !== 'sim', tax = S.tax !== 'none' && D.fx ? { fx: function (i) { return D.fx[i]; }, method: S.tax } : null;
+    return { capital: S.cap, mode: S.mode === 'sim' ? 'sim' : 'real', lag: S.lag ? 1 : 0, fee: S.fee / 100, sec: real ? SEC : 0, divTax: real ? DIV_TAX : 0, intTax: S.itax === 'on' ? INT_TAX : 0, tax: tax };
   }
 
   /* ── 계산 ── */
@@ -19151,7 +19248,7 @@ if (typeof module !== 'undefined') module.exports = SMB;
   function run() {
     readUI(); save(); modeHint();
     var seq = ++runSeq; msg('자료를 받는 중…');
-    getData(S.mode).then(function (G) { if (seq === runSeq) compute(dataFor(G)); }, function (e) { if (seq === runSeq) msg((e && e.message) || '자료를 받지 못했어요', true); });
+    getData(S.mode).then(function (G) { return S.mode === 'pre' ? preFor(G) : G; }).then(function (G) { if (seq === runSeq) compute(dataFor(G)); }, function (e) { if (seq === runSeq) msg((e && e.message) || '자료를 받지 못했어요', true); });
   }
   function compute(D) {
     var fv = SMB.firstValid(D, S.p, S.lag), last = D.d.length - 1;
@@ -19172,7 +19269,7 @@ if (typeof module !== 'undefined') module.exports = SMB;
     try { R = SMB.run(D, S.p, Object.assign({ from: from, to: to, rows: true }, o)); } catch (e) { msg('계산하지 못했어요: ' + ((e && e.message) || e), true); return; }
     var st = SMB.stats(R), h = SMB.bh(D, R.K.ul, from, to, S.cap, o);
     LAST = { D: D, R: R, st: st, h: h, o: o, from: from, to: to, fv: fv, ow: {} };
-    msg(D.d[from] + ' ~ ' + D.d[to] + ' · ' + ((performance.now() - t0) / 1000).toFixed(2) + '초' + note + (D.late ? ' · ' + D.late : '') + (S.tax !== 'none' && !D.fx ? ' · 원/달러 자료를 받지 못해 양도세 빼고 계산' : ''));
+    msg(D.d[from] + ' ~ ' + D.d[to] + ' · ' + ((performance.now() - t0) / 1000).toFixed(2) + '초' + note + (D.late ? ' · ' + D.late : '') + (D.noPre && D.noPre.length ? ' · ' + D.noPre.join('·') + ' 상장 전 재현을 받지 못해 실제 일봉만' : '') + (S.tax !== 'none' && !D.fx ? ' · 원/달러 자료를 받지 못해 양도세 빼고 계산' : ''));
     page = 0; out(); dist();
   }
 
@@ -19187,13 +19284,13 @@ if (typeof module !== 'undefined') module.exports = SMB;
       kv('기간 총 수익률', pct(ret), cls(ret), '원금 ' + usd(cap) + ' 대비') +
       kv('연평균(CAGR)', pct(st.cagr), cls(st.cagr), st.yrs.toFixed(2) + '년') +
       kv('최대 낙폭(MDD)', pct(st.mdd), 'dn') +
-      kv('끝날 전부 팔면', usd(st.liq), '', '연 ' + pct(st.cagrLiq) + ' · 팔 때 수수료' + (S.mode === 'real' ? '·SEC' : '') + (tx ? ' + 올해까지 양도세' : '') + ' 뺀 값') +
+      kv('끝날 전부 팔면', usd(st.liq), '', '연 ' + pct(st.cagrLiq) + ' · 팔 때 수수료' + (S.mode !== 'sim' ? '·SEC' : '') + (tx ? ' + 올해까지 양도세' : '') + ' 뺀 값') +
       kv('보유 기간', pct(R.inDays / R.n, 1).replace('+', ''), '', '매수 ' + nB + '일 · 전량 매도 ' + nS + '번') +
       kv(UL + ' 그냥 보유', pct(h.cagr), '', '총 ' + pct(h.fin / cap - 1) + ' · MDD ' + pct(h.mdd) + ' · 세후 연 ' + pct(h.net)) +
       kv('낸 수수료·세금', usd(R.fees + R.taxPaid), '', '수수료 ' + usd(R.fees) + (tx ? ' · 양도세 ' + usd(R.taxPaid) : '') + (R.divs ? ' · 분배금 ' + usd(R.divs) + ' 받음' : '') + (R.intr ? ' · 이자 ' + usd(R.intr) : '')) +
-      (tx ? kv('아직 안 낸 양도세', usd(R.taxDue), '', '이듬해 5월에 낼 세금(위 평가금에서 안 뺌)') : '') + '</div>' +
+      (tx ? kv('아직 안 낸 양도세', usd(R.taxDue), '', '이듬해 5월에 낼 세금(위 평가금에서 안 뺌)') : '') + '</div>' + preNote() +
       '<div class="s2-ctl"><span class="s2-seg" id="s2-scale"><button type="button" data-s="log"' + (scale === 'log' ? ' class="on"' : '') + '>로그</button><button type="button" data-s="linear"' + (scale !== 'log' ? ' class="on"' : '') + '>일반</button></span>' +
-      '<span class="s2-small">▲ 매수 ' + nB + '일 · ▼ 매도 ' + nS + '일 (' + NM[K.sig] + ' 종가 선 위 · 범례를 눌러 끄고 켜기)</span></div>' +
+      '<span class="s2-small">▲ 매수 ' + nB + '일 · ▼ 매도 ' + nS + '일 (' + NM[K.sig] + ' 종가 선 위 · 범례를 눌러 끄고 켜기)</span><span class="s2-zh">' + BTUI.HINT + '</span></div>' +
       '<div class="s2-chart"><canvas id="s2-c"></canvas></div>' +
       '<p class="s2-small">왼쪽 눈금 = ' + NM[K.sig] + ' 종가 · ' + K.win + '일 이동평균 · 오른쪽 파란 눈금 = 총자산 · ' + UL + ' 그냥 보유(초록 점선)</p>' +
       '<div id="s2-dist"></div>' +
@@ -19202,11 +19299,18 @@ if (typeof module !== 'undefined') module.exports = SMB;
       '<button type="button" class="s2-btn" id="s2-csv">CSV 내보내기</button></div><div id="s2-tb"></div>' +
       '<p class="s2-small">가정: ' + (S.lag ? '신호는 전날 종가로 판단해 다음 거래일 종가에 사고팖(하루 늦게)' : '신호는 그날 종가로 판단해 그날 종가에 사고팖(시뮬레이터와 같음 — 실제로는 마감 직전 시세로 판단해 장 마감 주문을 내는 것에 해당)') +
       ' · 처음 시작일은 시뮬레이터처럼 평균 위면(과열이 아니면) 바로 한 번에 삼(완충·확인 횟수·재진입 RSI·나눠 사기는 다음 날부터) · 현금 이자는 달이 바뀐 첫 거래일에 · ' +
-      (S.mode === 'real' ? '분배금은 분배락일(지급일 아님) 아침 보유분에 미국 세금 15%를 떼고 현금으로(다음 거래일부터 1주 단위로 다시 삼) · 1주 단위라 1주 값도 안 되는 돈은 현금으로 남음 · 가격은 주식 분할을 반영한 값이라 초기(예: 2010년 TQQQ 약 $0.2) 1주는 실제 1주보다 작음 — 큰 원금에선 차이 없음 · 환전 수수료 없음 · ' : '시뮬레이터 자료는 분배금을 넣은 수정 종가(분배 세금 없음) · ') +
+      (S.mode !== 'sim' ? '분배금은 분배락일(지급일 아님) 아침 보유분에 미국 세금 15%를 떼고 현금으로(다음 거래일부터 1주 단위로 다시 삼) · 1주 단위라 1주 값도 안 되는 돈은 현금으로 남음 · 가격은 주식 분할을 반영한 값이라 초기(예: 2010년 TQQQ 약 $0.2) 1주는 실제 1주보다 작음 — 큰 원금에선 차이 없음 · 환전 수수료 없음 · ' : '시뮬레이터 자료는 분배금을 넣은 수정 종가(분배 세금 없음) · ') +
       (tx ? '양도세는 해마다 결제일 기준 실현 손익(원화) − 250만 원 × 22%, 이듬해 5월 31일 이후 첫 거래일에 납부 · ' : '') +
-      UL + ' 그냥 보유 = 시작일 종가에 원금 전부' + (S.mode === 'real' ? '(분배금은 15% 뗀 뒤 분배락일 종가로 다시 삼)' : '') + ' · 그냥 보유 세후 = 사고팔 때 수수료와 끝 날 한 번 팔고 낸 양도세를 뺀 값 · 과거 결과는 미래를 보장하지 않아요.</p></div>';
+      UL + ' 그냥 보유 = 시작일 종가에 원금 전부' + (S.mode !== 'sim' ? '(분배금은 15% 뗀 뒤 분배락일 종가로 다시 삼)' : '') + ' · 그냥 보유 세후 = 사고팔 때 수수료와 끝 날 한 번 팔고 낸 양도세를 뺀 값 · 과거 결과는 미래를 보장하지 않아요.</p></div>';
     $('s2-out').innerHTML = hd;
     draw(); table();
+  }
+
+  /* 상장 전 포함: 재현 가격으로 계산한 구간 안내 (종목마다 상장 첫날 전) */
+  function preNote() {
+    var L = LAST, D = L.D; if (S.mode !== 'pre' || !D.lst) return '';
+    var a = Object.keys(D.lst).filter(function (k) { return D.lst[k] > L.from; }).map(function (k) { return NM[k] + ' ' + D.d[D.lst[k]] + ' 상장'; });
+    return a.length ? '<p class="s2-small warn">' + D.d[L.from] + '부터 각 종목 상장 전날까지는 재현 가격(' + a.join(' · ') + ') — 그래프의 주황 점선이 사는 종목의 상장일 · 재현 오차는 ETF 차트 비교 \'상장 전 백테스트\' 오차 카드 참고</p>' : '';
   }
 
   /* ── 그래프 ── */
@@ -19226,8 +19330,8 @@ if (typeof module !== 'undefined') module.exports = SMB;
       { label: K.win + '일 평균', data: avg, yAxisID: 'p', borderColor: '#fe9800', borderWidth: 1.2, pointRadius: 0, spanGaps: true },
       { label: '총자산', data: R.eq, yAxisID: 'y', borderColor: '#3182f6', borderWidth: 2, pointRadius: 0 },
       { label: NM[K.ul] + ' 그냥 보유', data: L.h.v, yAxisID: 'y', borderColor: 'rgba(34,197,94,.8)', borderDash: [5, 4], borderWidth: 1.2, pointRadius: 0 },
-      { label: '매수', data: sig.map(function (y, i) { return buys[i] ? y : null; }), info: buys, yAxisID: 'p', showLine: false, pointStyle: 'triangle', pointRadius: 2.6, pointHoverRadius: 6, backgroundColor: 'rgba(240,68,82,.8)', borderColor: 'rgba(240,68,82,.8)', borderWidth: 0, order: -1 },
-      { label: '매도', data: sig.map(function (y, i) { return sells[i] ? y : null; }), info: sells, yAxisID: 'p', showLine: false, pointStyle: 'triangle', pointRotation: 180, pointRadius: 5, pointHoverRadius: 8, backgroundColor: '#3182f6', borderColor: '#3182f6', borderWidth: 0, order: -2 }
+      { label: '매수', data: sig.map(function (y, i) { return buys[i] ? y : null; }), info: buys, yAxisID: 'p', showLine: false, pointStyle: 'triangle', pointRadius: BTUI.mkR(false), pointHoverRadius: 6, backgroundColor: 'rgba(240,68,82,.8)', borderColor: 'rgba(240,68,82,.8)', borderWidth: 0, order: -1 },
+      { label: '매도', data: sig.map(function (y, i) { return sells[i] ? y : null; }), info: sells, yAxisID: 'p', showLine: false, pointStyle: 'triangle', pointRotation: 180, pointRadius: BTUI.mkR(true), pointHoverRadius: 8, backgroundColor: '#3182f6', borderColor: '#3182f6', borderWidth: 0, order: -2 }
     ];
     var cfg = { type: 'line', data: { labels: lab, datasets: ds }, options: { responsive: true, maintainAspectRatio: false, animation: false, normalized: true, interaction: { mode: 'index', intersect: false },
       scales: { x: { type: 'category', ticks: { maxTicksLimit: 8, maxRotation: 0, autoSkipPadding: 16, color: tick }, grid: { color: grid() } },
@@ -19235,8 +19339,17 @@ if (typeof module !== 'undefined') module.exports = SMB;
                 p: { type: scale === 'log' ? 'logarithmic' : 'linear', position: 'left', ticks: { callback: pTick, color: tick, maxTicksLimit: 8 }, grid: { color: grid() } } },
       plugins: { legend: { labels: { color: function () { return css('--text'); }, usePointStyle: true, sort: function (a, b) { return a.datasetIndex - b.datasetIndex; } } },
         tooltip: { callbacks: { label: function (c) { return c.dataset.info ? c.dataset.info[c.dataIndex] : c.dataset.label + ': ' + (c.dataset.yAxisID === 'p' ? px(c.parsed.y) : money(c.parsed.y)); } } } } } };
-    if (CH) { try { CH.destroy(); } catch (e) {} }
-    CH = new Chart($('s2-c').getContext('2d'), cfg);
+    /* 상장 전 포함: 사는 종목이 상장한 날에 세로 점선 (그 전은 재현 가격) */
+    var LI = D.lst && D.lst[K.ul] != null ? D.lst[K.ul] - a : -1;
+    cfg.plugins = [BTUI.vline('s2List', function () { return LI > 0 && LI < lab.length ? LI : null; }, NM[K.ul] + ' 상장')];
+    var seq = ++drawSeq;
+    BTUI.zoom().then(function (z) {
+      if (seq !== drawSeq || !$('s2-c')) return;
+      if (z) cfg.options.plugins.zoom = BTUI.zoomOpts();
+      if (CH) { try { CH.destroy(); } catch (e) {} }
+      CH = new Chart($('s2-c').getContext('2d'), cfg);
+      BTUI.dbl($('s2-c'), CH);
+    });
   }
 
   /* ── 그날 한 일 ── */
@@ -19277,10 +19390,10 @@ if (typeof module !== 'undefined') module.exports = SMB;
         r.b.forEach(function (x) { o.fee += x.fee; }); r.s.forEach(function (x) { o.fee += x.fee; }); e0 = r.eq; b0 = h[j];
       });
       var T = {}; R.taxes.forEach(function (t) { T[t.y] = t; });
-      el.innerHTML = '<div class="s2-tw"><table class="s2-t"><thead><tr><th>연도</th><th>연말 평가금</th><th>그해 수익률</th><th>' + UL + ' 그냥 보유</th><th>차이</th><th>매수·매도</th><th>수수료</th>' + (S.mode === 'real' ? '<th>분배금</th>' : '') + '<th>현금 이자</th>' + (tx ? '<th>양도세</th>' : '') + '</tr></thead><tbody>' +
+      el.innerHTML = '<div class="s2-tw"><table class="s2-t"><thead><tr><th>연도</th><th>연말 평가금</th><th>그해 수익률</th><th>' + UL + ' 그냥 보유</th><th>차이</th><th>매수·매도</th><th>수수료</th>' + (S.mode !== 'sim' ? '<th>분배금</th>' : '') + '<th>현금 이자</th>' + (tx ? '<th>양도세</th>' : '') + '</tr></thead><tbody>' +
         order.map(function (y) { var o = Y[y], r = o.e1 / o.e0 - 1, hh = o.b1 / o.b0 - 1, t = T[+y];
           return '<tr><td>' + y + '</td><td>' + usd(o.e1) + '</td><td class="' + cls(r) + '">' + pct(r) + '</td><td class="' + cls(hh) + '">' + pct(hh) + '</td><td class="' + cls(r - hh) + '">' + (r - hh >= 0 ? '+' : '−') + Math.abs((r - hh) * 100).toFixed(2) + '%p</td>' +
-            '<td>' + o.nb + '일 · ' + o.ns + '번</td><td>' + usd(o.fee) + '</td>' + (S.mode === 'real' ? '<td>' + usd(o.div) + '</td>' : '') + '<td>' + usd(o.it) + '</td>' +
+            '<td>' + o.nb + '일 · ' + o.ns + '번</td><td>' + usd(o.fee) + '</td>' + (S.mode !== 'sim' ? '<td>' + usd(o.div) + '</td>' : '') + '<td>' + usd(o.it) + '</td>' +
             (tx ? '<td>' + (!t ? '—' : !(t.tax > 0) ? '0원' : krw(t.tax) + ' <span class="s2-small">' + (t.paid && t.paid !== '-' ? t.paid + ' 납부' + (t.ext ? ' · ' + usd(t.ext) + ' 밖에서' : '') : '미납') + '</span>') + '</td>' : '') + '</tr>'; }).join('') +
         '</tbody></table></div><p class="s2-small">그해 수익률 = 그해 말 평가금 ÷ 전해 말 평가금 − 1 (첫해는 원금 대비) · 매수·매도 = 산 날 수 · 전량 매도 횟수' + (tx ? ' · 양도세 = 그해(결제일 기준) 실현 손익 원화 환산 − 250만 원 × 22%, 이듬해 5월 말 납부(납부한 날 환율로 달러에서 뺌)' : '') + '</p>';
       return;
@@ -19292,7 +19405,7 @@ if (typeof module !== 'undefined') module.exports = SMB;
           var got = p.open ? p.net + p.val : p.net, pl = got - p.spend;
           return '<tr><td>' + (j + 1) + '</td><td>' + NM[p.k] + '</td><td>' + D.d[p.from] + '</td><td>' + (p.open ? '—' : D.d[p.to]) + '</td><td>' + (p.to - p.from + 1) + '</td><td>' + usd(p.spend) + '</td>' +
             '<td>' + (p.open ? '<span class="s2-small">평가 </span>' + usd(got) : usd(got)) + '</td><td class="' + cls(pl) + '">' + usd(pl) + '</td><td class="' + cls(pl) + '">' + pct(p.spend > 0 ? pl / p.spend : 0) + '</td><td>' + (WHY[p.why] || '—') + '</td></tr>';
-        }).join('') + '</tbody></table></div><p class="s2-small">보유 구간 = 종목을 처음 산 날부터 다 판 날까지(나눠 사기 포함) · 산 돈 = 수수료 포함 · 판 돈 = 수수료' + (S.mode === 'real' ? '·SEC' : '') + ' 뺀 값(중간에 양도세 내려 판 것 포함) · 보유 중이면 끝일 종가 평가(팔 때 수수료 빼기 전)</p>';
+        }).join('') + '</tbody></table></div><p class="s2-small">보유 구간 = 종목을 처음 산 날부터 다 판 날까지(나눠 사기 포함) · 산 돈 = 수수료 포함 · 판 돈 = 수수료' + (S.mode !== 'sim' ? '·SEC' : '') + ' 뺀 값(중간에 양도세 내려 판 것 포함) · 보유 중이면 끝일 종가 평가(팔 때 수수료 빼기 전)</p>';
       return;
     }
     var idx = []; rows.forEach(function (r, j) { if (dayF === 'all' || r.b.length || r.s.length || r.div > 0 || r.tax > 0 || j === 0) idx.push(j); });
@@ -19310,7 +19423,7 @@ if (typeof module !== 'undefined') module.exports = SMB;
         '<td>' + hold + '</td><td>' + usd(r.cash) + '</td><td>' + usd(r.eq) + '</td></tr>';
     }).join('');
     el.innerHTML = hdr + '<div class="s2-tw"><table class="s2-t" id="s2-day"><thead><tr><th>날짜</th><th>상태</th><th>그날 한 일</th><th>' + NM[K.sig] + (S.lag ? ' 전날' : '') + ' 종가</th><th>' + (S.lag ? '전날 ' : '') + K.win + '일 평균</th><th>평균 대비</th><th>RSI(' + K.ohw + ')</th><th>RSI(' + K.coolw + ')</th><th>매수</th><th>매도</th><th>보유</th><th>현금</th><th>총자산</th></tr></thead><tbody>' + body + '</tbody></table></div>' +
-      (pages > 1 ? pager(pages, idx.length) : '') + '<p class="s2-small">상태 = ' + (S.lag ? '전날 종가로 판단한 신호(확인 횟수 반영 · 지표 칸도 전날 값) — 그날 종가에 체결' : '그날 종가로 판단한 신호(확인 횟수 반영)') + ' · 매수·매도 금액은 수수료 빼기 전 · 총자산 = 현금 + 보유 × 종가' + (S.mode === 'real' ? ' · 분배금·이자는 그날 현금에 더해짐' : '') + '</p>';
+      (pages > 1 ? pager(pages, idx.length) : '') + '<p class="s2-small">상태 = ' + (S.lag ? '전날 종가로 판단한 신호(확인 횟수 반영 · 지표 칸도 전날 값) — 그날 종가에 체결' : '그날 종가로 판단한 신호(확인 횟수 반영)') + ' · 매수·매도 금액은 수수료 빼기 전 · 총자산 = 현금 + 보유 × 종가' + (S.mode !== 'sim' ? ' · 분배금·이자는 그날 현금에 더해짐' : '') + '</p>';
   }
   function pager(pages, total) {
     var cur = page + 1, list = [], h = '<nav class="s2-pager" aria-label="일자별 쪽"><button type="button" class="dv-pg" data-pg="' + (cur - 1) + '"' + (cur === 1 ? ' disabled' : '') + ' aria-label="이전 쪽">‹</button>', prev = 0;
@@ -19348,13 +19461,13 @@ if (typeof module !== 'undefined') module.exports = SMB;
   function dist() {
     var L = LAST, box = $('s2-dist'); if (!box || !L) return;
     R72D.inject();
-    var D = L.D, o = L.o, to = L.to, mo = S.mode === 'sim' && to - L.fv > 6000;
+    var D = L.D, o = L.o, to = L.to, mo = to - L.fv > 6000;   /* 6,000거래일(약 24년) 넘으면 매월 첫 거래일 시작만 (계산 시간) */
     var K0 = L.R.K, key = JSON.stringify([S.mode, S.lag, S.p, S.cap, S.fee, S.tax, S.itax, !!o.tax, D.d[L.fv], D.d[to], D.d.length, D.d[D.d.length - 1], D.px[K0.sig][D.d.length - 1], D.px[K0.ul][D.d.length - 1]]);
     var st = DIST.c.get(key);
     if (!st) st = DIST.c.put(key, R72D.job({ plan: SMB.plan(D, L.fv, to, 20, mo), run: function (s) { return SMB.one(D, S.p, o, s, to); }, paused: paused, update: upd }));
     DIST.st = st;
     DIST.m = { end: D.d[to], first: D.d[L.fv], mo: mo, tax: !!o.tax, ul: NM[L.R.K.ul],
-      set: '원금 ' + usd(S.cap).replace('.00', '') + ' · ' + (S.mode === 'real' ? '실전(실제 일봉 · 1주 단위)' : '시뮬레이터와 같게') + (S.lag ? ' · 하루 늦게 체결' : '') + ' · 수수료 ' + S.fee + '%' + (S.mode === 'real' ? ' + SEC · 분배금 원천징수 15%' : '') +
+      set: '원금 ' + usd(S.cap).replace('.00', '') + ' · ' + (S.mode === 'pre' ? '상장 전 포함(재현 가격 + 실제 일봉 · 1주 단위)' : S.mode !== 'sim' ? '실전(실제 일봉 · 1주 단위)' : '시뮬레이터 검증용(시뮬레이터 자료 · 소수 주)') + (S.lag ? ' · 하루 늦게 체결' : '') + ' · 수수료 ' + S.fee + '%' + (S.mode !== 'sim' ? ' + SEC · 분배금 원천징수 15%' : '') +
         ' · ' + (o.tax ? '양도세 22%(250만 원 공제 · ' + (S.tax === 'avg' ? '이동평균' : '선입선출') + ')' : S.tax === 'none' ? '양도세 제외' : '원/달러 자료가 없어 양도세 빼고') + (S.itax === 'on' ? ' · 이자소득세 15.4%' : '') };
     box.innerHTML = dhtml(); paint();
   }
@@ -19448,8 +19561,10 @@ if (typeof module !== 'undefined') module.exports = SMB;
   function bind() {
     $('s2-run').onclick = function () { if (S.per === 'rnd-done') S.per = 'custom'; run(); };
     $('s2-def').onclick = function () { apply(base('real')); };
-    $('s2-simlike').onclick = function () { apply(base('sim')); };
-    $('s2-mode').onchange = function () { readUI(); var s = S, sim = s.mode === 'sim'; Array.prototype.forEach.call(root.querySelectorAll('select[data-k]'), function (e) { e.innerHTML = optsHtml(e.getAttribute('data-k'), s.p[e.getAttribute('data-k')]); }); modeHint(); if (s.per !== 'all' && !/^\d+$/.test(s.per)) s.per = 'all'; setPer(s.per); run(); };
+    $('s2-pre').onclick = function () { apply(base('pre')); };
+    $('s2-mode').onchange = function () { readUI(); var s = S; Array.prototype.forEach.call(root.querySelectorAll('select[data-k]'), function (e) { e.innerHTML = optsHtml(e.getAttribute('data-k'), s.p[e.getAttribute('data-k')]); }); modeHint(); sums(); if (s.per !== 'all' && !/^\d+$/.test(s.per)) s.per = 'all'; setPer(s.per); run(); };
+    $('s2-set').addEventListener('change', function (e) { if (e.target.closest('.s2-sec')) sums(); });
+    $('s2-set').addEventListener('input', function (e) { if (e.target.id === 's2-fee') sums(); });
     $('s2-lag').onchange = function () { if (S.per === 'rnd-done') S.per = 'custom'; run(); };   /* 같은 날 ↔ 하루 늦게 바로 비교 */
     Array.prototype.forEach.call(root.querySelectorAll('#s2-per button'), function (b) { b.onclick = function () { S.per = b.getAttribute('data-p'); setPer(S.per); run(); }; });
     ['s2-from', 's2-to'].forEach(function (id) { $(id).addEventListener('change', function () { S.per = 'custom'; setPer(''); }); });
@@ -19476,6 +19591,386 @@ if (typeof module !== 'undefined') module.exports = SMB;
   window.S2debug = { S: function () { return S; }, last: function () { return LAST; }, run: run, dist: function () { return DIST; }, opts: function (D) { return engOpts(D); } };
 })();
 /* [/SMA200] */
+
+/* ════════════════════════════════════════════════════════════
+   [T72BT] 72루틴 백테스트 — 관리자 전용 화면 (/72-backtest/ · #tb-root) · 72루틴 화면 '이 설정으로 백테스트'를 따로 뗀 것
+   · 모양: 72루틴 자동매매 프로그램(routine72-auto) '백테스트' 탭과 같은 양식 — 조건 카드 → 요약 칸 · 그래프(휠 확대) · 시작일별 분포 · 연도별/사이클별/일자별 표 · CSV
+   · 계산 = 72루틴 화면과 같은 엔진 MHV(V1.0 규칙 · SOXL · 72분할 · 목표 +52.5% · 상단 매수선 13% · 평단 매수선 0% · 소진 대응 recover · 1주 단위 · T 반올림 r2)
+            = 프로그램 cfg72 · 고를 것: 1회 매수금(복리/일부분 복리 + 비율) · 새 사이클(다음 날/RSI(14) 60 이하) · 주문 넣는 때 · 증권사 주문 거부 · 수수료 · 양도세(선입선출/이동평균 · 연말 절세) · 분배금
+   · 자료: 실전 = SOXL 실제 일봉(MBT.load — 72루틴 화면과 같음) / 상장 전 포함 = 상장 전 재현 + 실제 일봉(MBT.preload · hiAlpha · join — 72루틴 화면 '상장 전 포함'과 같음)
+   · 시작일별 분포는 상장 뒤 실제 일봉만(72루틴 화면·프로그램과 같은 정의 — R72D) · 설정은 이 브라우저에만(localStorage 'tb-set')
+   · 관리자 확인([ADMIN] dcAdmin.when) 뒤에만 시작 — 그 전엔 자료도 받지 않음
+════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+  var root = document.getElementById('tb-root'); if (!root || typeof MHV === 'undefined' || !window.MBT) return;
+  var LSK = 'tb-set', SK = 'tb-open', CAP_DEF = 100000, SEC = 0.0000206, PER = 50;
+  var FL_M = [['none', '기존 계산 — 그날 고가가 지정가에 닿으면 지정가'], ['open', '정규장 시작 전 — 갭 상승이면 그날 시가'], ['pre', '프리장 시작(한국 17~18시) — 전날 종가가 이미 넘으면 전날 종가']];
+  var RJ_M = [['none', '반영 안 함'], ['clamp', '한도로 낮춰 넣기'], ['skip', '그날 건너뛰기']];
+  function base(mode) { return { per: 'all', from: '', to: '', cap: CAP_DEF, mode: mode === 'pre' ? 'pre' : 'real', money: 'compound', mix: 50, rs: 'next', fl: 'none', rj: 'none', fee: 0.25, tax: 'fifo', hv: 'off', dv: 'on' }; }
+  function load() {
+    var s = base('real');
+    try { var j = JSON.parse(localStorage.getItem(LSK) || 'null'); if (j && typeof j === 'object') {
+      ['per', 'from', 'to', 'mode', 'money', 'rs', 'fl', 'rj', 'tax', 'hv', 'dv'].forEach(function (k) { if (typeof j[k] === 'string') s[k] = j[k]; });
+      if (typeof j.cap === 'number' && j.cap >= 100) s.cap = j.cap; if (typeof j.fee === 'number' && j.fee >= 0 && j.fee <= 5) s.fee = j.fee; if (typeof j.mix === 'number' && j.mix >= 0 && j.mix <= 100) s.mix = j.mix;
+    } } catch (e) {}
+    if (s.mode !== 'pre') s.mode = 'real'; if (s.money !== 'part') s.money = 'compound'; if (s.rs !== 'rsi') s.rs = 'next';
+    if (!FL_M.some(function (m) { return m[0] === s.fl; })) s.fl = 'none'; if (!RJ_M.some(function (m) { return m[0] === s.rj; })) s.rj = 'none';
+    if (['fifo', 'avg', 'none'].indexOf(s.tax) < 0) s.tax = 'fifo'; if (s.hv !== 'on') s.hv = 'off'; if (s.dv !== 'off') s.dv = 'on';
+    return s;
+  }
+  function save() { try { localStorage.setItem(LSK, JSON.stringify(S)); } catch (e) {} }
+  var S = load(), G = {}, LAST = null, CH = null, drawSeq = 0, scale = 'log', tab = 'year', cycF = 'all', page = 0, started = false;
+  try { if (localStorage.getItem('tb-scale') === 'linear') scale = 'linear'; } catch (e) {}
+
+  /* ── 글자 ── */
+  function $(id) { return document.getElementById(id); }
+  var esc = BTUI.esc;
+  function usd(x) { return x == null || !isFinite(x) ? '—' : (x < 0 ? '−$' : '$') + Math.abs(x).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function krw(x) { return x == null || !isFinite(x) ? '—' : (x < 0 ? '−' : '') + Math.round(Math.abs(x)).toLocaleString('ko-KR') + '원'; }
+  function pct(x, d) { return x == null || !isFinite(x) ? '—' : (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x * 100).toFixed(d == null ? 2 : d) + '%'; }
+  function cls(x) { return x > 0 ? 'up' : x < 0 ? 'dn' : ''; }
+  function fq(q) { return Math.abs(q - Math.round(q)) < 1e-9 ? Math.round(q).toLocaleString('en-US') : (+q.toFixed(4)).toLocaleString('en-US'); }
+  function px(v) { return v == null || !isFinite(v) ? '—' : (v < 0 ? '−$' : '$') + (Math.abs(v) >= 1 ? Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : Math.abs(v).toPrecision(3)); }
+  function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+  function msg(t, bad) { var m = $('tb-msg'); if (m) { m.textContent = t || ''; m.classList.toggle('bad', !!bad); } }
+
+  /* ── 설정 (72루틴 화면 [T72] 고정 규칙 = 프로그램 cfg72) ── */
+  function cfg72() {
+    var c = MHV.defaults('1.0', 'SOXL');
+    c.splits = 72; c.target = 52.5; c.big = 13; c.avgOff = 0; c.exhaust = 'recover'; c.ideal = false; c.lines = 0; c.shares = 1; c.tround = 'r2'; c.rebase = false;
+    c.restart = S.rs === 'rsi' ? 'rsi' : 'next';
+    if (S.money === 'part') { c.money = 'part'; c.mix = Math.max(0, Math.min(1, S.mix / 100)); } else c.money = 'compound';
+    return c;
+  }
+  function sumOf(id, x) {
+    if (id === 'rule') return 'SOXL · 72분할 · 목표 +52.5% · 상단 매수선 +13% · ' + (x.money === 'part' ? '일부분 복리 ' + x.mix + '%' : '복리') + ' · 새 사이클 ' + (x.rs === 'rsi' ? 'RSI(14) 60 이하' : '다음 날');
+    if (id === 'fill') return '주문 넣는 때 ' + FL_M.filter(function (m) { return m[0] === x.fl; })[0][1].split(' — ')[0] + ' · 주문 거부 ' + RJ_M.filter(function (m) { return m[0] === x.rj; })[0][1];
+    if (id === 'cost') return '수수료 ' + x.fee + '% + SEC · 양도세 ' + ({ fifo: '선입선출', avg: '이동평균', none: '미포함' }[x.tax] || '') + (x.tax !== 'none' && x.hv === 'on' ? ' · 연말 절세' : '') + ' · 분배금 ' + (x.dv === 'on' ? '받음(15% 원천징수)' : '끔');
+    return '';
+  }
+  function uiX() { return { money: $('tb-money').value, mix: $('tb-mix').value, rs: $('tb-rs').value, fl: $('tb-fl').value, rj: $('tb-rj').value, fee: $('tb-fee').value, tax: $('tb-tax').value, hv: $('tb-hv').value, dv: $('tb-dv').value }; }
+  function sums() { var x = uiX(); Array.prototype.forEach.call(root.querySelectorAll('[data-sum]'), function (e) { e.textContent = sumOf(e.getAttribute('data-sum'), x); }); $('tb-mix').disabled = x.money !== 'part'; $('tb-hv').disabled = x.tax === 'none'; }
+  function sel(id, list, v) { return '<select id="' + id + '">' + list.map(function (o) { return '<option value="' + o[0] + '"' + (String(v) === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>'; }
+  function setHtml() {
+    var h = '<div class="s2-card" id="tb-set"><h3>72루틴 백테스트 <span class="s2-sub">72루틴 화면과 같은 계산 엔진 · SOXL 실제 일봉(2010~) · 상장 전 재현 포함 선택</span></h3>' +
+      '<div class="f"><label>기간</label><div class="s2-row"><span class="s2-seg" id="tb-per">' + [['1', '1년'], ['3', '3년'], ['5', '5년'], ['10', '10년'], ['all', '전체'], ['rnd', '시작 시점 랜덤']].map(function (p) {
+        return '<button type="button" data-p="' + p[0] + '"' + (S.per === p[0] ? ' class="on"' : '') + '>' + p[1] + '</button>'; }).join('') + '</span>' +
+      '<span class="s2-dates"><input type="date" id="tb-from" aria-label="시작일"> ~ <input type="date" id="tb-to" aria-label="끝일"></span></div>' +
+      '<span class="hint">시작일 = 첫 매수일(원금 기준일은 그 전 거래일 종가) · 끝일 종가로 평가</span></div>' +
+      '<div class="f"><label for="tb-cap">원금 ($)</label><input id="tb-cap" type="number" min="100" step="100" value="' + S.cap + '"></div>' +
+      '<div class="f s2-wf"><label for="tb-mode">자료</label>' + sel('tb-mode', [['real', '실전 — SOXL 상장(2010-03) 뒤 실제 일봉'], ['pre', '상장 전 포함 — 상장 전 재현 가격 + 실제 일봉 (계산은 실전과 같음)']], S.mode) +
+        '<span class="hint" id="tb-mode-h"></span></div>' +
+      '<div class="s2-secs"><button type="button" class="s2-link" data-secall="1">모두 펼치기</button><button type="button" class="s2-link" data-secall="0">모두 접기</button></div>';
+    h += BTUI.sec(SK, 'rule', '72루틴 규칙', sumOf('rule', S),
+      '<div class="f"><label>고정 규칙</label><span class="s2-small" style="margin:0">SOXL · 72번 나눠 사기 · 평단 +52.5% 지정가 전량 매도 · 평단 매수선 = 평단 그대로 · 상단 매수선 = 어제 종가 +13% · 원금을 다 쓰면 매수를 멈추고 종가가 평단 −10% 안으로 오면 전량 매도 · 1주 단위</span></div>' +
+      '<div class="f"><label for="tb-money">1회 매수금</label>' + sel('tb-money', [['compound', '복리'], ['part', '일부분 복리']], S.money) + '</div>' +
+      '<div class="f"><label for="tb-mix">일부분 복리 비율 (%)</label><input id="tb-mix" type="number" min="0" max="100" step="1" value="' + S.mix + '"><span class="hint">\'일부분 복리\'일 때만 · 번 돈은 이 비율만큼만 다음 사이클에 더하고, 잃은 돈은 전부 반영(기준 원금도 낮춤)</span></div>' +
+      '<div class="f"><label for="tb-rs">새 사이클</label>' + sel('tb-rs', [['next', '다음 날 바로'], ['rsi', 'RSI(14) 60 이하일 때']], S.rs) + '</div>');
+    h += BTUI.sec(SK, 'fill', '체결 가정', sumOf('fill', S),
+      '<div class="f s2-wf"><label for="tb-fl">주문 넣는 때</label>' + sel('tb-fl', FL_M, S.fl) + '<span class="hint">LOC 매수는 셋 다 종가 · 지정가 매도가 체결되는 값만 다름 · 프리장 고가는 몰라 갭 상승도 지정가로</span></div>' +
+      '<div class="f"><label for="tb-rj">증권사 주문 거부</label>' + sel('tb-rj', RJ_M, S.rj) + '<span class="hint">매수 지정가가 주문 넣는 때 가격(그날 시가 · 프리장이면 전날 종가)의 120%(1센트 버림)를 넘으면 증권사가 받지 않는다고 봄 · 한도로 낮춰 넣기 = 수량 그대로 한도 가격에 · 그날 건너뛰기 = 그날 매수 없음</span></div>');
+    h += BTUI.sec(SK, 'cost', '거래 비용 · 세금', sumOf('cost', S),
+      '<div class="f"><label for="tb-fee">매매 수수료 (%)</label><input id="tb-fee" type="number" step="0.01" min="0" max="5" value="' + S.fee + '"><span class="hint">살 때·팔 때마다 거래 금액 × 수수료율 + 팔 때 SEC 0.00206% · 기본 0.25%</span></div>' +
+      '<div class="f"><label for="tb-tax">양도세</label>' + sel('tb-tax', [['fifo', '포함 — 선입선출'], ['avg', '포함 — 이동평균'], ['none', '미포함']], S.tax) + '<span class="hint">해외주식: 1~12월(결제일 기준) 실현 손익 원화 − 250만 원 × 22% · 이듬해 5월 31일 이후 첫 거래일에 계좌 현금으로(모자라면 보유를 팔아서)</span></div>' +
+      '<div class="f s2-wf"><label for="tb-hv">연말 절세</label>' + sel('tb-hv', [['off', '안 함'], ['on', '함 — 그해 이익이 250만 원을 넘고 손해 중인 주식이 있으면 연말에 팔고 같은 값에 다시 사서 손실 확정']], S.hv) + '</div>' +
+      '<div class="f"><label for="tb-dv">분배금</label>' + sel('tb-dv', [['on', '받음 — 분배락일 보유분 × (1 − 15%) 현금'], ['off', '끔']], S.dv) + '</div>');
+    h += '<div class="s2-row" style="margin-top:12px"><button type="button" class="s2-btn pri" id="tb-run">계산</button><button type="button" class="s2-btn" id="tb-def" title="SOXL 상장 뒤 실제 일봉 · 복리 · 다음 날 · 기존 계산 · 수수료 0.25% · 양도세 선입선출 · 분배금 받음">기본값 (실전)</button>' +
+      '<button type="button" class="s2-btn" id="tb-pre" title="기본값 (실전)과 같은 조건 · 자료만 상장 전 재현 가격 + 실제 일봉">상장 전 포함</button><span class="s2-msg" id="tb-msg"></span></div></div>' +
+      '<div id="tb-out"></div>';
+    root.innerHTML = h;
+    BTUI.bindSecs(root, SK);
+    modeHint(); sums();
+  }
+  function modeHint() {
+    var e = $('tb-mode-h'); if (!e) return;
+    e.textContent = S.mode === 'pre' ? '상장(2010-03-11) 전은 SOXX(반도체 지수 ETF) × 약 3배로 다시 만든 재현 가격(72루틴 화면 \'상장 전 포함\'과 같은 식 · 고가는 추정) + 그 뒤 실제 일봉 · 재현 구간은 분배금 없음'
+      : 'SOXL 실제 일봉(data/etfcagr.json — 주식 분할만 반영한 종가·고가 · 분배금은 분배락일 현금) · 1주 단위 · LOC 는 종가, 지정가 매도는 그날 고가가 닿으면 지정가';
+  }
+  function readUI() {
+    var num = function (id) { var t = String($(id).value).trim(); return t === '' ? NaN : +t; };
+    var c = num('tb-cap'); S.cap = c >= 100 && c <= 1e12 ? Math.round(c * 100) / 100 : CAP_DEF; $('tb-cap').value = S.cap;
+    S.mode = $('tb-mode').value === 'pre' ? 'pre' : 'real';
+    S.money = $('tb-money').value === 'part' ? 'part' : 'compound';
+    var m = num('tb-mix'); S.mix = m >= 0 && m <= 100 ? m : 50; $('tb-mix').value = S.mix;
+    S.rs = $('tb-rs').value === 'rsi' ? 'rsi' : 'next'; S.fl = $('tb-fl').value; S.rj = $('tb-rj').value;
+    var f = num('tb-fee'); S.fee = f >= 0 && f <= 5 ? f : 0.25; $('tb-fee').value = S.fee;
+    S.tax = $('tb-tax').value; S.hv = $('tb-hv').value === 'on' ? 'on' : 'off'; S.dv = $('tb-dv').value === 'off' ? 'off' : 'on';
+    S.from = $('tb-from').value; S.to = $('tb-to').value;
+  }
+  function apply(s) { S = s; save(); setHtml(); bind(); setPer(S.per); run(); }
+
+  /* ── 자료 (72루틴 화면 btRun 과 같은 순서 · 같은 함수) ── */
+  function getData(mode) {
+    var B = window.MBT, op = S.fl !== 'none' || S.rj !== 'none', key = mode + (op ? '+o' : '');
+    if (G[key]) return G[key];
+    G[key] = Promise.all([B.load('SOXL'), B.fxData().catch(function () { return null; }), mode === 'pre' ? B.preload('SOXL').catch(function () { return null; }) : null]).then(function (a) {
+      return op ? B.withOpen(a[0]).then(function () { return a; }) : a;   /* 주문 거부·주문 넣는 때: 그날 시가 */
+    }).then(function (a) {
+      var D0 = a[0], F = a[1], PR = a[2], DD = D0, note = '';
+      if (!D0.h) D0.h = D0.c.slice();
+      if (mode === 'pre') { var al = B.hiAlpha(D0, 1), J = PR && al != null ? B.join(D0, PR, al) : null; if (J) DD = J; else note = (PR ? '상장 전 재현을 이어 붙이지 못해' : '상장 전 재현 자료를 받지 못해') + ' 실제 일봉만 썼어요'; }
+      return (op && DD !== D0 ? B.preOpen(DD, 'SOXL', DD.L) : Promise.resolve(DD)).then(function () { return { D0: D0, D: DD, F: F, PR: PR, note: note }; });
+    });
+    G[key].catch(function () { delete G[key]; });
+    return G[key];
+  }
+  function idxGE(D, s) { if (!s) return -1; for (var i = 1; i < D.d.length; i++) if (D.d[i] >= s) return i; return -1; }
+  function idxLE(D, s) { if (!s) return -1; for (var i = D.d.length - 1; i >= 1; i--) if (D.d[i] <= s) return i; return -1; }
+  function engOpts(D, F) {
+    var fx = S.tax !== 'none' && F ? window.MBT.fxFor(D.d, F) : null;
+    return { capital: S.cap, fee: S.fee / 100, sec: SEC, divTax: 0.15, norm: 'auto', rows: true, fx: fx,
+             tax: fx ? { fx: function (i) { return fx[i]; }, method: S.tax, harvest: S.hv === 'on' } : null,
+             rej: S.rj === 'none' ? null : { mode: S.rj, cap: 1.2 }, fill: S.fl === 'none' ? null : S.fl };
+  }
+
+  /* ── 계산 ── */
+  var runSeq = 0;
+  function run() {
+    readUI(); save(); modeHint();
+    var seq = ++runSeq; msg('자료를 받는 중…');
+    getData(S.mode).then(function (x) { if (seq === runSeq) compute(x); }, function (e) { if (seq === runSeq) msg((e && e.message) || '일봉을 받지 못했어요', true); });
+  }
+  function compute(X) {
+    var D = S.dv === 'on' ? X.D : Object.assign({}, X.D, { dv: null }), last = D.d.length - 1;
+    var fi = $('tb-from'), ti = $('tb-to'); fi.min = ti.min = D.d[1]; fi.max = ti.max = D.d[last];
+    var to = S.per === 'all' || /^\d+$/.test(S.per) ? last : idxLE(D, S.to), from;
+    if (to < 1) to = last;
+    if (S.per === 'all') from = 1;
+    else if (/^\d+$/.test(S.per)) { var t0 = new Date(D.d[last] + 'T12:00:00Z'); t0.setUTCFullYear(t0.getUTCFullYear() - (+S.per)); from = idxGE(D, t0.toISOString().slice(0, 10)); }
+    else if (S.per === 'rnd') { var hi = to - 252; if (hi < 1) { msg('끝 날짜가 너무 이르러요 (1년 이상 필요)', true); return; } from = 1 + Math.floor(Math.random() * hi); S.per = 'rnd-done'; }
+    else from = idxGE(D, S.from);
+    var note = X.note ? ' · ' + X.note : '';
+    if (from < 1) { from = 1; if (S.from) note += ' · 시작일을 자료 첫 거래일 다음 날 ' + D.d[1] + '로 맞춤'; }
+    if (!(to - from >= 20)) { msg('기간이 너무 짧아요 (20거래일 이상)', true); return; }
+    fi.value = D.d[from]; ti.value = D.d[to]; S.from = D.d[from]; S.to = D.d[to]; save();
+    var o = engOpts(D, X.F), cfg = cfg72(), t1 = performance.now(), R;
+    try { R = MHV.run(cfg, D, Object.assign({ from: from, to: to }, o)); } catch (e) { msg('계산하지 못했어요: ' + ((e && e.message) || e), true); return; }
+    var B = window.MBT, st = B.stats(R, D, S.cap);
+    /* SOXL 그냥 보유 세후 — 사고팔 때 수수료·SEC · 끝 날 한 번 팔고 양도세 (72루틴 화면·분포 상자와 같은 R72D.bhNet) */
+    var bhN = window.R72D ? B.cagr(S.cap, R72D.bhNet(D, o, from, to, S.cap, MHV.RATE, MHV.DED).final, st.days) : null;
+    /* 끝날 전부 팔면 — 끝날 종가에 다 팔고(수수료·SEC) 밀린 양도세 + 올해 양도세까지 낸 금액 */
+    var liq = R.st.cash + R.st.qty * D.c[to] * R.st.k * (1 - o.fee - o.sec) - (R.taxExt || 0);
+    if (o.tax) { var ly = R.taxes.reduce(function (m, t) { return Math.max(m, t.y); }, -1), lt = R.taxes.filter(function (t) { return t.y === ly; })[0];
+      var unp = R.taxes.filter(function (t) { return t.paid == null && t.y !== ly && t.tax > 0; }).reduce(function (a, t) { return a + t.tax; }, 0);
+      liq -= (unp + Math.max(0, (lt ? lt.gain : 0) + (R.unrealKrw || 0) - MHV.DED) * MHV.RATE) / o.fx[to]; }
+    LAST = { D: D, X: X, R: R, st: st, o: o, cfg: cfg, from: from, to: to, bhN: bhN, liq: liq, cagrLiq: B.cagr(S.cap, liq, st.days) };
+    msg(D.d[from] + ' ~ ' + D.d[to] + ' · ' + ((performance.now() - t1) / 1000).toFixed(2) + '초' + note + (S.tax !== 'none' && !o.fx ? ' · 원/달러 자료를 받지 못해 양도세 빼고 계산' : ''));
+    cycF = 'all'; page = 0; out(); dist();
+  }
+
+  /* ── 결과 카드 ── */
+  function kv(lab, val, c, sub) { return '<div><small>' + lab + '</small><b' + (c ? ' class="' + c + '"' : '') + '>' + val + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</div>'; }
+  function out() {
+    var L = LAST, R = L.R, st = L.st, D = L.D, cap = S.cap, tx = !!L.o.tax, N = R.n || {};
+    var nB = R.rows.filter(function (r) { return r.bq > 0; }).length, nS = R.rows.filter(function (r) { return r.sq > 0; }).length;
+    var pre = D.L > 0 && D.L > L.from ? D.L : 0;
+    var hd = '<div class="s2-card"><div class="s2-kv" id="tb-kv">' +
+      kv('최종 평가금', usd(st.final)) +
+      kv('기간 총 수익률', pct(st.ret), cls(st.ret), '원금 ' + usd(cap) + ' 대비') +
+      kv('연평균(CAGR)', pct(st.cagr), cls(st.cagr), st.years.toFixed(2) + '년') +
+      kv('최대 낙폭(MDD)', pct(st.mdd), 'dn', st.mddFrom + ' → ' + st.mddTo) +
+      kv('끝날 전부 팔면', usd(L.liq), '', '연 ' + pct(L.cagrLiq) + ' · 팔 때 수수료·SEC' + (tx ? ' + 올해까지 양도세' : '') + ' 뺀 값') +
+      kv('사이클', R.cycles.length + '번', '', '익절 ' + (N.win || 0) + ' · 손실 마감 ' + (N.loss || 0) + ' · 소진 대응 매도 ' + (N.xsell || 0) + (R.cycles.length && R.cycles[R.cycles.length - 1].open ? ' · 마지막 진행 중' : '')) +
+      kv('SOXL 그냥 보유', pct(st.bh.cagr), '', '총 ' + pct(st.bh.ret) + ' · MDD ' + pct(st.bh.mdd) + (L.bhN != null ? ' · 세후 연 ' + pct(L.bhN) : '')) +
+      kv('낸 수수료·세금', usd(R.fees + (R.taxPaid || 0)), '', '수수료 ' + usd(R.fees) + (tx ? ' · 양도세 ' + usd(R.taxPaid || 0) : '') + (R.divs ? ' · 분배금 ' + usd(R.divs) + ' 받음' : '')) +
+      (tx ? kv('아직 안 낸 양도세', usd(R.taxDue || 0), '', '이듬해 5월에 낼 세금(위 평가금에서 안 뺌)') : '') + '</div>' +
+      (R.nob > 0 ? '<p class="s2-small warn">⚠ 1회 매수금이 1주 가격보다 작은 날이 ' + R.nob.toLocaleString() + '일 — 원금을 늘려 보세요</p>' : '') +
+      (pre ? '<p class="s2-small warn">' + D.d[L.from] + ' ~ ' + D.d[pre - 1] + '은 상장 전 재현 가격(SOXX × 약 3배로 다시 만든 값 · 고가는 추정 · 가격 예상 오차 연 ±' + (L.X.PR && L.X.PR.rc ? (Math.max(L.X.PR.rc.x || 0, L.X.PR.rc.xc || 0) * 100).toFixed(1) : '?') + '%p) — 그래프의 주황 점선이 상장일</p>' : '') +
+      '<div class="s2-ctl"><span class="s2-seg" id="tb-scale"><button type="button" data-s="log"' + (scale === 'log' ? ' class="on"' : '') + '>로그</button><button type="button" data-s="linear"' + (scale !== 'log' ? ' class="on"' : '') + '>일반</button></span>' +
+      '<span class="s2-small">▲ 매수 ' + nB.toLocaleString() + '일 · ▼ 매도 ' + nS.toLocaleString() + '일 (종가 선 위 · 범례를 눌러 끄고 켜기)</span><span class="s2-zh">' + BTUI.HINT + '</span></div>' +
+      '<div class="s2-chart"><canvas id="tb-c"></canvas></div>' +
+      '<p class="s2-small">왼쪽 눈금 = SOXL 종가 · 평단(보유가 있는 날) · 오른쪽 파란 눈금 = 72루틴 총자산 · 그냥 보유</p>' +
+      '<div id="tb-dist"></div>' +
+      '<div class="s2-ctl s2-tabs"><span class="s2-seg" id="tb-tab">' + [['year', '연도별'], ['cycle', '사이클별 (' + R.cycles.length + ')'], ['day', '일자별']].map(function (x) {
+        return '<button type="button" data-v="' + x[0] + '"' + (x[0] === tab ? ' class="on"' : '') + '>' + x[1] + '</button>'; }).join('') + '</span>' +
+      '<button type="button" class="s2-btn" id="tb-csv">CSV 내보내기</button></div><div id="tb-tb"></div>' +
+      '<p class="s2-small">가정: LOC 는 종가 체결 · 지정가 매도는 ' + (S.fl === 'open' ? '정규장 시작 전에 넣었다고 봄(갭 상승이면 그날 시가, 아니면 고가가 닿을 때 지정가)' : S.fl === 'pre' ? '프리장 시작에 넣었다고 봄(전날 종가가 이미 넘으면 전날 종가, 아니면 고가가 닿을 때 지정가)' : '그날 고가가 닿으면 지정가') +
+      (S.rj !== 'none' ? ' · 증권사 주문 거부 ' + RJ_M.filter(function (m) { return m[0] === S.rj; })[0][1] : '') +
+      ' · 수수료 ' + S.fee + '% + 매도 SEC · ' + (S.dv === 'on' ? '분배금 원천징수 15% 뒤 현금' : '분배금 끔') + (tx ? ' · 양도세는 이듬해 5월 말 계좌에서' + (S.hv === 'on' ? ' · 연말 절세' : '') : '') +
+      ' · SOXL 그냥 보유는 시작 전날 종가에 원금 전부(분배금·세금 빼고) · 그냥 보유 세후 = 사고팔 때 수수료·SEC 와 끝 날 한 번 팔고 낸 양도세(22% · 250만 원 공제)를 뺀 값 · 기간 총 수익률 = 최종 평가금 ÷ 원금 − 1. 과거 결과는 미래를 보장하지 않아요.</p></div>';
+    $('tb-out').innerHTML = hd;
+    draw(); table();
+  }
+
+  /* ── 그래프 (프로그램 drawBT 와 같은 4선 + 매수·매도 표시 · 휠 확대) ── */
+  function draw() {
+    var L = LAST; if (!L || !$('tb-c') || !window.Chart) return;
+    var D = L.D, R = L.R, a = L.from, b = L.to, lab = D.d.slice(a, b + 1);
+    var amt = function (v, q, k) { return usd(v) + (k === 1 && q > 0 ? ' (' + Math.round(q).toLocaleString() + '주)' : ''); };
+    var buys = R.rows.map(function (r) { return r.bq > 0 ? '매수 ' + amt(r.ba, r.bq, r.k) : null; }), sells = R.rows.map(function (r) { return r.sq > 0 ? '매도 ' + amt(r.sa, r.sq, r.k) + (r.end ? ' · 사이클 끝' : '') : null; });
+    var close = lab.map(function (x, i) { return D.c[a + i]; }), avg = R.rows.map(function (r) { return r.q > 0 ? r.avg : null; }), hold = L.st.bhEq;
+    var money = function (v) { return '$' + Math.round(v).toLocaleString('en-US'); };
+    var short = function (v) { var x = Math.abs(v), f = function (y, u) { return '$' + (+y.toFixed(y < 10 ? 1 : 0)) + u; }; return x >= 1e9 ? f(v / 1e9, 'B') : x >= 1e6 ? f(v / 1e6, 'M') : x >= 1e3 ? f(v / 1e3, 'K') : '$' + Math.round(v); };
+    var grid = function () { return 'rgba(' + (css('--fg-rgb') || '255,255,255') + ',0.08)'; }, tick = function () { return css('--text3'); };
+    var ds = [
+      { label: '종가', data: close, yAxisID: 'p', borderColor: '#8b95a1', borderWidth: 1, pointRadius: 0 },
+      { label: '평단', data: avg, yAxisID: 'p', borderColor: '#fe9800', borderWidth: 1.2, pointRadius: 0, spanGaps: false },
+      { label: '총자산', data: R.eq, yAxisID: 'y', borderColor: '#3182f6', borderWidth: 2, pointRadius: 0 },
+      { label: '그냥 보유', data: hold, yAxisID: 'y', borderColor: 'rgba(139,149,161,.75)', borderDash: [5, 4], borderWidth: 1.2, pointRadius: 0 },
+      { label: '매수', data: close.map(function (y, i) { return buys[i] ? y : null; }), info: buys, yAxisID: 'p', showLine: false, pointStyle: 'triangle', pointRadius: BTUI.mkR(false), pointHoverRadius: 6, backgroundColor: 'rgba(240,68,82,.75)', borderColor: 'rgba(240,68,82,.75)', borderWidth: 0, order: -1 },
+      { label: '매도', data: close.map(function (y, i) { return sells[i] ? y : null; }), info: sells, yAxisID: 'p', showLine: false, pointStyle: 'triangle', pointRotation: 180, pointRadius: BTUI.mkR(true), pointHoverRadius: 9, backgroundColor: '#3182f6', borderColor: '#3182f6', borderWidth: 0, order: -2 }
+    ];
+    var cfg = { type: 'line', data: { labels: lab, datasets: ds }, options: { responsive: true, maintainAspectRatio: false, animation: false, normalized: true, interaction: { mode: 'index', intersect: false },
+      scales: { x: { type: 'category', ticks: { maxTicksLimit: 8, maxRotation: 0, autoSkipPadding: 16, color: tick }, grid: { color: grid() } },
+                y: { type: scale === 'log' ? 'logarithmic' : 'linear', position: 'right', ticks: { callback: function (v) { return this.chart.width < 600 ? short(+v) : money(+v); }, color: '#3182f6', maxTicksLimit: 8 }, grid: { display: false } },
+                p: { type: scale === 'log' ? 'logarithmic' : 'linear', position: 'left', ticks: { callback: function (v) { v = +v; return v >= 10 ? '$' + Math.round(v).toLocaleString('en-US') : px(v); }, color: tick, maxTicksLimit: 8 }, grid: { color: grid() } } },
+      plugins: { legend: { labels: { color: function () { return css('--text'); }, usePointStyle: true, sort: function (p, q) { return p.datasetIndex - q.datasetIndex; } } },
+        tooltip: { itemSort: function (p, q) { return p.datasetIndex - q.datasetIndex; }, callbacks: { label: function (c) { return c.dataset.info ? c.dataset.info[c.dataIndex] : c.dataset.label + ': ' + (c.dataset.yAxisID === 'p' ? px(c.parsed.y) : money(c.parsed.y)); } } } } } };
+    var LI = D.L > 0 ? D.L - a : -1;
+    cfg.plugins = [BTUI.vline('tbList', function () { return LI > 0 && LI < lab.length ? LI : null; }, 'SOXL 상장')];
+    var seq = ++drawSeq;
+    BTUI.zoom().then(function (z) {
+      if (seq !== drawSeq || !$('tb-c')) return;
+      if (z) cfg.options.plugins.zoom = BTUI.zoomOpts();
+      if (CH) { try { CH.destroy(); } catch (e) {} }
+      CH = new Chart($('tb-c').getContext('2d'), cfg);
+      BTUI.dbl($('tb-c'), CH);
+    });
+  }
+
+  /* ── 표: 연도별 · 사이클별 · 일자별 (프로그램 btTable 과 같은 구성) ── */
+  function lbl(r) {
+    var t = r.tags || {}, a = [];
+    if (r.hv) a.push('연말 절세 매도·재매수');
+    if (t.xrec || t.xall) a.push('소진 대응 매도 (평단 −10% · 전량)');
+    else if (t.xtax) a.push('양도세 내려 전량 매도 (' + fq(r.ts) + '주)');
+    else if (r.end && r.sq > 0) a.push(t.tp ? '목표가 익절 (+52.5% · 전량)' : '전량 매도');
+    else if (r.sq > 0) a.push('매도');
+    if (r.ts > 0 && !t.xtax) a.push('양도세 내려 ' + fq(r.ts) + '주 매도');
+    if (r.bq > 0) a.push(r.rb ? '새 사이클 첫 매수 (같은 날)' : t.first ? '첫 매수' : t.cap ? '매수 (상단 1회 전부)' : t.avg && t.big ? '매수 (평단·상단)' : t.avg ? '매수 (평단만)' : t.big ? '매수 (상단만 · +0.5회)' : '매수');
+    if (r.exh) a.push('원금 소진 (72회)');
+    if (r.rj) a.push('주문 거부 ' + (S.rj === 'skip' ? '— 그날 매수 건너뜀' : '— 한도로 낮춤'));
+    if (!a.length) a.push(r.ph === '대기' ? '새 사이클 RSI 대기' : r.q > 0 ? (r.ph === '소진' ? '소진 대응 대기 (평단 −10% · 목표가)' : '체결 없음') : '첫 매수 체결 안 됨');
+    if (r.dv > 0) a.push('분배금');
+    return a.join(' + ');
+  }
+  function table() {
+    var el = $('tb-tb'), L = LAST; if (!el || !L) return;
+    var D = L.D, R = L.R, hold = L.st.bhEq, cap = S.cap, tx = !!L.o.tax, a = L.from;
+    if (tab === 'year') {
+      var Y = {}, order = [], e0 = cap, b0 = cap;
+      R.rows.forEach(function (r, i) { var y = D.d[r.i].slice(0, 4); if (!Y[y]) { Y[y] = { e0: e0, b0: b0, rz: 0, fee: 0, dv: 0 }; order.push(y); } var o = Y[y]; o.e1 = r.eq; o.b1 = hold[i]; o.rz += r.rz; o.fee += r.fee; o.dv += r.dv; e0 = r.eq; b0 = hold[i]; });
+      var T = {}; (R.taxes || []).forEach(function (t) { T[t.y] = t; });
+      el.innerHTML = '<div class="s2-tw"><table class="s2-t"><thead><tr><th>연도</th><th>연말 평가금</th><th>72루틴 그해 수익률</th><th>SOXL 그냥 보유</th><th>차이</th><th>실현 손익</th><th>수수료</th><th>분배금</th>' + (tx ? '<th>양도세</th>' : '') + '</tr></thead><tbody>' +
+        order.map(function (y) { var o = Y[y], r = o.e1 / o.e0 - 1, h = o.b1 / o.b0 - 1, t = T[+y];
+          return '<tr><td>' + y + (D.L > 0 && D.d[D.L] > y + '-12-31' ? ' <span class="s2-small">재현</span>' : '') + '</td><td>' + usd(o.e1) + '</td><td class="' + cls(r) + '">' + pct(r) + '</td><td class="' + cls(h) + '">' + pct(h) + '</td><td class="' + cls(r - h) + '">' + (r - h >= 0 ? '+' : '−') + Math.abs((r - h) * 100).toFixed(2) + '%p</td>' +
+            '<td class="' + cls(o.rz) + '">' + usd(o.rz) + '</td><td>' + usd(o.fee) + '</td><td>' + usd(o.dv) + '</td>' +
+            (tx ? '<td>' + (!t ? '—' : !(t.tax > 0) ? '0원' : krw(t.tax) + ' <span class="s2-small">' + (t.paid && t.paid !== '-' ? t.paid + ' 납부' + (t.ext ? ' · ' + usd(t.ext) + ' 밖에서' : '') : '미납') + '</span>') + '</td>' : '') + '</tr>'; }).join('') +
+        '</tbody></table></div><p class="s2-small">그해 수익률 = 그해 말 평가금 ÷ 전해 말 평가금 − 1 (첫해는 원금 대비)' + (tx ? ' · 양도세 = 그해(결제일 기준) 실현 손익 원화 환산 − 250만 원 공제 × 22%, 이듬해 5월 말 납부' : '') + ' · \'재현\' = 상장 전 재현 가격으로 계산한 해</p>';
+      return;
+    }
+    if (tab === 'cycle') {
+      var KIND = { win: '<span class="up">익절</span>', loss: '<span class="dn">손실 마감</span>', xsell: '<span>소진 대응 매도</span>', tax: '<span class="dn">세금 내려 전량 매도</span>', open: '<span class="warn">진행 중</span>' }, N = R.n || {};
+      el.innerHTML = '<div class="s2-tw"><table class="s2-t"><thead><tr><th>#</th><th>시작</th><th>끝</th><th>거래일</th><th>운용 원금</th><th>최대 투입</th><th>손익</th><th>수익률</th><th>결과</th></tr></thead><tbody>' +
+        R.cycles.map(function (c) { var e = c.end != null ? c.end : R.to;
+          return '<tr><td>' + c.n + '</td><td>' + D.d[c.from] + (c.rebuy ? ' <span class="s2-small" title="앞 사이클을 익절한 날 그 종가에 바로 새 사이클 첫 매수">같은 날</span>' : '') + '</td><td>' + (c.end != null ? D.d[c.end] : '—') + '</td><td>' + (e - c.from + 1) + '</td><td>' + usd(c.cap) + '</td><td>' + usd(c.maxCost) + '</td>' +
+            '<td class="' + cls(c.pnl) + '">' + usd(c.pnl) + '</td><td class="' + cls(c.pnl) + '">' + pct(c.pnl / c.cap) + '</td><td>' + (KIND[c.kind] || '—') + (c.exh ? ' <span class="s2-small">원금 소진</span>' : '') + '</td></tr>'; }).join('') +
+        '</tbody></table></div><p class="s2-small">익절 ' + (N.win || 0) + '번 · 손실 마감 ' + (N.loss || 0) + '번 · 소진 대응 매도 ' + (N.xsell || 0) + '번 · 원금 소진(72회 다 씀) ' + R.cycles.filter(function (c) { return c.exh; }).length + '사이클 · ' +
+        '시작 \'같은 날\' = 앞 사이클을 익절한 날 바로 새 사이클 · 운용 원금 = 사이클을 시작할 때의 현금 · 최대 투입 = 그 사이클 중 가장 컸던 평단 × 보유 · 수익률 = 손익 ÷ 운용 원금</p>';
+      return;
+    }
+    var idx = []; R.rows.forEach(function (r, i) { if (cycF === 'all' || String(r.n) === cycF) idx.push(i); });
+    var pages = Math.max(1, Math.ceil(idx.length / PER)); if (page >= pages) page = pages - 1; if (page < 0) page = 0;
+    var unit = R.rows.filter(function (r) { return r.k !== 1; }), u0 = unit.length ? D.d[unit[0].i] : null, u1 = unit.length ? D.d[unit[unit.length - 1].i] : null;
+    el.innerHTML = '<div class="s2-row" style="margin-bottom:6px"><select id="tb-cyc" aria-label="사이클 고르기" style="width:auto"><option value="all">전체 사이클</option>' +
+      R.cycles.map(function (c) { return '<option value="' + c.n + '"' + (String(c.n) === cycF ? ' selected' : '') + '>' + c.n + '사이클 (' + D.d[c.from] + ')</option>'; }).join('') + '</select>' +
+      '<span class="s2-small">' + idx.length.toLocaleString() + '일 · ' + (page + 1) + '/' + pages + '쪽</span></div>' +
+      '<div class="s2-tw"><table class="s2-t" id="tb-day"><thead><tr><th>날짜</th><th>사이클</th><th>구분</th><th>종가</th><th>매수</th><th>매도</th><th>평단</th><th>보유</th><th>평가손익</th><th>회차</th><th>현금</th><th>총자산</th></tr></thead><tbody>' +
+      idx.slice(page * PER, page * PER + PER).map(function (i) {
+        var r = R.rows[i], c = D.c[r.i], ch = c / D.c[r.i - 1] - 1, val = r.q * c * r.k, cost = r.avg * r.k * r.q, pl = val - cost, u = r.k !== 1 ? '<sup class="s2-small">*</sup>' : '';
+        return '<tr><td>' + D.d[r.i] + (D.L > 0 && r.i < D.L ? ' <span class="s2-small">재현</span>' : '') + '</td><td>' + (r.n ? r.n + '-' + r.cd : '—') + '</td><td class="s2-l">' + esc(lbl(r)) + '</td><td>' + px(c) + ' <span class="s2-small ' + cls(ch) + '">' + pct(ch, 1) + '</span></td>' +
+          '<td>' + (r.bq > 0 ? fq(r.bq) + '주' + u + ' <span class="s2-small">' + usd(r.ba) + '</span>' : '') + '</td><td>' + (r.sq > 0 ? fq(r.sq) + '주' + u + ' <span class="s2-small">' + usd(r.sa) + '</span>' : '') + '</td>' +
+          '<td>' + (r.q > 0 ? px(r.avg) : '—') + '</td><td>' + (r.q > 0 ? fq(r.q) + u : '0') + '</td><td class="' + cls(pl) + '">' + (r.q > 0 ? usd(pl) + ' <span class="s2-small">' + pct(cost > 0 ? pl / cost : 0, 1) + '</span>' : '—') + '</td>' +
+          '<td>' + (r.q > 0 ? (+r.T).toFixed(1).replace(/\.0$/, '') : '—') + '</td><td>' + usd(r.cash) + '</td><td>' + usd(r.eq) + '</td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      (pages > 1 ? pager(pages, idx.length) : '') +
+      '<p class="s2-small">평가손익 = 보유 × 종가 − 평단 × 보유 · 회차 = 72루틴 회차(평단까지 체결 +1 · 상단만 +0.5) · 매수·매도 금액은 수수료 빼기 전 · \'재현\' = 상장 전 재현 가격의 날' +
+      (unit.length ? ' · <b>*</b> = 가격(수정주가)이 $10 아래일 때 시작한 사이클의 날 (이 기간에서 처음 ' + u0 + ' · 마지막 ' + u1 + '). 이런 사이클은 시작가를 $50 단위로 바꿔 계산해요(1주 단위 반올림 왜곡 방지 — 72루틴 화면과 같음). 그래서 주식 수는 그 단위 기준이고, 금액·평단·손익은 실제 가격 그대로예요' : '') + '</p>';
+  }
+  function pager(pages, total) {
+    var cur = page + 1, list = [], h = '<nav class="s2-pager" aria-label="일자별 쪽"><button type="button" class="dv-pg" data-pg="' + (cur - 1) + '"' + (cur === 1 ? ' disabled' : '') + ' aria-label="이전 쪽">‹</button>', prev = 0;
+    for (var i = 1; i <= pages; i++) if (i === 1 || i === pages || Math.abs(i - cur) <= 2) list.push(i);
+    list.forEach(function (i) { if (i - prev > 1) h += '<span class="dv-pg-gap">…</span>'; h += '<button type="button" class="dv-pg' + (i === cur ? ' active' : '') + '" data-pg="' + i + '"' + (i === cur ? ' aria-current="page"' : '') + '>' + i + '</button>'; prev = i; });
+    h += '<button type="button" class="dv-pg" data-pg="' + (cur + 1) + '"' + (cur === pages ? ' disabled' : '') + ' aria-label="다음 쪽">›</button>' + (window.pgJump ? window.pgJump(pages, cur) : '') +
+      '<span class="dv-pg-info">' + ((cur - 1) * PER + 1).toLocaleString() + '–' + Math.min(cur * PER, total).toLocaleString() + ' / ' + total.toLocaleString() + '일</span></nav>';
+    return h;
+  }
+  /* CSV — 일자별 전부(사이클 고르기와 상관없이) · 엑셀 한글 BOM (프로그램 btCsv 와 같은 열 + 재현 표시) */
+  function csv() {
+    var L = LAST; if (!L) return;
+    var R = L.R, D = L.D;
+    var head = ['사이클', '사이클일차', '전체일차', '날짜', '구분', '종가', '등락률(%)', '매수수량', '매수금액', '매도수량', '매도금액', '평단가', '보유수량', '평가금', '매수원가', '평가손익', '수익률(%)', '실현손익', '누적실현손익', '수수료', '분배금', '회차', '현금', '총자산', '가격단위배율', '상장 전 재현'];
+    var q = function (s) { return '"' + String(s).replace(/"/g, '""') + '"'; };
+    var lines = [head.join(',')].concat(R.rows.map(function (r, j) {
+      var c = D.c[r.i], val = r.q * c * r.k, cost = r.avg * r.k * r.q;
+      return [r.n, r.cd, j + 1, D.d[r.i], q(lbl(r)), c.toFixed(4), ((c / D.c[r.i - 1] - 1) * 100).toFixed(2), +r.bq.toFixed(4), r.ba.toFixed(2), +r.sq.toFixed(4), r.sa.toFixed(2), r.q > 0 ? r.avg.toFixed(4) : '', +r.q.toFixed(4),
+        val.toFixed(2), cost.toFixed(2), (val - cost).toFixed(2), cost > 0 ? ((val / cost - 1) * 100).toFixed(2) : '', r.rz.toFixed(2), r.cum.toFixed(2), r.fee.toFixed(4), r.dv.toFixed(4), (+r.T).toFixed(2), r.cash.toFixed(2), r.eq.toFixed(2), +r.k.toFixed(6), D.L > 0 && r.i < D.L ? 'Y' : ''].join(',');
+    }));
+    var el = document.createElement('a');
+    el.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    el.download = 'routine72-backtest-' + D.d[L.from] + '_' + D.d[L.to] + '.csv';
+    document.body.appendChild(el); el.click(); setTimeout(function () { URL.revokeObjectURL(el.href); el.remove(); }, 1000);
+  }
+
+  /* ── 시작일별 분포 — R72D(72루틴 화면·프로그램과 같은 코드) · 상장 뒤 실제 일봉만 · 위와 같은 설정·수수료·세금 · 끝 = 위 끝 날짜(상장 뒤로 맞춤) ── */
+  var DIST = { c: window.R72D ? R72D.cache(4) : null, st: null, m: null, u: { hold: 1, tab: 'cagr', due: false } };
+  function distPaused() { var b = document.getElementById('tb-r7d'); return !!document.hidden || !b || !b.offsetParent; }
+  function distUpd(st, full) { if (st !== DIST.st) return; var b = document.getElementById('tb-r7d'); if (!b) return; if (full) b.outerHTML = R72D.html(st, DIST.m, DIST.u); else R72D.prog(b, st); }
+  function dist() {
+    var box = $('tb-dist'), L = LAST; if (!box || !L || !DIST.c) return;
+    R72D.inject();
+    var D0 = S.dv === 'on' ? L.X.D0 : Object.assign({}, L.X.D0, { dv: null }), to = -1;
+    for (var j = D0.d.length - 1; j >= 1; j--) if (D0.d[j] <= L.D.d[L.to]) { to = j; break; }
+    if (to < 21) { box.innerHTML = '<p class="s2-small">끝 날짜가 SOXL 상장 뒤 20거래일이 안 돼 시작일별 분포는 계산하지 않아요 (상장 뒤 실제 일봉만 씀)</p>'; return; }
+    var fx0 = S.tax !== 'none' && L.X.F ? window.MBT.fxFor(D0.d, L.X.F) : null, cfg = L.cfg;
+    var o = { fee: S.fee / 100, sec: SEC, divTax: 0.15, norm: 'auto', tax: fx0 ? { fx: function (i) { return fx0[i]; }, method: S.tax, harvest: S.hv === 'on' } : null,
+              rej: S.rj === 'none' ? null : { mode: S.rj, cap: 1.2 }, fill: S.fl === 'none' ? null : S.fl };
+    var key = JSON.stringify([cfg, S.cap, S.fee, S.tax, S.hv, S.dv, S.fl, S.rj, !!fx0, D0.d[to], D0.d[D0.d.length - 1], D0.c[D0.c.length - 1]]);
+    var st = DIST.c.get(key);
+    if (!st) st = DIST.c.put(key, R72D.job({ plan: R72D.plan(D0.d, to), run: function (s) { return R72D.one(MHV, cfg, D0, o, s, to, S.cap); }, paused: distPaused, update: distUpd }));
+    DIST.st = st;
+    DIST.m = { id: 'tb-r7d', end: D0.d[to], first: D0.d[1], net: true, tax: !!fx0,
+      set: '원금 ' + usd(S.cap).replace('.00', '') + ' · 수수료 ' + S.fee + '% + SEC · ' + (S.dv === 'on' ? '분배금 원천징수 15%' : '분배금 끔') + ' · ' + (fx0 ? '양도소득세 22%(250만 원 공제 · ' + (S.tax === 'avg' ? '이동평균' : '선입선출') + (S.hv === 'on' ? ' · 연말 절세' : '') + ')' : S.tax === 'none' ? '양도세 제외' : '원/달러 자료가 없어 양도세 빼고') +
+        (cfg.money === 'part' ? ' · 일부분 복리 ' + Math.round(cfg.mix * 100) + '%' : ' · 복리') + (cfg.restart === 'rsi' ? ' · 새 사이클 RSI(14) 60 이하' : '') +
+        (S.fl !== 'none' ? ' · 주문 넣는 때 ' + FL_M.filter(function (m) { return m[0] === S.fl; })[0][1].split(' — ')[0] : '') + (S.rj !== 'none' ? ' · 주문 거부 ' + RJ_M.filter(function (m) { return m[0] === S.rj; })[0][1] : '') +
+        (S.mode === 'pre' ? ' · 분포는 상장 뒤 실제 일봉만(재현 구간 제외)' : '') };
+    box.innerHTML = R72D.html(st, DIST.m, DIST.u);
+  }
+
+  /* ── 이벤트 ── */
+  function bind() {
+    $('tb-run').onclick = function () { if (S.per === 'rnd-done') S.per = 'custom'; run(); };
+    $('tb-def').onclick = function () { apply(base('real')); };
+    $('tb-pre').onclick = function () { apply(base('pre')); };
+    $('tb-mode').onchange = function () { if (S.per !== 'all' && !/^\d+$/.test(S.per)) { S.per = 'all'; setPer('all'); } run(); };
+    Array.prototype.forEach.call(root.querySelectorAll('#tb-per button'), function (b) { b.onclick = function () { S.per = b.getAttribute('data-p'); setPer(S.per); run(); }; });
+    ['tb-from', 'tb-to'].forEach(function (id) { $(id).addEventListener('change', function () { S.per = 'custom'; setPer(''); }); });
+    $('tb-set').addEventListener('change', function (e) { if (e.target.closest('.s2-sec')) sums(); });
+    $('tb-set').addEventListener('input', function (e) { if (e.target.id === 'tb-fee' || e.target.id === 'tb-mix') sums(); });
+    root.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.closest('#tb-set')) { e.preventDefault(); $('tb-run').click(); } });
+  }
+  function setPer(p) { Array.prototype.forEach.call(root.querySelectorAll('#tb-per button'), function (b) { b.classList.toggle('on', b.getAttribute('data-p') === p); }); }
+  root.addEventListener('click', function (e) {
+    var t = e.target.closest ? e.target : null; if (!t) return;
+    var sb = t.closest('#tb-scale button'); if (sb) { scale = sb.getAttribute('data-s'); try { localStorage.setItem('tb-scale', scale); } catch (x) {} Array.prototype.forEach.call(root.querySelectorAll('#tb-scale button'), function (x) { x.classList.toggle('on', x === sb); }); draw(); return; }
+    var tb = t.closest('#tb-tab button'); if (tb) { tab = tb.getAttribute('data-v'); page = 0; Array.prototype.forEach.call(root.querySelectorAll('#tb-tab button'), function (x) { x.classList.toggle('on', x === tb); }); table(); return; }
+    if (t.closest('#tb-csv')) { csv(); return; }
+    var pg = t.closest('.s2-pager .dv-pg[data-pg]'); if (pg && !pg.disabled) { page = Math.max(0, +pg.getAttribute('data-pg') - 1); table(); var tt = $('tb-tb'); if (tt && tt.getBoundingClientRect().top < 0) tt.scrollIntoView({ block: 'start' }); return; }
+    var db = t.closest('#tb-r7d [data-r7d]'); if (db && DIST.st) { var k = db.getAttribute('data-r7d'), v = db.getAttribute('data-v');
+      if (k === 'hold' && [1, 3, 5, 10].indexOf(+v) >= 0) DIST.u.hold = +v; else if (k === 'tab') DIST.u.tab = v; else if (k === 'due') DIST.u.due = v === '1'; else return;
+      var x = $('tb-r7d'); if (x) x.outerHTML = R72D.html(DIST.st, DIST.m, DIST.u); }
+  });
+  root.addEventListener('change', function (e) { if (e.target.id === 'tb-cyc') { cycF = e.target.value; page = 0; table(); } });
+  root.addEventListener('pointermove', function (e) { if (window.R72D && ((e.target.closest && e.target.closest('#tb-r7d .r7d-ln')) || root.querySelector('#tb-r7d .r7d-cur:not([hidden])'))) R72D.hover(e); }, { passive: true });
+  root.addEventListener('pointerleave', function (e) { if (window.R72D && e.target && e.target.classList && e.target.classList.contains('r7d-ln')) R72D.hover(e); }, true);
+
+  function start() { if (started) return; started = true; setHtml(); bind(); setPer(S.per); run(); }
+  window.tbRender = function () { var pg = document.getElementById('page-t72bt'); if (!pg || !pg.classList.contains('active')) return; window.dcAdmin.when(start); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.tbRender); else setTimeout(window.tbRender, 0);
+  window.TBdebug = { S: function () { return S; }, last: function () { return LAST; }, run: run, dist: function () { return DIST; }, cfg: cfg72 };
+})();
+/* [/T72BT] */
 
 
 
