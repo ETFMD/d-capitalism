@@ -2002,7 +2002,7 @@ MHZ_DATE = """([cv, px]) => { const c = Chart.getChart(cv), r = cv.getBoundingCl
 
 def mh_zoom_check(pg, base, path, fail):
     """무한매수법 기록·72루틴 화면 '글자 크기'(뿌리 요소 CSS zoom) 130% 에서 마우스 정확도 (2026-10-19 — 툴팁 최대 118px·크게 보기 307px 어긋남 · ⋮ 메뉴가 단추에서 떨어져 뜸 · 크게 보기 휠 중심·끌어 고르기 어긋남)
-       그래프 툴팁 점 = 마우스 아래(브라우저가 받은 좌표로 견줌) · ⋮ 메뉴 = 단추 바로 아래 · 72루틴 크게 보기: 툴팁 · 휠 확대 뒤 마우스 아래 날짜 그대로 · 끌어 고른 구간 = 끈 자리의 날짜 · 고르기 상자 = 마우스 자리"""
+       그래프 툴팁 점 = 마우스 아래(브라우저가 받은 좌표로 견줌) · ⋮ 메뉴 = 단추 바로 아래 · 72루틴 크게 보기: 툴팁 · 휠 확대·축소(여러 자리·이어서) 뒤 마우스 아래 날짜 그대로 · 끌어 고른 구간 = 끈 자리의 날짜 · 고르기 상자 = 마우스 자리 (크게 보기 마우스 자리는 정수 px — 2026-10-21)"""
     where, t72 = ('t72' if path.startswith('72') else 'muhan'), path.startswith('72')
     keys = ['r72-store', 'r72-fontScale'] if t72 else ['muhan4-store', 'muhan4-fontScale']
     vp0 = pg.viewport_size; pg.set_viewport_size({'width': 1280, 'height': 900})   # 마우스를 쓰는 PC 폭 — 앞 검사가 바꿔 둔 폭(휴대폰 430 등)과 무관하게 · 끝나면 되돌림
@@ -2045,13 +2045,22 @@ def mh_zoom_check(pg, base, path, fail):
             ob = pg.locator('[data-act="btz-open"]').first; ob.scroll_into_view_if_needed(); ob.click()
             pg.wait_for_function("() => { const c = document.querySelector('canvas[data-chart=btz]'); return c && Chart.getChart(c); }", timeout=60000); pg.wait_for_timeout(500)
             h, g, y = tips('canvas[data-chart=btz]', '크게 보기 그래프')
-            x = g['L'] + (g['R'] - g['L']) * 0.8; pg.mouse.move(x, y); pg.wait_for_timeout(60)
-            d0 = pg.evaluate(MHZ_DATE, [h, x]); pg.mouse.wheel(0, -400); pg.wait_for_timeout(500)
-            d1 = pg.evaluate(MHZ_DATE, [pg.locator('canvas[data-chart=btz]').first.element_handle(), x])
-            if d0 != d1: fail(where, '글자 크기 130%%: 크게 보기 휠 확대 뒤 마우스 아래 날짜가 바뀜 (%s → %s)' % (d0, d1))
+            # 마우스 자리는 정수 px — 실제 마우스·휠 사건의 clientX 는 정수라(브라우저가 반올림) 소수 자리로 재면 눈금 사이 절반에서 어느 날인지 갈림
+            # 휠: 여러 자리에서 확대·축소를 이어서 — 마우스 아래 날이 그대로 (구간이 자료 끝에 닿은 경우는 맞출 수 없어 뺌 · 2026-10-21 예전 코드는 0.05·0.2 자리에서 2~4주 어긋남)
+            y = round(y)
+            for fr, dy in ((0.05, -400), (0.2, -400), (0.8, -400), (0.5, 250), (0.33, -300), (0.93, 150)):
+                if dy == -400:   # 전체에서 새로 확대 (나머지는 앞 상태에서 이어서 확대·축소)
+                    pg.evaluate("() => { const b = document.querySelector('[data-act=\"btz-per\"][data-v=\"0\"]'); if (b) b.click(); }"); pg.wait_for_timeout(400)
+                h = pg.locator('canvas[data-chart=btz]').first.element_handle(); g = pg.evaluate(MHZ_GEO, h)
+                x = round(g['L'] + (g['R'] - g['L']) * fr); pg.mouse.move(x, y); pg.wait_for_timeout(60)
+                d0 = pg.evaluate(MHZ_DATE, [h, x]); pg.mouse.wheel(0, dy); pg.wait_for_timeout(500)
+                d1 = pg.evaluate(MHZ_DATE, [pg.locator('canvas[data-chart=btz]').first.element_handle(), x])
+                st = pg.evaluate("() => { const B = T72debug.btz; return [B.a, B.b, B.W ? B.W.d.length : 0]; }")
+                if d0 != d1 and not (st[0] <= 0 or st[1] >= st[2] - 1):
+                    fail(where, '글자 크기 130%%: 크게 보기 휠 %s 뒤 마우스 아래 날짜가 바뀜 (%d%% 자리 %s → %s)' % ('확대' if dy < 0 else '축소', fr * 100, d0, d1))
             pg.evaluate("() => { const b = document.querySelector('[data-act=\"btz-per\"][data-v=\"0\"]'); if (b) b.click(); }"); pg.wait_for_timeout(500)
             h = pg.locator('canvas[data-chart=btz]').first.element_handle(); g = pg.evaluate(MHZ_GEO, h)
-            x0, x1 = g['L'] + (g['R'] - g['L']) * 0.3, g['L'] + (g['R'] - g['L']) * 0.7
+            x0, x1 = round(g['L'] + (g['R'] - g['L']) * 0.3), round(g['L'] + (g['R'] - g['L']) * 0.7)
             want = [pg.evaluate(MHZ_DATE, [h, x0]), pg.evaluate(MHZ_DATE, [h, x1])]
             pg.mouse.move(x0, y); pg.mouse.down()
             for i in range(1, 11):
