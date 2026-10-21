@@ -156,7 +156,7 @@ const LABU = { d0: '2021-01-04', dd: [1,1,1,1,3,1,1,1,1,4,1,1,1,3,1,1,1,1,3,1,1,
   }
   check('무작위 불변식 (' + n + '번)', b0 === 0, b0 + '건 실패'); }
 
-/* ⑧ 해외주식 양도소득세 — (결제일 기준 해마다 실현 손익 원화 − 250만) × 22% · 다음 해 5월 말 납부 */
+/* ⑧ 해외주식 양도소득세 — (결제일 기준 해마다 실현 손익 원화 − 250만) × 22% · 다음 해 5월 1일(휴장이면 다음 거래일) 납부 */
 function synth(dates, closes, highs) { return { d: dates, c: closes, h: highs, dv: null }; }
 function bdays(from, n, skip) { const out = []; let t = Date.parse(from + 'T12:00:00Z'); while (out.length < n) { const d = new Date(t), s = d.toISOString().slice(0, 10); if (d.getUTCDay() % 6 && (!skip || skip.indexOf(s) < 0)) out.push(s); t += 864e5; } return out; }
 { /* V1.0: 첫날 100에 1000주 → 다음 날 고가 121 · 종가 120 → 110 지정가 전량 (이익 0,000) → 그 뒤 120 보합 (실현 손익 0) */
@@ -165,7 +165,7 @@ function bdays(from, n, skip) { const out = []; let t = Date.parse(from + 'T12:0
     const d = bdays(start, 420, ['2023-12-25', '2024-01-01', '2025-12-25', '2026-01-01', '2027-01-01']), c = d.map((x, i) => i === 0 || i === 1 ? 100 : 120), h = d.map((x, i) => i === 2 ? 121 : c[i]);
     const O = MHV.run(MHV.defaults('1.0', 'TQQQ'), synth(d, c, h), { from: 1, capital: 4000000, fee: 0, tax: { fx: () => 1300, method: 'fifo' }, rows: true });
     const T = O.taxes.filter(t => t.tax > 0), g = O.taxes.filter(t => t.y === wantY)[0];
-    const sellDay = d[2], payDue = (wantY + 1) + '-05-31', paidDay = d.find(x => x >= payDue);
+    const sellDay = d[2], payDue = (wantY + 1) + '-05-01', paidDay = d.find(x => x >= payDue);
     check('양도세 ' + sellDay + ' 매도 → 결제일 기준 ' + wantY + '년', g && Math.abs(g.gain - 13000000) < 1 && T.length === 1 && T[0].y === wantY, JSON.stringify(O.taxes));
     check('양도세 (1300만 − 250만) × 22% = 231만 원 · ' + paidDay + ' 납부', g && Math.abs(g.tax - 2310000) < 1 && g.paid === paidDay && Math.abs(O.taxPaid - 2310000 / 1300) < 1e-6, g && JSON.stringify(g));
   } }
@@ -198,7 +198,7 @@ function bdays(from, n, skip) { const out = []; let t = Date.parse(from + 'T12:0
     check('액면 병합 뒤 평가금 = 현금 + 보유 × 종가 V' + ver, O.rows.every(r => Math.abs(r.cash + r.q * D.c[r.i] * r.k - r.eq) < 1e-6 * Math.max(1, r.eq)));
   } }
 
-/* ⑪ 5월 말 양도세를 낼 현금이 모자라면 그날 종가에 보유를 팔아 냄 · 다 팔아도 모자라면 밖에서 낸 것으로 (현금은 0 아래로 안 내려감 — 예전엔 음수 현금으로 매수가 멈췄음) */
+/* ⑪ 5월 1일 양도세를 낼 현금이 모자라면 그날 종가에 보유를 팔아 냄 · 다 팔아도 모자라면 밖에서 낸 것으로 (현금은 0 아래로 안 내려감 — 예전엔 음수 현금으로 매수가 멈췄음) */
 { const d = bdays('2025-01-02', 520), j = d.indexOf('2026-01-02');
   const path = (low, days) => { const c = d.map((x, i) => { if (i < j) { const ph = i % 60; return ph < 35 ? 100 - ph : 65 + (ph - 35) * 2.2; } const k = i - j; return k < days ? 80 * Math.pow(low / 80, k / days) : low; }); return { d, c, h: c.map(x => x * 1.005), dv: null }; };
   for (const [low, ext] of [[10, false], [2, true]]) {
@@ -410,16 +410,18 @@ function bdays(from, n, skip) { const out = []; let t = Date.parse(from + 'T12:0
 
 /* ㉑ 연말 절세(harvest) 수수료는 계좌 현금 안에서 (2026-10-17) — 팔고 다시 사는 수수료가 현금보다 크면 수량을 줄임(전략 평단·수량은 그대로)
       · 예전: SOXL V1.0 30분할 소진 hold $1,000,000 2010-12-02 ~ 2021-03-15 선입선출에서 2015-12-29 수수료 $5,595 로 현금 $2,157 → −$3,438 (105일 음수 · ⑮ 무작위 구간이 새 날짜로 밀려 드러남) */
-{ const cfg = Object.assign(MHV.defaults('1.0', 'SOXL'), { splits: 30, exhaust: 'hold' }), from = SX.d.indexOf('2010-12-02'), to = SX.d.indexOf('2021-03-15');
+{ const cfg = Object.assign(MHV.defaults('1.0', 'SOXL'), { splits: 30, exhaust: 'hold' }), from0 = SX.d.indexOf('2010-12-02'), to = SX.d.indexOf('2021-03-15');
+  /* 2026-10-22 양도세 납부일 5/31 → 5/1: 2010-12-02 시작은 현금이 모자란 연말이 없어져(세금이 한 달 일찍 빠져 현금 흐름이 바뀜) — 무작위 원/달러는 같은 상황(절세 수수료 > 현금)이 생기는 2011-05-25 시작으로 */
+  const fromOf = fx => SX.d.indexOf(fx === 'seed' ? '2011-05-25' : '2010-12-02'), from = from0;
   /* 실패했던 그대로: ⑮ 의 무작위 원/달러(부를 때마다 1,100 + 300 × 난수 · 그 회차 시작 씨앗 129171712) + 고정 원/달러 두 가지 */
   const fxOf = fx => { if (fx !== 'seed') return () => fx; let sd = 129171712; return () => 1100 + 300 * ((sd = (sd * 1103515245 + 12345) % 2147483648) / 2147483648); };
   for (const [method, fx] of [['fifo', 'seed'], ['fifo', 1400], ['avg', 1250]]) {
-    const O = MHV.run(cfg, SX, { from, to, capital: 1e6, fee: 0.0025, sec: 0.0000206, divTax: 0.15, rows: true, tax: { fx: fxOf(fx), method, harvest: true } });
-    const neg = O.rows.filter(r => r.cash < -1e-9), hv = O.rows.filter(r => r.hv > 0), d29 = O.rows.find(r => SX.d[r.i] === '2015-12-29');
+    const O = MHV.run(cfg, SX, { from: fromOf(fx), to, capital: 1e6, fee: 0.0025, sec: 0.0000206, divTax: 0.15, rows: true, tax: { fx: fxOf(fx), method, harvest: true } });
+    const neg = O.rows.filter(r => r.cash < -1e-9), hv = O.rows.filter(r => r.hv > 0), d29 = hv.find(r => r.cash < 1);   /* 절세 수수료로 현금이 바닥난 날(수량을 줄인 날) */
     let rz = 0, fe = 0, dd = 0; O.rows.forEach(r => { rz += r.rz; fe += r.fee; dd += r.dv; });
     const L = O.rows[O.rows.length - 1], want = 1e6 + rz + L.q * (SX.c[L.i] * L.k - L.avg * L.k) - fe + dd - O.taxPaid;
     check('연말 절세 수수료는 현금 안에서 — ' + method + ' 원/달러 ' + fx + ': 현금 음수 0일 · 절세 매매는 그대로 함(' + hv.length + '번) · 현금 모자란 해는 수량을 줄임(' + O.hcut + '해) · 세후 평가금 식 그대로',
-      from > 0 && to > from && neg.length === 0 && hv.length > 0 && (fx !== 'seed' || (O.hcut >= 1 && d29 && d29.cash >= -1e-9 && d29.hv > 0)) && Math.abs(want - O.final) < 1e-6 * Math.max(1e6, Math.abs(O.final)),
+      fromOf(fx) > 0 && to > fromOf(fx) && neg.length === 0 && hv.length > 0 && (fx !== 'seed' || (O.hcut >= 1 && d29 && d29.cash >= -1e-9 && d29.hv > 0)) && Math.abs(want - O.final) < 1e-6 * Math.max(1e6, Math.abs(O.final)),
       [neg.length, hv.length, O.hcut, d29 && d29.cash, want, O.final].join(' · '));
   }
   const O2 = MHV.run(cfg, SX, { from, to, capital: 1e6, fee: 0.0025, sec: 0.0000206, divTax: 0.15, rows: true, tax: { fx: () => 1200, method: 'fifo', harvest: false } });

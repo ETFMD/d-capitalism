@@ -1536,9 +1536,10 @@ console.log(JSON.stringify({ fin: r.points[r.points.length - 1].value, mdd: -M.s
 
 
 def sma200_check(page, base, fail, local):
-    """/sma200/ 관리자 'SMA 200 백테스트' — 처음 기본값 = 시뮬레이터 라이브러리 SMA 200 프리셋 · 실전(실제 일봉·1주 단위·수수료 0.25%·선입선출 양도세·이자세)
+    """/sma200/ 관리자 'SMA 200 백테스트' — 처음 기본값 = 시뮬레이터 라이브러리 SMA 200 프리셋 + 팔았을 때 SPY · 이자 0%(2026-10-22) · 실전(실제 일봉·1주 단위·수수료 0.25%·선입선출 양도세·이자세)
     · 화면 9칸 = 따로 돌린 엔진(SMB) · 그래프·표(연도별·보유 구간별·일자별 쪽 넘김)·CSV · 조건 바꿔 다시 계산 = 엔진 · 빈 칸 → 기본값
-    · 설정은 접는 묶음 6개(처음엔 모두 접힘 · 모두 펼치기) · 그래프 휠 확대(chartjs-plugin-zoom) · '상장 전 포함' 단추 = 기본값과 같은 조건 + 상장 전 재현
+    · 설정은 접는 묶음 6개(처음엔 모두 접힘 · 모두 펼치기) · 그래프 휠 확대(chartjs-plugin-zoom) · 단추는 계산·기본값 (실전)만('상장 전 포함' 단추는 뺌 — 자료 칸에서 고르면 같은 조건 + 상장 전 재현)
+    · 맨 아래 규칙 설명서(기본 설정 기준 · 양도세 5월 1일) · 예전 기본값(현금 · 4%) 그대로였던 저장값은 한 번 새 기본값으로 · 직접 바꾼 값은 그대로
     · 자료 칸 '검증용' = 투자전략 시뮬레이터 SMA 200 끝 금액·최대 낙폭(로컬: 저장소 자료로 Node 시뮬레이터 엔진과 대조)
     (엔진 자체의 시뮬레이터 대조 수천 번·세금 독립 검산은 tests/sma200_test.cjs)"""
     page.set_viewport_size({'width': 1280, 'height': 900})
@@ -1553,16 +1554,21 @@ def sma200_check(page, base, fail, local):
         fail('sma200', 'SMA 200 백테스트 결과가 나오지 않음 (60초)'); return
     try:
         d = page.evaluate("""() => { const S = S2debug.S(), ui = {}; document.querySelectorAll('#s2-root select[data-k]').forEach(e => ui[e.dataset.k] = e.value);
-            const pre = Object.assign({}, SMB.PRESET); delete pre.cost;
+            const pre = Object.assign({}, SMB.PRESET, { out: 'spy', cr: '0' }); delete pre.cost;
             return { ok: JSON.stringify(Object.keys(ui).sort().map(k => [k, ui[k]])) === JSON.stringify(Object.keys(pre).sort().map(k => [k, pre[k]])),
                      v: [document.getElementById('s2-cap').value, document.getElementById('s2-mode').value, document.getElementById('s2-fee').value, document.getElementById('s2-tax').value, document.getElementById('s2-itax').value,
                          [...document.querySelectorAll('#s2-per button.on')].map(b => b.dataset.p).join()] }; }""")
         if not d['ok'] or d['v'] != ['100000', 'real', '0.25', 'fifo', 'on', 'all']:
-            fail('sma200', '처음 기본값 이상 (기대: 라이브러리 SMA 200 조건 · 원금 100000 · 실전 · 0.25% · 선입선출 · 이자세 · 전체): %s' % d)
+            fail('sma200', '처음 기본값 이상 (기대: 라이브러리 SMA 200 조건 + 팔았을 때 SPY · 이자 0% · 원금 100000 · 실전 · 0.25% · 선입선출 · 이자세 · 전체): %s' % d)
         u = page.evaluate("""() => ({ secs: [...document.querySelectorAll('#s2-set details.s2-sec')].map(x => x.dataset.sec + (x.open ? '+' : '')).join(),
             btn: [...document.querySelectorAll('#s2-set .s2-btn')].map(x => x.innerText).join('|'), modes: [...document.querySelectorAll('#s2-mode option')].map(o => o.value).join() })""")
-        if u != {'secs': 'sig,rsi,out,ease,bub,cost', 'btn': '계산|기본값 (실전)|상장 전 포함', 'modes': 'real,pre,sim'}:
-            fail('sma200', '설정 묶음·단추·자료 칸 이상 (기대: 접힌 묶음 6개 · 계산|기본값 (실전)|상장 전 포함 · real,pre,sim): %s' % u)
+        if u != {'secs': 'sig,rsi,out,ease,bub,cost', 'btn': '계산|기본값 (실전)', 'modes': 'real,pre,sim'}:
+            fail('sma200', '설정 묶음·단추·자료 칸 이상 (기대: 접힌 묶음 6개 · 계산|기본값 (실전) · real,pre,sim): %s' % u)
+        # 맨 아래 규칙 설명서 — 기본 설정과 같은 값 · 양도세 5월 1일
+        g = page.evaluate("() => { const e = document.getElementById('g-sma200'); if (!e) return null; const r = e.getBoundingClientRect(), x = document.getElementById('s2-root').getBoundingClientRect(); return { t: e.innerText, below: r.top >= x.bottom - 1, vis: r.height > 200 }; }")
+        need = ['SMA 200 백테스트 규칙 설명서', '$100,000', '2010년 11월 24일', 'QQQ 200일 이동평균', '9일 RSI 90 이상', '7일 RSI 80 미만', 'SPY · 현금 이자 연 0%', '15거래일', '40% 이상', '0.25%', '5월 1일', '250만 원']
+        if not g or not g['below'] or not g['vis'] or [w for w in need if w not in g['t']]:
+            fail('sma200', '규칙 설명서가 없거나 화면 아래가 아니거나 기본 설정 값이 빠짐: %s' % (g and {'below': g['below'], 'vis': g['vis'], 'miss': [w for w in need if w not in g['t']]}))
         page.click('#s2-set [data-secall="1"]'); page.wait_for_timeout(100)   # 아래에서 조건을 바꾸려고 모두 펼침
         page.wait_for_function("() => window.Chart && Chart.getChart('s2-c')", timeout=30000)
         z = page.evaluate("() => { const c = Chart.getChart('s2-c'); return !!(window.ChartZoom && c.options.plugins.zoom && c.options.plugins.zoom.zoom.wheel.enabled && c.options.plugins.zoom.pan.enabled); }")
@@ -1611,11 +1617,12 @@ def sma200_check(page, base, fail, local):
         if r['diff'] or not r['same'] or q[0] != 1 or q[1] != 1 or q[2] != fv0 + 1:
             fail('sma200', "'하루 늦게' 결과가 엔진(lag 1)과 다르거나 시작 가능일이 하루 뒤가 아님: %s · %s" % ({k: r[k] for k in ('diff', 'same')}, q[:3]))
         page.select_option('#s2-lag', '0'); wait_new()
-        # 상장 전 포함 단추 — 기본값과 같은 조건 · 자료만 상장 전 재현 + 실제 일봉 (로컬은 Worker 대신 합성 자료라 시작일만 확인)
-        page.click('#s2-pre'); page.wait_for_function(ready, timeout=120000); page.evaluate("() => { window.__s2p = S2debug.last(); }"); page.wait_for_timeout(100)
-        q = page.evaluate("() => { const L = S2debug.last(), S = S2debug.S(); return { mode: S.mode, fee: S.fee, tax: S.tax, itax: S.itax, lag: S.lag, same: JSON.stringify(S.p) === JSON.stringify(SMB.PRESET), from: L.D.d[L.from], noPre: L.D.noPre }; }")
+        # 상장 전 포함 — 단추는 뺐고(2026-10-22) 자료 칸에서 고름: 기본값 뒤 자료 칸만 바꾸면 기본값과 같은 조건 · 자료만 상장 전 재현 + 실제 일봉 (로컬은 Worker 대신 합성 자료라 시작일만 확인)
+        page.click('#s2-def'); wait_new()
+        page.select_option('#s2-mode', 'pre'); page.wait_for_function(ready, timeout=120000); page.evaluate("() => { window.__s2p = S2debug.last(); }"); page.wait_for_timeout(100)
+        q = page.evaluate("() => { const L = S2debug.last(), S = S2debug.S(); return { mode: S.mode, fee: S.fee, tax: S.tax, itax: S.itax, lag: S.lag, same: JSON.stringify(S.p) === JSON.stringify(Object.assign({}, SMB.PRESET, { out: 'spy', cr: '0' })), from: L.D.d[L.from], noPre: L.D.noPre }; }")
         if q['mode'] != 'pre' or q['fee'] != 0.25 or q['tax'] != 'fifo' or q['itax'] != 'on' or q['lag'] != 0 or not q['same'] or (not local and (q['noPre'] or q['from'] >= '2000-01-01')):
-            fail('sma200', "'상장 전 포함' 단추 이상 (기대: 기본값과 같은 조건 · 상장 전 재현으로 2000년 전 시작): %s" % q)
+            fail('sma200', "자료 칸 '상장 전 포함' 이상 (기대: 기본값과 같은 조건 · 상장 전 재현으로 2000년 전 시작): %s" % q)
         page.click('#s2-def'); wait_new()
         # 검증용 자료(투자전략 시뮬레이터 자료 · 소수 주) + 수수료 0.02% · 세금 없음 = 투자전략 시뮬레이터
         page.select_option('#s2-mode', 'sim'); wait_new()
@@ -1645,6 +1652,17 @@ def sma200_check(page, base, fail, local):
             ov = page.evaluate("() => document.documentElement.scrollWidth - document.documentElement.clientWidth")
             if ov > 0: fail('sma200', '%dpx 에서 가로 넘침 %dpx' % (w, ov))
         page.set_viewport_size({'width': 1280, 'height': 900})
+        # 예전 저장값: 예전 기본값(현금 · 4% · 판 표시 없음) 그대로였으면 한 번 새 기본값(SPY · 0%) · 직접 바꾼 값(QQQ · 2%)은 그대로 · 새 판(v 2)에 저장된 현금 · 4%도 그대로
+        mig = []
+        for old, want in (({'sig': 'qqq', 'out': 'cash', 'cr': '4', 'win': '150'}, ['spy', '0', '150']), ({'out': 'qqq', 'cr': '2'}, ['qqq', '2', '200']), ({'v': 2, 'out': 'cash', 'cr': '4'}, ['cash', '4', '200'])):
+            v = old.pop('v', None); j = {'mode': 'real', 'p': old}
+            if v: j['v'] = v
+            page.evaluate("(j) => localStorage.setItem('s2-set', JSON.stringify(j))", j)
+            page.goto(base + 'sma200/', wait_until='load')
+            page.wait_for_function(ready, timeout=60000); page.evaluate("() => { window.__s2p = S2debug.last(); }")
+            got = page.evaluate("() => { const S = S2debug.S(); return [S.p.out, S.p.cr, S.p.win, S.v, JSON.parse(localStorage.getItem('s2-set')).v]; }")
+            if got[:3] != want or got[3] != 2 or got[4] != 2: mig.append([j, got])
+        if mig: fail('sma200', '예전 저장값 옮기기 이상 (기대: 예전 기본값만 SPY · 0% · 저장값 판 2): %s' % mig)
         page.evaluate("() => { ['s2-set', 's2-scale', 's2-open'].forEach(k => localStorage.removeItem(k)); }")
     except Exception as e:
         fail('sma200', 'SMA 200 백테스트 검사 실패: %s' % str(e)[:200])

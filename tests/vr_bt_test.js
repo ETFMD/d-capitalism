@@ -109,7 +109,7 @@ for (const [tk, D0] of [['TQQQ', TQ], ['SOXL', SX]]) {
       const g = fifoGain(D, R, o), bad2 = R.taxes.filter(t => Math.abs((g[t.y] || 0) - t.gain) > 1 + 1e-9 * Math.abs(t.gain));
       check('양도차익 (선입선출 독립 계산) ' + name, !bad2.length, JSON.stringify(bad2.slice(0, 2).map(t => [t.y, t.gain, g[t.y]])));
       check('양도세 = (차익 − 250만) × 22% ' + name, R.taxes.every(t => Math.abs(t.tax - Math.max(0, t.gain - 2500000) * 0.22) < 1e-6));
-      check('세금 낸 날 = 다음 해 5월 31일 이후 첫 거래일 ' + name, R.taxes.every(t => t.paid == null || t.paid === '-' || (t.paid >= (t.y + 1) + '-05-31' && D.d[D.d.indexOf(t.paid) - 1] < (t.y + 1) + '-05-31')));
+      check('세금 낸 날 = 다음 해 5월 1일(휴장이면 다음 거래일) ' + name, R.taxes.every(t => t.paid == null || t.paid === '-' || (t.paid >= (t.y + 1) + '-05-01' && D.d[D.d.indexOf(t.paid) - 1] < (t.y + 1) + '-05-01')));
     }
     /* 인출 부족 · 적립 합계 */
     const flowSum = R.flows.reduce((s, f) => s + f[1], 0);

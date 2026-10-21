@@ -2,7 +2,7 @@
    · src/index.html 의 SMB · MBT 를 그대로 꺼내 씀 (관리자 화면 /sma200/ 과 같은 코드) · 비교 기준 = 투자전략 시뮬레이터 엔진(scripts/stratsim_fit.cjs 가 꺼낸 ssRunSma)
    · ① 시뮬레이터와 같게: 무작위 손잡이 조합(선택지 전부) × 무작위 기간(자료 첫날 1971-02-05~) — 끝 금액 차이 0 · 날마다 평가금 = 시뮬레이터 보유(dd) × 종가 · 최대 낙폭 같음
    · ② 실전(1주 단위 · 수수료 = 체결 금액 × 수수료율 · SEC · 분배금 원천징수)·시뮬 방식 × 양도세(선입선출·이동평균) × 이자세 — 거래 기록만으로 따로 다시 계산:
-        날마다 현금·주식 · 매수·매도 금액 · 분배금 · 현금 이자 · 연도별 원화 손익(결제일 환율·결제일 연도) · 세액 · 납부일(다음 해 5/31 이후 첫 거래일) · 납부액(그날 환율) · 끝날 정리 값 · 평가금
+        날마다 현금·주식 · 매수·매도 금액 · 분배금 · 현금 이자 · 연도별 원화 손익(결제일 환율·결제일 연도) · 세액 · 납부일(다음 해 5/1 — 휴장이면 다음 첫 거래일) · 납부액(그날 환율) · 끝날 정리 값 · 평가금
         + 규칙: 실전은 소수 주 없음 · 현금 음수 없음 · 보유하기로 한 날은 1주 값보다 적은 현금만 남음
    · ③ 자료: 실제 일봉 달력(빠진 날 0 · 달력 밖 날 0) · 프리셋 첫 시작 가능일 = 쓰는 지표가 모두 나온 첫날(따로 계산)
    · ④ 도우미: clean(선택지 밖 → 프리셋) · stats(연평균·낙폭 식) · bh(그냥 보유 세전·세후 따로 계산) · plan(매월 첫 거래일 · 끝 20거래일 전) · one = run + stats + bh
@@ -138,7 +138,7 @@ const pick = a => a[Math.floor(rnd() * a.length)];
     for (const T of R.taxes) {
       const exp = Math.max(0, (gain[T.y] || 0) - SMB.DED) * SMB.RATE;
       if (Math.abs(exp - T.tax) > 1e-3) check('세액 = 22% × (손익 − 250만 원)', false, [T.y, exp, T.tax]);
-      if (T.paid && T.paid !== '-') { if (T.paid < (T.y + 1) + '-05-31') check('5/31 전 납부 없음', false, T); const pi = D.d.indexOf(T.paid); if (pi > a && D.d[pi - 1] >= (T.y + 1) + '-05-31') check('5/31 뒤 첫 거래일에 납부', false, T); }
+      if (T.paid && T.paid !== '-') { if (T.paid < (T.y + 1) + '-05-01') check('5/1 전 납부 없음', false, T); const pi = D.d.indexOf(T.paid); if (pi > a && D.d[pi - 1] >= (T.y + 1) + '-05-01') check('5/1(휴장이면 다음 거래일)에 납부', false, T); }
     }
     const ly = yr(b); let unreal = 0, hv = 0;
     for (const k of SMB.ASSETS) if (sh[k] > 0) { const v = sh[k] * D.px[k][b]; hv += v; const bs = method === 'avg' ? (pool[k] ? pool[k].c : 0) : (lots[k] || []).reduce((s2, z) => s2 + z[0] * z[1], 0); unreal += v * (1 - fee - sec) * fxA(b) - bs; }
@@ -232,8 +232,9 @@ const pick = a => a[Math.floor(rnd() * a.length)];
     /* 검토에서 나온 두 경우 그대로 */
     { const p = { sig: 'tqqq', win: '110', ul: 'qld', eb: '10', xb: '8', cb: '3', cs: '2', settle: '2', ohw: '4', oh: '45', coolw: '2', cool: '65', out: 'qqq', cr: '7.5', din: '11', dout: '126', bga: 'spy', bg: '50', bgw: '130' };
       const a = D.d.indexOf('2015-02-02'), o = { from: a, to: N - 1, capital: 1e5, fee: 0.0025, sec: 0.0000206, divTax: 0.15, intTax: 0, tax: { fx: i => fx[i], method: 'fifo' }, rows: true };
-      const R = SMB.run(D, p, Object.assign({ mode: 'real' }, o)), i = D.d.indexOf('2018-05-31'), r = R.rows.find(x => x.i === i + 1);
-      check('세금 낸 날 남은 잔돈이 나눠 사기·매도를 막지 않음(2018-06-01 QLD 매도)', a > 0 && i > 0 && r && r.s.some(s => s.k === 'qld' && !s.tax), r && r.s); }
+      /* 2017년 양도세 낸 날(2026-10-22 전: 2018-05-31 · 지금: 납부일 5/1 → 2018-05-01) 다음 거래일에 QLD 매도 */
+      const R = SMB.run(D, p, Object.assign({ mode: 'real' }, o)), T17 = R.taxes.find(T => T.y === 2017), i = T17 ? D.d.indexOf(T17.paid) : -1, r = R.rows.find(x => x.i === i + 1);
+      check('세금 낸 날 남은 잔돈이 나눠 사기·매도를 막지 않음(' + (r ? D.d[r.i] : '?') + ' QLD 매도)', a > 0 && i > 0 && T17.paid === '2018-05-01' && r && r.s.some(s => s.k === 'qld' && !s.tax), r && r.s); }
     { const p = { sig: 'qqq', win: '220', ul: 'qld', eb: '1.5', xb: '15', cs: '10', settle: '0', ohw: '15', oh: '50', coolw: '17', cool: '75', out: 'spxl', cr: '1', din: '63', dout: '10', bga: 'qld', bg: '15', bgw: '40' };
       const a = D.d.indexOf('2023-06-26'), o = { from: a, to: N - 1, capital: 150, fee: 0, intTax: 0, tax: null, rows: true, lag: 1 };
       const Rs = SMB.run(D, p, Object.assign({ mode: 'sim' }, o)), Rr = SMB.run(D, p, Object.assign({ mode: 'real', divTax: 0.15 }, o));

@@ -129,7 +129,7 @@ const t0 = Date.now(), log = s => console.log(((Date.now() - t0) / 1000).toFixed
 
 (async () => {
   const out = { tk: TK, per: PER, ver: VER, fix: FIX, rej: REJ ? REJ.mode : 'none', fill: FILL || 'none', from: DATA.d[0], to: DATA.d[DATA.d.length - 1], L: DATA.L || 0, listing: DATA.L ? DATA.d[DATA.L] : DATA.d[0],
-                env: '원금 $10,000 · 1주 단위 · 수수료 0.07% + SEC 0.00206% · 분배 원천징수 15% · 양도세 22% (결제일 매매기준율, 5월 말 납부)' + (REJ ? ' · 증권사 주문 거부 ' + REJ.mode + '(' + (FILL === 'pre' ? '전날 종가' : '시가') + ' × 1.2)' : '') + (FILL ? ' · 주문 넣는 때 ' + FILL : ''), combos: COMBOS, splits: SPLITS, targets: TGT_A };
+                env: '원금 $10,000 · 1주 단위 · 수수료 0.07% + SEC 0.00206% · 분배 원천징수 15% · 양도세 22% (결제일 매매기준율, 다음 해 5월 1일 납부)' + (REJ ? ' · 증권사 주문 거부 ' + REJ.mode + '(' + (FILL === 'pre' ? '전날 종가' : '시가') + ' × 1.2)' : '') + (FILL ? ' · 주문 넣는 때 ' + FILL : ''), combos: COMBOS, splits: SPLITS, targets: TGT_A };
   /* 원문 기본값 */
   const d0 = (await evalMany([Object.assign({}, base, VER === '4.0' ? {} : {})]))[0];
   out.default = { p: base, r: d0 }; log('기본값 CAGR ' + (d0.cagr * 100).toFixed(2) + '% MDD ' + (d0.mdd * 100).toFixed(1) + '%');
