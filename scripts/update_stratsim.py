@@ -8,8 +8,11 @@
     (야후가 분배금으로 지난 값을 다시 조정해도 상장 첫날 값에 맞춰 함께 따라감)
   - 장중에 돌면 오늘의 아직 끝나지 않은 일봉도 넣음(화면이 '아직 끝나지 않은 값'으로 표시) — 마감 뒤 다음 실행이 확정값으로 바꿈
 · NFCI: 미국 시카고 연은 금융 여건 지수(FRED, 주간) — 실패해도 가격 갱신은 그대로
-· 검사: 7종목이 모두 있는 날만 새로 붙임 · 값은 양수·유한 · 상장 첫날이 예상(또는 prelist.csv 의 상장 첫날)과 다르거나
-  prelist.csv 에 상장 전 날이 빠졌거나 행이 줄거나 하루 변동이 ±70% 를 넘으면(분할 미반영 등) 아무것도 쓰지 않고 멈춤
+· 검사: 7종목이 모두 있는 날만 새로 붙임 · 값은 양수·유한 · 야후 첫 일봉이 상장일과 5일 넘게 다르거나 행이 줄거나
+  하루 변동이 ±70% 를 넘으면(분할 미반영 등) 아무것도 쓰지 않고 멈춤
+  · 야후가 상장 첫날 값을 빠뜨리면(수정 종가 null 등) 파일 값 × 야후가 지난 값을 다시 조정한 비율로 이음
+  · prelist.csv 를 쓸 수 없으면(상장 첫날이 IPO 와 다름·날 빠짐 등) 매시간 갱신은 멈추지 않고 상장 전 줄만 예전처럼 비율만 맞춤(경고)
+    — --prelist-only 에서는 멈춤(update-etf-bt.yml 이 새 prelist.csv 를 커밋하기 전에 이 모드로 확인)
   · 쓰기 전에 상장 첫날 하루 변화 = 재현 식의 그날 변화인지 다시 확인
 · 바뀔 때만 씀 — 값 차이가 상대 5e-6 이하면 예전 줄 글자를 그대로 둠(야후 값의 소수 끝자리 흔들림으로 매번 수천 줄이 바뀌지 않게)
 · updated.txt = 마지막으로 자료가 바뀐 시각(UTC) — 화면 위쪽 '가격 자료 갱신' 시각
@@ -115,8 +118,8 @@ def read_prelist():
         if not lv[c]:
             raise SystemExit(f'prelist.csv: {c} 값이 없음')
         first = max(lv[c])
-        if lv[c][first] != 1.0 or abs((datetime.date.fromisoformat(first) - datetime.date.fromisoformat(IPO[c])).days) > 5:
-            raise SystemExit(f'prelist.csv: {c} 상장 첫날 {first} 이상(값 {lv[c][first]})')
+        if lv[c][first] != 1.0 or first != IPO[c]:
+            raise SystemExit(f'prelist.csv: {c} 상장 첫날 {first}(값 {lv[c][first]}) 이 {IPO[c]} 이 아님')
         out[c] = (first, lv[c])
     return out
 
@@ -125,29 +128,55 @@ def update_prices(fetch=True):
     old = read_prices()
     dates_old = sorted(old)
     new_vals = {d: [float(x) for x in old[d]] for d in dates_old}
-    pre = read_prelist()
-    real = {}
+    if fetch:
+        try:
+            pre = read_prelist()
+        except SystemExit as e:     # 매시간 갱신은 멈추지 않게 — 예전처럼 지금 파일 값을 같은 비율로 (경고만)
+            print(f'::warning::prelist.csv 를 쓸 수 없어 상장 전 줄은 지금 값 그대로 비율만 맞춤 — {e}')
+            pre = {}
+    else:
+        pre = read_prelist()        # --prelist-only: 문제가 있으면 멈춤
+    real, used = {}, {}
     for i, c in enumerate(COLS):
-        p_first, p = pre[c]
         if fetch:
             real[c] = yahoo_daily(c.upper())
         else:                       # --prelist-only: 상장 뒤 값은 지금 파일 그대로
-            real[c] = {d: float(old[d][i]) for d in dates_old if d >= p_first}
+            real[c] = {d: float(old[d][i]) for d in dates_old if d >= IPO[c]}
         first = min(real[c])
         if abs((datetime.date.fromisoformat(first) - datetime.date.fromisoformat(IPO[c])).days) > 5:
             raise SystemExit(f'{c}: 야후 첫 일봉 {first} 가 상장일 {IPO[c]} 과 다름 — 자료가 잘렸을 수 있어 멈춤')
-        if first != p_first:
-            raise SystemExit(f'{c}: 야후 첫 일봉 {first} 와 prelist.csv 상장 첫날 {p_first} 이 다름 — 멈춤')
+        L = IPO[c]
+        # 야후가 지난 값을 분배금으로 다시 조정한 비율 k (상장 첫날 이후 야후·파일 모두 있는 첫날) — 야후에 빠진 상장 초기 날에 씀
+        ref = next((d for d in sorted(real[c]) if d >= L and d in old), None)
+        if ref is None:
+            raise SystemExit(f'{c}: 상장 뒤 야후·파일에 같이 있는 날이 없음 — 멈춤')
+        k = real[c][ref] / float(old[ref][i])
+        if L in real[c]:
+            base = real[c][L]
+        elif L in old:              # 야후가 상장 첫날 값을 빠뜨림(수정 종가 null 등) → 파일 값 × k
+            base = float(old[L][i]) * k
+            print(f'  {c}: 야후에 상장 첫날 {L} 값이 없어 파일 값 × {k:.8f} 로 이음')
+        else:
+            raise SystemExit(f'{c}: 상장 첫날 {L} 이 야후·파일 모두에 없음 — 멈춤')
+        p = pre[c][1] if c in pre else None
+        if p is not None and any(d < L and d not in p for d in dates_old):
+            print(f'::warning::{c}: prelist.csv 에 빠진 날이 있어 상장 전 줄은 지금 값 그대로 비율만 맞춤')
+            if not fetch:
+                raise SystemExit(f'{c}: prelist.csv 에 빠진 날 — 멈춤')
+            p = None
+        used[c] = p
         # 상장 전 = 재현 수준 × 상장 첫날 수정 종가 (상장 첫날 하루 변화 = 재현 식 · 야후가 지난 값을 다시 조정해도 함께 따라감)
-        base = real[c][first]
+        #   (prelist 를 쓸 수 없을 때만 예전 방식: 지금 값 × 상장 첫날 비율)
+        k0 = base / float(old[L][i]) if L in old else k
         for d in dates_old:
-            if d < first:
-                v = p.get(d)
-                if v is None:
-                    raise SystemExit(f'{c}: prelist.csv 에 {d} 가 없음 — 멈춤')
-                new_vals[d][i] = base * v
+            if d < L:
+                new_vals[d][i] = base * p[d] if p is not None else float(old[d][i]) * k0
+            elif d == L:
+                new_vals[d][i] = base
             elif d in real[c]:
                 new_vals[d][i] = real[c][d]
+            elif d < first:         # 야후에 빠진 상장 초기 날 → 파일 값 × k
+                new_vals[d][i] = float(old[d][i]) * k
     # 새 날: 7종목이 모두 있는 날만
     last = dates_old[-1]
     added = []
@@ -188,7 +217,9 @@ def update_prices(fetch=True):
     # 상장 첫날 하루 변화 = 재현 식의 그날 변화 (글자로 쓴 값으로 다시 확인 — 예전 글자를 둔 칸의 작은 차이 5e-6 까지만 허용)
     back = {ln[:8]: ln.split(',')[1:] for ln in text.splitlines()[1:]}
     for i, c in enumerate(COLS):
-        p_first, p = pre[c]
+        p, p_first = used[c], IPO[c]
+        if p is None or p_first not in dates:
+            continue
         j = dates.index(p_first)
         if j < 1:
             continue

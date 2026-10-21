@@ -27,6 +27,7 @@ import numpy as np
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 EPOCH = datetime.date(1970, 1, 1)
 COLS = ['qqq', 'tqqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq']           # prices.csv 열 순서
+IPO = {'qqq': '1999-03-10', 'tqqq': '2010-02-11', 'spy': '1993-01-29', 'qld': '2006-06-21', 'sso': '2006-06-21', 'spxl': '2008-11-05', 'sqqq': '2010-02-11'}   # update_stratsim.py 와 같음
 START = (datetime.date(1953, 1, 2) - EPOCH).days                      # prices.csv 첫날
 CHAIN_EC = 0.05                                                       # 화면 BT_CHAIN_EC · etf_bt_fit.py CHAIN_EC
 MAX_DEPTH = 3                                                         # 화면 btGet/getF 의 depth 상한
@@ -240,6 +241,8 @@ class Builder:
             return self.spxtr
         if key == 'Y:^NDX':
             return self.ndx
+        if key == 'R:USD':                                            # 현금 자체가 후보인 식 (그 열은 늘 0)
+            return {'d': self.rate['d'], 'a': self.rate['a']}
         c0 = key[0]
         if c0 not in 'UYKD':
             raise Fail('지원하지 않는 후보 %s' % key)
@@ -278,8 +281,8 @@ class Builder:
         m0 = cash.copy()
         for t in rc['m']:
             key, lag, w, var, fcur = t[0], int(t[1]), float(t[2]), t[3], t[4] or rc['c']
-            if (len(t) > 6 and t[6]) or fcur != 'USD' or var not in ('n', 'h'):
-                raise Fail('지원하지 않는 식 열 %s (환 노출·콜 매도 등) — 이 스크립트를 넓혀야 함' % (t,))
+            if (len(t) > 6 and t[6]) or fcur != 'USD':                # 달러 대상 · 달러 후보면 'n'·'u'·'h' 모두 '후보 − 현금' (화면 btLevels 와 같음)
+                raise Fail('지원하지 않는 식 열 %s (다른 통화·콜 매도) — 이 스크립트를 넓혀야 함' % (t,))
             f = self.getF(key, depth)
             m0 = m0 + w * (rets(align(f['d'], f['a'], cal, lag)) - cash)
         dd = math.exp(float(rc.get('d') or 0.0) / 252.0)
@@ -300,6 +303,8 @@ class Builder:
             rc = self.E.get('U:' + c.upper())
             if not rc:
                 raise Fail('%s 재현 식이 없음' % c.upper())
+            if ymd(rc['s']) != IPO[c]:
+                raise Fail('%s 재현 식의 상장 첫날 %s 가 %s 와 다름' % (c.upper(), ymd(rc['s']), IPO[c]))
             self._memo = {}
             lev = self.levels(rc, 1)
             if lev is None:

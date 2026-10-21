@@ -5,8 +5,8 @@ name: 투자전략 시뮬레이터 자료 갱신
 #    (장중 실행은 오늘의 아직 끝나지 않은 일봉도 넣음 — 화면이 '아직 끝나지 않은 값'으로 표시, 마감 뒤 실행이 확정값으로 바꿈)
 #  · 마감 뒤 실행(ET 16:00~17:30)에서만 과최적화 탐색기 표의 2026년 이후·1990~최신 지표를 다시 계산(후보 6,293개 — Actions 에서 약 5분)
 #  · 계산 코드(src/stratsim/00-core·05-params·10-engine·41-render.js)·후보·STATIC_VER 이 바뀌면 탐색기 전체를 다시 계산(Actions 에서 약 20~40분)
-#  · 상장 전 구간 = data/stratsim/prelist.csv(update-etf-bt.yml 이 재현 식으로 만듦 — 바뀌면 그 워크플로가 prices.csv·탐색기 표까지 함께 다시 만듦)
-#    × 야후 상장 첫날 수정 종가 — 이 워크플로도 매번 같은 식으로 씀(prelist.csv 가 바뀌면 탐색기 해시도 바뀌어 전체 다시 계산)
+#  · 상장 전 구간 = data/stratsim/prelist.csv(update-etf-bt.yml 이 매주 재현 식으로 만듦 · 이 워크플로는 쓰지 않음) × 야후 상장 첫날 수정 종가
+#    — prelist.csv 가 바뀐 뒤 첫 실행이 가격을 다시 쓰고, 탐색기 해시도 바뀌므로 같은 실행에서 탐색기 표 전체를 다시 계산해 한 커밋으로
 #    (fit-*.json 의 engine 해시가 지금 코드와 다를 때 저절로 — 시간 제한을 넉넉히 둠)
 #  · 손으로 돌릴 때(workflow_dispatch) '전체 다시 계산'을 켜면 탐색기 전체를 다시 계산
 on:
@@ -64,7 +64,7 @@ jobs:
           python-version: '3.12'
 
       - uses: actions/setup-node@v4
-        if: steps.gate.outputs.fit == 'true'
+        if: steps.gate.outputs.run == 'true'
         with:
           node-version: '20'
 
@@ -82,6 +82,12 @@ jobs:
       - name: 과최적화 탐색기 표
         if: steps.gate.outputs.fit == 'true'
         run: node scripts/stratsim_fit.cjs ${{ inputs.full && '--full' || '' }}
+
+      # 장중 실행: 상장 전 구간(prelist.csv)이 바뀌어 위 일봉 단계가 가격을 다시 쓴 경우만 탐색기 표를 같은 커밋으로 다시 계산 (해시가 같으면 바로 끝)
+      - name: 과최적화 탐색기 표 (해시가 바뀐 경우만)
+        if: steps.gate.outputs.run == 'true' && steps.gate.outputs.fit != 'true'
+        timeout-minutes: 90
+        run: node scripts/stratsim_fit.cjs --if-stale
 
       - name: 바뀐 경우에만 커밋
         if: steps.gate.outputs.run == 'true'

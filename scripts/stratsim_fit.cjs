@@ -5,7 +5,9 @@
      (시작 $10,000 + 매달 $500 · 9sig 현금 이자 4% · SMA 현금 이자 0% · 거래 비용 0.02% · 맞춘 구간 끝 = 2025년 12월 31일)
    · 맞춘 구간 지표(연평균·끝 금액·낙폭·샤프·소르티노·칼마·쏠림·보유 대비·작동 규칙·강건성·1990~2010)는
      계산 코드나 후보, 상장 전 구간(prelist.csv)이 바뀔 때만 다시 계산(오래 걸림 — SMA 약 20분), 2026년 이후 구간·1990~최신 지표는 매일
-   사용: node scripts/stratsim_fit.cjs [--full] [--kind 9sig|sma] [--limit 행수(시험용)]
+   사용: node scripts/stratsim_fit.cjs [--full] [--kind 9sig|sma] [--limit 행수(시험용)] [--if-stale]
+     --if-stale: 저장된 표의 해시(계산 코드·후보·상장 전 구간)가 지금과 같으면 아무것도 하지 않음 — 장중 실행이 상장 전 구간이 바뀐 날
+                 가격 자료와 탐색기 표를 같은 커밋으로 맞출 때 (다르면 보통 실행과 같음 — 맞춘 구간 지표 전체 다시 계산)
    결과가 바뀔 때만 파일을 씀 (계산 시각만 바뀐 경우 제외) */
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm'), crypto = require('crypto');
@@ -216,6 +218,16 @@ function main() {
 const seed = SEED;
 const t0 = Date.now();
 let wrote = 0;
+if (args.includes('--if-stale')) {
+  const stale = ['9sig', 'sma'].filter((kind) => {
+    if (ONLY && ONLY !== kind) return false;
+    let prev = null;
+    try { prev = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'stratsim', 'fit-' + kind + '.json'), 'utf8')); } catch (e) { prev = null; }
+    return !prev || prev.engine !== engineHash || prev.seed !== sha(JSON.stringify(seed[kind]));
+  });
+  if (!stale.length) { console.log('탐색기 표: 해시가 지금과 같음 — 다시 계산하지 않음'); return; }
+  console.log('탐색기 표: 해시가 바뀜(' + stale.join('·') + ') — 맞춘 구간 지표를 다시 계산');
+}
 for (const kind of ['9sig', 'sma']) {
   if (ONLY && ONLY !== kind) continue;
   const sd = seed[kind], keys = sd.keys, fixed = sd.fixed;
