@@ -2596,7 +2596,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   #page-sma200 .f input[type=number], #page-sma200 .f select { background:var(--bg3); border:1px solid var(--card-border); border-radius:8px; padding:7px 9px; color:var(--text); font:inherit; min-width:0; width:100%; }
   #page-sma200 .f .hint { grid-column:2; color:var(--text3); font-size:12px; margin-top:-2px; line-height:1.5; }
   #page-sma200 .f > .cs-wrap { display:block; width:100%; max-width:360px; } #page-sma200 .f > .cs-wrap > .cs-btn { width:100%; }
-  #page-sma200 .f input[type=number] { max-width:360px; } #page-sma200 .f > .cs-wrap.s2-wide, #page-sma200 .f > .cs-wrap:has(#s2-mode) { max-width:620px; }
+  #page-sma200 .f input[type=number] { max-width:360px; } #page-sma200 .f > .cs-wrap.s2-wide, #page-sma200 .f > .cs-wrap:has(#s2-mode), #page-sma200 .f > .cs-wrap:has(#s2-lag) { max-width:620px; }
   #page-sma200 .s2-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; min-width:0; }
   #page-sma200 .s2-dates { display:inline-flex; flex-wrap:wrap; align-items:center; gap:6px; }
   #page-sma200 .s2-dates input[type=date] { background:var(--bg3); border:1px solid var(--card-border); border-radius:8px; padding:6px 8px; color:var(--text); font:inherit; }

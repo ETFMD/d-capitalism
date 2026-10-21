@@ -1512,9 +1512,9 @@ def aspeed2_check(page, base, fail, local):
     sns_ui_check(page, fail)
 
 
-S2_INDEP_JS = """([mode, fee, tax, itax]) => { const L = S2debug.last(), D = L.D, cap = S2debug.S().cap;
+S2_INDEP_JS = """([mode, fee, tax, itax, lag]) => { const L = S2debug.last(), D = L.D, cap = S2debug.S().cap;
     const o = { from: L.from, to: L.to, capital: cap, mode, fee: fee / 100, sec: mode === 'real' ? 0.0000206 : 0, divTax: mode === 'real' ? 0.15 : 0, intTax: itax ? 0.154 : 0,
-                tax: tax === 'none' ? null : { fx: i => D.fx[i], method: tax }, rows: true };
+                tax: tax === 'none' ? null : { fx: i => D.fx[i], method: tax }, rows: true, lag: lag };
     const R = SMB.run(D, S2debug.S().p, o), st = SMB.stats(R), h = SMB.bh(D, R.K.ul, L.from, L.to, cap, o);
     const kv = {}; document.querySelectorAll('#s2-kv > div').forEach(e => { const s = e.querySelectorAll('small'); kv[s[0].innerText] = { b: e.querySelector('b').innerText, sub: s[1] ? s[1].innerText : '' }; });
     const usd = x => (x < 0 ? '−$' : '$') + Math.abs(x).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1556,7 +1556,7 @@ def sma200_check(page, base, fail, local):
                          [...document.querySelectorAll('#s2-per button.on')].map(b => b.dataset.p).join()] }; }""")
         if not d['ok'] or d['v'] != ['100000', 'real', '0.25', 'fifo', 'on', 'all']:
             fail('sma200', '처음 기본값 이상 (기대: 라이브러리 SMA 200 조건 · 원금 100000 · 실전 · 0.25% · 선입선출 · 이자세 · 전체): %s' % d)
-        r = page.evaluate(S2_INDEP_JS, ['real', 0.25, 'fifo', True])
+        r = page.evaluate(S2_INDEP_JS, ['real', 0.25, 'fifo', True, 0])
         if r['diff'] or not r['same'] or not r['cnt']:
             fail('sma200', '실전 기본 결과가 따로 돌린 엔진과 다름: %s' % {k: r[k] for k in ('diff', 'same', 'cnt', 'from', 'to')})
         fin0 = r['fin']
@@ -1588,10 +1588,18 @@ def sma200_check(page, base, fail, local):
         page.select_option('#s2-k-win', '150'); page.select_option('#s2-k-out', 'qqq'); page.select_option('#s2-k-cs', '2')
         page.select_option('#s2-tax', 'avg'); page.select_option('#s2-itax', 'off'); page.fill('#s2-fee', '')
         page.click('#s2-run'); wait_new()
-        r = page.evaluate(S2_INDEP_JS, ['real', 0.25, 'avg', False])
+        r = page.evaluate(S2_INDEP_JS, ['real', 0.25, 'avg', False, 0])
         q = page.evaluate("() => [document.getElementById('s2-fee').value, S2debug.S().p.win, S2debug.S().p.out, S2debug.last().R.K.out]")
         if r['diff'] or not r['same'] or q != ['0.25', '150', 'qqq', 'qqq']:
             fail('sma200', '조건을 바꾼 결과가 엔진과 다름: %s · %s' % ({k: r[k] for k in ('diff', 'same')}, q))
+        # 신호 → 체결 '다음 거래일 종가'(하루 늦게): 바꾸면 바로 다시 계산 · 시작 가능일 하루 뒤 · 결과 = 엔진(lag 1)
+        fv0 = page.evaluate("() => S2debug.last().fv")
+        page.select_option('#s2-lag', '1'); wait_new()
+        r = page.evaluate(S2_INDEP_JS, ['real', 0.25, 'avg', False, 1])
+        q = page.evaluate("() => [S2debug.S().lag, S2debug.last().o.lag, S2debug.last().fv, [...document.querySelectorAll('#s2-tb thead th, #s2-day thead th')].map(t => t.innerText).join('|')]")
+        if r['diff'] or not r['same'] or q[0] != 1 or q[1] != 1 or q[2] != fv0 + 1:
+            fail('sma200', "'하루 늦게' 결과가 엔진(lag 1)과 다르거나 시작 가능일이 하루 뒤가 아님: %s · %s" % ({k: r[k] for k in ('diff', 'same')}, q[:3]))
+        page.select_option('#s2-lag', '0'); wait_new()
         # 시뮬레이터와 같게
         page.click('#s2-simlike'); wait_new()
         q = page.evaluate("""() => { const L = S2debug.last(), S = S2debug.S(); return { from: L.D.d[L.from], to: L.D.d[L.to], fin: L.R.final, mdd: L.st.mdd, n: L.R.eq.length, p: S.p,

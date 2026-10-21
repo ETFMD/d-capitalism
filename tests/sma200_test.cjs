@@ -100,7 +100,12 @@ const pick = a => a[Math.floor(rnd() * a.length)];
         else { const Lq = lots[s.k] || []; let need = s.q; while (need > 1e-12 && Lq.length) { const z = Lq[0], tk = Math.min(need, z[0]); base += tk * z[1]; z[0] -= tk; need -= tk; if (z[0] <= 1e-12) Lq.shift(); } if (need > 1e-6) check('없는 주식 매도', false, D.d[i]); }
         const y = yr(i); gain[y] = (gain[y] || 0) + w - base;
       };
-      r.s.filter(s => !s.tax).forEach(doSell);   /* 엔진 순서: 신호 매도 → 매수 → (분배금) → 세금 내려 매도 */
+      r.s.filter(s => !s.tax).forEach(doSell);   /* 엔진 순서: 신호 매도 → 양도세(모자라면 보유 매도 → 납부) → 매수 → 분배금 */
+      r.s.filter(s => s.tax).forEach(s => { doSell(s); nTaxSell++; });
+      const pd = R.taxes.filter(T => T.paid === D.d[i] && T.tax > 0).reduce((s2, T) => s2 + T.tax / fx[i], 0);
+      if (Math.abs(pd - r.tax) > 1e-6 * Math.max(1, pd)) check('세금 납부액 = 원화 세액 ÷ 그날 환율', false, [D.d[i], pd, r.tax]);
+      if (pd > 0) nPaid++;
+      const pay = Math.min(pd, Math.max(0, cash)); ext += pd - pay; cash -= pay;
       for (const bx of r.b) {
         const pr = D.px[bx.k][i];
         if (mode === 'real') { if (Math.abs(bx.q - Math.round(bx.q)) > 1e-9) check('실전인데 소수 주 매수', false, [D.d[i], bx.q]); const sp = bx.q * pr * (1 + fee); if (Math.abs(sp - bx.spend) > 1e-6 * sp) check('매수 금액', false, D.d[i]); if (sp > cash + 1e-6) check('현금보다 많이 삼', false, [D.d[i], sp, cash]); cash -= sp; }
@@ -112,11 +117,6 @@ const pick = a => a[Math.floor(rnd() * a.length)];
       let dc = 0; if (mode === 'real') for (const k of SMB.ASSETS) { const dv = D.dv[k][i]; if (dv > 0 && sh0[k] > 0 && i > a) dc += sh0[k] * dv * 0.85; }
       cash += dc; divSum += dc; if (dc > 0) nDiv++;
       if (Math.abs(dc - r.div) > 1e-6 * Math.max(1, dc)) check('분배금', false, [D.d[i], dc, r.div]);
-      r.s.filter(s => s.tax).forEach(s => { doSell(s); nTaxSell++; });
-      const pd = R.taxes.filter(T => T.paid === D.d[i] && T.tax > 0).reduce((s2, T) => s2 + T.tax / fx[i], 0);
-      if (Math.abs(pd - r.tax) > 1e-6 * Math.max(1, pd)) check('세금 납부액 = 원화 세액 ÷ 그날 환율', false, [D.d[i], pd, r.tax]);
-      if (pd > 0) nPaid++;
-      const pay = Math.min(pd, Math.max(0, cash)); ext += pd - pay; cash -= pay;
       if (Math.abs(cash - r.cash) > 1e-6 * Math.max(1, Math.abs(r.cash)) + 1e-6) { check('현금', false, [D.d[i], cash, r.cash]); cash = r.cash; }
       if (r.cash < -1e-6) check('현금 음수 없음', false, [D.d[i], r.cash]);
       for (const k of SMB.ASSETS) if (Math.abs(sh[k] - r.sh[k]) > 1e-9 * Math.max(1, sh[k])) { check('주식 수', false, [D.d[i], k, sh[k], r.sh[k]]); sh[k] = r.sh[k]; }
@@ -173,9 +173,14 @@ const pick = a => a[Math.floor(rnd() * a.length)];
     check('stats: 연평균 식', Math.abs(st.cagr - (Math.pow(R.final / 100000, 365.25 / days) - 1)) < 1e-15 && st.days === days);
     let pk = -Infinity, m = 0; R.eq.forEach(v => { pk = Math.max(pk, v); m = Math.min(m, v / pk - 1); });
     check('stats: 최대 낙폭 식', st.mdd === m);
-    const h = SMB.bh(D, 'tqqq', a, b, 100000, o), p0 = D.px.tqqq[a], p1 = D.px.tqqq[b];
-    const pr = 100000 / 1.0025 / p0 * p1 * (1 - 0.0025 - 0.0000206), f0 = fx[Math.min(N - 1, sIdx(a))], f1 = fx[Math.min(N - 1, sIdx(b))], tx = 0.22 * Math.max(0, pr * f1 - 100000 * f0 - 2500000) / fx[b];
-    check('bh: 세전 = 가격 비율 · 세후 = 수수료·SEC·양도세 뺀 값', Math.abs(h.fin - 100000 * p1 / p0) < 1e-6 && Math.abs(h.netFin - (pr - tx)) < 1e-6, [h.netFin, pr - tx]);
+    /* 그냥 보유(실전): 분배금(15% 뗀 뒤)을 분배락일 종가로 다시 삼 — 세전은 수수료 없이, 세후는 다시 살 때 수수료 · 취득가에 더함(그날 결제일 환율) */
+    const h = SMB.bh(D, 'tqqq', a, b, 100000, o), P = D.px.tqqq, p0 = P[a], p1 = P[b], f0 = fx[Math.min(N - 1, sIdx(a))], f1 = fx[Math.min(N - 1, sIdx(b))];
+    let qg = 100000 / p0, qn = 100000 / 1.0025 / p0, basis = 100000 * f0, nEv = 0;
+    for (let i = a + 1; i <= b; i++) { const dv = D.dv.tqqq[i]; if (dv > 0) { nEv++; const c = qn * dv * 0.85; qn += c / (P[i] * 1.0025); basis += c * fx[Math.min(N - 1, sIdx(i))]; qg *= 1 + dv * 0.85 / P[i]; } }
+    const pr = qn * p1 * (1 - 0.0025 - 0.0000206), tx = 0.22 * Math.max(0, pr * f1 - basis - 2500000) / fx[b];
+    check('bh(실전): 분배금 다시 사기 · 세후 = 수수료·SEC·양도세 뺀 값', nEv > 5 && Math.abs(h.fin / (qg * p1) - 1) < 1e-12 && Math.abs(h.netFin / (pr - tx) - 1) < 1e-12 && h.fin > 100000 * p1 / p0, [nEv, h.fin, qg * p1, h.netFin, pr - tx]);
+    const hs = SMB.bh(D, 'tqqq', a, b, 100000, Object.assign({}, o, { mode: 'sim', tax: null }));
+    check('bh(시뮬 방식): 분배금 없이 가격 비율', Math.abs(hs.fin - 100000 * p1 / p0) < 1e-6 && Math.abs(hs.netFin - 100000 * 0.9975 / p0 * p1 * 0.9975) < 1e-6);
     const one = SMB.one(D, SMB.PRESET, o, a, b);
     check('one = run + stats + bh', one.cagr === st.cagr && one.mdd === st.mdd && one.liq === st.cagrLiq && one.bh === h.cagr && one.bhN === h.net && one.d === D.d[a], one);
     const pl = SMB.plan(D, a, b, 20), months = new Set(pl.first.map(s => D.d[s].slice(0, 7)));
@@ -185,6 +190,55 @@ const pick = a => a[Math.floor(rnd() * a.length)];
     /* 세금 없음 · 수수료 0 이면 끝날 정리 = 평가금 */
     const R0 = SMB.run(D, SMB.PRESET, { from: a, to: b, capital: 100000, mode: 'real', fee: 0, sec: 0, divTax: 0.15, intTax: 0, tax: null });
     check('세금·수수료 없으면 정리 값 = 평가금', Math.abs(R0.liq - R0.final) < 1e-6 && R0.taxPaid === 0 && R0.taxDue === 0);
+  }
+  /* ── ⑤ 실전이 시뮬레이터와 같은 날 사고파는지 · 하루 늦게(lag) · RSI 상장 전 0 ── */
+  {   /* RSI: 앞쪽 0 은 건너뜀 → 0 을 붙인 계열의 RSI = 원래 계열의 RSI 를 그만큼 민 것 (시뮬레이터 자료처럼 0 이 없으면 예전 식과 같음) */
+    const v = Dsim.px.qqq.slice(0, 400), z = [0, 0, 0].concat(v), r0 = SMB.rsi(v, 14), rz = SMB.rsi(z, 14);
+    check('RSI: 상장 전 0 을 오름으로 세지 않음', rz.slice(0, 17).every(x => x == null) && r0.every((x, i) => x === rz[i + 3]));
+    const t = D.px.tqqq, s0 = t.findIndex(x => x > 0), rt = SMB.rsi(t, 30);
+    check('RSI: 실제 TQQQ 는 상장 뒤 30일째부터', rt[s0 + 29] == null && rt[s0 + 30] != null, [D.d[s0]]);
+  }
+  {   /* 실전(1주 단위 · 분배금 · 잔돈 다시 사기) vs 시뮬 방식 — 같은 자료 · 큰 원금 · 수수료 0 · 세금 없음: 날마다 신호·목표·나눠 사기 남은 횟수, 판 날, (잔돈이 아닌) 산 날이 같아야 함 */
+    const NT = FULL ? 600 : 150; let nT = 0, nTop = 0, nSet = 0;
+    const cases = [];
+    for (let t = 0; t < NT; t++) {
+      const p = {}; for (const k in SMB.OPTS) p[k] = rnd() < 0.5 ? SMB.PRESET[k] : pick(SMB.OPTS[k])[0];
+      for (const k of ['sig', 'ul', 'out', 'bga']) if (p[k] === 'sqqq') p[k] = SMB.PRESET[k];
+      if (t % 3 === 0) p.settle = pick(['2', '3', '4', '5']);
+      cases.push([p, rnd() < 0.5 ? 1 : 0]);
+    }
+    cases.unshift([Object.assign({}, SMB.PRESET, { settle: '3' }), 0], [Object.assign({}, SMB.PRESET, { settle: '5' }), 0], [Object.assign({}, SMB.PRESET), 1]);
+    for (const [p, lag] of cases) {
+      const fv = SMB.firstValid(D, p, lag); if (fv < 0 || fv > N - 120) continue;
+      const a = cases.indexOf(cases.find(c => c[0] === p)) < 3 ? fv : fv + Math.floor(rnd() * (N - fv - 100)), b = a < fv + 1 ? N - 1 : Math.min(N - 1, a + 60 + Math.floor(rnd() * 4000));
+      const base = { from: a, to: b, capital: 1e10, fee: 0, sec: 0, intTax: 0, tax: null, rows: true, lag };
+      const Rs = SMB.run(D, p, Object.assign({ mode: 'sim' }, base)), Rr = SMB.run(D, p, Object.assign({ mode: 'real', divTax: 0.15 }, base));
+      nT++; if (+p.settle >= 2) nSet++;
+      for (let j = 0; j < Rs.rows.length; j++) {
+        const x = Rs.rows[j], y = Rr.rows[j];
+        const bs = x.b.length > 0, br = y.b.some(q => !q.top), ss = x.s.length > 0, sr = y.s.length > 0;
+        if (y.b.some(q => q.top)) nTop++;
+        if (x.st !== y.st || x.tgt !== y.tgt || x.ease !== y.ease || x.bg !== y.bg || bs !== br || ss !== sr) { check('실전 = 시뮬 방식과 같은 날 사고팖', false, [D.d[x.i], lag, p, [x.st, y.st, x.tgt, y.tgt, x.ease, y.ease, bs, br, ss, sr]]); break; }
+      }
+    }
+    check('실전 = 시뮬 방식 날짜 (' + nT + '번 · 결제 대기 2일 이상 ' + nSet + '번 · 잔돈 매수 ' + nTop + '일)', nT > 50 && nSet > 15 && nTop > 100, [nT, nSet, nTop]);
+  }
+  {   /* 하루 늦게(lag 1) = 신호 종목을 하루 민 계열로 같은 날 판단(lag 0) — 시뮬레이터 자료의 빈 칸(SQQQ)에 '하루 민 QQQ'(첫날 0)를 넣어 비교 */
+    const Dz = { d: Dsim.d, px: Object.assign({}, Dsim.px), dv: null, kind: 'sim' };
+    Dz.px.sqqq = Dsim.px.qqq.map((v, i) => (i ? Dsim.px.qqq[i - 1] : 0));
+    let nL = 0, wL = 0;
+    for (let t = 0; t < (FULL ? 400 : 120); t++) {
+      const p = {}; for (const k in SMB.OPTS) p[k] = rnd() < 0.5 ? SMB.PRESET[k] : pick(SMB.OPTS[k])[0];
+      for (const k of ['ul', 'out']) if (p[k] === 'sqqq') p[k] = SMB.PRESET[k];
+      const p1 = Object.assign({}, p, { sig: 'qqq', bga: 'qqq' }), p0 = Object.assign({}, p, { sig: 'sqqq', bga: 'sqqq' });
+      const fv = Math.max(SMB.firstValid(Dz, p1, 1), SMB.firstValid(Dz, p0, 0)); if (fv < 0) continue;
+      const a = fv + Math.floor(rnd() * (Dz.d.length - fv - 300)), b = Math.min(Dz.d.length - 1, a + 20 + Math.floor(rnd() * 8000));
+      const R1 = SMB.run(Dz, p1, { from: a, to: b, capital: 1e5, mode: 'sim', lag: 1 }), R0 = SMB.run(Dz, p0, { from: a, to: b, capital: 1e5, mode: 'sim', lag: 0 });
+      nL++; wL = Math.max(wL, Math.abs(R1.final - R0.final) / R0.final); if (R1.nSell !== R0.nSell) check('하루 늦게: 매도 횟수', false, [Dz.d[a], Dz.d[b], p]);
+    }
+    check('하루 늦게 = 하루 민 신호로 같은 날 (' + nL + '번 · 끝 금액 차이 0)', nL > 60 && wL === 0, wL);
+    const f0 = SMB.firstValid(D, SMB.PRESET), f1 = SMB.firstValid(D, SMB.PRESET, 1);
+    check('하루 늦게: 첫 시작 가능일 = 하루 뒤', f1 === f0 + 1, [D.d[f0], D.d[f1]]);
   }
   console.log((bad ? 'FAIL ' : '') + 'sma200_test: ' + ok + '개 통과 · ' + bad + '개 실패 (시뮬레이터 대조 ' + n1 + '번 · 실전·세금 검산 ' + runs + '번)');
   process.exit(bad ? 1 : 0);

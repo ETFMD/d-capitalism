@@ -18653,14 +18653,16 @@ var SMB = (function () {
     }
     return out;
   }
+  /* RSI — 앞쪽 0(상장 전 · 실제 일봉)은 건너뛰고 첫 가격부터 셈 (0 → 첫 가격을 오름으로 세지 않게 · 시뮬레이터 자료는 0 이 없어 같은 값) */
   function rsi(vals, w) {
-    var out = new Array(vals.length).fill(null);
-    if (vals.length < w + 1) return out;
+    var out = new Array(vals.length).fill(null), s = 0;
+    while (s < vals.length && !(vals[s] > 0)) s++;
+    if (vals.length - s < w + 1) return out;
     var up = 0, dn = 0, i, d;
-    for (i = 1; i <= w; i++) { d = vals[i] - vals[i - 1]; if (d > 0) up += d; else dn -= d; }
+    for (i = s + 1; i <= s + w; i++) { d = vals[i] - vals[i - 1]; if (d > 0) up += d; else dn -= d; }
     up /= w; dn /= w;
-    out[w] = dn === 0 ? 100 : 100 - 100 / (1 + up / dn);
-    for (i = w + 1; i < vals.length; i++) {
+    out[s + w] = dn === 0 ? 100 : 100 - 100 / (1 + up / dn);
+    for (i = s + w + 1; i < vals.length; i++) {
       d = vals[i] - vals[i - 1];
       up = (up * (w - 1) + (d > 0 ? d : 0)) / w;
       dn = (dn * (w - 1) + (d < 0 ? -d : 0)) / w;
@@ -18684,12 +18686,13 @@ var SMB = (function () {
   }
   /* 이 설정이 쓰는 종목 */
   function used(K) { var u = {}; u[K.sig] = 1; u[K.ul] = 1; if (K.out !== 'cash') u[K.out] = 1; if (K.bg > 0) u[K.bga] = 1; return Object.keys(u); }
-  /* 첫 시작 가능일 — 쓰는 종목에 가격이 있고, 쓰는 지표(이동평균 · RSI · 버블 평균)가 모두 나온 첫날 (그 전은 판단을 못 함) */
-  function firstValid(D, p) {
-    var K = knobs(p), u = used(K), a = ind(D, 'sma', K.sig, K.win), h = K.oh > 0 ? ind(D, 'rsi', K.sig, K.ohw) : null, c = K.cool > 0 ? ind(D, 'rsi', K.sig, K.coolw) : null, b = K.bg > 0 ? ind(D, 'sma', K.bga, K.bgw) : null;
-    for (var i = 0; i < D.d.length; i++) {
-      var ok = a[i] != null && (!h || h[i] != null) && (!c || c[i] != null) && (!b || b[i] != null);
-      for (var j = 0; ok && j < u.length; j++) if (!(D.px[u[j]][i] > 0)) ok = false;
+  /* 첫 시작 가능일 — 쓰는 종목에 가격이 있고, 쓰는 지표(이동평균 · RSI · 버블 평균)가 모두 나온 첫날 (그 전은 판단을 못 함)
+     · lag 1(다음 날 종가에 체결)이면 판단에 쓰는 전날까지 지표가 나와 있어야 하므로 하루 뒤 */
+  function firstValid(D, p, lag) {
+    var K = knobs(p), u = used(K), a = ind(D, 'sma', K.sig, K.win), h = K.oh > 0 ? ind(D, 'rsi', K.sig, K.ohw) : null, c = K.cool > 0 ? ind(D, 'rsi', K.sig, K.coolw) : null, b = K.bg > 0 ? ind(D, 'sma', K.bga, K.bgw) : null, L = lag ? 1 : 0;
+    for (var i = L; i < D.d.length; i++) {
+      var g = i - L, ok = a[g] != null && (!h || h[g] != null) && (!c || c[g] != null) && (!b || b[g] != null);
+      for (var j = 0; ok && j < u.length; j++) if (!(D.px[u[j]][i] > 0) || !(D.px[u[j]][g] > 0)) ok = false;
       if (ok) return i;
     }
     return -1;
@@ -18697,11 +18700,12 @@ var SMB = (function () {
 
   /* ════ 한 번 실행 ════
      o = { from, to (인덱스), capital, mode: 'sim'(시뮬레이터와 같게) | 'real'(실전), fee(비율 — 없으면 손잡이 cost), sec(매도 SEC 비율 · real 만),
-           divTax(분배금 원천징수 · real 만), intTax(현금 이자 소득세), tax: { fx(인덱스 → 원/달러), method: 'fifo'|'avg' } | null, rows: 날마다 기록 } */
+           divTax(분배금 원천징수 · real 만), intTax(현금 이자 소득세), tax: { fx(인덱스 → 원/달러), method: 'fifo'|'avg' } | null, rows: 날마다 기록,
+           lag: 0(그날 종가로 판단해 그날 종가에 체결 — 시뮬레이터와 같음) | 1(전날 종가로 판단해 오늘 종가에 체결 — 하루 늦게) } */
   function run(D, p, o) {
     var K = knobs(p), real = o.mode === 'real', cost = o.fee != null ? o.fee : K.cost, sec = real ? (o.sec || 0) : 0, divTax = real ? (o.divTax || 0) : 0;
     var mRate = K.rate / 12 * (1 - (o.intTax || 0)), initial = o.capital, keep = !!o.rows, N = D.d.length, PX = D.px, DV = real && D.dv ? D.dv : null;
-    var a = Math.max(0, o.from | 0), b = Math.min(N - 1, o.to != null ? o.to | 0 : N - 1);
+    var LG = o.lag ? 1 : 0, a = Math.max(LG, o.from | 0), b = Math.min(N - 1, o.to != null ? o.to | 0 : N - 1);
     if (!(a < b)) throw new Error('기간이 너무 짧아요');
     var smaAt = ind(D, 'sma', K.sig, K.win), ohAt = ind(D, 'rsi', K.sig, K.ohw), coolAt = ind(D, 'rsi', K.sig, K.coolw);
     var bgSma = K.bg > 0 ? ind(D, 'sma', K.bga, K.bgw) : null;
@@ -18743,13 +18747,15 @@ var SMB = (function () {
     }
 
     var r0 = a;
-    var state = smaAt[a] == null ? 'in' : ((sigP[a] || 0) > smaAt[a] ? 'in' : 'out');
-    if (state === 'in' && K.oh > 0 && ohAt && ohAt[a] != null && ohAt[a] >= K.oh) state = 'out';
+    var g0 = a - LG;   /* 판단에 쓰는 날 (lag 1 이면 전날) */
+    var state = smaAt[g0] == null ? 'in' : ((sigP[g0] || 0) > smaAt[g0] ? 'in' : 'out');
+    if (state === 'in' && K.oh > 0 && ohAt && ohAt[g0] != null && ohAt[g0] >= K.oh) state = 'out';
     var pend = state, pendN = 0;
-    var bg = bubbleState(bgP[a] || 0, bgSma ? bgSma[a] : null);
+    var bg = bubbleState(bgP[g0] || 0, bgSma ? bgSma[g0] : null);
     var sh = { tqqq: 0, qqq: 0, spy: 0, qld: 0, sso: 0, spxl: 0, sqqq: 0 };
     var cash = initial, fees = 0, divs = 0, intr = 0, lastAmt = 0;
     var value = function (i) { var v = 0; for (var j = 0; j < ASSETS.length; j++) { var k = ASSETS[j]; if (sh[k] > 0) v += sh[k] * (px(i, k) || 0); } return v + cash; };
+    var onlyHolds = function (k) { for (var j = 0; j < ASSETS.length; j++) if (ASSETS[j] !== k && sh[ASSETS[j]] > 0) return false; return true; };
     var biggest = function (i) { var best = 'cash', bv = cash; for (var j = 0; j < ASSETS.length; j++) { var k = ASSETS[j]; if (sh[k] > 0) { var v = sh[k] * (px(i, k) || 0); if (v > bv) { bv = v; best = k; } } } return best; };
     /* 사기 — sim: 시뮬레이터처럼 금액 안에서 수수료(주식 = 금액 × (1 − 수수료) ÷ 가격 · 소수 주) · real: 1주 단위 · 체결 금액 × 수수료를 따로 */
     function buy(i, k, amt) {
@@ -18772,7 +18778,10 @@ var SMB = (function () {
 
     var tgt = wantAsset(state, bg), b0 = null;
     if (tgt !== 'cash') { var p00 = px(r0, tgt); if (p00 > 0) { if (!real) { b0 = buy(r0, tgt, cash); cash = 0; } else b0 = buy(r0, tgt, cash); } }
-    var ease = 0, lastSell = a - 1e9, lastBuy = a - 1e9, outWhy = state === 'out' ? (K.oh > 0 && ohAt && ohAt[a] != null && ohAt[a] >= K.oh ? 'hot' : 'below') : null;
+    var ease = 0, lastSell = a - 1e9, lastBuy = a - 1e9, outWhy = state === 'out' ? (K.oh > 0 && ohAt && ohAt[g0] != null && ohAt[g0] >= K.oh ? 'hot' : 'below') : null;
+    /* full = 시뮬레이터라면 현금이 0 인 상태(목표 종목을 다 산 뒤) — 실전의 잔돈(1주 값 미만)·분배금·이자는 이때 생긴 현금이라
+       사고팔 날짜(결제 대기 · 나눠 사기 횟수)에 끼어들지 않게 따로 다룸 → 실전도 시뮬레이터와 같은 날 사고팖 */
+    var full = !!b0;
     var held = biggest(r0);
     var ul0 = px(r0, K.ul);
     var ready = tgt === 'cash' ? true : (ul0 > 0 && px(r0, tgt) > 0);
@@ -18782,7 +18791,7 @@ var SMB = (function () {
     function pBuy(i, bx) { var c = cur[bx.k]; if (!c) { c = cur[bx.k] = { k: bx.k, from: i, spend: 0, net: 0, to: null, why: null }; periods.push(c); } c.spend += bx.spend; }
     function pSell(i, k, sx, why) { var c = cur[k]; if (!c) return; c.net += sx.net; if (!(sh[k] > 0)) { c.to = i; c.why = why; cur[k] = null; } }
     if (b0) pBuy(r0, b0);
-    if (keep) rows.push({ i: r0, st: state, bg: bg, tgt: tgt, why: smaAt[a] == null ? 'na' : state === 'in' ? 'start-in' : (K.oh > 0 && ohAt && ohAt[a] != null && ohAt[a] >= K.oh ? 'hot' : 'start-out'), ow: outWhy, b: b0 ? [b0] : [], s: [], div: 0, int: 0, tax: 0, txq: 0, cash: cash, sh: Object.assign({}, sh), eq: eq[0], held: held, ease: 0 });
+    if (keep) rows.push({ i: r0, g: g0, st: state, bg: bg, tgt: tgt, why: smaAt[g0] == null ? 'na' : state === 'in' ? 'start-in' : (K.oh > 0 && ohAt && ohAt[g0] != null && ohAt[g0] >= K.oh ? 'hot' : 'start-out'), ow: outWhy, b: b0 ? [b0] : [], s: [], div: 0, int: 0, tax: 0, txq: 0, cash: cash, sh: Object.assign({}, sh), eq: eq[0], held: held, ease: 0 });
 
     for (var m = a + 1; m <= b; m++) {
       var d = D.d[m], mo = d.slice(0, 7), newMonth = mo !== pMonth, it = 0;
@@ -18791,13 +18800,14 @@ var SMB = (function () {
       var sh0 = DV ? Object.assign({}, sh) : null;
       /* 확인 필터: 바뀐 신호가 정한 횟수만큼 이어져야 실제로 바꿈 */
       var bgBefore = bg, st0 = state;
-      var want = judge(state, sigP[m] || 0, smaAt[m], ohAt ? ohAt[m] : null, coolAt ? coolAt[m] : null), why0 = why;
+      var gm = m - LG;
+      var want = judge(state, sigP[gm] || 0, smaAt[gm], ohAt ? ohAt[gm] : null, coolAt ? coolAt[gm] : null), why0 = why;
       if (want !== state) {
         if (want === pend) pendN++; else { pend = want; pendN = 1; }
         var need = want === 'in' ? K.cb : K.cs;
         if (need <= 1 || pendN >= need) { state = want; pendN = 0; if (state === 'out') outWhy = why0; }
       } else { pend = state; pendN = 0; }
-      bg = bubbleState(bgP[m] || 0, bgSma ? bgSma[m] : null);
+      bg = bubbleState(bgP[gm] || 0, bgSma ? bgSma[gm] : null);
       var before = tgt;
       tgt = wantAsset(state, bg);
       if (!ready) ready = tgt === 'cash' || px(m, tgt) > 0;
@@ -18811,24 +18821,8 @@ var SMB = (function () {
         }
         if (sold) lastSell = m;
       }
-      if (sold) { held = 'cash'; nSell++; }
-      var canBuy = K.settle === 0 || m - lastSell >= K.settle;
-      if (canBuy && ready && tgt !== 'cash' && cash > 0) {
-        var pt = px(m, tgt);
-        if (pt > 0) {
-          var amt, bx;
-          if (ease > 1) { amt = cash * (1 / ease); if (!real) { bx = buy(m, tgt, amt); cash -= amt; } else bx = buy(m, tgt, amt); ease--; }
-          else { amt = cash; if (!real) { bx = buy(m, tgt, amt); cash = 0; } else bx = buy(m, tgt, amt); if (ease === 1) ease = 0; }
-          if (bx) {
-            lastBuy = m; B.push(bx); nBuy++; pBuy(m, bx);
-            held = tgt;
-          }
-        }
-      }
-      /* 분배금 (실전 · 분배락일 아침 보유분 · 원천징수 뒤 현금) */
-      var dc = 0;
-      if (DV) for (var j2 = 0; j2 < ASSETS.length; j2++) { var k2 = ASSETS[j2], dvv = DV[k2] ? DV[k2][m] : 0; if (dvv > 0 && sh0[k2] > 0) { var g = sh0[k2] * dvv * (1 - divTax); dc += g; cash += g; divs += g; } }
-      /* 해외주식 양도세: 해가 바뀌면 그해 세금 확정 → 다음 해 5월 31일 이후 첫 거래일에 납부 */
+      if (sold) { held = 'cash'; nSell++; full = false; }
+      /* 해외주식 양도세: 해가 바뀌면 그해 세금 확정 → 다음 해 5월 31일 이후 첫 거래일에 납부 (그날 사기 전에 — 산 주식을 바로 팔아 수수료를 두 번 내지 않게) */
       var tpay = 0, tq = 0;
       if (tx) {
         if (m < b && yearOf(m + 1) !== yearOf(m)) { var yy = yearOf(m), gg = tx.gain[yy] || 0; tx.list.push({ y: yy, gain: gg, tax: Math.max(0, gg - DED) * RATE, paid: null }); }
@@ -18850,9 +18844,29 @@ var SMB = (function () {
           if (!(value(m) - cash > 0)) held = 'cash';
         }
       }
+      var canBuy = K.settle === 0 || m - lastSell >= K.settle;
+      if (canBuy && ready && tgt !== 'cash' && cash > 0) {
+        var pt = px(m, tgt);
+        if (pt > 0) {
+          var amt, bx;
+          if (full) {
+            /* 다 산 뒤 생긴 현금(실전의 잔돈·분배금·이자): 들고 있는 게 목표 종목뿐이면 1주 단위로 더 삼 — 결제 대기·나눠 사기 횟수는 건드리지 않음
+               (시뮬레이터는 이때 현금이 0 이라 아무 일도 없음 · 시뮬 방식에선 양도세 낸 뒤 남은 소수점 잔돈만 해당 → 사지 않음) */
+            if (real && onlyHolds(tgt)) { bx = buy(m, tgt, cash); if (bx) { bx.top = true; B.push(bx); pBuy(m, bx); } }
+          } else {
+            if (ease > 1) { amt = cash * (1 / ease); if (!real) { bx = buy(m, tgt, amt); cash -= amt; } else bx = buy(m, tgt, amt); ease--; }
+            else { amt = cash; if (!real) { bx = buy(m, tgt, amt); cash = 0; } else bx = buy(m, tgt, amt); if (ease === 1) ease = 0; full = true; }
+            lastBuy = m;   /* 시뮬레이터와 같은 날을 '산 날'로 (실전에서 그 회차 금액이 1주 값보다 작아 못 산 날도 — 시뮬레이터는 소수 주로 삼) */
+            if (bx) { B.push(bx); nBuy++; pBuy(m, bx); held = tgt; }
+          }
+        }
+      }
+      /* 분배금 (실전 · 분배락일 아침 보유분 · 원천징수 뒤 현금 — 다음 거래일부터 다시 삼) */
+      var dc = 0;
+      if (DV) for (var j2 = 0; j2 < ASSETS.length; j2++) { var k2 = ASSETS[j2], dvv = DV[k2] ? DV[k2][m] : 0; if (dvv > 0 && sh0[k2] > 0) { var g = sh0[k2] * dvv * (1 - divTax); dc += g; cash += g; divs += g; } }
       var e = value(m) - taxExt; eq.push(e);
       if (biggest(m) !== 'cash') inDays++;
-      if (keep) rows.push({ i: m, st: state, st0: st0, want: want, pend: pendN, bg: bg, tgt: tgt, why: why0, ow: outWhy, b: B, s: S, div: dc, int: it, tax: tpay, txq: tq, cash: cash, sh: Object.assign({}, sh), eq: e, held: held, ease: ease });
+      if (keep) rows.push({ i: m, g: gm, st: state, st0: st0, want: want, pend: pendN, bg: bg, tgt: tgt, why: why0, ow: outWhy, b: B, s: S, div: dc, int: it, tax: tpay, txq: tq, cash: cash, sh: Object.assign({}, sh), eq: e, held: held, ease: ease });
     }
     var last = b, liq = cash - taxExt, hv = 0;
     for (var j4 = 0; j4 < ASSETS.length; j4++) { var k4 = ASSETS[j4]; if (sh[k4] > 0) { var v4 = sh[k4] * px(last, k4); hv += v4; liq += v4 * (1 - cost - sec); } }
@@ -18886,12 +18900,19 @@ var SMB = (function () {
     return { days: days, yrs: days / Y, fin: R.final, ret: R.final / R.cap - 1, cagr: cagr(R.cap, R.final, days), mdd: mdd(R.eq), liq: R.liq, cagrLiq: cagr(R.cap, R.liq, days),
              due: cagr(R.cap, R.final - R.taxDue, days) };
   }
-  /* 그냥 보유 — 시작일 종가에 원금 전부로 사서 끝 날 종가에 평가 (세전 · 수수료 없음 = 가격 비율) + 세후(사고팔 때 수수료·SEC · 끝 날 한 번 팔고 양도세 22% × (원화 차익 − 250만 원)) */
+  /* 그냥 보유 — 시작일 종가에 원금 전부로 사서 끝 날 종가에 평가
+     · 세전(v · fin · cagr · mdd): 수수료 없음 · 실전 방식이면 분배금(원천징수 뒤)을 분배락일 종가로 다시 삼(전략도 분배금을 받으니 같은 조건으로)
+     · 세후(net · netFin): 살 때·분배금 다시 살 때 수수료 · 끝 날 한 번 팔 때 수수료·SEC · 양도세 22% × (원화 양도가 − 원화 취득가(원금 + 다시 산 분배금, 그날 결제일 환율) − 250만 원) */
   function bh(D, k, a, b, cap, o) {
-    var p = D.px[k], days = dnum(D.d[b]) - dnum(D.d[a]), v = [], i;
-    for (i = a; i <= b; i++) v.push(cap * p[i] / p[a]);
-    var fe = o && o.fee || 0, se = o && o.mode === 'real' ? (o.sec || 0) : 0, pr = (o && o.mode === 'real' ? cap / (1 + fe) : cap * (1 - fe)) / p[a] * p[b] * (1 - fe - se), tx = 0;
-    if (o && o.tax && o.tax.fx) { var f0 = o.tax.fx(Math.min(D.d.length - 1, a + (D.d[a] < '2024-05-28' ? 2 : 1))), f1 = o.tax.fx(Math.min(D.d.length - 1, b + (D.d[b] < '2024-05-28' ? 2 : 1))); tx = RATE * Math.max(0, pr * f1 - cap * f0 - DED) / o.tax.fx(b); }
+    var p = D.px[k], days = dnum(D.d[b]) - dnum(D.d[a]), v = [], i, real = !!(o && o.mode === 'real'), N = D.d.length;
+    var dv = real && D.dv && D.dv[k] ? D.dv[k] : null, dt = real ? (o.divTax || 0) : 0, fe = o && o.fee || 0, se = real ? (o.sec || 0) : 0, T = o && o.tax && o.tax.fx ? o.tax : null;
+    var fxS = function (i) { return T.fx(Math.min(N - 1, i + (D.d[i] < '2024-05-28' ? 2 : 1))); };
+    var q = cap / p[a], qn = (real ? cap / (1 + fe) : cap * (1 - fe)) / p[a], basis = T ? cap * fxS(a) : 0;
+    for (i = a; i <= b; i++) {
+      if (dv && i > a && dv[i] > 0 && p[i] > 0) { var g = dv[i] * (1 - dt), gn = qn * g; q += q * g / p[i]; qn += gn / (1 + fe) / p[i]; if (T) basis += gn * fxS(i); }
+      v.push(q * p[i]);
+    }
+    var pr = qn * p[b] * (1 - fe - se), tx = T ? RATE * Math.max(0, pr * fxS(b) - basis - DED) / T.fx(b) : 0;
     return { v: v, fin: v[v.length - 1], cagr: cagr(cap, v[v.length - 1], days), mdd: mdd(v), net: cagr(cap, pr - tx, days), netFin: pr - tx };
   }
 
@@ -18967,12 +18988,13 @@ if (typeof module !== 'undefined') module.exports = SMB;
   var NM = { tqqq: 'TQQQ', qqq: 'QQQ', spy: 'SPY', qld: 'QLD', sso: 'SSO', spxl: 'SPXL', sqqq: 'SQQQ', cash: '현금' };
   function base(mode) {
     var sim = mode === 'sim', p = {}, k; for (k in SMB.PRESET) p[k] = SMB.PRESET[k];
-    return { per: 'all', from: '', to: '', cap: CAP_DEF, mode: sim ? 'sim' : 'real', fee: sim ? +SMB.PRESET.cost : 0.25, tax: sim ? 'none' : 'fifo', itax: sim ? 'off' : 'on', p: p };
+    return { per: 'all', from: '', to: '', cap: CAP_DEF, mode: sim ? 'sim' : 'real', lag: 0, fee: sim ? +SMB.PRESET.cost : 0.25, tax: sim ? 'none' : 'fifo', itax: sim ? 'off' : 'on', p: p };
   }
   function load() {
     var s = base('real');
     try { var j = JSON.parse(localStorage.getItem(LSK) || 'null'); if (j && typeof j === 'object') {
       ['per', 'from', 'to', 'mode', 'tax', 'itax'].forEach(function (k) { if (typeof j[k] === 'string') s[k] = j[k]; });
+      if (j.lag === 1) s.lag = 1;
       if (typeof j.cap === 'number' && j.cap >= 100) s.cap = j.cap; if (typeof j.fee === 'number' && j.fee >= 0 && j.fee <= 5) s.fee = j.fee; if (j.p && typeof j.p === 'object') s.p = SMB.clean(j.p);
     } } catch (e) {}
     if (s.mode !== 'sim') s.mode = 'real'; if (['fifo', 'avg', 'none'].indexOf(s.tax) < 0) s.tax = 'fifo'; if (s.itax !== 'off') s.itax = 'on';
@@ -19013,7 +19035,7 @@ if (typeof module !== 'undefined') module.exports = SMB;
     ['cool', '재진입 — RSI 가 이 값 미만일 때만 삼', ''],
     ['h', '팔았을 때 들고 있을 것'],
     ['out', '시장 밖에 있을 땐', ''],
-    ['cr', '그 현금 이자 (연)', '달이 바뀐 첫 거래일에 그때 현금에 붙음'],
+    ['cr', '그 현금 이자 (연)', '달이 바뀐 첫 거래일에 그때 현금에 붙음 · 2010~2021년 실제 달러 단기 금리는 대부분 0~2%대(라이브러리 기본 4%는 후한 편)'],
     ['h', '나눠서 사기'],
     ['din', '살 때 주 종목을 나눠 사는 기간', ''],
     ['dout', '팔 때 대기 종목으로 나눠 옮기는 기간', '시장 밖 종목이 현금이 아닐 때만'],
@@ -19037,7 +19059,10 @@ if (typeof module !== 'undefined') module.exports = SMB;
       '<div class="f"><label for="s2-cap">원금 ($)</label><input id="s2-cap" type="number" min="100" step="100" value="' + S.cap + '"></div>' +
       '<div class="f"><label for="s2-mode">계산 방식</label><select id="s2-mode"><option value="real"' + (S.mode === 'real' ? ' selected' : '') + '>실전 — 실제 일봉 · 1주 단위 · 분배금 원천징수 15% · 매도 SEC</option>' +
         '<option value="sim"' + (S.mode === 'sim' ? ' selected' : '') + '>시뮬레이터와 같게 — 시뮬레이터 자료(상장 전 재현 포함) · 소수 주</option></select>' +
-        '<span class="hint" id="s2-mode-h"></span></div>';
+        '<span class="hint" id="s2-mode-h"></span></div>' +
+      '<div class="f"><label for="s2-lag">신호 → 체결</label><select id="s2-lag"><option value="0"' + (S.lag ? '' : ' selected') + '>같은 날 종가 — 장 마감 직전 값으로 판단해 종가 주문 (시뮬레이터와 같음)</option>' +
+        '<option value="1"' + (S.lag ? ' selected' : '') + '>다음 거래일 종가 — 종가를 본 뒤 다음 날 체결 (하루 늦게)</option></select>' +
+        '<span class="hint">같은 날 종가는 판단에 쓴 바로 그 종가에 사고파는 가정이라, 실제로는 마감 직전(미국 동부 15:50 무렵) 시세로 판단해 장 마감 주문(MOC)을 내야 비슷해집니다 · 하루 늦게로 바꿔 차이를 확인해 보세요</span></div>';
     KN.forEach(function (x) {
       if (x[0] === 'h') { h += '<h4>' + esc(x[1]) + '</h4>'; return; }
       h += '<div class="f"><label for="s2-k-' + x[0] + '">' + esc(x[1]) + '</label><select id="s2-k-' + x[0] + '" data-k="' + x[0] + '">' + optsHtml(x[0], S.p[x[0]]) + '</select>' + (x[2] ? '<span class="hint">' + esc(x[2]) + '</span>' : '') + '</div>';
@@ -19069,6 +19094,7 @@ if (typeof module !== 'undefined') module.exports = SMB;
     S.p = SMB.clean(p);
     if (S.mode === 'real') ['sig', 'ul', 'bga'].forEach(function (k) { if (REAL_ASSETS.indexOf(S.p[k]) < 0) S.p[k] = SMB.PRESET[k]; });
     if (S.mode === 'real' && S.p.out !== 'cash' && REAL_ASSETS.indexOf(S.p.out) < 0) S.p.out = 'cash';
+    S.lag = $('s2-lag').value === '1' ? 1 : 0;
     S.from = $('s2-from').value; S.to = $('s2-to').value;
   }
   function apply(s) { S = s; save(); setHtml(); bind(); run(); }
@@ -19077,24 +19103,38 @@ if (typeof module !== 'undefined') module.exports = SMB;
   function getData(mode) {
     if (DATA[mode]) return DATA[mode];
     var p = mode === 'sim'
-      ? fetch('data/stratsim/prices.csv', { cache: 'no-cache' }).then(function (r) { if (!r.ok) throw new Error('시뮬레이터 자료를 받지 못했어요 (' + r.status + ')'); return r.text(); }).then(SMB.fromCsv)
+      ? fetch('data/stratsim/prices.csv', { cache: 'no-cache' }).then(function (r) { if (!r.ok) throw new Error('시뮬레이터 자료를 받지 못했어요 (' + r.status + ')'); return r.text(); }).then(function (t) { return { D: SMB.fromCsv(t) }; })
       : window.mdLoad('etfcagr.json').then(function (j) {
           if (!j || !j.series) throw new Error('실제 일봉 자료를 받지 못했어요');
           var X = {}; REAL_ASSETS.forEach(function (k) { var s = j.series[NM[k]]; if (s) X[k] = window.MBT.fromCagr(s); });
           if (!X.qqq || !X.tqqq) throw new Error('QQQ·TQQQ 일봉이 없어요');
-          return SMB.fromSeries(X);
+          return { X: X, c: {} };
         });
-    DATA[mode] = p.then(function (D) {
-      return window.MBT.fxData().then(function (F) { D.fx = window.MBT.fxFor(D.d, F); return D; }, function () { D.fx = null; return D; });
+    DATA[mode] = p.then(function (G) {
+      return window.MBT.fxData().then(function (F) { G.F = F; return G; }, function () { G.F = null; return G; });
     });
     DATA[mode].catch(function () { delete DATA[mode]; });
     return DATA[mode];
+  }
+  /* 계산에 쓸 자료 — 실제 일봉은 이 설정이 쓰는 종목만 합쳐 달력을 만듦(쓰지 않는 종목 자료가 늦게 갱신돼도 끝날이 당겨지지 않게) · 원/달러는 그 달력에 맞춤 */
+  function dataFor(G) {
+    var D;
+    if (G.D) D = G.D;
+    else {
+      var u = SMB.used(SMB.knobs(S.p)).sort(), key = u.join(',');
+      if (!G.c[key]) { var Y = {}; u.forEach(function (k) { if (G.X[k]) Y[k] = G.X[k]; }); G.c[key] = SMB.fromSeries(Y); }
+      D = G.c[key];
+      var allEnd = Object.keys(G.X).reduce(function (m, k) { var x = G.X[k].d[G.X[k].d.length - 1]; return x > m ? x : m; }, '');
+      D.late = D.d[D.d.length - 1] < allEnd ? u.filter(function (k) { return D.ends[k] < allEnd; }).map(function (k) { return NM[k]; }).join('·') + ' 자료가 ' + D.d[D.d.length - 1] + '까지라 그날까지 계산' : '';
+    }
+    if (D.fx === undefined) D.fx = G.F ? window.MBT.fxFor(D.d, G.F) : null;
+    return D;
   }
   function idxGE(D, s) { if (!s) return -1; for (var i = 0; i < D.d.length; i++) if (D.d[i] >= s) return i; return -1; }
   function idxLE(D, s) { if (!s) return -1; for (var i = D.d.length - 1; i >= 0; i--) if (D.d[i] <= s) return i; return -1; }
   function engOpts(D) {
     var real = S.mode === 'real', tax = S.tax !== 'none' && D.fx ? { fx: function (i) { return D.fx[i]; }, method: S.tax } : null;
-    return { capital: S.cap, mode: S.mode, fee: S.fee / 100, sec: real ? SEC : 0, divTax: real ? DIV_TAX : 0, intTax: S.itax === 'on' ? INT_TAX : 0, tax: tax };
+    return { capital: S.cap, mode: S.mode, lag: S.lag ? 1 : 0, fee: S.fee / 100, sec: real ? SEC : 0, divTax: real ? DIV_TAX : 0, intTax: S.itax === 'on' ? INT_TAX : 0, tax: tax };
   }
 
   /* ── 계산 ── */
@@ -19102,10 +19142,10 @@ if (typeof module !== 'undefined') module.exports = SMB;
   function run() {
     readUI(); save(); modeHint();
     var seq = ++runSeq; msg('자료를 받는 중…');
-    getData(S.mode).then(function (D) { if (seq === runSeq) compute(D); }, function (e) { if (seq === runSeq) msg((e && e.message) || '자료를 받지 못했어요', true); });
+    getData(S.mode).then(function (G) { if (seq === runSeq) compute(dataFor(G)); }, function (e) { if (seq === runSeq) msg((e && e.message) || '자료를 받지 못했어요', true); });
   }
   function compute(D) {
-    var fv = SMB.firstValid(D, S.p), last = D.d.length - 1;
+    var fv = SMB.firstValid(D, S.p, S.lag), last = D.d.length - 1;
     if (fv < 0 || fv >= last - 20) { msg('이 설정으로는 계산할 수 있는 기간이 없어요', true); return; }
     var fi = $('s2-from'), ti = $('s2-to');
     fi.min = ti.min = D.d[fv]; fi.max = ti.max = D.d[last];
@@ -19123,7 +19163,7 @@ if (typeof module !== 'undefined') module.exports = SMB;
     try { R = SMB.run(D, S.p, Object.assign({ from: from, to: to, rows: true }, o)); } catch (e) { msg('계산하지 못했어요: ' + ((e && e.message) || e), true); return; }
     var st = SMB.stats(R), h = SMB.bh(D, R.K.ul, from, to, S.cap, o);
     LAST = { D: D, R: R, st: st, h: h, o: o, from: from, to: to, fv: fv, ow: {} };
-    msg(D.d[from] + ' ~ ' + D.d[to] + ' · ' + ((performance.now() - t0) / 1000).toFixed(2) + '초' + note + (S.tax !== 'none' && !D.fx ? ' · 원/달러 자료를 받지 못해 양도세 빼고 계산' : ''));
+    msg(D.d[from] + ' ~ ' + D.d[to] + ' · ' + ((performance.now() - t0) / 1000).toFixed(2) + '초' + note + (D.late ? ' · ' + D.late : '') + (S.tax !== 'none' && !D.fx ? ' · 원/달러 자료를 받지 못해 양도세 빼고 계산' : ''));
     page = 0; out(); dist();
   }
 
@@ -19151,10 +19191,11 @@ if (typeof module !== 'undefined') module.exports = SMB;
       '<div class="s2-ctl s2-tabs"><span class="s2-seg" id="s2-tab">' + [['year', '연도별'], ['per', '보유 구간별 (' + R.periods.length + ')'], ['day', '일자별']].map(function (x) {
         return '<button type="button" data-v="' + x[0] + '"' + (x[0] === tab ? ' class="on"' : '') + '>' + x[1] + '</button>'; }).join('') + '</span>' +
       '<button type="button" class="s2-btn" id="s2-csv">CSV 내보내기</button></div><div id="s2-tb"></div>' +
-      '<p class="s2-small">가정: 신호는 그날 종가로 판단해 그날 종가에 사고팖(시뮬레이터와 같음) · 처음 시작일엔 나눠 사기 없이 한 번에 · 현금 이자는 달이 바뀐 첫 거래일에 · ' +
-      (S.mode === 'real' ? '분배금은 분배락일 아침 보유분에 미국 세금 15%를 떼고 현금으로(다음 거래일 다시 삼) · 1주 단위라 1주 값도 안 되는 돈은 현금으로 남음 · ' : '시뮬레이터 자료는 분배금을 넣은 수정 종가(분배 세금 없음) · ') +
+      '<p class="s2-small">가정: ' + (S.lag ? '신호는 전날 종가로 판단해 다음 거래일 종가에 사고팖(하루 늦게)' : '신호는 그날 종가로 판단해 그날 종가에 사고팖(시뮬레이터와 같음 — 실제로는 마감 직전 시세로 판단해 장 마감 주문을 내는 것에 해당)') +
+      ' · 처음 시작일은 시뮬레이터처럼 평균 위면(과열이 아니면) 바로 한 번에 삼(완충·확인 횟수·재진입 RSI·나눠 사기는 다음 날부터) · 현금 이자는 달이 바뀐 첫 거래일에 · ' +
+      (S.mode === 'real' ? '분배금은 분배락일(지급일 아님) 아침 보유분에 미국 세금 15%를 떼고 현금으로(다음 거래일부터 1주 단위로 다시 삼) · 1주 단위라 1주 값도 안 되는 돈은 현금으로 남음 · 가격은 주식 분할을 반영한 값이라 초기(예: 2010년 TQQQ 약 $0.2) 1주는 실제 1주보다 작음 — 큰 원금에선 차이 없음 · 환전 수수료 없음 · ' : '시뮬레이터 자료는 분배금을 넣은 수정 종가(분배 세금 없음) · ') +
       (tx ? '양도세는 해마다 결제일 기준 실현 손익(원화) − 250만 원 × 22%, 이듬해 5월 31일 이후 첫 거래일에 납부 · ' : '') +
-      UL + ' 그냥 보유 = 시작일 종가에 원금 전부(분배금·세금 빼고) · 그냥 보유 세후 = 사고팔 때 수수료와 끝 날 한 번 팔고 낸 양도세를 뺀 값 · 과거 결과는 미래를 보장하지 않아요.</p></div>';
+      UL + ' 그냥 보유 = 시작일 종가에 원금 전부' + (S.mode === 'real' ? '(분배금은 15% 뗀 뒤 분배락일 종가로 다시 삼)' : '') + ' · 그냥 보유 세후 = 사고팔 때 수수료와 끝 날 한 번 팔고 낸 양도세를 뺀 값 · 과거 결과는 미래를 보장하지 않아요.</p></div>';
     $('s2-out').innerHTML = hd;
     draw(); table();
   }
@@ -19163,7 +19204,7 @@ if (typeof module !== 'undefined') module.exports = SMB;
   function draw() {
     var L = LAST; if (!L || !$('s2-c') || !window.Chart) return;
     var D = L.D, R = L.R, K = R.K, a = L.from, b = L.to, lab = D.d.slice(a, b + 1), sig = D.px[K.sig].slice(a, b + 1), avg = SMB.ind(D, 'sma', K.sig, K.win).slice(a, b + 1);
-    var buys = R.rows.map(function (r) { return r.b.length ? r.b.map(function (x) { return '매수 ' + NM[x.k] + ' ' + fq(x.q) + '주 ' + usd(x.amt); }).join(' · ') : null; });
+    var buys = R.rows.map(function (r) { return r.b.length ? r.b.map(function (x) { return '매수 ' + NM[x.k] + ' ' + fq(x.q) + '주 ' + usd(x.amt) + (x.top ? ' (남은 현금·분배금)' : ''); }).join(' · ') : null; });
     var sells = R.rows.map(function (r) { var s = r.s.filter(function (x) { return !x.tax; }); return s.length ? s.map(function (x) { return '매도 ' + NM[x.k] + ' ' + fq(x.q) + '주 ' + usd(x.amt) + ' · ' + whyTxt(r, x); }).join(' · ') : null; });
     var money = function (v) { return '$' + Math.round(v).toLocaleString('en-US'); };
     /* 눈금 글자: 좁은 화면(그래프 폭 600px 미만)은 $10M · $500K 처럼 줄여서 잘리지 않게 · 말풍선은 그대로 정확한 값 */
@@ -19200,7 +19241,7 @@ if (typeof module !== 'undefined') module.exports = SMB;
   function label(r, i) {
     var K = LAST.R.K, a = [];
     r.s.forEach(function (s) { a.push(s.tax ? '양도세 내려 ' + NM[s.k] + ' ' + fq(s.q) + '주 매도' : whyTxt(r, s) + ' → ' + NM[s.k] + ' 전량 매도'); });
-    if (r.b.length) r.b.forEach(function (b) { a.push(NM[b.k] + ' ' + fq(b.q) + '주 매수' + (r.ease > 0 || (r.ease === 0 && b.k === K.ul && LAST.R.rows[i - 1] && LAST.R.rows[i - 1].ease > 0) ? ' (나눠 사기)' : '')); });
+    if (r.b.length) r.b.forEach(function (b) { a.push(NM[b.k] + ' ' + fq(b.q) + '주 매수' + (b.top ? ' (남은 현금·분배금)' : r.ease > 0 || (r.ease === 0 && b.k === K.ul && LAST.R.rows[i - 1] && LAST.R.rows[i - 1].ease > 0) ? ' (나눠 사기)' : '')); });
     if (!a.length) {
       var hv = r.held && r.held !== 'cash';
       if (r.st0 && r.want && r.want !== r.st && r.pend > 0) a.push('신호 확인 중 (' + r.pend + '/' + (r.want === 'in' ? K.cb : K.cs) + '일)');
@@ -19251,16 +19292,16 @@ if (typeof module !== 'undefined') module.exports = SMB;
     var hdr = '<div class="s2-row" style="margin-bottom:6px"><select id="s2-dayf" aria-label="보일 날" style="width:auto"><option value="all"' + (dayF === 'all' ? ' selected' : '') + '>모든 날</option><option value="act"' + (dayF === 'act' ? ' selected' : '') + '>사고판 날 · 분배금 · 세금 날만</option></select>' +
       '<span class="s2-small">' + n0(idx.length) + '일 · ' + (page + 1) + '/' + pages + '쪽</span></div>';
     var body = idx.slice(page * PER, page * PER + PER).map(function (j) {
-      var r = rows[j], i = r.i, sp = D.px[K.sig][i], av = smaA[i], ch = i > 0 && D.px[K.sig][i - 1] > 0 ? sp / D.px[K.sig][i - 1] - 1 : null;
+      var r = rows[j], i = r.i, g = r.g == null ? i : r.g, sp = D.px[K.sig][g], av = smaA[g], ch = g > 0 && D.px[K.sig][g - 1] > 0 ? sp / D.px[K.sig][g - 1] - 1 : null;
       var hold = SMB.ASSETS.filter(function (k) { return r.sh[k] > 0; }).map(function (k) { return NM[k] + ' ' + fq(r.sh[k]) + '주'; }).join(' · ') || '—';
       return '<tr><td>' + D.d[i] + '</td><td>' + (r.st === 'in' && r.bg !== 'gtfo' ? '<span class="up">보유 신호</span>' : '<span class="dn">시장 밖</span>') + '</td><td class="s2-l">' + esc(label(r, j)) + '</td>' +
         '<td>' + px(sp) + (ch == null ? '' : ' <span class="s2-small ' + cls(ch) + '">' + pct(ch, 1) + '</span>') + '</td><td>' + px(av) + '</td><td class="' + cls(av ? sp / av - 1 : 0) + '">' + (av ? pct(sp / av - 1, 1) : '—') + '</td>' +
-        '<td>' + (ohA[i] == null ? '—' : ohA[i].toFixed(1)) + '</td><td>' + (coA[i] == null ? '—' : coA[i].toFixed(1)) + '</td>' +
+        '<td>' + (ohA[g] == null ? '—' : ohA[g].toFixed(1)) + '</td><td>' + (coA[g] == null ? '—' : coA[g].toFixed(1)) + '</td>' +
         '<td>' + r.b.map(function (x) { return fq(x.q) + '주 <span class="s2-small">' + usd(x.amt) + '</span>'; }).join('<br>') + '</td><td>' + r.s.map(function (x) { return fq(x.q) + '주 <span class="s2-small">' + usd(x.amt) + '</span>'; }).join('<br>') + '</td>' +
         '<td>' + hold + '</td><td>' + usd(r.cash) + '</td><td>' + usd(r.eq) + '</td></tr>';
     }).join('');
-    el.innerHTML = hdr + '<div class="s2-tw"><table class="s2-t" id="s2-day"><thead><tr><th>날짜</th><th>상태</th><th>그날 한 일</th><th>' + NM[K.sig] + ' 종가</th><th>' + K.win + '일 평균</th><th>평균 대비</th><th>RSI(' + K.ohw + ')</th><th>RSI(' + K.coolw + ')</th><th>매수</th><th>매도</th><th>보유</th><th>현금</th><th>총자산</th></tr></thead><tbody>' + body + '</tbody></table></div>' +
-      (pages > 1 ? pager(pages, idx.length) : '') + '<p class="s2-small">상태 = 그날 종가로 판단한 신호(확인 횟수 반영) · 매수·매도 금액은 수수료 빼기 전 · 총자산 = 현금 + 보유 × 종가' + (S.mode === 'real' ? ' · 분배금·이자는 그날 현금에 더해짐' : '') + '</p>';
+    el.innerHTML = hdr + '<div class="s2-tw"><table class="s2-t" id="s2-day"><thead><tr><th>날짜</th><th>상태</th><th>그날 한 일</th><th>' + NM[K.sig] + (S.lag ? ' 전날' : '') + ' 종가</th><th>' + (S.lag ? '전날 ' : '') + K.win + '일 평균</th><th>평균 대비</th><th>RSI(' + K.ohw + ')</th><th>RSI(' + K.coolw + ')</th><th>매수</th><th>매도</th><th>보유</th><th>현금</th><th>총자산</th></tr></thead><tbody>' + body + '</tbody></table></div>' +
+      (pages > 1 ? pager(pages, idx.length) : '') + '<p class="s2-small">상태 = ' + (S.lag ? '전날 종가로 판단한 신호(확인 횟수 반영 · 지표 칸도 전날 값) — 그날 종가에 체결' : '그날 종가로 판단한 신호(확인 횟수 반영)') + ' · 매수·매도 금액은 수수료 빼기 전 · 총자산 = 현금 + 보유 × 종가' + (S.mode === 'real' ? ' · 분배금·이자는 그날 현금에 더해짐' : '') + '</p>';
   }
   function pager(pages, total) {
     var cur = page + 1, list = [], h = '<nav class="s2-pager" aria-label="일자별 쪽"><button type="button" class="dv-pg" data-pg="' + (cur - 1) + '"' + (cur === 1 ? ' disabled' : '') + ' aria-label="이전 쪽">‹</button>', prev = 0;
@@ -19275,10 +19316,11 @@ if (typeof module !== 'undefined') module.exports = SMB;
     var L = LAST; if (!L) return;
     var D = L.D, R = L.R, K = R.K, smaA = SMB.ind(D, 'sma', K.sig, K.win), ohA = SMB.ind(D, 'rsi', K.sig, K.ohw), coA = SMB.ind(D, 'rsi', K.sig, K.coolw), bgA = K.bg > 0 ? SMB.ind(D, 'sma', K.bga, K.bgw) : null;
     var q = function (s) { return '"' + String(s).replace(/"/g, '""') + '"'; }, f = function (v, d) { return v == null || !isFinite(v) ? '' : (+v).toFixed(d); };
-    var head = ['날짜', '상태', '버블', '그날 한 일', NM[K.sig] + ' 종가', K.win + '일 평균', 'RSI(' + K.ohw + ')', 'RSI(' + K.coolw + ')', NM[K.bga] + ' 종가', '버블 평균', '매수 종목', '매수 주', '매수 금액', '매수 수수료', '매도 종목', '매도 주', '매도 금액', '매도 수수료·SEC', '분배금', '현금 이자', '양도세 납부', '보유', '현금', '총자산'];
+    var pre = S.lag ? '판단(전날) ' : '';
+    var head = ['날짜', '상태', '버블', '그날 한 일', pre + NM[K.sig] + ' 종가', pre + K.win + '일 평균', pre + 'RSI(' + K.ohw + ')', pre + 'RSI(' + K.coolw + ')', pre + NM[K.bga] + ' 종가', pre + '버블 평균', '매수 종목', '매수 주', '매수 금액', '매수 수수료', '매도 종목', '매도 주', '매도 금액', '매도 수수료·SEC', '분배금', '현금 이자', '양도세 납부', '보유', '현금', '총자산'];
     var lines = [head.join(',')].concat(R.rows.map(function (r, j) {
-      var i = r.i, bq = function (a, k) { return a.map(function (x) { return x[k]; }); };
-      return [D.d[i], r.st === 'in' ? '보유 신호' : '시장 밖', r.bg === 'gtfo' ? '버블' : '', q(label(r, j)), f(D.px[K.sig][i], 4), f(smaA[i], 4), f(ohA[i], 2), f(coA[i], 2), f((D.px[K.bga] || [])[i], 4), bgA ? f(bgA[i], 4) : '',
+      var i = r.i, g = r.g == null ? i : r.g, bq = function (a, k) { return a.map(function (x) { return x[k]; }); };
+      return [D.d[i], r.st === 'in' ? '보유 신호' : '시장 밖', r.bg === 'gtfo' ? '버블' : '', q(label(r, j)), f(D.px[K.sig][g], 4), f(smaA[g], 4), f(ohA[g], 2), f(coA[g], 2), f((D.px[K.bga] || [])[g], 4), bgA ? f(bgA[g], 4) : '',
         q(bq(r.b, 'k').map(function (k) { return NM[k]; }).join(' ')), q(bq(r.b, 'q').map(function (v) { return +v.toFixed(6); }).join(' ')), q(bq(r.b, 'amt').map(function (v) { return v.toFixed(2); }).join(' ')), q(bq(r.b, 'fee').map(function (v) { return v.toFixed(4); }).join(' ')),
         q(bq(r.s, 'k').map(function (k) { return NM[k]; }).join(' ')), q(bq(r.s, 'q').map(function (v) { return +v.toFixed(6); }).join(' ')), q(bq(r.s, 'amt').map(function (v) { return v.toFixed(2); }).join(' ')), q(bq(r.s, 'fee').map(function (v) { return v.toFixed(4); }).join(' ')),
         f(r.div, 4), f(r.int, 4), f(r.tax, 2), q(SMB.ASSETS.filter(function (k) { return r.sh[k] > 0; }).map(function (k) { return NM[k] + ':' + (+r.sh[k].toFixed(6)); }).join(' ')), f(r.cash, 2), f(r.eq, 2)].join(',');
@@ -19298,12 +19340,12 @@ if (typeof module !== 'undefined') module.exports = SMB;
     var L = LAST, box = $('s2-dist'); if (!box || !L) return;
     R72D.inject();
     var D = L.D, o = L.o, to = L.to, mo = S.mode === 'sim' && to - L.fv > 6000;
-    var key = JSON.stringify([S.mode, S.p, S.cap, S.fee, S.tax, S.itax, !!o.tax, D.d[L.fv], D.d[to], D.d.length, D.d[D.d.length - 1], D.px.qqq[D.px.qqq.length - 1]]);
+    var K0 = L.R.K, key = JSON.stringify([S.mode, S.lag, S.p, S.cap, S.fee, S.tax, S.itax, !!o.tax, D.d[L.fv], D.d[to], D.d.length, D.d[D.d.length - 1], D.px[K0.sig][D.d.length - 1], D.px[K0.ul][D.d.length - 1]]);
     var st = DIST.c.get(key);
     if (!st) st = DIST.c.put(key, R72D.job({ plan: SMB.plan(D, L.fv, to, 20, mo), run: function (s) { return SMB.one(D, S.p, o, s, to); }, paused: paused, update: upd }));
     DIST.st = st;
     DIST.m = { end: D.d[to], first: D.d[L.fv], mo: mo, tax: !!o.tax, ul: NM[L.R.K.ul],
-      set: '원금 ' + usd(S.cap).replace('.00', '') + ' · ' + (S.mode === 'real' ? '실전(실제 일봉 · 1주 단위)' : '시뮬레이터와 같게') + ' · 수수료 ' + S.fee + '%' + (S.mode === 'real' ? ' + SEC · 분배금 원천징수 15%' : '') +
+      set: '원금 ' + usd(S.cap).replace('.00', '') + ' · ' + (S.mode === 'real' ? '실전(실제 일봉 · 1주 단위)' : '시뮬레이터와 같게') + (S.lag ? ' · 하루 늦게 체결' : '') + ' · 수수료 ' + S.fee + '%' + (S.mode === 'real' ? ' + SEC · 분배금 원천징수 15%' : '') +
         ' · ' + (o.tax ? '양도세 22%(250만 원 공제 · ' + (S.tax === 'avg' ? '이동평균' : '선입선출') + ')' : S.tax === 'none' ? '양도세 제외' : '원/달러 자료가 없어 양도세 빼고') + (S.itax === 'on' ? ' · 이자소득세 15.4%' : '') };
     box.innerHTML = dhtml(); paint();
   }
@@ -19399,6 +19441,7 @@ if (typeof module !== 'undefined') module.exports = SMB;
     $('s2-def').onclick = function () { apply(base('real')); };
     $('s2-simlike').onclick = function () { apply(base('sim')); };
     $('s2-mode').onchange = function () { readUI(); var s = S, sim = s.mode === 'sim'; Array.prototype.forEach.call(root.querySelectorAll('select[data-k]'), function (e) { e.innerHTML = optsHtml(e.getAttribute('data-k'), s.p[e.getAttribute('data-k')]); }); modeHint(); if (s.per !== 'all' && !/^\d+$/.test(s.per)) s.per = 'all'; setPer(s.per); run(); };
+    $('s2-lag').onchange = function () { if (S.per === 'rnd-done') S.per = 'custom'; run(); };   /* 같은 날 ↔ 하루 늦게 바로 비교 */
     Array.prototype.forEach.call(root.querySelectorAll('#s2-per button'), function (b) { b.onclick = function () { S.per = b.getAttribute('data-p'); setPer(S.per); run(); }; });
     ['s2-from', 's2-to'].forEach(function (id) { $(id).addEventListener('change', function () { S.per = 'custom'; setPer(''); }); });
     root.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.closest('#s2-set')) { e.preventDefault(); $('s2-run').click(); } });
