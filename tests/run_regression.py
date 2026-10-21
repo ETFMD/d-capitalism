@@ -19,6 +19,8 @@
   7. --etf-audit (배포된 사이트 · 매일 Actions) — ETF 차트 비교 화면의 기준·끝 가격을 독립 출처의 실제 가격(네이버 일별 시세 · 야후 일봉)과 맞춰 봄
   8. 투자전략 시뮬레이터 — 계산 기준값(tests/stratsim_test.cjs · 고정 구간) · 라이브러리 써 보기(격리 Worker) · 분석 표 · 공유 링크 복원 ·
      9sig/SMA 과최적화 탐색기(탭·행 수 · '열기' 링크 숫자 일치) · TQQQ 장중 흐름
+  9. 관리자 'SMA 200 백테스트'(/sma200/) — 엔진(tests/sma200_test.cjs: 시뮬레이터와 끝 금액 차이 0 · 실전·양도세 독립 검산) ·
+     화면(기본값 = 라이브러리 SMA 200 · 화면 숫자 = 엔진 · 표·CSV · '시뮬레이터와 같게' = 투자전략 시뮬레이터) · 잠김(관리자 아니면 빈 화면)
 
 사용법
   pip install playwright && python -m playwright install chromium
@@ -1088,10 +1090,11 @@ def admin_lock_check(page, base, fail, routes):
             return { pg: !!pg, lock: !!lk && getComputedStyle(lk).display !== 'none', txt: lk ? lk.innerText : '',
                      vis: pg ? [...pg.children].filter(c => c !== lk && getComputedStyle(c).display !== 'none').length : -1, ok: pg && pg.classList.contains('adm-ok'),
                      as: !!(window.ASPEED && ASPEED.state().ready), t7: (document.getElementById('t7-root') || { innerHTML: '' }).innerHTML.length,
+                     s2: (document.getElementById('s2-root') || { innerHTML: '' }).innerHTML.length + (window.S2debug && S2debug.last() ? 1 : 0),
                      robots: (document.querySelector('meta[name=robots]') || {}).content || '' }; }""", 'page-' + r['tab'])
         if not x['pg'] or not x['lock'] or x['vis'] or x['ok'] or '관리자 전용' not in x['txt']:
             fail(r['path'], '관리자 전용 화면이 잠기지 않음: %s' % x)
-        if x['as'] or x['t7']:
+        if x['as'] or x['t7'] or x['s2']:
             fail(r['path'], '잠긴 화면인데 시작 함수가 돌았음: %s' % x)
         if 'noindex' not in x['robots']:
             fail(r['path'], '관리자 전용 화면에 noindex 없음')
@@ -1507,6 +1510,118 @@ def aspeed2_check(page, base, fail, local):
     except Exception as e:
         fail('asset-speed', '배경음악 검사 실패: %s' % str(e)[:160])
     sns_ui_check(page, fail)
+
+
+S2_INDEP_JS = """([mode, fee, tax, itax]) => { const L = S2debug.last(), D = L.D, cap = S2debug.S().cap;
+    const o = { from: L.from, to: L.to, capital: cap, mode, fee: fee / 100, sec: mode === 'real' ? 0.0000206 : 0, divTax: mode === 'real' ? 0.15 : 0, intTax: itax ? 0.154 : 0,
+                tax: tax === 'none' ? null : { fx: i => D.fx[i], method: tax }, rows: true };
+    const R = SMB.run(D, S2debug.S().p, o), st = SMB.stats(R), h = SMB.bh(D, R.K.ul, L.from, L.to, cap, o);
+    const kv = {}; document.querySelectorAll('#s2-kv > div').forEach(e => { const s = e.querySelectorAll('small'); kv[s[0].innerText] = { b: e.querySelector('b').innerText, sub: s[1] ? s[1].innerText : '' }; });
+    const usd = x => (x < 0 ? '−$' : '$') + Math.abs(x).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const pct = x => (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x * 100).toFixed(2) + '%';
+    const exp = { '최종 평가금': usd(R.final), '기간 총 수익률': pct(R.final / cap - 1), '연평균(CAGR)': pct(st.cagr), '최대 낙폭(MDD)': pct(st.mdd), '끝날 전부 팔면': usd(R.liq),
+                  [{ tqqq: 'TQQQ', qqq: 'QQQ', spy: 'SPY', qld: 'QLD', sso: 'SSO', spxl: 'SPXL', sqqq: 'SQQQ' }[R.K.ul] + ' 그냥 보유']: pct(h.cagr), '낸 수수료·세금': usd(R.fees + R.taxPaid) };
+    if (tax !== 'none') exp['아직 안 낸 양도세'] = usd(R.taxDue);
+    const diff = Object.keys(exp).filter(k => !kv[k] || kv[k].b !== exp[k]).map(k => [k, kv[k] && kv[k].b, exp[k]]);
+    const same = L.R.final === R.final && L.R.liq === R.liq && L.R.eq.length === R.eq.length && L.R.eq.every((v, i) => v === R.eq[i]);
+    const nB = R.rows.filter(r => r.b.length).length, sub = kv['보유 기간'] ? kv['보유 기간'].sub : '';
+    return { diff, same, cnt: sub.indexOf('매수 ' + nB + '일 · 전량 매도 ' + R.nSell + '번') >= 0, fin: R.final, from: D.d[L.from], to: D.d[L.to], n: R.eq.length, mdd: st.mdd }; }"""
+
+S2_SIM_JS = r"""/* 투자전략 시뮬레이터 엔진(scripts/stratsim_fit.cjs)으로 SMA 200 프리셋 — 끝 금액·최대 낙폭 */
+const F = require(process.argv[1]), M = F.M, [ed, xd, cap, pj] = process.argv.slice(2), p = JSON.parse(pj), cp = M.ssCleanParams('sma', p);
+const r = M.ssRunSma(Object.assign({ initial: +cap, monthly: 0, raise: 0, rate: M.ssRate9(cp), dd: true, ed, xd }, M.ssOptsSma(cp)));
+console.log(JSON.stringify({ fin: r.points[r.points.length - 1].value, mdd: -M.ssDailyDDMulti(r.dd).pct, first: r.points[0].date, last: r.points[r.points.length - 1].date, n: r.dd.length }));"""
+
+
+def sma200_check(page, base, fail, local):
+    """/sma200/ 관리자 'SMA 200 백테스트' — 처음 기본값 = 시뮬레이터 라이브러리 SMA 200 프리셋 · 실전(실제 일봉·1주 단위·수수료 0.25%·선입선출 양도세·이자세)
+    · 화면 9칸 = 따로 돌린 엔진(SMB) · 그래프·표(연도별·보유 구간별·일자별 쪽 넘김)·CSV · 조건 바꿔 다시 계산 = 엔진 · 빈 칸 → 기본값
+    · '시뮬레이터와 같게' = 투자전략 시뮬레이터 SMA 200 끝 금액·최대 낙폭(로컬: 저장소 자료로 Node 시뮬레이터 엔진과 대조)
+    (엔진 자체의 시뮬레이터 대조 수천 번·세금 독립 검산은 tests/sma200_test.cjs)"""
+    page.set_viewport_size({'width': 1280, 'height': 900})
+    page.goto(base + 'robots.txt'); page.evaluate("() => { localStorage.removeItem('s2-set'); localStorage.removeItem('s2-scale'); }")
+    page.goto(base + 'sma200/', wait_until='load')
+    ready = "() => window.S2debug && S2debug.last() && S2debug.last() !== window.__s2p && document.querySelector('#s2-kv')"
+    def wait_new():
+        page.wait_for_function(ready, timeout=60000); page.evaluate("() => { window.__s2p = S2debug.last(); }"); page.wait_for_timeout(100)
+    try:
+        wait_new()
+    except Exception:
+        fail('sma200', 'SMA 200 백테스트 결과가 나오지 않음 (60초)'); return
+    try:
+        d = page.evaluate("""() => { const S = S2debug.S(), ui = {}; document.querySelectorAll('#s2-root select[data-k]').forEach(e => ui[e.dataset.k] = e.value);
+            const pre = Object.assign({}, SMB.PRESET); delete pre.cost;
+            return { ok: JSON.stringify(Object.keys(ui).sort().map(k => [k, ui[k]])) === JSON.stringify(Object.keys(pre).sort().map(k => [k, pre[k]])),
+                     v: [document.getElementById('s2-cap').value, document.getElementById('s2-mode').value, document.getElementById('s2-fee').value, document.getElementById('s2-tax').value, document.getElementById('s2-itax').value,
+                         [...document.querySelectorAll('#s2-per button.on')].map(b => b.dataset.p).join()] }; }""")
+        if not d['ok'] or d['v'] != ['100000', 'real', '0.25', 'fifo', 'on', 'all']:
+            fail('sma200', '처음 기본값 이상 (기대: 라이브러리 SMA 200 조건 · 원금 100000 · 실전 · 0.25% · 선입선출 · 이자세 · 전체): %s' % d)
+        r = page.evaluate(S2_INDEP_JS, ['real', 0.25, 'fifo', True])
+        if r['diff'] or not r['same'] or not r['cnt']:
+            fail('sma200', '실전 기본 결과가 따로 돌린 엔진과 다름: %s' % {k: r[k] for k in ('diff', 'same', 'cnt', 'from', 'to')})
+        fin0 = r['fin']
+        c = page.evaluate("""() => { const ch = Chart.getChart('s2-c'), R = S2debug.last().R; return ch ? [ch.data.labels.length === R.eq.length, ch.data.datasets[4].data.filter(v => v != null).length === R.rows.filter(r => r.b.length).length,
+            ch.data.datasets[5].data.filter(v => v != null).length === R.nSell] : null; }""")
+        if not c or not all(c): fail('sma200', '그래프 점 수·매수·매도 표시가 엔진과 다름: %s' % c)
+        # 표: 연도별(마지막 연말 = 최종) · 보유 구간별(구간 수) · 일자별(50줄 · 2쪽 첫날 · 마지막 쪽 총자산 = 최종)
+        t = page.evaluate("""() => { const L = S2debug.last(), R = L.R, D = L.D, usd = x => (x < 0 ? '−$' : '$') + Math.abs(x).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const out = {}; let tr = [...document.querySelectorAll('#s2-tb tbody tr')];
+            out.year = tr.length === new Set(R.rows.map(r => D.d[r.i].slice(0, 4))).size && tr[tr.length - 1].children[1].innerText === usd(R.final);
+            document.querySelector('#s2-tab button[data-v=per]').click(); tr = [...document.querySelectorAll('#s2-tb tbody tr')]; out.per = tr.length === R.periods.length;
+            let pl = 0; R.periods.forEach(p => { pl += (p.open ? p.net + p.val : p.net) - p.spend; }); out.perSum = Math.abs(R.final - R.cap - (pl + R.divs + R.intr - R.taxPaid)) < 1e-6 * R.final;
+            document.querySelector('#s2-tab button[data-v=day]').click(); tr = [...document.querySelectorAll('#s2-day tbody tr')]; out.day1 = tr.length === Math.min(50, R.rows.length) && tr[0].children[0].innerText === D.d[R.rows[0].i];
+            const nx = document.querySelector('#s2-tb .s2-pager .dv-pg[data-pg="2"]'); if (nx) { nx.click(); out.day2 = document.querySelector('#s2-day tbody tr').children[0].innerText === D.d[R.rows[50].i]; }
+            const lp = Math.ceil(R.rows.length / 50), lb = document.querySelector('#s2-tb .s2-pager .dv-pg[data-pg="' + lp + '"]'); if (lb) lb.click();
+            tr = [...document.querySelectorAll('#s2-day tbody tr')]; out.dayEnd = tr[tr.length - 1].children[0].innerText === D.d[L.to] && tr[tr.length - 1].children[12].innerText === usd(R.final);
+            out.bad = [...document.querySelectorAll('#s2-root td, #s2-kv b')].map(e => e.innerText).filter(x => /undefined|NaN|Infinity/.test(x)).slice(0, 3);
+            document.querySelector('#s2-tab button[data-v=year]').click(); return out; }""")
+        if not all(t[k] for k in ('year', 'per', 'perSum', 'day1', 'dayEnd')) or t.get('day2') is False or t['bad']:
+            fail('sma200', '표(연도별·보유 구간별·일자별) 이상: %s' % t)
+        with page.expect_download(timeout=15000) as dl:
+            page.click('#s2-csv')
+        raw = open(dl.value.path(), 'rb').read().decode('utf-8')
+        lines = raw.lstrip('﻿').split('\r\n')
+        cv = page.evaluate("() => { const L = S2debug.last(); return [L.R.rows.length, L.R.final.toFixed(2)]; }")
+        if not raw.startswith('﻿') or len(lines) != cv[0] + 1 or not lines[-1].endswith(',' + cv[1]) or re.search(r'undefined|NaN', raw):
+            fail('sma200', 'CSV 이상: %d줄(기대 %d) · 끝 %s' % (len(lines), cv[0] + 1, lines[-1][-30:]))
+        # 조건 바꿔 다시 계산 (빈 수수료 칸 → 0.25 · 대기 종목 QQQ · 150일 · 이동평균 · 이자세 끔)
+        page.select_option('#s2-k-win', '150'); page.select_option('#s2-k-out', 'qqq'); page.select_option('#s2-k-cs', '2')
+        page.select_option('#s2-tax', 'avg'); page.select_option('#s2-itax', 'off'); page.fill('#s2-fee', '')
+        page.click('#s2-run'); wait_new()
+        r = page.evaluate(S2_INDEP_JS, ['real', 0.25, 'avg', False])
+        q = page.evaluate("() => [document.getElementById('s2-fee').value, S2debug.S().p.win, S2debug.S().p.out, S2debug.last().R.K.out]")
+        if r['diff'] or not r['same'] or q != ['0.25', '150', 'qqq', 'qqq']:
+            fail('sma200', '조건을 바꾼 결과가 엔진과 다름: %s · %s' % ({k: r[k] for k in ('diff', 'same')}, q))
+        # 시뮬레이터와 같게
+        page.click('#s2-simlike'); wait_new()
+        q = page.evaluate("""() => { const L = S2debug.last(), S = S2debug.S(); return { from: L.D.d[L.from], to: L.D.d[L.to], fin: L.R.final, mdd: L.st.mdd, n: L.R.eq.length, p: S.p,
+            ui: [S.mode, S.fee, S.tax, S.itax, [...document.querySelectorAll('#s2-k-ul option')].some(o => o.value === 'sqqq' && o.disabled)] }; }""")
+        if q['ui'] != ['sim', 0.02, 'none', 'off', False]:
+            fail('sma200', "'시뮬레이터와 같게' 설정 이상 (기대: 시뮬 방식 · 0.02% · 세금 미포함 · SQQQ 선택 가능): %s" % q['ui'])
+        if local and shutil.which('node'):
+            pr = subprocess.run(['node', '-e', S2_SIM_JS, os.path.join(ROOT, 'scripts', 'stratsim_fit.cjs'), q['from'], q['to'], '100000', json.dumps(q['p'])], capture_output=True, text=True, timeout=120)
+            try:
+                sm = json.loads(pr.stdout.strip().splitlines()[-1])
+                if sm['first'] != q['from'] or sm['last'] != q['to'] or sm['n'] != q['n'] or abs(sm['fin'] - q['fin']) > 1e-9 * sm['fin'] or abs(sm['mdd'] - q['mdd']) > 1e-12:
+                    fail('sma200', "'시뮬레이터와 같게' 결과가 투자전략 시뮬레이터와 다름: 화면 %s · 시뮬레이터 %s" % ({k: q[k] for k in ('from', 'to', 'fin', 'mdd')}, sm))
+            except Exception as e:
+                fail('sma200', '시뮬레이터 엔진 대조 실패: %s %s' % (e, (pr.stderr or pr.stdout)[-200:]))
+        # 기본값 (실전) 단추 → 처음 결과
+        page.click('#s2-def'); wait_new()
+        if abs(page.evaluate("() => S2debug.last().R.final") - fin0) > 1e-9:
+            fail('sma200', "'기본값 (실전)' 단추 뒤 결과가 처음과 다름")
+        # 분포 상자(표본 단계부터 숫자) · 좁은 화면 넘침
+        page.wait_for_function("() => document.querySelectorAll('#s2-dbox .r7d-k').length >= 6", timeout=60000)
+        bx = page.evaluate("() => { const b = document.getElementById('s2-dbox'); return /undefined|NaN/.test(b.innerText) ? b.innerText.slice(0, 200) : ''; }")
+        if bx: fail('sma200', '시작일별 분포 상자에 이상한 값: %s' % bx)
+        for w in (360, 768):
+            page.set_viewport_size({'width': w, 'height': 900}); page.wait_for_timeout(250)
+            ov = page.evaluate("() => document.documentElement.scrollWidth - document.documentElement.clientWidth")
+            if ov > 0: fail('sma200', '%dpx 에서 가로 넘침 %dpx' % (w, ov))
+        page.set_viewport_size({'width': 1280, 'height': 900})
+        page.evaluate("() => { localStorage.removeItem('s2-set'); localStorage.removeItem('s2-scale'); }")
+    except Exception as e:
+        fail('sma200', 'SMA 200 백테스트 검사 실패: %s' % str(e)[:200])
 
 
 SNS_RE = re.compile(r'^https://[^/]+\.workers\.dev/sns/')
@@ -3090,6 +3205,13 @@ def main():
         if _r.returncode != 0:
             fail('stratsim', '계산·탐색기 자료 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:400])
 
+    # [SMA200-ENG] SMA 200 백테스트 엔진 — 투자전략 시뮬레이터와 끝 금액 차이 0(무작위 조건·기간 700번) · 실전·양도세 독립 검산 250번 · 자료·프리셋 — node 가 있으면
+    if not a.etf_audit and shutil.which('node'):
+        _r = subprocess.run(['node', os.path.join(ROOT, 'tests', 'sma200_test.cjs')], capture_output=True, text=True, timeout=300)
+        print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'sma200_test: 출력 없음', flush=True)
+        if _r.returncode != 0:
+            fail('sma200', '엔진 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:400])
+
     # 외부 광고·방문 분석 서버(일시 오류가 잦고 사이트 기능과 무관) — 실패해도 사이트 오류로 보지 않음
     THIRD = ('clarity.ms', 'bing.com', 'naver.com', 'naver.net', 'pstatic.net', 'googlesyndication', 'doubleclick',
              'google-analytics', 'googletagmanager', 'adtrafficquality', 'googleadservices', 'gstatic.com', 'kakao', 'withgoogle.com')
@@ -3333,10 +3455,11 @@ def main():
             a = page.evaluate("() => { const s = document.querySelector('.auto-sum'); return s ? { vis: !!s.offsetParent, rows: s.querySelectorAll('tbody tr').length, li: s.querySelectorAll('.in-auto li').length } : null; }")
             if not a or not a['vis'] or a['rows'] < 4 or a['li'] < 2:
                 fail(r['path'], '자료 화면 자동 요약(.auto-sum)이 안 보이거나 비어 있음: %s' % a)
-        print('[2-3] 관리자 전용 화면 잠금 · 자산 속도 시뮬레이터', flush=True)
+        print('[2-3] 관리자 전용 화면 잠금 · 자산 속도 시뮬레이터 · SMA 200 백테스트', flush=True)
         admin_lock_check(page, base, fail, routes)
         apage = admin_page(ctx, attach)
         aspeed_check(apage, base, fail, local)
+        sma200_check(apage, base, fail, local)
         print('[2-2] 커버드콜 코스피 비교 — 실제 종가(분배금 미반영)', flush=True)
         kcmp_check(page, base, fail, local)
         print('[2-5] 아파트 시세 순위 — 가격 구간', flush=True)
