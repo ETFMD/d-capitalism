@@ -12730,9 +12730,9 @@ var MHV = (function () {
       }
       if (tx && i < to && yearOf(i + 1) !== yearOf(i)) { var yy = yearOf(i), gg = tx.gain[yy] || 0, tt = Math.max(0, gg - DED) * RATE; out.taxes.push({ y: yy, gain: gg, tax: tt, paid: null }); }
       var tsQ = 0;
-      if (tx) {                                                       /* 5월 말 납부 (다음 해) — 이 계좌 현금에서. 현금이 모자라면 그날 종가에 보유를 팔아 채우고, 다 팔아도 모자란 만큼은 밖에서 낸 것으로 (현금은 0 아래로 안 내려감) */
+      if (tx) {                                                       /* 다음 해 5월 1일(그날 또는 뒤 첫 거래일) 납부 — 이 계좌 현금에서 (2026-10-22 사용자 지시: 5월 31일 → 5월 1일). 현금이 모자라면 그날 종가에 보유를 팔아 채우고, 다 팔아도 모자란 만큼은 밖에서 낸 것으로 (현금은 0 아래로 안 내려감) */
         out.taxes.forEach(function (t) {
-          if (t.paid != null || D.d[i] < (t.y + 1) + '-05-31') return;
+          if (t.paid != null || D.d[i] < (t.y + 1) + '-05-01') return;
           if (!(t.tax > 0)) { t.paid = '-'; return; }
           var usd = t.tax / o.tax.fx(i), px = c[i] * k;
           if (st.cash < usd - 1e-9 && st.qty > 0 && px > 0) {
@@ -14546,7 +14546,7 @@ function mhApp(P) {
         return '<button class="mh-btn' + (on ? ' mh-btn-sel' : '') + '" style="flex:1 1 auto;font-size:12px;padding:8px 10px" data-act="su-fee" data-v="' + f[0] + '" aria-pressed="' + on + '">' + f[1] + '</button>'; }).join('') + '</div>' +
       '<div class="mh-mrow" style="margin-top:6px"><input class="mh-in" type="number" step="0.01" min="0" max="2" placeholder="직접 입력" value="' + (fc ? '' : esc(u.fee)) + '" data-in="su:fee" aria-label="수수료 직접 입력 (%)"><span class="mh-small mh-faint">%</span></div>' +
       '<p class="mh-help">국내 증권사 미국 주식 온라인 기본 0.25% · 이벤트 0.07% 안팎 · 매도 때 SEC 수수료 0.00206%도 뺌' + (c.okF ? '' : ' · <span class="mh-bad">0~2 사이로 입력하세요</span>') + '</p></div>' +
-      grpBtns('해외주식 양도소득세', 'su-tax', [['1', '포함 (22%)'], ['0', '빼기']], u.tax ? '1' : '0', '해마다 실현 손익(원화) − 250만 원 공제 × 22%, 다음 해 5월 말 납부');
+      grpBtns('해외주식 양도소득세', 'su-tax', [['1', '포함 (22%)'], ['0', '빼기']], u.tax ? '1' : '0', '해마다 실현 손익(원화) − 250만 원 공제 × 22%, 다음 해 5월 1일 납부');
     if (u.tax) h += grpBtns('취득가액 계산', 'su-method', [['fifo', '선입선출 (법 원칙)'], ['avg', '이동평균']], u.method, '') +
       grpBtns('연말 절세 매도·재매수', 'su-harv', [['0', '안 함'], ['1', '함']], u.harvest ? '1' : '0', '그해 이익이 250만 원을 넘고 평가손이 있으면 같은 종가에 팔고 다시 사서 손실 확정 (라오어 2024-12-20 글)');
     h += grpBtns('분배금', 'su-divs', [['1', '받기'], ['0', '끄기']], u.divs ? '1' : '0', '현금으로 받음 (세금 포함 보기는 미국 원천징수 15% 뗌)');
@@ -14666,7 +14666,7 @@ function mhApp(P) {
     h += grpBtns('매매 수수료', 'su-feemode', [['def', '기본 ' + BT_FEE_DEF + '%'], ['custom', '직접 입력']], u.feeMode === 'custom' ? 'custom' : 'def', '');
     if (u.feeMode === 'custom') h += '<div class="mh-mrow" style="margin-top:-6px"><input class="mh-in" type="number" step="0.01" min="0" max="2" value="' + esc(u.feeC) + '" data-in="su:feeC" aria-label="수수료 직접 입력 (%)"><span class="mh-small mh-faint">%</span></div>';
     h += '<p class="mh-help" style="margin-top:-8px">살 때·팔 때마다 거래 금액 × 수수료율 · 팔 때 미국 SEC 수수료 0.00206%도 뺌' + (c.okF ? '' : ' · <span class="mh-bad">0~2 사이로 입력하세요</span>') + '</p>';
-    h += grpBtns('해외주식 양도소득세 (22%)', 'su-tax', [['1', '포함'], ['0', '미포함']], u.tax ? '1' : '0', '해마다 실현 손익(원화) − 250만 원 공제 × 22%, 다음 해 5월 말 납부');
+    h += grpBtns('해외주식 양도소득세 (22%)', 'su-tax', [['1', '포함'], ['0', '미포함']], u.tax ? '1' : '0', '해마다 실현 손익(원화) − 250만 원 공제 × 22%, 다음 해 5월 1일 납부');
     if (u.tax) h += grpBtns('양도세 취득가액 계산', 'su-method', [['fifo', '선입선출 (법 원칙)'], ['avg', '이동평균']], u.method, '') +
       grpBtns('연말 절세 매도', 'su-harv', [['0', '안 함'], ['1', '함']], u.harvest ? '1' : '0', '그해 이익이 250만 원을 넘고 손해 중인 주식이 있으면 연말에 팔고 같은 값에 다시 사서 손실을 확정해요');
     h += grpBtns('분배금(배당금)', 'su-divs', [['1', '재투자 (분배세금 포함)'], ['0', '재투자 안 함']], u.divs ? '1' : '0', u.divs ? '분배금을 현금으로 받아 다음 매수에 써요 (세금 포함 보기는 미국 원천징수 15% 뗌)' : '분배금은 계산에서 빼요');
@@ -14691,7 +14691,7 @@ function mhApp(P) {
       '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px">' + [['def', '기본 ' + BT_FEE_DEF + '%'], ['custom', '직접 입력']].map(function (f) { var on = (f[0] === 'custom') === cu;
         return '<button class="mh-btn' + (on ? ' mh-btn-sel' : '') + '" style="flex:1 1 auto;padding:6px 8px;font-size:12px" data-act="m-feemode" data-v="' + f[0] + '" aria-pressed="' + on + '">' + f[1] + '</button>'; }).join('') + '</div>' +
       (cu ? '<div class="mh-mrow" style="margin-top:6px"><input class="mh-in" id="mh-m-btfee" type="number" step="0.01" min="0" max="2" value="' + o.fee + '"><span class="mh-small mh-faint">%</span><button class="mh-btn mh-btn-sel" style="padding:6px 10px;font-size:12px" data-act="ap-btfee">적용</button></div>' : '') + '</div>' +
-      toggleRow('해외주식 양도소득세 (22%)', o.tax, 'tg-bttax', '해마다 실현 손익(원화) − 250만 원 공제 × 22% · 다음 해 5월 말 납부',
+      toggleRow('해외주식 양도소득세 (22%)', o.tax, 'tg-bttax', '해마다 실현 손익(원화) − 250만 원 공제 × 22% · 다음 해 5월 1일 납부',
         o.tax ? '<div style="display:flex;gap:4px;margin-top:6px">' + [['fifo', '선입선출'], ['avg', '이동평균']].map(function (m) { return '<button class="mh-btn' + (o.method === m[0] ? ' mh-btn-sel' : '') + '" style="flex:1;padding:5px;font-size:12px" data-act="m-btmethod" data-v="' + m[0] + '">' + m[1] + '</button>'; }).join('') + '</div>' : '') +
       (o.tax ? toggleRow('연말 절세 매도', o.harvest, 'tg-btharv', '그해 이익이 250만 원을 넘고 손해 중인 주식이 있으면 연말에 팔고 같은 값에 다시 사서 손실 확정') : '') +
       toggleRow('분배금 재투자 (분배세금 포함)', o.divs, 'tg-btdivs', '끄면 분배금을 계산에서 빼요 (재투자 안 함)');
@@ -14757,7 +14757,7 @@ function mhApp(P) {
         return '<button class="mh-btn' + (on ? ' mh-btn-sel' : '') + '" style="flex:1 1 auto;padding:6px 8px;font-size:12px" data-act="m-btfee" data-v="' + f[0] + '" aria-pressed="' + on + '">' + f[1] + '</button>'; }).join('') + '</div>' +
       '<div class="mh-mrow" style="margin-top:6px"><input class="mh-in" id="mh-m-btfee" type="number" step="0.01" min="0" max="2" placeholder="직접 입력" value="' + (fc ? '' : o.fee) + '"><span class="mh-small mh-faint">%</span>' +
       '<button class="mh-btn mh-btn-sel" style="padding:6px 10px;font-size:12px" data-act="ap-btfee">적용</button></div></div>' +
-      toggleRow('해외주식 양도소득세 (22%)', o.tax, 'tg-bttax', '해마다 실현 손익(원화) − 250만 원 공제 × 22% · 다음 해 5월 말 납부',
+      toggleRow('해외주식 양도소득세 (22%)', o.tax, 'tg-bttax', '해마다 실현 손익(원화) − 250만 원 공제 × 22% · 다음 해 5월 1일 납부',
         o.tax ? '<div style="display:flex;gap:4px;margin-top:6px">' + [['fifo', '선입선출'], ['avg', '이동평균']].map(function (m) { return '<button class="mh-btn' + (o.method === m[0] ? ' mh-btn-sel' : '') + '" style="flex:1;padding:5px;font-size:12px" data-act="m-btmethod" data-v="' + m[0] + '">' + m[1] + '</button>'; }).join('') + '</div>' : '') +
       (o.tax ? toggleRow('연말 절세 매도·재매수', o.harvest, 'tg-btharv', '그해 이익이 250만 원을 넘고 평가손이 있으면 같은 종가에 팔고 다시 사서 손실 확정') : '') +
       toggleRow('분배금 받기', o.divs, 'tg-btdivs', '현금으로 (세금 포함 보기는 미국 원천징수 15% 뗌)');
@@ -16234,7 +16234,7 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
       '<div class="mb-seg mb-fee">' + FEES.map(function (f) { var on = String(S.fee) === f[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" data-fee="' + f[0] + '" aria-pressed="' + on + '">' + f[1] + '</button>'; }).join('') +
       '<span class="mb-spc"><input class="mh-in" id="mb-feec" type="number" min="0" max="2" step="0.01" placeholder="직접" value="' + (FEES.some(function (f) { return String(S.fee) === f[0]; }) ? '' : S.fee) + '" aria-label="수수료 직접 입력 (%)"></span></div>' +
       '<p class="mh-help">국내 증권사 미국 주식 온라인 기본 0.25% · 이벤트 0.07% 안팎 · 매도 때 SEC 수수료 0.00206%(2026-04 기준)도 뺌</p>' +
-      '<label class="mb-chk"><input type="checkbox" id="mb-tax"' + (S.tax ? ' checked' : '') + '> <span><b>해외주식 양도소득세</b> — 해마다 실현 손익(원화) − 250만 원 공제 × 22%, 다음 해 5월 말 납부 · 원화 환산은 결제일 매매기준율</span></label>' +
+      '<label class="mb-chk"><input type="checkbox" id="mb-tax"' + (S.tax ? ' checked' : '') + '> <span><b>해외주식 양도소득세</b> — 해마다 실현 손익(원화) − 250만 원 공제 × 22%, 다음 해 5월 1일 납부 · 원화 환산은 결제일 매매기준율</span></label>' +
       (S.tax ? '<div class="mb-sub"><label class="mh-lbl">취득가액 계산</label>' + seg('취득가액', [['fifo', '선입선출 (법 원칙)'], ['avg', '이동평균']], S.method, 'method') +
         '<label class="mb-chk"><input type="checkbox" id="mb-harv"' + (S.harvest ? ' checked' : '') + '> <span>연말 절세 매도·재매수 — 그해 이익이 250만 원을 넘고 평가손이 있으면 같은 종가에 필요한 만큼 팔고 다시 사서 손실 확정 (라오어 2024-12-20 글)</span></label></div>' : '') +
       '<label class="mb-chk"><input type="checkbox" id="mb-divs"' + (S.divs ? ' checked' : '') + '> <span>분배금 받기 — 현금으로 (세금 포함 보기는 미국 원천징수 15% 뗌)</span></label>');
@@ -16459,7 +16459,7 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
     if (X.lack0 > 0 && !R.S.rebase) W.push('V3.0: 손실로 남은 현금이 1회 매수금보다 적어 <b>전반전(T < 분할/2)에 벌써 \'잔금 소진 → 쿼터매도\'가 된 날이 ' + X.lack0.toLocaleString() + '일</b>(처음 ' + X.lack0From + ') 있어요. 원문은 손해가 나도 1회 매수금을 줄이지 않고(지금까지 가장 컸던 누적 수익 기준) 모자란 회차는 남겨 둔 수익 절반으로 메운다고 가정하는데, 손실이 그 완충보다 커지면 매수 → 다음 날 쿼터매도가 되풀이돼요. 원문이 다루지 않는 상황이라 이 구간 결과는 그대로 믿기 어려워요 — 조건 4의 <b>\'손실이 커지면 1회 매수금 다시 정하기\'</b>를 켜고 비교해 보세요.');
     if (X.rebase > 0) W.push('1회 매수금을 ' + X.rebase + '번 다시 정했어요 (원문 밖 선택 — 사이클을 시작할 때 현금이 1회 매수금 × 분할보다 적어서 그 현금을 새 원금으로).');
     if (X.nob > 0) W.push('<b>1회 매수금이 1주 가격보다 작은 날이 ' + X.nob.toLocaleString() + '일</b>(처음 ' + X.nobFrom + ') — ' + (R.S.ver === '4.0' ? '주문표대로 1주씩 사서 계획보다 빨리 소진돼요' : '그날은 매수를 못 해요') + '. 원금을 늘리거나 분할 수를 줄여 보세요 (실제 주문도 1주 단위라 같은 일이 생겨요).');
-    if (X.tsell > 0) W.push('5월 말 양도소득세를 낼 현금이 모자라 그날 종가에 보유를 팔아 낸 해가 ' + X.tsell + '번 있어요 (이 계좌에서 세금을 낸다고 가정 · 판 손익은 그해 양도 손익에 들어감).');
+    if (X.tsell > 0) W.push('5월 1일 양도소득세를 낼 현금이 모자라 그날 종가에 보유를 팔아 낸 해가 ' + X.tsell + '번 있어요 (이 계좌에서 세금을 낸다고 가정 · 판 손익은 그해 양도 손익에 들어감).');
     if (X.taxExt > 0) W.push('<b>보유를 다 팔아도 세금이 모자라 ' + usd(X.taxExt) + ' 은 밖에서 낸 것으로 계산</b>했어요 — 최종 자산·수익률·그래프에서 뺐어요 (큰 이익을 낸 해 다음에 크게 잃은 경우).');
     if (X.rs > 0) W.push('사이클 안에서 가격이 크게 떨어져 가격 단위를 ' + X.rs + '번 바꿔 계산했어요 (실제 ETF 의 액면 병합처럼 보유 수량은 10분의 1로, 평단은 10배로 — 손익은 같음).');
     /* 상장 전 결과가 재현 가격·추정 고가 탓으로 크게 달라지는 설정 (아래 오차 카드의 ② 가 ±5%p 넘음) — 숫자를 보기 전에 알림 */
@@ -16502,7 +16502,7 @@ mhApp({ id: 'muhan', name: '무한매수법', root: 'mh-root', page: 'page-muhan
         R.fill === 'pre' ? '<b>프리장 시작(한국 오후 5~6시) 주문</b> — 전날 종가가 이미 지정가 이상이면 전날 종가로, 아니면 그날 고가가 지정가에 닿을 때 지정가로 체결(프리장 고가는 몰라 갭 상승도 지정가 — 보수적)' :
         '그날 고가가 지정가에 닿으면 지정가로 체결(몇 시인지 따지지 않는 일봉 가정)') + ' · MOC 는 종가 (' + (R.fill === 'pre' ? '애프터장' : '프리·애프터장') + ' 체결·일부 체결은 없다고 봄)</li>' +
       '<li>주문 수량은 원문대로 1주 단위' + (R.cfg && R.cfg.ideal ? ' — 지금은 고급 설정 <b>정액(소수 주)</b>' : '') + ' · 수정주가가 $10 아래·$2,000 위이거나 상장 전 재현 가격이면 사이클마다 시작가를 $50 단위로, 사이클 안에서 $1 아래로 떨어지면 액면 병합처럼 10배 단위로 바꿔 계산(1센트·1주 반올림 왜곡 방지, 손익은 같음)</li>' +
-      '<li>세금·수수료 포함 보기: 매매 수수료 ' + R.S.fee + '% + 매도 SEC 0.00206% · 분배금 미국 원천징수 15%' + (R.taxOn ? ' · 양도소득세 22%(250만 원 공제, ' + (R.S.method === 'avg' ? '이동평균' : '선입선출') + ', 결제일 매매기준율, 다음 해 5월 말 이 계좌 현금에서 납부 — 모자라면 그날 종가에 보유를 팔아 냄)' + (R.S.harvest ? ' · 연말 절세 매도·재매수' : '') : '') + '</li>' +
+      '<li>세금·수수료 포함 보기: 매매 수수료 ' + R.S.fee + '% + 매도 SEC 0.00206% · 분배금 미국 원천징수 15%' + (R.taxOn ? ' · 양도소득세 22%(250만 원 공제, ' + (R.S.method === 'avg' ? '이동평균' : '선입선출') + ', 결제일 매매기준율, 다음 해 5월 1일(휴장이면 다음 거래일) 이 계좌 현금에서 납부 — 모자라면 그날 종가에 보유를 팔아 냄)' + (R.S.harvest ? ' · 연말 절세 매도·재매수' : '') : '') + '</li>' +
       (R.rej ? '<li>증권사 주문 거부(' + RJ_NM[R.rej.mode] + '): 매수 지정가가 주문 넣는 때 가격(' + (R.fill === 'pre' ? '전날 종가 — 프리장 시작 주문' : '그날 시가') + ')의 120%(1센트 버림)를 넘으면 증권사가 받지 않는다고 봄 — ' + (R.rej.mode === 'clamp' ? '수량 그대로 한도 가격에 넣음' : '그날 그 주문은 없음') + ' · 매도 주문은 그대로' + (R.fill === 'pre' ? ' · 프리장 시작의 전날 종가 기준은 근사(증권사는 주문 순간 현재가로 정해 애프터장에서 크게 빠진 날은 거부될 수 있음 — 이 계산은 거부를 적게 셈)' : ' · 시가를 모르는 날(상장 전 재현 중 같은 지수 ETF 시가도 없는 때)은 전날 종가 무렵에 주문했다고 봄') + ' · 상장 전 재현 구간의 시가 = 같은 지수 ETF(TQQQ ← QQQ · SOXL ← SOXX·SMH · UPRO ← SPY · TECL ← XLK)의 시가 ÷ 전날 종가 변화 × 3</li>' : '') +
       '<li>환전 수수료·현금 이자·다른 해외주식 손익과의 합산·금융소득종합과세는 빼고 계산 · 과거 기간에도 지금 세법(2026년)을 적용</li></ul></div>';
     $('mb-res').innerHTML = h;
@@ -17158,9 +17158,9 @@ var VRE = (function () {
         }
       }
       if (tx && i < to && yearOf(i + 1) !== yearOf(i)) { var yy = yearOf(i), gg = tx.gain[yy] || 0; out.taxes.push({ y: yy, gain: gg, tax: Math.max(0, gg - DED) * RATE, paid: null }); }
-      /* 양도소득세: 다음 해 5월 말(그날 또는 뒤 첫 거래일) Pool 에서 · 모자라면 그날 종가에 팔아서 · 그래도 모자라면 밖에서 */
+      /* 양도소득세: 다음 해 5월 1일(그날 또는 뒤 첫 거래일) Pool 에서 · 모자라면 그날 종가에 팔아서 · 그래도 모자라면 밖에서 (2026-10-22 사용자 지시: 5월 31일 → 5월 1일) */
       if (tx) out.taxes.forEach(function (t) {
-        if (t.paid != null || D.d[i] < (t.y + 1) + '-05-31') return;
+        if (t.paid != null || D.d[i] < (t.y + 1) + '-05-01') return;
         if (!(t.tax > 0)) { t.paid = '-'; return; }
         var usd = cent(t.tax / o.tax.fx(i));
         if (pool < usd - 1e-9 && n > 0 && cc > 0) {
@@ -17924,7 +17924,7 @@ var VBD = (function () {
       '<div class="mb-seg mb-fee">' + FEES.map(function (f) { var on = String(S.fee) === f[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" data-fee="' + f[0] + '" aria-pressed="' + on + '">' + f[1] + '</button>'; }).join('') +
       '<span class="mb-spc"><input class="mh-in" id="vb-feec" type="number" min="0" max="2" step="0.01" placeholder="직접" value="' + (FEES.some(function (f) { return String(S.fee) === f[0]; }) ? '' : S.fee) + '" aria-label="수수료 직접 입력 (%)"></span></div>' +
       '<p class="mh-help">국내 증권사 미국 주식 온라인 기본 0.25% · 이벤트 0.07% 안팎 · 매도 때 SEC 수수료 0.00206%(2026-04 기준)도 뺌</p>' +
-      '<label class="mb-chk"><input type="checkbox" id="vb-tax"' + (S.tax ? ' checked' : '') + '> <span><b>해외주식 양도소득세</b> — 해마다 실현 손익(원화) − 250만 원 공제 × 22%, 다음 해 5월 말 Pool 에서 납부 · 원화 환산은 결제일 매매기준율</span></label>' +
+      '<label class="mb-chk"><input type="checkbox" id="vb-tax"' + (S.tax ? ' checked' : '') + '> <span><b>해외주식 양도소득세</b> — 해마다 실현 손익(원화) − 250만 원 공제 × 22%, 다음 해 5월 1일(휴장이면 다음 거래일) Pool 에서 납부 · 원화 환산은 결제일 매매기준율</span></label>' +
       (S.tax ? '<div class="mb-sub"><label class="mh-lbl">취득가액 계산</label>' + seg('취득가액', [['fifo', '선입선출 (법 원칙)'], ['avg', '이동평균']], S.method, 'method') +
         '<label class="mb-chk"><input type="checkbox" id="vb-harv"' + (S.harvest ? ' checked' : '') + '> <span>연말 절세 매도·재매수 — 그해 이익이 250만 원을 넘고 평가손 물량이 있으면 같은 종가에 팔고 다시 사서 손실 확정 (보유 개수·V 그대로)</span></label></div>' : '') +
       '<label class="mb-chk"><input type="checkbox" id="vb-divs"' + (S.divs ? ' checked' : '') + '> <span>분배금 받기 — Pool 로 (세금 포함 보기는 미국 원천징수 15% 뗌)</span></label>');
@@ -18050,7 +18050,7 @@ var VBD = (function () {
     if (X.dead != null) W.push('<b>' + D.d[X.dead] + ' 인출로 V 가 0 이하가 되어 VR 이 멈췄어요</b> — 그 뒤로는 적립·인출·매매 없이 남은 보유와 Pool 을 평가만 해요. 인출금을 줄이거나 G 를 키워 보세요.');
     if (X.short > 0) W.push('인출식: Pool 이 모자라 인출금을 다 못 뺀 사이클이 ' + X.short.toLocaleString() + '번(모자란 돈 ' + usd(X.shortAmt) + ') 있어요 — 원문처럼 Pool 에 있는 만큼만 뺐어요.');
     if (X.coarse > 0) W.push('사이클 첫날 보유가 <b>30개 미만인 사이클이 ' + X.coarse.toLocaleString() + '번</b>(처음 ' + X.coarseFrom + ') 있어요 — 1개씩 사고파는 매수표·매도표가 거칠어져(1개가 V 의 3% 넘음) 결과가 원문 의도와 달라질 수 있어요. 원금을 늘려 보세요.');
-    if (X.tsell > 0) W.push('5월 말 양도소득세를 낼 Pool 이 모자라 그날 종가에 보유를 팔아 낸 해가 ' + X.tsell + '번 있어요 (판 손익은 그해 양도 손익에 들어감).');
+    if (X.tsell > 0) W.push('5월 1일 양도소득세를 낼 Pool 이 모자라 그날 종가에 보유를 팔아 낸 해가 ' + X.tsell + '번 있어요 (판 손익은 그해 양도 손익에 들어감).');
     if (X.taxExt > 0) W.push('<b>보유를 다 팔아도 세금이 모자라 ' + usd(X.taxExt) + ' 은 밖에서 낸 것으로 계산</b>했어요 — 최종 자산·수익률·그래프에서 뺐어요' + (st.final <= 0 ? ' (그래서 최종 자산이 0 이하 — 원금을 다 잃고 세금 빚이 남은 셈이라 연평균은 계산할 수 없어요)' : '') + '. 큰 이익을 낸 다음 해 5월 전에 폭락하면 생기는 해외주식 양도세의 함정이에요.');
     if (X.idle != null) W.push('<b>' + D.d[X.idle] + ' 부터 보유가 0개라 VR 이 멈췄어요</b> — 매수표·매도표는 보유 개수로 만들어서 0개면 더 사고팔 수 없어요' + (X.taxExt > 0 || X.tsell > 0 ? '(양도소득세를 내느라 보유를 다 판 뒤)' : '') + '. 그 뒤로는 남은 현금' + (SS.type === 'acc' ? '·적립금' : '') + '만 그대로 있어요.');
     if (X.rs > 0) W.push('가격이 크게 떨어져 1주 가격을 ' + X.rs + '번 병합처럼 바꿔 계산했어요 (보유 10분의 1 · 끝수는 전날 종가로 현금화 — 손익은 거의 같음).');
@@ -18094,7 +18094,7 @@ var VBD = (function () {
         '<li>사이클 첫날 매수표(최소값 ÷ 개수)·매도표(최대값 ÷ 개수)를 1개씩 지정가로 · 2주 동안 장중 저가가 매수점 이하면 매수점에(장이 매수점 아래에서 시작하면 시가에), 고가가 매도점 이상이면 매도점에(매도점 위에서 시작하면 시가에) 체결 · 시가·고가·저가가 없는 날(상장 전 재현 등)은 종가로 판단 — 종가가 매수점 이하면 종가에 매수, 매도점 이상이면 종가에 매도 · 매수는 그 사이클 Pool × 한도 안에서(매수표 가격으로 셈) · 첫날은 종가에 매수, 매수표는 다음 거래일부터</li>') +
       '<li>V 갱신: 다음 V = V + Pool ÷ G ' + (SS.type === 'acc' ? '+ 적립금' : SS.type === 'wd' ? '− 인출금(Pool 에 있는 만큼만)' : '') + ' · ' + (SS.cycle === 'td' ? '10거래일마다' : '시작일부터 14일마다(같은 요일)') + ' · 처음 V = 첫날 평가금(개수 × 가격)</li>' +
       '<li>1주 가격 단위: ' + (SS.norm === 'none' ? '수정주가 그대로' : '자동 — 실제 ETF 처럼 $5~$200 안에서 분할·병합을 흉내 (손익 같음)') + ' · 현금은 센트 단위</li>' +
-      '<li>세금·수수료 포함 보기: 매매 수수료 ' + SS.fee + '% + 매도 SEC 0.00206% · 분배금 미국 원천징수 15%' + (R.taxOn ? ' · 양도소득세 22%(250만 원 공제, ' + (SS.method === 'avg' ? '이동평균' : '선입선출') + ', 결제일 매매기준율, 다음 해 5월 말 Pool 에서 납부 — 모자라면 그날 종가에 보유를 팔아 냄)' + (SS.harvest ? ' · 연말 절세 매도·재매수' : '') : '') + '</li>' +
+      '<li>세금·수수료 포함 보기: 매매 수수료 ' + SS.fee + '% + 매도 SEC 0.00206% · 분배금 미국 원천징수 15%' + (R.taxOn ? ' · 양도소득세 22%(250만 원 공제, ' + (SS.method === 'avg' ? '이동평균' : '선입선출') + ', 결제일 매매기준율, 다음 해 5월 1일(휴장이면 다음 거래일) Pool 에서 납부 — 모자라면 그날 종가에 보유를 팔아 냄)' + (SS.harvest ? ' · 연말 절세 매도·재매수' : '') : '') + '</li>' +
       (fl ? '<li>넣고 뺀 돈이 있으면: 연수익은 내 돈 기준(IRR, 넣고 뺀 날짜와 금액 반영) · 시간가중 연평균과 MDD 는 넣고 뺀 돈의 영향을 뺀 운용 성과 · 그냥 보유는 같은 날 같은 돈을 ' + esc(tk) + ' 에 넣고 뺀 경우</li>' : '') +
       '<li>일봉: ' + (R.D.src === 'c' ? '이 사이트 시세 자료(야후 일봉 종가·분배금 · 시가 없음 → 종가로 판단)' : '야후 파이낸스 일봉(' + (R.D.o ? '시가·고가·저가·종가' : '종가 — 시가·고가·저가가 없어 종가로 판단') + ' · 분할 반영) — ' + (R.D.via === 'p' ? '공개 프록시로 받음' : '이 사이트 서버가 30분마다 새로 받음')) + ' · 장이 끝나지 않은 오늘 일봉은 뺌 · 분배금은 분배락일 아침 보유분만큼 Pool 로</li>' +
       '<li>환전 수수료·현금 이자·다른 해외주식 손익과의 합산·금융소득종합과세는 빼고 계산 · 과거 기간에도 지금 세법(2026년)을 적용 · 과거 결과는 미래를 보장하지 않아요</li></ul></div>';
@@ -18606,7 +18606,7 @@ window.dcAdmin = (function () {
      → '시뮬레이터와 같게' 방식(시뮬레이터 자료 · 소수 주 · 수수료를 매수 금액 안에서 · SEC·세금·이자세 없음)이면 시뮬레이터와 같은 값(tests/sma200_test.cjs 가 확인)
    · 더한 것: 실전 방식(1주 단위 · 수수료 = 체결 금액 × 수수료율 · 매도 SEC · 분배금 원천징수) · 해외주식 양도소득세(72루틴 엔진 MHV.run 과 같은 규칙) · 현금 이자 소득세
    · 양도세: 22% × (그해 실현 손익 − 250만 원), 원화 · 결제일(2024-05-28 전 T+2, 뒤 T+1) 환율 · 결제일 연도 · 취득가 = 산 돈 + 수수료 · 양도가 = 판 돈 − 수수료·SEC
-             · 선입선출(fifo) 또는 이동평균(avg) · 종목마다 장부, 손익은 해마다 합침 · 다음 해 5월 31일 이후 첫 거래일에 계좌 현금으로 냄(모자라면 그날 종가에 보유를 팔아서 · 다 팔아도 모자라면 밖에서 낸 것으로)
+             · 선입선출(fifo) 또는 이동평균(avg) · 종목마다 장부, 손익은 해마다 합침 · 다음 해 5월 1일(그날 또는 뒤 첫 거래일)에 계좌 현금으로 냄(모자라면 그날 종가에 보유를 팔아서 · 다 팔아도 모자라면 밖에서 낸 것으로)
    · 자료 D = { d:[YYYY-MM-DD], px:{종목:[종가 · 없으면 0]}, dv:{종목:[주당 분배금]}|null } — 날짜는 모든 종목이 같은 달력
    · 시작일 from = 돈을 넣는 날(그날 종가에 신호가 '보유'면 바로 삼) · 연평균 = (끝 평가금 ÷ 원금)^(365.25 ÷ 달력 일수) − 1 · 최대 낙폭 = 날마다 평가금(현금 + 보유 × 종가 − 밖에서 낸 세금)의 최고점 대비
 ════════════════════════════════════════════════════════════ */
@@ -18833,13 +18833,13 @@ var SMB = (function () {
         if (simSold) { lastSell = m; hasCash = true; }
       }
       if (sold) { held = 'cash'; nSell++; }
-      /* 해외주식 양도세: 해가 바뀌면 그해 세금 확정 → 다음 해 5월 31일 이후 첫 거래일에 납부 (그날 사기 전에 — 산 주식을 바로 팔아 수수료를 두 번 내지 않게) */
+      /* 해외주식 양도세: 해가 바뀌면 그해 세금 확정 → 다음 해 5월 1일(그날 또는 뒤 첫 거래일)에 납부 (그날 사기 전에 — 산 주식을 바로 팔아 수수료를 두 번 내지 않게) */
       var tpay = 0, tq = 0;
       if (tx) {
         if (m < b && yearOf(m + 1) !== yearOf(m)) { var yy = yearOf(m), gg = tx.gain[yy] || 0; tx.list.push({ y: yy, gain: gg, tax: Math.max(0, gg - DED) * RATE, paid: null }); }
         for (var t = 0; t < tx.list.length; t++) {
           var T = tx.list[t];
-          if (T.paid != null || d < (T.y + 1) + '-05-31') continue;
+          if (T.paid != null || d < (T.y + 1) + '-05-01') continue;
           if (!(T.tax > 0)) { T.paid = '-'; continue; }
           var usd = T.tax / o.tax.fx(m), short0 = cash < usd - 1e-9;
           for (var j3 = 0; j3 < ASSETS.length && cash < usd - 1e-9; j3++) {
@@ -19037,8 +19037,10 @@ window.BTUI = (function () {
    [SMA200] SMA 200 백테스트 — 관리자 전용 화면 (/sma200/ · #s2-root) · 계산은 [SMA200-ENG] SMB
    · 모양: 72루틴 자동매매 프로그램(routine72-auto) '백테스트' 탭과 같은 양식 — 조건 카드(기간·원금·조건·수수료·세금 · [계산]) → 결과 카드(요약 칸 · 그래프 · 시작일별 분포 · 연도별/보유 구간별/일자별 표 · CSV)
    · 조건 = 투자전략 시뮬레이터 라이브러리 'SMA 200' 편집 창의 손잡이 전부(선택지도 같음) + 72루틴 백테스트처럼 수수료·양도세(선입선출/이동평균/미포함) + 현금 이자 세금
-   · 계산 방식: 실전(실제 일봉 data/etfcagr.json · 1주 단위 · 수수료 = 체결 금액 × 수수료율 · 매도 SEC · 분배금 원천징수 15%) / 시뮬레이터와 같게(data/stratsim/prices.csv · 소수 주)
-     — '시뮬레이터와 같게' 단추(프리셋 · 수수료 0.02% · 세금 미포함)면 투자전략 시뮬레이터 SMA 200 과 같은 숫자
+   · 계산 방식(자료 칸): 실전(실제 일봉 data/etfcagr.json · 1주 단위 · 수수료 = 체결 금액 × 수수료율 · 매도 SEC · 분배금 원천징수 15%) / 상장 전 포함(상장 전 재현 + 실제 일봉 · 계산은 실전)
+     / 투자전략 시뮬레이터 검증용(data/stratsim/prices.csv · 소수 주 — 라이브러리 조건(현금 · 4%) · 수수료 0.02% · 세금 미포함이면 시뮬레이터 SMA 200 과 같은 숫자)
+   · 기본값 = 라이브러리 'SMA 200' 조건 + 팔았을 때 SPY · 그 현금 이자 0% (2026-10-22) · 단추는 [계산]·[기본값 (실전)]만 ('상장 전 포함' 단추는 2026-10-22 뺌 — 자료 칸에서 고름)
+   · 맨 아래 규칙 설명서(#g-sma200 — 기본 설정 기준, 정적 글)
    · 자료는 시세 봇이 날마다 갱신하는 파일을 열 때마다 받음(새 자료 자동 반영) · 설정은 이 브라우저에만 저장(localStorage 's2-set')
    · 관리자 확인([ADMIN] dcAdmin.when) 뒤에만 시작 — 그 전엔 자료도 받지 않음
 ════════════════════════════════════════════════════════════ */
@@ -19050,11 +19052,15 @@ window.BTUI = (function () {
   var PRE_ASSETS = REAL_ASSETS;   /* 상장 전 포함 = 이 종목들의 실제 일봉 앞에 상장 전 재현을 이어 붙임 (SQQQ 는 실제 일봉이 없어 뺌) */
   var PRE_HINT = '상장 전은 재현 가격(ETF 차트 비교·72루틴 화면 \'상장 전 포함\'과 같은 식 — 지수나 같은 지수의 다른 ETF × 배수 · 현금 금리 · 상장 뒤 실제와 맞춘 비용) + 상장 뒤 실제 일봉 · 계산은 실전과 같음(1주 단위 · 수수료 · SEC · 분배금 원천징수) · 재현 구간은 분배금을 가격에 넣어 따로 없음';
   var NM = { tqqq: 'TQQQ', qqq: 'QQQ', spy: 'SPY', qld: 'QLD', sso: 'SSO', spxl: 'SPXL', sqqq: 'SQQQ', cash: '현금' };
-  /* 기본값 — '기본값 (실전)'과 '상장 전 포함'은 자료(상장 뒤 실제 일봉 / 상장 전 재현 + 실제 일봉)만 다르고 나머지는 같음 (사용자 지시 2026-10-21)
-     · 'sim'(투자전략 시뮬레이터 검증용)은 자료 칸에서만 고름 — 고를 때 수수료·세금은 그대로(같은 숫자를 보려면 수수료 0.02% · 세금 미포함) */
+  /* 기본값 — 라이브러리 'SMA 200' 조건에서 '팔았을 때 들고 있을 것'만 SPY · 그 현금 이자 0% (사용자 지시 2026-10-22 · SMB.PRESET 은 라이브러리 그대로 — 시뮬레이터 검증용)
+     · '상장 전 포함'(상장 전 재현 + 실제 일봉)·'sim'(투자전략 시뮬레이터 검증용)은 자료 칸에서만 고름 — 고를 때 다른 조건은 그대로
+       ('상장 전 포함' 단추는 사용자 지시로 뺌 2026-10-22 · 시뮬레이터와 같은 숫자를 보려면 수수료 0.02% · 세금 미포함 · 현금 · 4%)
+     · v: 저장값 판 — 2 = 이 기본값부터 (그 전 저장값 중 예전 기본값(현금 · 4%) 그대로였던 것은 한 번 새 기본값으로) */
+  var SET_V = 2, DEF_OUT = 'spy', DEF_CR = '0';
   function base(mode) {
     var p = {}, k; for (k in SMB.PRESET) p[k] = SMB.PRESET[k];
-    return { per: 'all', from: '', to: '', cap: CAP_DEF, mode: mode === 'pre' || mode === 'sim' ? mode : 'real', lag: 0, fee: 0.25, tax: 'fifo', itax: 'on', p: p };
+    p.out = DEF_OUT; p.cr = DEF_CR;
+    return { v: SET_V, per: 'all', from: '', to: '', cap: CAP_DEF, mode: mode === 'pre' || mode === 'sim' ? mode : 'real', lag: 0, fee: 0.25, tax: 'fifo', itax: 'on', p: p };
   }
   function load() {
     var s = base('real');
@@ -19062,7 +19068,9 @@ window.BTUI = (function () {
       ['per', 'from', 'to', 'mode', 'tax', 'itax'].forEach(function (k) { if (typeof j[k] === 'string') s[k] = j[k]; });
       if (j.lag === 1) s.lag = 1;
       if (typeof j.cap === 'number' && j.cap >= 100) s.cap = j.cap; if (typeof j.fee === 'number' && j.fee >= 0 && j.fee <= 5) s.fee = j.fee; if (j.p && typeof j.p === 'object') s.p = SMB.clean(j.p);
+      if (!(j.v >= SET_V) && s.p.out === SMB.PRESET.out && s.p.cr === SMB.PRESET.cr) { s.p.out = DEF_OUT; s.p.cr = DEF_CR; }   /* 예전 기본값(현금 · 4%) 그대로였던 저장값 → 새 기본값 (직접 바꾼 값은 그대로) */
     } } catch (e) {}
+    s.v = SET_V;
     if (['real', 'pre', 'sim'].indexOf(s.mode) < 0) s.mode = 'real'; if (['fifo', 'avg', 'none'].indexOf(s.tax) < 0) s.tax = 'fifo'; if (s.itax !== 'off') s.itax = 'on';
     return s;
   }
@@ -19101,7 +19109,7 @@ window.BTUI = (function () {
       ['cool', '재진입 — RSI 가 이 값 미만일 때만 삼', '']]],
     ['out', '팔았을 때 들고 있을 것', [
       ['out', '시장 밖에 있을 땐', ''],
-      ['cr', '그 현금 이자 (연)', '달이 바뀐 첫 거래일에 그때 현금에 붙음 · 2010~2021년 실제 달러 단기 금리는 대부분 0~2%대(라이브러리 기본 4%는 후한 편)']]],
+      ['cr', '그 현금 이자 (연)', '달이 바뀐 첫 거래일에 그때 현금에 붙음 · 기본 0%(시장 밖에선 SPY 를 들고 있어 현금이 거의 없음) · 2010~2021년 실제 달러 단기 금리는 대부분 0~2%대(라이브러리 기본 4%는 후한 편)']]],
     ['ease', '나눠서 사기', [
       ['din', '살 때 주 종목을 나눠 사는 기간', ''],
       ['dout', '팔 때 대기 종목으로 나눠 옮기는 기간', '시장 밖 종목이 현금이 아닐 때만']]],
@@ -19160,10 +19168,10 @@ window.BTUI = (function () {
     h += BTUI.sec(SK, 'cost', '거래 비용 · 세금', sumOf('cost', S.p, x0),
       '<div class="f"><label for="s2-fee">매매 수수료·슬리피지 (%)</label><input id="s2-fee" type="number" step="0.01" min="0" max="5" value="' + S.fee + '"><span class="hint">살 때·팔 때마다 · 체결 금액 × 수수료율(+ 팔 때 SEC 0.00206%) · 기본 0.25%(국내 증권사 미국 주식 온라인 기본 수준)</span></div>' +
       '<div class="f"><label for="s2-tax">양도세</label><select id="s2-tax"><option value="fifo"' + (S.tax === 'fifo' ? ' selected' : '') + '>포함 — 선입선출</option><option value="avg"' + (S.tax === 'avg' ? ' selected' : '') + '>포함 — 이동평균</option><option value="none"' + (S.tax === 'none' ? ' selected' : '') + '>미포함</option></select>' +
-        '<span class="hint">해외주식: 1~12월(결제일 기준)에 판 이익을 원화로 더해 250만 원을 빼고 22% · 다음 해 5월 31일 이후 첫 거래일에 이 계좌 현금으로 냄(모자라면 그날 종가에 보유를 팔아서)</span></div>' +
+        '<span class="hint">해외주식: 1~12월(결제일 기준)에 판 이익을 원화로 더해 250만 원을 빼고 22% · 다음 해 5월 1일(휴장이면 다음 거래일)에 이 계좌 현금으로 냄(모자라면 그날 종가에 보유를 팔아서)</span></div>' +
       '<div class="f"><label for="s2-itax">현금 이자 세금</label><select id="s2-itax"><option value="on"' + (S.itax === 'on' ? ' selected' : '') + '>이자소득세 15.4% 뗌</option><option value="off"' + (S.itax === 'off' ? ' selected' : '') + '>미포함</option></select></div>');
-    h += '<div class="s2-row" style="margin-top:12px"><button type="button" class="s2-btn pri" id="s2-run">계산</button><button type="button" class="s2-btn" id="s2-def" title="상장 뒤 실제 일봉 · 라이브러리 SMA 200 조건 · 수수료 0.25% · 양도세 선입선출 · 이자세 15.4%">기본값 (실전)</button>' +
-      '<button type="button" class="s2-btn" id="s2-pre" title="기본값 (실전)과 같은 조건 · 자료만 상장 전 재현 가격 + 실제 일봉">상장 전 포함</button><span class="s2-msg" id="s2-msg"></span></div></div>' +
+    h += '<div class="s2-row" style="margin-top:12px"><button type="button" class="s2-btn pri" id="s2-run">계산</button><button type="button" class="s2-btn" id="s2-def" title="상장 뒤 실제 일봉 · 라이브러리 SMA 200 조건(팔았을 때 SPY · 이자 0%) · 수수료 0.25% · 양도세 선입선출 · 이자세 15.4%">기본값 (실전)</button>' +
+      '<span class="s2-msg" id="s2-msg"></span></div></div>' +
       '<div id="s2-out"></div>';
     root.innerHTML = h;
     BTUI.bindSecs(root, SK);
@@ -19304,7 +19312,7 @@ window.BTUI = (function () {
       '<p class="s2-small">가정: ' + (S.lag ? '신호는 전날 종가로 판단해 다음 거래일 종가에 사고팖(하루 늦게)' : '신호는 그날 종가로 판단해 그날 종가에 사고팖(시뮬레이터와 같음 — 실제로는 마감 직전 시세로 판단해 장 마감 주문을 내는 것에 해당)') +
       ' · 처음 시작일은 시뮬레이터처럼 평균 위면(과열이 아니면) 바로 한 번에 삼(완충·확인 횟수·재진입 RSI·나눠 사기는 다음 날부터) · 현금 이자는 달이 바뀐 첫 거래일에 · ' +
       (S.mode !== 'sim' ? '분배금은 분배락일(지급일 아님) 아침 보유분에 미국 세금 15%를 떼고 현금으로(다음 거래일부터 1주 단위로 다시 삼) · 1주 단위라 1주 값도 안 되는 돈은 현금으로 남음 · 가격은 주식 분할을 반영한 값이라 초기(예: 2010년 TQQQ 약 $0.2) 1주는 실제 1주보다 작음 — 큰 원금에선 차이 없음 · 환전 수수료 없음 · ' : '시뮬레이터 자료는 분배금을 넣은 수정 종가(분배 세금 없음) · ') +
-      (tx ? '양도세는 해마다 결제일 기준 실현 손익(원화) − 250만 원 × 22%, 이듬해 5월 31일 이후 첫 거래일에 납부 · ' : '') +
+      (tx ? '양도세는 해마다 결제일 기준 실현 손익(원화) − 250만 원 × 22%, 이듬해 5월 1일(휴장이면 다음 거래일)에 납부 · ' : '') +
       UL + ' 그냥 보유 = 시작일 종가에 원금 전부' + (S.mode !== 'sim' ? '(분배금은 15% 뗀 뒤 분배락일 종가로 다시 삼)' : '') + ' · 그냥 보유 세후 = 사고팔 때 수수료와 끝 날 한 번 팔고 낸 양도세를 뺀 값 · 과거 결과는 미래를 보장하지 않아요.</p></div>';
     $('s2-out').innerHTML = hd;
     draw(); table();
@@ -19399,7 +19407,7 @@ window.BTUI = (function () {
           return '<tr><td>' + y + '</td><td>' + usd(o.e1) + '</td><td class="' + cls(r) + '">' + pct(r) + '</td><td class="' + cls(hh) + '">' + pct(hh) + '</td><td class="' + cls(r - hh) + '">' + (r - hh >= 0 ? '+' : '−') + Math.abs((r - hh) * 100).toFixed(2) + '%p</td>' +
             '<td>' + o.nb + '일 · ' + o.ns + '번</td><td>' + usd(o.fee) + '</td>' + (S.mode !== 'sim' ? '<td>' + usd(o.div) + '</td>' : '') + '<td>' + usd(o.it) + '</td>' +
             (tx ? '<td>' + (!t ? '—' : !(t.tax > 0) ? '0원' : krw(t.tax) + ' <span class="s2-small">' + (t.paid && t.paid !== '-' ? t.paid + ' 납부' + (t.ext ? ' · ' + usd(t.ext) + ' 밖에서' : '') : '미납') + '</span>') + '</td>' : '') + '</tr>'; }).join('') +
-        '</tbody></table></div><p class="s2-small">그해 수익률 = 그해 말 평가금 ÷ 전해 말 평가금 − 1 (첫해는 원금 대비) · 매수·매도 = 산 날 수 · 전량 매도 횟수' + (tx ? ' · 양도세 = 그해(결제일 기준) 실현 손익 원화 환산 − 250만 원 × 22%, 이듬해 5월 말 납부(납부한 날 환율로 달러에서 뺌)' : '') + '</p>';
+        '</tbody></table></div><p class="s2-small">그해 수익률 = 그해 말 평가금 ÷ 전해 말 평가금 − 1 (첫해는 원금 대비) · 매수·매도 = 산 날 수 · 전량 매도 횟수' + (tx ? ' · 양도세 = 그해(결제일 기준) 실현 손익 원화 환산 − 250만 원 × 22%, 이듬해 5월 1일 납부(납부한 날 환율로 달러에서 뺌)' : '') + '</p>';
       return;
     }
     if (tab === 'per') {
@@ -19565,7 +19573,6 @@ window.BTUI = (function () {
   function bind() {
     $('s2-run').onclick = function () { if (S.per === 'rnd-done') S.per = 'custom'; run(); };
     $('s2-def').onclick = function () { apply(base('real')); };
-    $('s2-pre').onclick = function () { apply(base('pre')); };
     $('s2-mode').onchange = function () { readUI(); var s = S; Array.prototype.forEach.call(root.querySelectorAll('select[data-k]'), function (e) { e.innerHTML = optsHtml(e.getAttribute('data-k'), s.p[e.getAttribute('data-k')]); }); modeHint(); sums(); if (s.per !== 'all' && !/^\d+$/.test(s.per)) s.per = 'all'; setPer(s.per); run(); };
     $('s2-set').addEventListener('change', function (e) { if (e.target.closest('.s2-sec')) sums(); });
     $('s2-set').addEventListener('input', function (e) { if (e.target.id === 's2-fee') sums(); });
@@ -19676,7 +19683,7 @@ window.BTUI = (function () {
       '<div class="f"><label for="tb-rj">증권사 주문 거부</label>' + sel('tb-rj', RJ_M, S.rj) + '<span class="hint">매수 지정가가 주문 넣는 때 가격(그날 시가 · 프리장이면 전날 종가)의 120%(1센트 버림)를 넘으면 증권사가 받지 않는다고 봄 · 한도로 낮춰 넣기 = 수량 그대로 한도 가격에 · 그날 건너뛰기 = 그날 매수 없음</span></div>');
     h += BTUI.sec(SK, 'cost', '거래 비용 · 세금', sumOf('cost', S),
       '<div class="f"><label for="tb-fee">매매 수수료 (%)</label><input id="tb-fee" type="number" step="0.01" min="0" max="5" value="' + S.fee + '"><span class="hint">살 때·팔 때마다 거래 금액 × 수수료율 + 팔 때 SEC 0.00206% · 기본 0.25%</span></div>' +
-      '<div class="f"><label for="tb-tax">양도세</label>' + sel('tb-tax', [['fifo', '포함 — 선입선출'], ['avg', '포함 — 이동평균'], ['none', '미포함']], S.tax) + '<span class="hint">해외주식: 1~12월(결제일 기준) 실현 손익 원화 − 250만 원 × 22% · 이듬해 5월 31일 이후 첫 거래일에 계좌 현금으로(모자라면 보유를 팔아서)</span></div>' +
+      '<div class="f"><label for="tb-tax">양도세</label>' + sel('tb-tax', [['fifo', '포함 — 선입선출'], ['avg', '포함 — 이동평균'], ['none', '미포함']], S.tax) + '<span class="hint">해외주식: 1~12월(결제일 기준) 실현 손익 원화 − 250만 원 × 22% · 이듬해 5월 1일(휴장이면 다음 거래일)에 계좌 현금으로(모자라면 보유를 팔아서)</span></div>' +
       '<div class="f s2-wf"><label for="tb-hv">연말 절세</label>' + sel('tb-hv', [['off', '안 함'], ['on', '함 — 그해 이익이 250만 원을 넘고 손해 중인 주식이 있으면 연말에 팔고 같은 값에 다시 사서 손실 확정']], S.hv) + '</div>' +
       '<div class="f"><label for="tb-dv">분배금</label>' + sel('tb-dv', [['on', '받음 — 분배락일 보유분 × (1 − 15%) 현금'], ['off', '끔']], S.dv) + '</div>');
     h += '<div class="s2-row" style="margin-top:12px"><button type="button" class="s2-btn pri" id="tb-run">계산</button><button type="button" class="s2-btn" id="tb-def" title="SOXL 상장 뒤 실제 일봉 · 복리 · 다음 날 · 기존 계산 · 수수료 0.25% · 양도세 선입선출 · 분배금 받음">기본값 (실전)</button>' +
@@ -19791,7 +19798,7 @@ window.BTUI = (function () {
       '<button type="button" class="s2-btn" id="tb-csv">CSV 내보내기</button></div><div id="tb-tb"></div>' +
       '<p class="s2-small">가정: LOC 는 종가 체결 · 지정가 매도는 ' + (S.fl === 'open' ? '정규장 시작 전에 넣었다고 봄(갭 상승이면 그날 시가, 아니면 고가가 닿을 때 지정가)' : S.fl === 'pre' ? '프리장 시작에 넣었다고 봄(전날 종가가 이미 넘으면 전날 종가, 아니면 고가가 닿을 때 지정가)' : '그날 고가가 닿으면 지정가') +
       (S.rj !== 'none' ? ' · 증권사 주문 거부 ' + RJ_M.filter(function (m) { return m[0] === S.rj; })[0][1] : '') +
-      ' · 수수료 ' + S.fee + '% + 매도 SEC · ' + (S.dv === 'on' ? '분배금 원천징수 15% 뒤 현금' : '분배금 끔') + (tx ? ' · 양도세는 이듬해 5월 말 계좌에서' + (S.hv === 'on' ? ' · 연말 절세' : '') : '') +
+      ' · 수수료 ' + S.fee + '% + 매도 SEC · ' + (S.dv === 'on' ? '분배금 원천징수 15% 뒤 현금' : '분배금 끔') + (tx ? ' · 양도세는 이듬해 5월 1일 계좌에서' + (S.hv === 'on' ? ' · 연말 절세' : '') : '') +
       ' · SOXL 그냥 보유는 시작 전날 종가에 원금 전부(분배금·세금 빼고) · 그냥 보유 세후 = 사고팔 때 수수료·SEC 와 끝 날 한 번 팔고 낸 양도세(22% · 250만 원 공제)를 뺀 값 · 기간 총 수익률 = 최종 평가금 ÷ 원금 − 1. 과거 결과는 미래를 보장하지 않아요.</p></div>';
     $('tb-out').innerHTML = hd;
     draw(); table();
@@ -19861,7 +19868,7 @@ window.BTUI = (function () {
           return '<tr><td>' + y + (D.L > 0 && D.d[D.L] > y + '-12-31' ? ' <span class="s2-small">재현</span>' : '') + '</td><td>' + usd(o.e1) + '</td><td class="' + cls(r) + '">' + pct(r) + '</td><td class="' + cls(h) + '">' + pct(h) + '</td><td class="' + cls(r - h) + '">' + (r - h >= 0 ? '+' : '−') + Math.abs((r - h) * 100).toFixed(2) + '%p</td>' +
             '<td class="' + cls(o.rz) + '">' + usd(o.rz) + '</td><td>' + usd(o.fee) + '</td><td>' + usd(o.dv) + '</td>' +
             (tx ? '<td>' + (!t ? '—' : !(t.tax > 0) ? '0원' : krw(t.tax) + ' <span class="s2-small">' + (t.paid && t.paid !== '-' ? t.paid + ' 납부' + (t.ext ? ' · ' + usd(t.ext) + ' 밖에서' : '') : '미납') + '</span>') + '</td>' : '') + '</tr>'; }).join('') +
-        '</tbody></table></div><p class="s2-small">그해 수익률 = 그해 말 평가금 ÷ 전해 말 평가금 − 1 (첫해는 원금 대비)' + (tx ? ' · 양도세 = 그해(결제일 기준) 실현 손익 원화 환산 − 250만 원 공제 × 22%, 이듬해 5월 말 납부' : '') + ' · \'재현\' = 상장 전 재현 가격으로 계산한 해</p>';
+        '</tbody></table></div><p class="s2-small">그해 수익률 = 그해 말 평가금 ÷ 전해 말 평가금 − 1 (첫해는 원금 대비)' + (tx ? ' · 양도세 = 그해(결제일 기준) 실현 손익 원화 환산 − 250만 원 공제 × 22%, 이듬해 5월 1일 납부' : '') + ' · \'재현\' = 상장 전 재현 가격으로 계산한 해</p>';
       return;
     }
     if (tab === 'cycle') {
