@@ -906,6 +906,8 @@ def main():
     cands = sorted(k for k, v in uni.items() if v.get('n', 0) > 30 and not v.get('err') and k not in EXCLUDE and k not in KRX_AUX) + sorted(k for k in SYN if k not in SYN_NOCAND) + ['F:USDKRW', 'X:SPXTR'] \
         + sorted(z for z in ZSIM if D.series(z) is not None)     # 모의 커버드콜 (코스피 200·VKOSPI 가 있을 때)
     log('대상 %d · 후보 %d' % (len(targets), len(cands)))
+    if D.series(LEV_RATE) is None:                   # GitHub Actions 화면에 경고로 — 레버리지·인버스 식이 예전 단기국채 금리로 맞춰짐
+        log('::warning::연방기금 금리(FRED DFF) 자료가 없어 레버리지·인버스 미국 ETF 식을 단기국채 금리로 맞춤 (scripts/etf_bt_data.py FRED 받기 확인)')
     # 안전장치: 지난 식이 쓰던 옵션 전략 지수(C: Cboe · D: 한국거래소 — 화면이 r/<키>.json 으로 받는 것)의 절반 넘게 이번 자료에 없으면
     #   (받기 막힘 + 캐시 없음) 계산하지 않고 멈춤 — 식·r/*.json 이 지난 것 그대로 남아 화면은 계속 맞고, 다음 실행이 다시 받음
     #   (지수 몇 개만 없어진 경우는 그 지수 없이 다시 고름 · 출처마다 따로 셈 · --force 로 무시)
@@ -1454,7 +1456,8 @@ def fit_target(D, E, mats, tk, recipes, explain, log):
     else:
         w, d = fit_final(yt, cash, Xs, good)
         W = float(sum(float(wi) for (vk, _), wi in zip(sel, w) if len(vk) <= 3))     # 노출 합 (콜 매도 덧씌우기 열 빼고)
-        if method == 'fit' and tcur == 'USD' and sel and (W >= LEV_HI or W <= LEV_LO) and is_lev_etf(D, tk):
+        if method == 'fit' and tcur == 'USD' and sel and (W >= LEV_HI or W <= LEV_LO) and is_lev_etf(D, tk) and D.series(LEV_RATE) is not None:
+            #   (FRED 를 한 번도 못 받아 연방기금 금리가 없으면 예전처럼 단기국채 금리 — 식이 통째로 빠지지 않게)
             # 레버리지·인버스: 현금·이자 = 연방기금 금리 — 대상 통화 현금을 뺀 열('n'·'u')은 x − f = (x − c) − (f − c) 로 바꿔 같은 후보로 다시 맞춤
             a0 = R['a0']
             fr = E.cash_ret(tcur, cal_name, LEV_RATE)[a0:a0 + n]
