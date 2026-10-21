@@ -19167,7 +19167,7 @@ window.BTUI = (function () {
   }
   function modeHint() {
     var e = $('s2-mode-h'); if (!e) return;
-    e.textContent = S.mode === 'sim' ? '투자전략 시뮬레이터 자료(data/stratsim/prices.csv) · 소수 주 · 수수료는 매수 금액 안에서 — 수수료 0.02% · 세금 미포함이면 투자전략 시뮬레이터와 같은 숫자(검증용)'
+    e.textContent = S.mode === 'sim' ? '투자전략 시뮬레이터 자료(data/stratsim/prices.csv — 상장 전 구간도 \'상장 전 포함\'과 같은 재현 식) · 소수 주 · 수수료는 매수 금액 안에서 — 수수료 0.02% · 세금 미포함이면 투자전략 시뮬레이터와 같은 숫자(검증용)'
       : S.mode === 'pre' ? PRE_HINT
       : '실제 일봉(data/etfcagr.json — 주식 분할만 반영한 종가 · 분배금은 분배락일에 현금으로, 미국 세금 15% 뗌) · TQQQ 상장 2010-02 이후 · 1주 단위 · 수수료 = 체결 금액 × 수수료율';
   }

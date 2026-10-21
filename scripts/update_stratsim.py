@@ -3,15 +3,18 @@
 
 · 일봉: 야후 파이낸스 수정주가(분할·분배금 반영) QQQ·TQQQ·SPY·QLD·SSO·SPXL·SQQQ
   - 각 ETF 상장일부터는 야후 값으로 바꿔 씀(야후가 고친 지난 값도 따라감)
-  - 상장 전(지수·금리로 재현한 합성 구간)은 파일에 있는 값을 그대로 두되, 야후가 분배금으로 지난 값을
-    다시 조정하면 상장 첫날에서 끊기지 않게 합성 구간 전체를 같은 비율로 맞춤
+  - 상장 전 = data/stratsim/prelist.csv(상장 첫날 = 1 인 재현 수준 · scripts/stratsim_prelist.py 가 ETF 차트 비교·무한매수법/72루틴
+    백테스트와 같은 재현 식으로 매주 만듦) × 야후 상장 첫날 수정 종가 → 상장 첫날 하루 변화도 재현 식 그대로 이어짐
+    (야후가 분배금으로 지난 값을 다시 조정해도 상장 첫날 값에 맞춰 함께 따라감)
   - 장중에 돌면 오늘의 아직 끝나지 않은 일봉도 넣음(화면이 '아직 끝나지 않은 값'으로 표시) — 마감 뒤 다음 실행이 확정값으로 바꿈
 · NFCI: 미국 시카고 연은 금융 여건 지수(FRED, 주간) — 실패해도 가격 갱신은 그대로
-· 검사: 7종목이 모두 있는 날만 새로 붙임 · 값은 양수·유한 · 상장 첫날이 예상과 다르거나 행이 줄거나
-  하루 변동이 ±70% 를 넘으면(분할 미반영 등) 아무것도 쓰지 않고 멈춤
+· 검사: 7종목이 모두 있는 날만 새로 붙임 · 값은 양수·유한 · 상장 첫날이 예상(또는 prelist.csv 의 상장 첫날)과 다르거나
+  prelist.csv 에 상장 전 날이 빠졌거나 행이 줄거나 하루 변동이 ±70% 를 넘으면(분할 미반영 등) 아무것도 쓰지 않고 멈춤
+  · 쓰기 전에 상장 첫날 하루 변화 = 재현 식의 그날 변화인지 다시 확인
 · 바뀔 때만 씀 — 값 차이가 상대 5e-6 이하면 예전 줄 글자를 그대로 둠(야후 값의 소수 끝자리 흔들림으로 매번 수천 줄이 바뀌지 않게)
 · updated.txt = 마지막으로 자료가 바뀐 시각(UTC) — 화면 위쪽 '가격 자료 갱신' 시각
 사용: python3 scripts/update_stratsim.py   (종료 코드 0 = 정상(바뀐 것 없음 포함), 1 = 실패)
+      python3 scripts/update_stratsim.py --prelist-only   (야후를 받지 않고 prelist.csv 만 다시 반영 — 상장 첫날 값은 파일 그대로 · NFCI 도 건너뜀)
 """
 import csv, datetime, io, json, math, os, sys, time, urllib.parse, urllib.request
 from zoneinfo import ZoneInfo
@@ -19,6 +22,7 @@ from zoneinfo import ZoneInfo
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DIR = os.environ.get('STRATSIM_DIR') or os.path.join(ROOT, 'data', 'stratsim')   # 시험할 때만 다른 폴더
 PRICES, NFCI, STAMP = os.path.join(DIR, 'prices.csv'), os.path.join(DIR, 'nfci.csv'), os.path.join(DIR, 'updated.txt')
+PRELIST = os.path.join(DIR, 'prelist.csv')
 COLS = ['qqq', 'tqqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq']          # 파일 열 순서 (date 다음)
 IPO = {'qqq': '1999-03-10', 'tqqq': '2010-02-11', 'spy': '1993-01-29', 'qld': '2006-06-21', 'sso': '2006-06-21', 'spxl': '2008-11-05', 'sqqq': '2010-02-11'}
 NOISE = 5e-6
@@ -87,33 +91,67 @@ def read_prices():
     return rows
 
 
-def update_prices():
+def read_prelist():
+    """data/stratsim/prelist.csv → {열: (상장 첫날 'YYYY-MM-DD', {날짜: 수준(상장 첫날 = 1)})} — 이상하면 멈춤"""
+    if not os.path.exists(PRELIST):
+        raise SystemExit('prelist.csv 가 없음 — scripts/stratsim_prelist.py 먼저')
+    lv = {c: {} for c in COLS}
+    with open(PRELIST, encoding='utf-8') as f:
+        rd = csv.reader(f)
+        if next(rd) != ['date'] + COLS:
+            raise SystemExit('prelist.csv 머리줄이 예상과 다름')
+        for r in rd:
+            if len(r) != 1 + len(COLS):
+                raise SystemExit(f'prelist.csv 칸 수 이상: {r}')
+            d = f'{r[0][:4]}-{r[0][4:6]}-{r[0][6:]}'
+            for i, c in enumerate(COLS):
+                if r[i + 1] != '':
+                    v = float(r[i + 1])
+                    if not (math.isfinite(v) and v > 0):
+                        raise SystemExit(f'prelist.csv {d} {c}: 값 이상 {r[i + 1]}')
+                    lv[c][d] = v
+    out = {}
+    for c in COLS:
+        if not lv[c]:
+            raise SystemExit(f'prelist.csv: {c} 값이 없음')
+        first = max(lv[c])
+        if lv[c][first] != 1.0 or abs((datetime.date.fromisoformat(first) - datetime.date.fromisoformat(IPO[c])).days) > 5:
+            raise SystemExit(f'prelist.csv: {c} 상장 첫날 {first} 이상(값 {lv[c][first]})')
+        out[c] = (first, lv[c])
+    return out
+
+
+def update_prices(fetch=True):
     old = read_prices()
     dates_old = sorted(old)
     new_vals = {d: [float(x) for x in old[d]] for d in dates_old}
+    pre = read_prelist()
     real = {}
     for i, c in enumerate(COLS):
-        real[c] = yahoo_daily(c.upper())
+        p_first, p = pre[c]
+        if fetch:
+            real[c] = yahoo_daily(c.upper())
+        else:                       # --prelist-only: 상장 뒤 값은 지금 파일 그대로
+            real[c] = {d: float(old[d][i]) for d in dates_old if d >= p_first}
         first = min(real[c])
         if abs((datetime.date.fromisoformat(first) - datetime.date.fromisoformat(IPO[c])).days) > 5:
             raise SystemExit(f'{c}: 야후 첫 일봉 {first} 가 상장일 {IPO[c]} 과 다름 — 자료가 잘렸을 수 있어 멈춤')
-        # 합성 구간을 상장 첫날에서 이어지게 (야후가 분배금으로 지난 값을 다시 조정한 만큼)
-        k = 1.0
-        if first in old and real[c][first] > 0:
-            k = real[c][first] / float(old[first][i])
-            if abs(k - 1) <= NOISE:
-                k = 1.0
+        if first != p_first:
+            raise SystemExit(f'{c}: 야후 첫 일봉 {first} 와 prelist.csv 상장 첫날 {p_first} 이 다름 — 멈춤')
+        # 상장 전 = 재현 수준 × 상장 첫날 수정 종가 (상장 첫날 하루 변화 = 재현 식 · 야후가 지난 값을 다시 조정해도 함께 따라감)
+        base = real[c][first]
         for d in dates_old:
             if d < first:
-                new_vals[d][i] = float(old[d][i]) * k
+                v = p.get(d)
+                if v is None:
+                    raise SystemExit(f'{c}: prelist.csv 에 {d} 가 없음 — 멈춤')
+                new_vals[d][i] = base * v
             elif d in real[c]:
                 new_vals[d][i] = real[c][d]
-        if k != 1.0:
-            print(f'  {c}: 상장 전 합성 구간을 {k:.8f} 배로 맞춤 (상장 첫날 {first})')
     # 새 날: 7종목이 모두 있는 날만
     last = dates_old[-1]
     added = []
-    for d in sorted(set.intersection(*[set(real[c]) for c in COLS])):
+    for d in (sorted(set.intersection(*[set(real[c]) for c in COLS])) if fetch else []):
         if d > last:
             new_vals[d] = [real[c][d] for c in COLS]
             added.append(d)
@@ -147,6 +185,18 @@ def update_prices():
             cells.append(fmt(v))
         out.write(d.replace('-', '') + ',' + ','.join(cells) + '\n')
     text = out.getvalue()
+    # 상장 첫날 하루 변화 = 재현 식의 그날 변화 (글자로 쓴 값으로 다시 확인 — 예전 글자를 둔 칸의 작은 차이 5e-6 까지만 허용)
+    back = {ln[:8]: ln.split(',')[1:] for ln in text.splitlines()[1:]}
+    for i, c in enumerate(COLS):
+        p_first, p = pre[c]
+        j = dates.index(p_first)
+        if j < 1:
+            continue
+        prev = dates[j - 1]
+        r_file = float(back[p_first.replace('-', '')][i]) / float(back[prev.replace('-', '')][i]) - 1
+        r_pre = 1.0 / p[prev] - 1
+        if abs(r_file - r_pre) > 2e-5 * (1 + abs(r_pre)):
+            raise SystemExit(f'{c}: 상장 첫날 {p_first} 하루 변화 {r_file:+.6%} 가 재현 식 {r_pre:+.6%} 와 다름 — 멈춤')
     cur = open(PRICES, encoding='utf-8').read()
     if text == cur:
         print(f'prices.csv: 바뀐 것 없음 ({len(dates)}일, 마지막 {dates[-1]})')
@@ -186,11 +236,13 @@ def update_nfci():
 
 
 def main():
-    ch = update_prices()
-    try:
-        ch = update_nfci() or ch
-    except Exception as e:
-        print(f'nfci.csv: FRED 실패 — 그대로 둠 ({e})')
+    only = '--prelist-only' in sys.argv[1:]
+    ch = update_prices(fetch=not only)
+    if not only:
+        try:
+            ch = update_nfci() or ch
+        except Exception as e:
+            print(f'nfci.csv: FRED 실패 — 그대로 둠 ({e})')
     if ch:
         with open(STAMP, 'w', encoding='utf-8', newline='\n') as f:
             f.write(datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ') + '\n')

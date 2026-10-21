@@ -7,6 +7,9 @@ name: ETF 차트 비교 상장 전 백테스트 갱신
 #      · 모의 커버드콜(Z_* — 코스피 200 에서 매일 블랙-숄즈로 다시 계산한 콜 값을 뺀 지수 · 변동성 VKOSPI · 2003년부터 · etf_bt_fit.py zsim_levels)
 #  · 1) scripts/etf_bt_data.py: 국내·미국 ETF·지수·환율·금리·상위 보유 종목·옵션 전략 지수(Cboe · 한국거래소 · 모의 커버드콜 재료 코스피 200·VKOSPI) 일봉을 이어 받음(캐시 .btcache 는 actions/cache 로 다음 실행에 넘김)
 #    2) scripts/etf_bt_fit.py : 상장 후 실제 값과 교차 검증해 오차가 가장 작은 식을 다시 고름
+#    3) scripts/stratsim_prelist.py: 투자전략 시뮬레이터 상장 전 구간(data/stratsim/prelist.csv)을 같은 재현 식으로 다시 계산
+#       — 지금 파일과 0.5% 넘게 다를 때만 써서, 그때만 시뮬레이터 가격(prices.csv 상장 전 줄)·과최적화 탐색기 표(fit-*.json)를 함께 다시 만들어 한 커밋으로
+#       (update-stratsim.yml 의 update_stratsim.py 도 매시간 prelist.csv 로 상장 전 줄을 씀 · 이 단계가 실패해도 위 식 갱신은 그대로 커밋)
 #  · 매주 토요일 KST 08:20 (미국 금요일 마감 뒤) · 수동 실행에서 full=true 면 일봉을 모두 처음부터
 on:
   schedule:
@@ -19,7 +22,7 @@ on:
         default: false
   push:
     branches: [main]
-    paths: ['scripts/etf_bt_data.py', 'scripts/etf_bt_fit.py', '.github/workflows/update-etf-bt.yml']
+    paths: ['scripts/etf_bt_data.py', 'scripts/etf_bt_fit.py', 'scripts/stratsim_prelist.py', 'scripts/stratsim_ndx_pre1971.csv', '.github/workflows/update-etf-bt.yml']
 
 permissions:
   contents: write
@@ -57,6 +60,22 @@ jobs:
           key: etfbt-${{ github.run_id }}
       - name: 재현 식 고르기 (교차 검증)
         run: python3 scripts/etf_bt_fit.py --cache .btcache
+      - name: 투자전략 시뮬레이터 상장 전 구간 (같은 재현 식)
+        id: pre
+        continue-on-error: true
+        run: |
+          python3 scripts/stratsim_prelist.py --cache .btcache
+          if [ -n "$(git status --porcelain -- data/stratsim/prelist.csv)" ]; then echo "changed=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/setup-node@v4
+        if: steps.pre.outputs.changed == 'true'
+        with:
+          node-version: '20'
+      - name: 시뮬레이터 가격·과최적화 탐색기 표에 반영 (상장 전 구간이 바뀐 경우만 · 탐색기 전체 다시 계산 약 20~40분)
+        if: steps.pre.outputs.changed == 'true'
+        continue-on-error: true
+        run: |
+          python3 scripts/update_stratsim.py --prelist-only
+          node scripts/stratsim_fit.cjs
       - name: 내용이 바뀐 경우에만 커밋 (계산 시각만 바뀐 파일은 커밋하지 않음)
         run: |
           git config user.name  'github-actions[bot]'
@@ -65,6 +84,9 @@ jobs:
           for f in data/etfbt/*.json data/etfbt/r/*.json; do
             if ! git show HEAD:$f > /tmp/old.json 2>/dev/null; then changed="$changed $f"; continue; fi
             if ! python3 -c "import json,sys;a=json.load(open('/tmp/old.json'));b=json.load(open('$f'));a.pop('updated',None);b.pop('updated',None);sys.exit(0 if a==b else 1)"; then changed="$changed $f"; fi
+          done
+          for f in data/stratsim/prelist.csv data/stratsim/prices.csv data/stratsim/updated.txt data/stratsim/fit-9sig.json data/stratsim/fit-sma.json; do   # 위 두 단계가 바꾼 경우만
+            if [ -n "$(git status --porcelain -- $f)" ]; then changed="$changed $f"; fi
           done
           deleted=$(git ls-files --deleted -- data/etfbt)   # 이제 쓰지 않는 옵션 전략 지수 파일 (etf_bt_fit.py write_out 이 지움)
           if [ -z "$changed" ] && [ -z "$deleted" ]; then echo "백테스트 식 변경 없음"; exit 0; fi

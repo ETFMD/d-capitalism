@@ -4,7 +4,7 @@
    · 계산: 투자전략 시뮬레이터 화면 코드(src/stratsim/*.js)를 그대로 불러와 화면과 똑같이 계산
      (시작 $10,000 + 매달 $500 · 9sig 현금 이자 4% · SMA 현금 이자 0% · 거래 비용 0.02% · 맞춘 구간 끝 = 2025년 12월 31일)
    · 맞춘 구간 지표(연평균·끝 금액·낙폭·샤프·소르티노·칼마·쏠림·보유 대비·작동 규칙·강건성·1990~2010)는
-     계산 코드나 후보가 바뀔 때만 다시 계산(오래 걸림 — SMA 약 20분), 2026년 이후 구간·1990~최신 지표는 매일
+     계산 코드나 후보, 상장 전 구간(prelist.csv)이 바뀔 때만 다시 계산(오래 걸림 — SMA 약 20분), 2026년 이후 구간·1990~최신 지표는 매일
    사용: node scripts/stratsim_fit.cjs [--full] [--kind 9sig|sma] [--limit 행수(시험용)]
    결과가 바뀔 때만 파일을 씀 (계산 시각만 바뀐 경우 제외) */
 'use strict';
@@ -21,7 +21,8 @@ const ONLY = args.includes('--kind') ? args[args.indexOf('--kind') + 1] : null;
 const LIMIT = args.includes('--limit') ? +args[args.indexOf('--limit') + 1] : 0;
 
 // ── 화면 계산 코드 불러오기 (화면을 그리는 함수는 빈 함수로) ──
-function loadEngine() {
+//  pricesText: 가격 자료 글(없으면 STRATSIM_PRICES 환경 변수의 파일 → data/stratsim/prices.csv) — 검사가 고정 자료·실사이트 자료로 따로 돌릴 때
+function loadEngine(pricesText) {
   const stubs = [
     'const ssPeriodUI = { update() {} };', 'const ssSideUI = { update() {} };',
     'function ssChartUpdate() {}', 'function ssAfterRender() {}', 'function ssTxEffective() { return null; }', 'const SB = { res: {}, yday: {} };',
@@ -35,7 +36,7 @@ function loadEngine() {
   vm.createContext(ctx);
   vm.runInContext(src + '\n;globalThis.__M = {' + names.join(',') + '};', ctx, { filename: 'stratsim-engine.js' });
   const M = ctx.__M;
-  const prices = fs.readFileSync(path.join(ROOT, 'data', 'stratsim', 'prices.csv'), 'utf8');
+  const prices = pricesText != null ? pricesText : fs.readFileSync(process.env.STRATSIM_PRICES || path.join(ROOT, 'data', 'stratsim', 'prices.csv'), 'utf8');
   const nfci = fs.readFileSync(path.join(ROOT, 'data', 'stratsim', 'nfci.csv'), 'utf8');
   M.ssInitData(M.ssParsePrices(prices), M.ssParseNfci(nfci));
   return M;
@@ -43,7 +44,11 @@ function loadEngine() {
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
 // 맞춘 구간(고정) 지표의 정의가 바뀌면 이 숫자를 올림 → 다음 실행이 전체를 다시 계산
 const STATIC_VER = 3;   // 2: 연평균·낙폭을 소수 넷째 자리까지 (화면에서 한 번만 반올림되게) · 3: 연평균을 엔진이 실제로 넣은 돈의 날짜(달이 바뀐 첫 거래일)와 끝 값이 나온 날로 · 50년 넘는 기간 IRR · 리밸런스 시점 옮긴 9sig 의 달 중간 마지막 행 적립
-const engineHash = sha(HASH_FILES.map((f) => fs.readFileSync(path.join(SRC, f), 'utf8')).join('\n') + '|static-v' + STATIC_VER);
+// 상장 전 구간(data/stratsim/prelist.csv — 재현 식이 바뀌는 매주 scripts/stratsim_prelist.py 가 다시 만듦)이 바뀌어도 맞춘 구간 지표가 바뀜 → 해시에 넣음
+//  (워크플로는 update_stratsim.py 가 그 값을 prices.csv 에 반영한 뒤에만 이 스크립트를 돌림 — 실패하면 다음 단계가 돌지 않음)
+const PRELIST = path.join(ROOT, 'data', 'stratsim', 'prelist.csv');
+const preHash = fs.existsSync(PRELIST) ? sha(fs.readFileSync(PRELIST, 'utf8')) : 'none';
+const engineHash = sha(HASH_FILES.map((f) => fs.readFileSync(path.join(SRC, f), 'utf8')).join('\n') + '|static-v' + STATIC_VER + '|pre-' + preHash);
 
 const M = loadEngine();
 const DS = M.DS, Q = DS.q, S = M.S;
@@ -259,4 +264,4 @@ for (const kind of ['9sig', 'sma']) {
 console.log('끝 —', ((Date.now() - t0) / 1000).toFixed(0), '초 · 저장', wrote);
 }
 if (require.main === module) main();
-module.exports = { M, run, finalOnly, ctxFor, dailyEquity, monthlyReturns, riskStats, staticMetrics, dynamicMetrics, KIND, X_FIT, X_LAST };
+module.exports = { M, loadEngine, run, finalOnly, ctxFor, dailyEquity, monthlyReturns, riskStats, staticMetrics, dynamicMetrics, KIND, X_FIT, X_LAST };

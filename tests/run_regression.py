@@ -31,7 +31,7 @@
   python tests/run_regression.py --base https://d-capitalism.com/ --etf-audit   # ETF 차트 비교 실제 가격 점검만
 실패가 하나라도 있으면 종료 코드 1
 """
-import re, argparse, html, functools, http.server, json, os, shutil, socketserver, subprocess, sys, threading, time, urllib.error, urllib.parse, urllib.request
+import re, argparse, html, functools, http.server, json, os, shutil, socketserver, subprocess, sys, tempfile, threading, time, urllib.error, urllib.parse, urllib.request
 
 from playwright.sync_api import sync_playwright
 
@@ -2867,13 +2867,21 @@ def share_all_check(br, base, local, fail):
     ctx.close()
 
 
+# 같은 가격 자료(화면이 받은 prices.csv 글)로 Node 시뮬레이터 엔진(scripts/stratsim_fit.cjs)이 낸 '9sig·SMA 기본'(2010 1분기~2025 4분기) 숫자
+SS_NODE_GOLD_JS = r"""const F = require(process.argv[1]), M = F.M, S = M.S;
+S.saved = [['9sig', {}], ['sma', {}]].map(([t, p], k) => ({ id: 'g' + k, type: t, name: t + k, params: M.ssCleanParams(t, Object.assign(M.ssDefaults(t), p)), color: '#ffffff', hidden: false }));
+S.e = 228; S.x = 291; S.iPos = 333; S.mPos = M.ssMonthlyToPos(500); S.raise = '0'; S.ed = ''; S.xd = ''; S.editing = null; S.panel = null; S.infl = false; S.log = false; S.tx = null;
+M.ssRender(); const m = M.R.metrics;
+console.log(JSON.stringify({ n: M.R.labels.length, bh: [m.bh.cagr, m.bh.maxDD], cfg: [[m['cfg:g0'].cagr, m['cfg:g0'].maxDD], [m['cfg:g1'].cagr, m['cfg:g1'].maxDD]] }));"""
+
 SS_GOLD_JS = """() => { const m = SSM.R.metrics; return { ready: SSM.ready(), n: SSM.R.labels.length, l0: SSM.R.labels[0], l1: SSM.R.labels[SSM.R.labels.length - 1],
   bh: [m.bh.cagr, m.bh.maxDD], inv: [m.invested.cagr], cfg: SSM.S.saved.map(c => { const x = m['cfg:' + c.id] || {}; return [c.type, x.cagr, x.maxDD, !!x.pending, x.error || null]; }) }; }"""
 
 
 def stratsim_check(br, base, fail, ignorable):
     """[STRATSIM] 투자전략 시뮬레이터(/strategy-simulator/) · 9sig/SMA 과최적화 탐색기 · TQQQ 장중 흐름
-    · 고정 구간(2010 1분기~2025 4분기) 9sig·SMA 기본 숫자 = tests/stratsim_test.cjs 기준값(화면 코드가 Node 계산과 같은지)
+    · 고정 구간(2010 1분기~2025 4분기) 9sig·SMA 기본 숫자 = 화면이 받은 같은 가격 자료로 돌린 Node 시뮬레이터 엔진 값(화면 코드가 Node 계산과 같은지 —
+      상장 전 구간이 재현 식 갱신으로 조금 바뀌어도 그대로 맞음 · 엔진 자체의 고정 기준값은 tests/stratsim_test.cjs 가 고정 자료로 확인)
     · 전략 라이브러리 44개 · 써 보기(사용자 코드 전략은 격리 Worker 에서 계산 끝) · 분석 표 열림 · 분석 표 풍선 연평균 = 본 화면 연평균 · 로그 단추
     · 링크 복사 → 새 창 같은 숫자
     · 탐색기: 탭 6개 · 첫 탭 행 수 · '열기' 링크로 연 시뮬레이터(청산 2025 4분기)가 표의 연평균과 같음 · 장중 흐름 그려짐"""
@@ -2893,11 +2901,24 @@ def stratsim_check(br, base, fail, ignorable):
         st = {'v': 1, 'i': 333, 'm': 500, 'a': '0', 'r': 4, 'e': 228, 'x': 291, 'hd': [], 'sc': [{'t': '9sig', 'n': '9sig', 'p': {}, 'c': '#e879f9'}, {'t': 'sma', 'n': 'SMA', 'p': {}, 'c': '#f59e0b'}]}
         pg.goto(base + 'strategy-simulator/#ss=' + tok(st), wait_until='load'); pg.wait_for_timeout(3500)
         g = pg.evaluate(SS_GOLD_JS)
-        want = [[40.1075404758, 81.6150703134], [38.892610706, 59.6674], [44.9301, 46.2812]]
-        ok = g['ready'] and g['n'] == 65 and g['l0'] == '2009-12-31' and g['l1'] == '2025-12-31' and abs(g['bh'][0] - want[0][0]) < 1e-6 and abs(g['bh'][1] - want[0][1]) < 1e-6 \
-            and len(g['cfg']) == 2 and abs(g['cfg'][0][1] - want[1][0]) < 1e-6 and abs(g['cfg'][1][1] - want[2][0]) < 1e-3
-        if not ok:
-            fail('strategy-simulator', '고정 구간 숫자가 기준값과 다름: %s' % json.dumps(g, ensure_ascii=False)[:300])
+        want = None
+        try:
+            txt = pg.evaluate("() => fetch('data/stratsim/prices.csv', { cache: 'no-store' }).then(r => r.text())")
+            tf = os.path.join(tempfile.gettempdir(), 'ss_gold_prices_%d.csv' % os.getpid())
+            with open(tf, 'w', encoding='utf-8') as f:
+                f.write(txt)
+            pr = subprocess.run(['node', '-e', SS_NODE_GOLD_JS, os.path.join(ROOT, 'scripts', 'stratsim_fit.cjs')], capture_output=True, text=True, timeout=180,
+                                env=dict(os.environ, STRATSIM_PRICES=tf))
+            os.remove(tf)
+            want = json.loads(pr.stdout.strip().splitlines()[-1])
+        except Exception as e:
+            fail('strategy-simulator', 'Node 엔진 대조값 계산 실패: %s' % str(e)[:200])
+        if want:
+            ok = g['ready'] and g['n'] == 65 == want['n'] and g['l0'] == '2009-12-31' and g['l1'] == '2025-12-31' \
+                and abs(g['bh'][0] - want['bh'][0]) < 1e-6 and abs(g['bh'][1] - want['bh'][1]) < 1e-6 and abs(g['bh'][0] - 40.12) < 0.5 \
+                and len(g['cfg']) == 2 and abs(g['cfg'][0][1] - want['cfg'][0][0]) < 1e-6 and abs(g['cfg'][1][1] - want['cfg'][1][0]) < 1e-3
+            if not ok:
+                fail('strategy-simulator', '고정 구간 숫자가 Node 엔진과 다름: 화면 %s · Node %s' % (json.dumps(g, ensure_ascii=False)[:240], json.dumps(want)[:200]))
         # 2) 라이브러리 · 써 보기 (사용자 코드 전략)
         pg.evaluate("() => { for (const k of Object.keys(localStorage)) if (k.startsWith('dc_ss_')) localStorage.removeItem(k); }")
         pg.goto(base + 'strategy-simulator/', wait_until='load'); pg.wait_for_timeout(2500)
