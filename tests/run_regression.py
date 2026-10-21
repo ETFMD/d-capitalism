@@ -2987,7 +2987,9 @@ def stratsim_check(br, base, fail, ignorable):
                 fail(path, '탭 %d개 · 첫 탭 %d행 (기대 6 · %d)' % (t['tabs'], t['rows'], n0))
                 continue
             o = json.loads(base64.urlsafe_b64decode(t['href'].split('#ss=j')[1] + '=='))
-            o['x'] = 291
+            # 끝 = 2025-12-31 (맞춘 구간 끝) — 분기 번호는 링크의 q0(자료 첫 분기말)부터 셈 · q0 없으면 예전 1953-03-31 기준
+            qk = lambda d: int(d[:4]) * 4 + (int(d[5:7]) - 1) // 3
+            o['x'] = qk('2025-12-31') - qk(o.get('q0') or '1953-03-31')
             # 앞 단계(라이브러리 써 보기)가 이 브라우저에 저장한 전략이 목록 앞에 남지 않게 — 링크로 받은 전략만 보이도록
             pg.evaluate("() => { for (const k of Object.keys(localStorage)) if (k.startsWith('dc_ss_')) localStorage.removeItem(k); }")
             p3 = ctx.new_page()
