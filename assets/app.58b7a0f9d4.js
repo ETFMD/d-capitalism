@@ -13975,7 +13975,7 @@ function mhApp(P) {
   }
 
   /* ── 백테스트 그래프 크게 보기 (P.btZoom) — 기간 단추 · 끌어서 구간 확대 · 전체 · 보는 구간 수익률 · 연도별 수익률(줄을 누르면 그해로) ── */
-  var BTZ = { key: null, a: -1, b: -1, per: '0', log: null, ch: null, idx: null, drag: null, W: null, raf: 0, stT: 0 };   /* W: 지금 그린 구간(btzWinData) */
+  var BTZ = { key: null, a: -1, b: -1, per: '0', log: null, ch: null, idx: null, drag: null, W: null, raf: 0, stT: 0, yw: 0, anchor: null };   /* W: 지금 그린 구간(btzWinData) · yw: 세로축 너비(줄지 않게) · anchor: 확대 기준 날·마우스 자리 */
   /* 구간 = 기준 a ~ 끝 b (a = −1 → 첫날 전날의 원금 · 카드 숫자와 같은 기준) · 수익률·연평균 = b ÷ a · 낙폭은 그래프에 보이는 날만(카드와 같게) */
   function btzR() { var S = MH.sheet; return S && S.kind === 'btz' ? btSync(BT.cache[S.key]) || null : null; }
   function btzSer(r) { return BT.view === 'net' ? r.ch.net : r.ch.gross; }
@@ -14042,6 +14042,8 @@ function mhApp(P) {
     o.scales.y.type = W.log ? 'logarithmic' : 'linear';
     if (W.log) o.scales.y.ticks.callback = function (v) { var e = Math.pow(10, Math.floor(Math.log10(v))), m = v / e; return Math.abs(m - 1) < 1e-6 || Math.abs(m - 2) < 1e-6 || Math.abs(m - 5) < 1e-6 ? usd(v) : ''; };
     o.scales.x.ticks.maxTicksLimit = 8; o.scales.x.ticks.maxRotation = 0;
+    /* 세로축 너비는 한 번 넓어지면 줄지 않게 — 확대·이동 때 눈금 글자 길이가 바뀌어 그래프 칸이 옆으로 움직이면 마우스 아래 날이 바뀜(글자 크기 130% 에서 3주 어긋남 · 2026-10-21) */
+    BTZ.yw = 0; o.scales.y.afterFit = function (sc) { if (sc.width < BTZ.yw) sc.width = BTZ.yw; else BTZ.yw = sc.width; };
     /* 눈금·풍선·상장일 표시는 그때그때 BTZ.W(지금 구간)를 읽음 — 휠·두 손가락 확대 때 그래프를 새로 만들지 않고 값만 바꿔 다시 그림 */
     o.scales.x.ticks.callback = function (v) { var dd = this.getLabelForValue(v), w = BTZ.W; return dd ? (w && w.b - w.a > 500 ? dd.slice(0, 4) : dd.slice(2, 7).replace('-', '.')) : ''; };
     o.plugins.tooltip.callbacks.title = function (it) { var w = BTZ.W; return it.length && w ? w.d[w.idx[it[0].dataIndex]] : ''; };
@@ -14055,6 +14057,7 @@ function mhApp(P) {
     BTZ.ch = _charts[_charts.length - 1] || null;
     btzStat();
     btzInput(cv);
+    btzKeep(W);   /* 확대하다 로그·보통 눈금이 저절로 바뀌어 새로 그린 경우에도 기준 날을 마우스 아래로 */
   }
   /* 구간만 바뀌었을 때 — 그래프를 새로 만들지 않고 점만 바꿔 다시 그림 (로그·보통 눈금이 바뀌면 새로 그림) · 보는 구간 표는 손을 멈춘 뒤 */
   function btzApply(now) {   /* now: 단추·줄을 눌렀을 때 — 보는 구간 표도 바로 */
@@ -14067,19 +14070,38 @@ function mhApp(P) {
     ch.data.datasets[1].data = W.idx.map(function (j) { return W.bh[j]; });
     ch.data.datasets[2].data = W.idx.map(function () { return r.cap; }); ch.data.datasets[2].hidden = !W.capOn;
     try { ch.update('none'); } catch (x) { btzRedraw(); return; }
+    if (btzKeep(W)) return;
     clearTimeout(BTZ.stT); if (now) btzStat(); else BTZ.stT = setTimeout(btzStat, 120);
   }
+  /* 다시 그린 뒤에도 확대 기준 날이 마우스 아래에 있는지 — 그래프 칸이 움직였으면(세로축이 넓어짐 등) 그만큼 옆으로 옮겨 한 번 더 그림 */
+  function btzKeep(W) {
+    var an = BTZ.anchor, ch = BTZ.ch; BTZ.anchor = null;
+    if (!an || !ch || !ch.canvas || W.idx.indexOf(an.i) < 0) return false;
+    var L = W.idx.length - 1, pm = Math.max(0, Math.min(L, Math.round(btzFx(ch.canvas, an.x) * L))), sh = an.i - W.idx[pm];
+    var r = btzR(), n = r && r.ch ? r.ch.d.length : 0; if (!sh || !n) return false;
+    var na = Math.max(0, Math.min(n - 1 - (W.b - W.a), W.a + sh)); if (na === W.a) return false;
+    BTZ.a = na <= 0 && na + (W.b - W.a) >= n - 1 ? -1 : na; BTZ.b = na + (W.b - W.a); btzApply(); return true;
+  }
   function btzSched() { if (BTZ.raf) return; BTZ.raf = (window.requestAnimationFrame || function (f) { return setTimeout(f, 16); })(function () { BTZ.raf = 0; btzApply(); }); }
-  /* 확대·축소 — f > 1 이면 확대(구간 좁게) · fx = 기준 자리(그래프 안 가로 비율 0~1, 그 자리의 날은 그대로) · 최소 10거래일 · 처음~끝 = 전체(원금 기준) */
+  /* 확대·축소 — f > 1 이면 확대(구간 좁게) · fx = 마우스 자리(그래프 칸 안 가로 비율 0~1) · 최소 10거래일 · 처음~끝 = 전체(원금 기준)
+     기준 날 = 지금 화면에서 마우스 아래 눈금(그린 점 — 풍선이 가리키는 날) → 새 구간에서도 그 날이 눈금(1,200개 넘으면 솎는 간격까지 맞춤)이 되어 같은 자리에 옴
+     (예전: 연속 비율로 계산해 솎은 점 간격·마지막 점 때문에 마우스 아래 날이 며칠 바뀜 · 2026-10-21) */
   function btzSet(na, nb, n) { BTZ.a = na <= 0 && nb >= n - 1 ? -1 : Math.max(0, na); BTZ.b = Math.min(n - 1, nb); BTZ.per = BTZ.a === -1 ? '0' : null; btzSched(); }
-  function btzZoom(f, fx, a0, b0) {
+  function btzAt(fx) { var idx = BTZ.idx; if (!idx || !idx.length) return -1; return idx[Math.max(0, Math.min(idx.length - 1, Math.round(fx * (idx.length - 1))))]; }   /* 그린 그래프에서 fx 자리 눈금의 날 위치 */
+  function btzPlace(iD, nw, fx, n) {   /* 너비 nw 의 새 구간 [na, nb] — iD 가 눈금이 되고 그 눈금이 fx 자리에 가장 가깝게 (btzWinData 의 솎는 간격과 같은 규칙) */
+    var s1 = Math.max(1, Math.ceil((nw + 1) / 1200)), L = Math.ceil(nw / s1), j = Math.round(fx * L), na = j * s1 > nw ? iD - nw : iD - j * s1, nb = na + nw;
+    if (na < 0) { na = 0; nb = nw; } if (nb > n - 1) { nb = n - 1; na = nb - nw; }
+    return [na, nb];
+  }
+  function btzZoom(f, fx, clientX) {
     var r = btzR(); if (!r || !r.ch) return false;
-    var n = r.ch.d.length; a0 = a0 != null ? a0 : Math.max(0, BTZ.a); b0 = b0 != null ? b0 : BTZ.b < 0 ? n - 1 : BTZ.b;
+    var n = r.ch.d.length, a0 = Math.max(0, BTZ.a), b0 = BTZ.b < 0 ? n - 1 : BTZ.b;
     var w = b0 - a0, nw = Math.max(Math.min(10, n - 1), Math.min(n - 1, Math.round(w / f)));
     if (nw === w) return false;
-    var c = a0 + w * fx, na = Math.round(c - nw * fx), nb = na + nw;
-    if (na < 0) { na = 0; nb = nw; } if (nb > n - 1) { nb = n - 1; na = nb - nw; }
-    btzSet(na, nb, n); return true;
+    var iD = btzAt(fx); if (iD < 0) iD = Math.round(a0 + w * fx);
+    var ab = btzPlace(iD, nw, fx, n);
+    BTZ.anchor = clientX != null ? { i: iD, x: clientX } : null;
+    btzSet(ab[0], ab[1], n); return true;
   }
   function btzPan(frac) {   /* 옆으로 이동 — frac = 구간 너비의 몇 배 (+ 오른쪽 · − 왼쪽) */
     var r = btzR(); if (!r || !r.ch) return false;
@@ -14100,7 +14122,7 @@ function mhApp(P) {
       if (e.shiftKey && !dx) { dx = dy; dy = 0; }
       if (Math.abs(dx) > Math.abs(dy)) { if (btzPan(dx / 900)) e.preventDefault(); return; }
       if (!dy) return;
-      if (btzZoom(Math.exp(-dy * 0.0015), btzFx(cv, e.clientX)) || dy < 0) e.preventDefault();   /* 더 줄일 수 없을 때(전체)만 화면이 스크롤 */
+      if (btzZoom(Math.exp(-dy * 0.0015), btzFx(cv, e.clientX), e.clientX) || dy < 0) e.preventDefault();   /* 더 줄일 수 없을 때(전체)만 화면이 스크롤 */
     };
     cv.onpointerdown = function (e) {
       pts[e.pointerId] = e.clientX; try { cv.setPointerCapture(e.pointerId); } catch (x) {}
@@ -14108,7 +14130,8 @@ function mhApp(P) {
       if (k.length === 2) {   /* 두 손가락 — 끌어서 고르기는 취소하고 확대·축소로 */
         BTZ.drag = null; if (sel) sel.hidden = true;
         var r = btzR(), n = r && r.ch ? r.ch.d.length : 0, x1 = pts[k[0]], x2 = pts[k[1]], a0 = Math.max(0, BTZ.a), b0 = BTZ.b < 0 ? n - 1 : BTZ.b;
-        pinch = { d0: Math.max(12, Math.abs(x1 - x2)), a0: a0, b0: b0, m0: a0 + (b0 - a0) * btzFx(cv, (x1 + x2) / 2) };
+        var fm = btzFx(cv, (x1 + x2) / 2), iM = btzAt(fm);   /* 두 손가락 가운데 아래 눈금의 날을 기준으로 (휠과 같은 규칙) */
+        pinch = { d0: Math.max(12, Math.abs(x1 - x2)), a0: a0, b0: b0, m0: iM >= 0 ? iM : a0 + (b0 - a0) * fm };
         return;
       }
       if (k.length === 1) BTZ.drag = { x0: xOf(e), x1: xOf(e) };
@@ -14119,9 +14142,8 @@ function mhApp(P) {
       if (pinch && k.length >= 2) {
         var r = btzR(); if (!r || !r.ch) return;
         var n = r.ch.d.length, x1 = pts[k[0]], x2 = pts[k[1]], d1 = Math.max(12, Math.abs(x1 - x2)), w0 = pinch.b0 - pinch.a0;
-        var nw = Math.max(Math.min(10, n - 1), Math.min(n - 1, Math.round(w0 * pinch.d0 / d1))), fx = btzFx(cv, (x1 + x2) / 2), na = Math.round(pinch.m0 - nw * fx), nb = na + nw;
-        if (na < 0) { na = 0; nb = nw; } if (nb > n - 1) { nb = n - 1; na = nb - nw; }
-        if (na !== Math.max(0, BTZ.a) || nb !== BTZ.b) btzSet(na, nb, n);
+        var nw = Math.max(Math.min(10, n - 1), Math.min(n - 1, Math.round(w0 * pinch.d0 / d1))), fx = btzFx(cv, (x1 + x2) / 2), ab = btzPlace(Math.round(pinch.m0), nw, fx, n), na = ab[0], nb = ab[1];
+        if (na !== Math.max(0, BTZ.a) || nb !== BTZ.b) { BTZ.anchor = { i: Math.round(pinch.m0), x: (x1 + x2) / 2 }; btzSet(na, nb, n); }
         return;
       }
       var g = BTZ.drag; if (!g || !sel) return; g.x1 = xOf(e); var w = Math.abs(g.x1 - g.x0); if (w > 6) { sel.hidden = false; sel.style.left = Math.min(g.x0, g.x1) + 'px'; sel.style.width = w + 'px'; }
