@@ -23,7 +23,7 @@ on:
         default: false
   push:
     branches: [main]
-    paths: ['scripts/etf_bt_data.py', 'scripts/etf_bt_fit.py', 'scripts/stratsim_prelist.py', 'scripts/stratsim_ndx_pre1971.csv', '.github/workflows/update-etf-bt.yml']
+    paths: ['scripts/etf_bt_data.py', 'scripts/etf_bt_fit.py', 'scripts/stratsim_prelist.py', '.github/workflows/update-etf-bt.yml']
 
 permissions:
   contents: write

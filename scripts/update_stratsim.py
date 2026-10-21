@@ -5,7 +5,7 @@
   - 각 ETF 상장일부터는 야후 값으로 바꿔 씀(야후가 고친 지난 값도 따라감)
   - 상장 전 = data/stratsim/prelist.csv(상장 첫날 = 1 인 재현 수준 · scripts/stratsim_prelist.py 가 ETF 차트 비교·무한매수법/72루틴
     백테스트와 같은 재현 식으로 매주 만듦) × 야후 상장 첫날 수정 종가 → 상장 첫날 하루 변화도 재현 식 그대로 이어짐
-    (야후가 분배금으로 지난 값을 다시 조정해도 상장 첫날 값에 맞춰 함께 따라감)
+    (야후가 분배금으로 지난 값을 다시 조정해도 상장 첫날 값에 맞춰 함께 따라감) · prelist.csv 첫날(1971-02-05) 전 줄은 지움
   - 장중에 돌면 오늘의 아직 끝나지 않은 일봉도 넣음(화면이 '아직 끝나지 않은 값'으로 표시) — 마감 뒤 다음 실행이 확정값으로 바꿈
 · NFCI: 미국 시카고 연은 금융 여건 지수(FRED, 주간) — 실패해도 가격 갱신은 그대로
 · 검사: 7종목이 모두 있는 날만 새로 붙임 · 값은 양수·유한 · 야후 첫 일봉이 상장일과 5일 넘게 다르거나 행이 줄거나
@@ -136,6 +136,15 @@ def update_prices(fetch=True):
             pre = {}
     else:
         pre = read_prelist()        # --prelist-only: 문제가 있으면 멈춤
+    # prelist.csv 첫날 전 줄은 지움 — 시뮬레이터 시작 = 상장 전 구간 첫날(1971-02-05 · 그 전 나스닥 값은 검증할 수 없는 가상값이라 뺌)
+    p0 = min(min(p) for _, p in pre.values()) if pre else None
+    if p0 is not None:
+        cut = [d for d in dates_old if d < p0]
+        if cut:
+            for d in cut:
+                del new_vals[d]
+            dates_old = [d for d in dates_old if d >= p0]
+            print(f'  prelist.csv 첫날 {p0} 전 줄 {len(cut)}개({cut[0]} ~ {cut[-1]})를 지움')
     real, used = {}, {}
     for i, c in enumerate(COLS):
         if fetch:

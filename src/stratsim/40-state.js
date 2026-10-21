@@ -59,9 +59,21 @@ function ssPersistSaved() {
   try { localStorage.setItem(SS_LS.saved, JSON.stringify(S.saved.filter((c) => !c._tr).map((c) => { const o = Object.assign({}, c); delete o._tr; return o; }))); } catch (e) {}
 }
 
+// ── 진입·청산 분기 번호(e·x) ─────────────────────────────────────────
+// 번호는 '자료 첫 분기'부터 센 것 — 자료 시작이 바뀌어도(2026-10-21: 1953 → 1971-02-05, 그 전 나스닥 값은 검증할 수 없는 가상값이라 뺌)
+// 예전 링크·저장값이 같은 분기를 가리키게 첫 분기말 날짜 q0 를 함께 적음 · q0 가 없으면 예전 자료(첫 분기말 1953-03-31) 기준
+const SS_Q0_OLD = '1953-03-31';
+const ssQKey = (d) => (+d.slice(0, 4)) * 4 + Math.floor((+d.slice(5, 7) - 1) / 3);
+function ssQShift(i, q0) {
+  if (!DS.q || !DS.q.length) return i;
+  const k = ssQKey(typeof q0 === 'string' && /^\d{4}-\d\d-\d\d$/.test(q0) ? q0 : SS_Q0_OLD) + i - ssQKey(DS.q[0][0]);
+  return Math.max(0, Math.min(DS.q.length - 1, k));
+}
+const ssQ0 = () => (DS.q && DS.q.length ? DS.q[0][0] : SS_Q0_OLD);
+
 // ── 입력·보기 저장 ───────────────────────────────────────────────────
 function ssPersistMain() {
-  const o = { i: S.iPos, m: ssPosToMonthly(S.mPos), a: S.raise, r: ssPosToRate(+S.base.invested.r), e: S.e, x: S.x, ed: S.ed, xd: S.xd,
+  const o = { i: S.iPos, m: ssPosToMonthly(S.mPos), a: S.raise, r: ssPosToRate(+S.base.invested.r), e: S.e, x: S.x, q0: ssQ0(), ed: S.ed, xd: S.xd,
     l: S.log, f: S.infl, hd: Object.keys(S.hide).filter((k) => S.hide[k]) };
   try { localStorage.setItem(SS_LS.main, JSON.stringify(o)); } catch (e) {}
 }
@@ -72,8 +84,8 @@ function ssApplyMain(o, fromLink) {
   if (num(o.m) != null) S.mPos = ssMonthlyToPos(num(o.m));
   if (o.a != null && SS_RAISE_OPTS.some((x) => x === String(o.a))) S.raise = String(o.a);
   if (num(o.r) != null) S.base.invested.r = String(ssRateToPos(num(o.r)));
-  if (num(o.e) != null) S.e = Math.max(0, Math.round(num(o.e)));
-  if (num(o.x) != null) S.x = Math.max(0, Math.round(num(o.x)));
+  if (num(o.e) != null) S.e = ssQShift(Math.max(0, Math.round(num(o.e))), o.q0);
+  if (num(o.x) != null) S.x = ssQShift(Math.max(0, Math.round(num(o.x))), o.q0);
   S.ed = typeof o.ed === 'string' && /^\d{4}-\d\d-\d\d$/.test(o.ed) ? o.ed : (fromLink ? '' : S.ed);
   S.xd = typeof o.xd === 'string' && /^\d{4}-\d\d-\d\d$/.test(o.xd) ? o.xd : (fromLink ? '' : S.xd);
   if (o.l != null) S.log = !!o.l;
@@ -119,7 +131,7 @@ async function ssUnpack(tok) {
 
 // 지금 화면 상태 → 공유용 묶음 (원본 공유 링크와 같은 범위: 보이는 저장 전략·거래내역·분석 창·고정 구간 포함)
 function ssShareState() {
-  const o = { v: 1, i: S.iPos, m: ssPosToMonthly(S.mPos), a: S.raise, r: ssPosToRate(+S.base.invested.r), e: S.e, x: S.x };
+  const o = { v: 1, i: S.iPos, m: ssPosToMonthly(S.mPos), a: S.raise, r: ssPosToRate(+S.base.invested.r), e: S.e, x: S.x, q0: ssQ0() };
   if (S.ed) o.ed = S.ed;
   if (S.xd) o.xd = S.xd;
   if (S.base.bh.ul !== 'tqqq') o.bu = S.base.bh.ul;

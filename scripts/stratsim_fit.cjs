@@ -258,7 +258,7 @@ for (const kind of ['9sig', 'sma']) {
     if (t.goal === 'dd') { tab.cagrMin = t.cagrMin; tab.total = t.total; }
     tabs.push(tab);
   }
-  const out = { v: 1, kind, updated: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), engine: engineHash, seed: seedHash, dataTo: LAST_DAY, fitEnd: FIT_END, fwdFrom: DEC_DAY,
+  const out = { v: 1, kind, updated: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), engine: engineHash, seed: seedHash, q0: Q[0][0], dataTo: LAST_DAY, fitEnd: FIT_END, fwdFrom: DEC_DAY,
     keys, fixed, cols: COLS, tabs };
   // 검사: 행 수·숫자
   for (const t of tabs) for (const r of t.rows) {

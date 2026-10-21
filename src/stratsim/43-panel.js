@@ -114,7 +114,7 @@ function ssCtls9(owner) {
   const c = (k) => ssCtl('9sig', owner, k);
   const stock = 100 - (+p.cash || 0);
   return '<div class="ss-cg">'
-    + '<a class="ss-explore" target="_blank" rel="noopener" href="' + SS_EXPLORER['9sig'] + '">🔬 과최적화 탐색기 — 1953·1990·2010년부터 기간별로 가장 잘 맞았던 9sig 설정 ↗</a>'
+    + '<a class="ss-explore" target="_blank" rel="noopener" href="' + SS_EXPLORER['9sig'] + '">🔬 과최적화 탐색기 — 1971·1990·2010년부터 기간별로 가장 잘 맞았던 9sig 설정 ↗</a>'
     + '<p class="ss-line">시작 금액의 ' + c('cash') + ' 를 ' + c('park') + ssTipI('안전 몫(현금 %)은 기본적으로 현금으로 두고 아래 이자를 받습니다. QQQ·SPY 등을 고르면 그 몫을 그 종목으로 들고 있게 되고, 새 돈과 리밸런스도 그 종목으로 사고팝니다(현금 이자는 붙지 않음). 레버리지 종목을 고르면 두 몫 모두 레버리지가 됩니다.') + ' 로 두고, 나머지 <b>' + stock + '%</b>로 ' + c('ul') + ' 를 삽니다.</p>'
     + (p.park === 'cash' ? '<p class="ss-line">그 현금에는 연 ' + c('cr') + ' 이자가 붙습니다.' + ssTipI('리밸런스 사이에 9sig 가 들고 있는 현금이 받는 연이자입니다. SMA 전략·현금 복리 선의 이자와는 따로입니다.') + '</p>' : '')
     + '<p class="ss-line">' + c('per') + ssTipI('리밸런스 주기입니다. 원래 9sig 는 분기마다 9% 목표라서, 옆의 성장률은 \'고른 주기마다\'로 읽힙니다 — 분기 + 9% 면 목표가 분기마다 9% 씩 큽니다.') + ' 리밸런스하고 목표를 ' + c('g') + ' 씩 키웁니다.' + ssTipI('3배 ETF(TQQQ·SPXL)에는 분기 9% 가 표준입니다. 2배(QLD·SSO)라면 낮추세요.') + '</p>'
@@ -135,7 +135,7 @@ function ssCtls9(owner) {
 function ssCtlsSma(owner) {
   const p = ssParamsOf('sma', owner), c = (k) => ssCtl('sma', owner, k);
   return '<div class="ss-cg">'
-    + '<a class="ss-explore" target="_blank" rel="noopener" href="' + SS_EXPLORER.sma + '">🔬 과최적화 탐색기 — 1953·1990·2010년부터 기간별로 가장 잘 맞았던 SMA 설정 ↗</a>'
+    + '<a class="ss-explore" target="_blank" rel="noopener" href="' + SS_EXPLORER.sma + '">🔬 과최적화 탐색기 — 1971·1990·2010년부터 기간별로 가장 잘 맞았던 SMA 설정 ↗</a>'
     + '<p class="ss-line">' + c('sig') + ' 종가가 ' + c('win') + '일 이동평균 위에 있으면 ' + c('ul') + ' 를 삽니다.</p>'
     + '<p class="ss-line">살 때는 평균보다 ' + c('eb') + ' 이상 위, 팔 때는 ' + c('xb') + ' 이상 아래여야 합니다.</p>'
     + '<p class="ss-line">신호가 ' + c('cb') + ' 일 이어져야 사고, ' + c('cs') + ' 일 이어져야 팝니다.' + ssTipI('잦은 들락날락을 막습니다.\n가격이 선 반대편에 이 날수만큼 머물러야 거래합니다.\n\n예: 3 —\nQQQ 가 하루 선 아래로 내려갔다 반등하면 팔지 않습니다. 3일 연속 아래에서 마감해야 팝니다.\n\n0 = 처음 넘는 날 바로 거래.') + '</p>'

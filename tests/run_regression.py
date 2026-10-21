@@ -2870,7 +2870,7 @@ def share_all_check(br, base, local, fail):
 # 같은 가격 자료(화면이 받은 prices.csv 글)로 Node 시뮬레이터 엔진(scripts/stratsim_fit.cjs)이 낸 '9sig·SMA 기본'(2010 1분기~2025 4분기) 숫자
 SS_NODE_GOLD_JS = r"""const F = require(process.argv[1]), M = F.M, S = M.S;
 S.saved = [['9sig', {}], ['sma', {}]].map(([t, p], k) => ({ id: 'g' + k, type: t, name: t + k, params: M.ssCleanParams(t, Object.assign(M.ssDefaults(t), p)), color: '#ffffff', hidden: false }));
-S.e = 228; S.x = 291; S.iPos = 333; S.mPos = M.ssMonthlyToPos(500); S.raise = '0'; S.ed = ''; S.xd = ''; S.editing = null; S.panel = null; S.infl = false; S.log = false; S.tx = null;
+const Q = M.DS.q; S.e = Q.findIndex((r) => r[0] === '2010-03-31'); S.x = Q.findIndex((r) => r[0] === '2025-12-31'); S.iPos = 333; S.mPos = M.ssMonthlyToPos(500); S.raise = '0'; S.ed = ''; S.xd = ''; S.editing = null; S.panel = null; S.infl = false; S.log = false; S.tx = null;
 M.ssRender(); const m = M.R.metrics;
 console.log(JSON.stringify({ n: M.R.labels.length, bh: [m.bh.cagr, m.bh.maxDD], cfg: [[m['cfg:g0'].cagr, m['cfg:g0'].maxDD], [m['cfg:g1'].cagr, m['cfg:g1'].maxDD]] }));"""
 
@@ -2897,7 +2897,7 @@ def stratsim_check(br, base, fail, ignorable):
     pg.on('console', lambda m: errs.append((m.text, m.location.get('url', '') if m.location else '')) if m.type == 'error' else None)
     tok = lambda o: 'j' + base64.urlsafe_b64encode(json.dumps(o, ensure_ascii=False).encode()).decode().rstrip('=')
     try:
-        # 1) 고정 구간 기준값 (tests/stratsim_test.cjs '9sig·SMA 기본')
+        # 1) 고정 구간 기준값 (tests/stratsim_test.cjs '9sig·SMA 기본') — 주소는 q0 없는 예전(1953 기준 분기 번호 e=228·x=291) 링크: 자료가 1971 부터로 바뀐 뒤에도 같은 분기(2010 1분기~2025 4분기)로 읽는지
         st = {'v': 1, 'i': 333, 'm': 500, 'a': '0', 'r': 4, 'e': 228, 'x': 291, 'hd': [], 'sc': [{'t': '9sig', 'n': '9sig', 'p': {}, 'c': '#e879f9'}, {'t': 'sma', 'n': 'SMA', 'p': {}, 'c': '#f59e0b'}]}
         pg.goto(base + 'strategy-simulator/#ss=' + tok(st), wait_until='load'); pg.wait_for_timeout(3500)
         g = pg.evaluate(SS_GOLD_JS)

@@ -9,6 +9,7 @@
   U:QLD     QQQ 2배               ← U:TQQQ 의 후보 (체인: TQQQ 백테스트가 QLD 백테스트를 이어 붙여 QQQ 상장일까지)
   U:TQQQ    QLD 1.5배
   U:SSO     S&P 500 TR 2배 (X:SPXTR = 앞부분 파일 + ^SP500TR)
+            QLD·TQQQ·SSO 는 레버리지 식 'cr': 현금·이자 = 연방기금 금리(data/etfbt/r/R_FF.json · 날수/360 'b')
   U:IWM     자료가 없는 후보(U:NODATA) → 재료를 못 받아 실제 기간만 + 경고
   U:QYLD    옵션 전략 지수 C:BXNT (data/etfbt/r/C_BXNT.json)
   D:O2903P  한국거래소 옵션 지수(코스피 200 커버드콜 ATM) 자체의 식 — 코스피 200 + 월간 콜 매도 + 모의 커버드콜 Z:M00L90
@@ -54,11 +55,11 @@ def recipes():
         'K:122630': {'s': day(BT_FIRST['K122630']), 'c': 'KRW', 'n': 900, 'm': [['K:069500', 0, 0.9, 'n', 'KRW', 'KODEX 200'],
                      ['K:069500', 0, 0.3, 'n', 'KRW', 'KODEX 200', ['W', 0.01, 1.0]]], 'd': -0.01, 'e': [0.01, 0.03, 0.0316, 3], 'k': 'fit', 'cc': 1, 'ec': 0.0316},
         'U:QLD': {'s': day(BT_FIRST['UQLD']), 'c': 'USD', 'n': 900, 'm': [['U:QQQ', 0, 2.0, 'n', 'USD', 'QQQ']], 'd': -0.02, 'e': [0.002, 0.01, 0.0102, 3],
-                  'k': 'fit', 'ec': 0.0102},
+                  'k': 'fit', 'cr': 'R:FF', 'ec': 0.0102},
         'U:TQQQ': {'s': day(BT_FIRST['UTQQQ']), 'c': 'USD', 'n': 900, 'dv': {'y': 0.004, 'f': 4, 'm': [3, 6, 9, 12], 'dom': 22, 'tx': 1.0},
-                   'm': [['U:QLD', 0, 1.5, 'n', 'USD', 'QLD']], 'd': 0.001, 'e': [0.001, 0.006, 0.0061, 3], 'k': 'fit', 'ec': 0.012},
+                   'm': [['U:QLD', 0, 1.5, 'n', 'USD', 'QLD']], 'd': 0.001, 'e': [0.001, 0.006, 0.0061, 3], 'k': 'fit', 'cr': 'R:FF', 'ec': 0.012},
         'U:SSO': {'s': day(BT_FIRST['USSO']), 'c': 'USD', 'n': 900, 'm': [['X:SPXTR', 0, 2.0, 'n', 'USD', 'S&P 500 TR']], 'd': -0.015,
-                  'e': [0.004, 0.012, 0.0126, 3], 'k': 'fit', 'ec': 0.0126},
+                  'e': [0.004, 0.012, 0.0126, 3], 'k': 'fit', 'cr': 'R:FF', 'ec': 0.0126},
         'U:IWM': {'s': day(BT_FIRST['UIWM']), 'c': 'USD', 'n': 900, 'm': [['U:NODATA', 0, 1.0, 'n', 'USD', 'NODATA']], 'd': 0.0, 'e': [0.001, 0.01, 0.0101, 3],
                   'k': 'fit', 'ec': 0.0101},
         # Cboe 옵션 전략 지수 후보 — 화면이 data/etfbt/r/C_BXNT.json 을 받아 같은 값으로 계산하는지
@@ -119,9 +120,12 @@ class Synth:
         return self.raw(key)['d']
 
     def rate(self, key):
-        """R:KRW (국내 달력 · CD91 처럼) · R:USD (미국 달력) — 금리 %"""
+        """R:KRW (국내 달력 · CD91 처럼) · R:USD (미국 달력) · R:FF (미국 달력 · 국채보다 조금 높고 따로 움직이는 연방기금 금리처럼) — 금리 %"""
         d = self.cal_days('N:KOSPI' if key == 'R:KRW' else 'Y:^GSPC')
-        y = [round(3.0 + 1.5 * math.sin(t / 400.0) if key == 'R:KRW' else 4.0 + 2.0 * math.sin(t / 500.0), 4) for t in range(len(d))]
+        if key == 'R:FF':
+            y = [round(4.4 + 2.3 * math.sin(t / 470.0) + 0.4 * math.sin(t / 90.0), 4) for t in range(len(d))]
+        else:
+            y = [round(3.0 + 1.5 * math.sin(t / 400.0) if key == 'R:KRW' else 4.0 + 2.0 * math.sin(t / 500.0), 4) for t in range(len(d))]
         return {'k': key, 'mat': 0, 'cur': 'KRW' if key == 'R:KRW' else 'USD', 'd': d, 'y': y}
 
     def usdkrw(self):
@@ -154,10 +158,10 @@ class Synth:
         def ser(d):
             return d[0], [d[i] - d[i - 1] for i in range(1, len(d))]
         up = _dt.datetime.now(_dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')   # 화면이 '새 자료'로 보고 깃허브 원본을 따로 받지 않게
-        if name in ('R_KRW.json', 'R_USD.json'):
+        if name in ('R_KRW.json', 'R_USD.json', 'R_FF.json'):
             r = self.rate(name[:-5].replace('_', ':'))
             d0, dd = ser(r['d'])
-            return json.dumps({'updated': up, 'k': r['k'], 'mat': 0, 'cur': r['cur'], 'd0': d0, 'dd': dd, 'y': r['y']})
+            return json.dumps(dict({'updated': up, 'k': r['k'], 'mat': 0, 'cur': r['cur'], 'd0': d0, 'dd': dd, 'y': r['y']}, **({'b': 360} if name == 'R_FF.json' else {})))
         if name == 'F_USDKRW.json':
             f = self.usdkrw(); d0, dd = ser(f['d'])
             return json.dumps({'updated': up, 'k': 'F:USDKRW', 'd0': d0, 'dd': dd, 'c': f['c']})
@@ -191,9 +195,9 @@ def expected(syn):
         def series(self, key):
             if key in self._s:
                 return self._s[key]
-            if key in ('R:KRW', 'R:USD'):
+            if key in ('R:KRW', 'R:USD', 'R:FF'):
                 r = syn.rate(key); d = np.array(r['d'], np.int64); y = np.array(r['y'], np.float64)
-                lv = F.syn_levels(d, y, 0)
+                lv = F.syn_levels(d, y, 0, F.SYN_BASIS.get(key, 365))
                 s = {'d': d, 'a': lv, 'c': lv, 'y': y}
             elif key == 'F:USDKRW':
                 f = syn.usdkrw(); s = {'d': np.array(f['d'], np.int64), 'a': np.array(f['c'], np.float64), 'c': np.array(f['c'], np.float64)}

@@ -14,6 +14,7 @@
   meta/kr/<코드>.json  네이버 ETF 분석 (기초지수·상장일·총보수·상위 10 구성종목·분배)
   meta/us/<티커>.json  야후 quoteSummary (상위 10 보유 종목·분류·보수)
   rates.json           한국은행 ECOS 시장금리(일별) — CD91·콜·국고채 1~30년·회사채·통안증권
+                       + FRED 미국 연방기금 실효 금리(DFF, 1954~) — 레버리지·인버스 미국 ETF 재현 식의 현금·이자 금리(etf_bt_fit.py R:FF)
   universe.json        모든 키의 시장·통화·첫날·마지막 날
 
 사용
@@ -128,6 +129,10 @@ NAVER_IDX = [('KOSPI', 'KR', 'KRW', '코스피'), ('KOSDAQ', 'KR', 'KRW', '코�
 ECOS_RATES = [('010502000', 'CD91'), ('010101000', 'CALL'), ('010190000', 'KTB1'), ('010200000', 'KTB3'), ('010200001', 'KTB5'), ('010210000', 'KTB10'),
               ('010220000', 'KTB20'), ('010230000', 'KTB30'), ('010240000', 'KTB50'), ('010300000', 'CORP3'), ('010400000', 'MSB91'), ('010400001', 'MSB1'),
               ('010400002', 'MSB2'), ('010901000', 'KOFR'), ('010503000', 'CP91')]
+
+# FRED 일별 금리 — [시리즈 ID] (rates.json 에 같은 이름으로) · FRED 는 'Mozilla/5.0' 만 있는 요청을 끊어 따로 밝힌 UA
+FRED_RATES = ['DFF']
+UA_FRED = 'd-capitalism-data/1.0 (+https://d-capitalism.com/)'
 
 _lock = threading.Lock()
 
@@ -521,6 +526,25 @@ def ecos_rates(old=None):
     return out, False
 
 
+def fred_rate(sid):
+    """FRED 일별 금리(%) → {d, v} · 빈 값('.') 건너뜀 · 값이 이상하면 실패"""
+    raw = get('https://fred.stlouisfed.org/graph/fredgraph.csv?id=' + urllib.parse.quote(sid), headers={'User-Agent': UA_FRED}).decode('utf-8', 'replace')
+    dd, vv = [], []
+    for ln in raw.splitlines()[1:]:
+        p = ln.strip().split(',')
+        if len(p) != 2 or p[1] in ('', '.'):
+            continue
+        x, v = day(datetime.date.fromisoformat(p[0])), float(p[1])
+        if not (-5.0 < v < 30.0):
+            raise ValueError('%s 값 이상: %s' % (sid, ln))
+        if dd and x <= dd[-1]:
+            continue
+        dd.append(x); vv.append(v)
+    if len(dd) < 1000:
+        raise ValueError('%s 행이 너무 적음 (%d)' % (sid, len(dd)))
+    return {'d': dd, 'v': vv}
+
+
 def ecos_fx():
     """한국은행 ECOS 731Y003 원/달러 종가(15:30) — 국내 ETF 종가(15:30)와 같은 시각의 환율 (1990-03 ~)"""
     today = datetime.date.today().strftime('%Y%m%d')
@@ -720,13 +744,24 @@ def main():
 
 
 def update_ecos(cache):
-    """캐시의 rates.json(시장금리)·fx.json(원/달러 15:30 종가)을 ECOS 로 갱신 — 못 받은 것·크게 짧아진 것은 지난 값 그대로"""
+    """캐시의 rates.json(시장금리)·fx.json(원/달러 15:30 종가)을 ECOS·FRED 로 갱신 — 못 받은 것·크게 짧아진 것은 지난 값 그대로"""
     rp, fp = os.path.join(cache, 'rates.json'), os.path.join(cache, 'fx.json')
     try:
         old = json.load(open(rp, encoding='utf-8')) if os.path.exists(rp) else {}
     except Exception:
         old = {}
     r, down = ecos_rates(old)
+    for sid in FRED_RATES:                             # FRED (ECOS 와 따로 — ECOS 가 응답하지 않아도 받음)
+        try:
+            f = fred_rate(sid)
+            prev = (r.get(sid) or {}).get('d') or []
+            if len(f['d']) < 0.9 * len(prev):
+                log('FRED', sid, '이번 값(%d일)이 지난 값(%d일)보다 크게 짧아 지난 값 그대로' % (len(f['d']), len(prev)))
+            else:
+                r[sid] = f
+                log('FRED', sid, len(f['d']), (EPOCH + datetime.timedelta(f['d'][0])).isoformat())
+        except Exception as e:
+            log('FRED 실패', sid, e)
     if r and r != old:
         json.dump(r, open(rp, 'w', encoding='utf-8'))
     if down:

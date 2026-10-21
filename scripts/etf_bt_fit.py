@@ -235,23 +235,41 @@ def par_bond_ret(y0, y1, mat, days):
 
 
 # 키 → (원자료 금리 이름, 만기 년(0 = 현금), 통화)
-SYN = {'R:KRW': ('CD91', 0, 'KRW'), 'R:CALL': ('CALL', 0, 'KRW'), 'R:USD': ('^IRX', 0, 'USD'),
+SYN = {'R:KRW': ('CD91', 0, 'KRW'), 'R:CALL': ('CALL', 0, 'KRW'), 'R:USD': ('^IRX', 0, 'USD'), 'R:FF': ('DFF', 0, 'USD'),
        'B:MSB1': ('MSB1', 1, 'KRW'), 'B:KTB1': ('KTB1', 1, 'KRW'), 'B:MSB2': ('MSB2', 2, 'KRW'), 'B:KTB3': ('KTB3', 3, 'KRW'), 'B:CORP3': ('CORP3', 3, 'KRW'),
        'B:KTB5': ('KTB5', 5, 'KRW'), 'B:KTB10': ('KTB10', 10, 'KRW'), 'B:KTB20': ('KTB20', 20, 'KRW'), 'B:KTB30': ('KTB30', 30, 'KRW'), 'B:KTB50': ('KTB50', 50, 'KRW'),
        'B:UST5': ('^FVX', 5, 'USD'), 'B:UST10': ('^TNX', 10, 'USD'), 'B:UST30': ('^TYX', 30, 'USD')}
-SYN_NAME = {'R:KRW': 'CD91 금리', 'R:CALL': '콜금리', 'R:USD': '미국 단기국채 금리', 'B:MSB1': '통안채 1년', 'B:KTB1': '국고채 1년', 'B:MSB2': '통안채 2년',
+SYN_NAME = {'R:KRW': 'CD91 금리', 'R:CALL': '콜금리', 'R:USD': '미국 단기국채 금리', 'R:FF': '미국 연방기금 금리', 'B:MSB1': '통안채 1년', 'B:KTB1': '국고채 1년', 'B:MSB2': '통안채 2년',
             'B:KTB3': '국고채 3년', 'B:CORP3': '회사채 3년(AA-)', 'B:KTB5': '국고채 5년', 'B:KTB10': '국고채 10년', 'B:KTB20': '국고채 20년',
             'B:KTB30': '국고채 30년', 'B:KTB50': '국고채 50년', 'B:UST5': '미국채 5년', 'B:UST10': '미국채 10년', 'B:UST30': '미국채 30년',
             'F:USDKRW': '원/달러 환율', 'X:SPXTR': 'S&P 500 TR'}
 
 
-def syn_levels(dates, yields_pct, mat):
-    """금리 시계열(%) → 총수익 지수(첫날 1)"""
+# 현금 금리의 날수 기준 (없으면 365) — 연방기금 금리는 실제 날수/360 으로 붙는 금리
+SYN_BASIS = {'R:FF': 360}
+# 식 고르기 후보에서 빼는 합성 금리 — R:FF 는 레버리지·인버스 식의 현금 금리로만 씀(아래 LEV_*)
+SYN_NOCAND = {'R:FF'}
+# 레버리지·인버스 미국 ETF(야후 분류 'Trading--Leveraged…'·'Trading--Inverse…' · 달러 식 · 노출 합 W ≥ LEV_HI 또는 ≤ LEV_LO):
+#   현금·빌린 돈 이자를 단기국채(R:USD) 대신 연방기금 금리(R:FF)로 — (분류를 함께 보는 까닭: 채권·고베타 ETF 도 W 가 1.2 넘게 맞춰지곤 함 — 빌린 돈이 아님)
+#   식 r = f + Σw·(x − f) + d (f = 연방기금) · 1993~2009 레버리지·인버스 펀드 15개(뮤추얼펀드 포함)를 2010년 뒤 자료로 맞춰 그 전 해마다 견준
+#   검증에서 오차가 작았음(평균 |오차| 1.58 → 1.50%p · 인버스 1.94 → 1.77%p · 2007~08 국채 금리가 급락한 때 크게 나음 · 롱은 비슷) — 식에 'cr' 로 적음
+LEV_HI, LEV_LO = 1.2, -0.2
+LEV_RATE = 'R:FF'
+LEV_CATS = ('Trading--Leveraged', 'Trading--Inverse')
+
+
+def is_lev_etf(D, tk):
+    """레버리지·인버스 상품인가 — 미국 ETF 의 야후 분류(meta/us · category)로"""
+    return tk.startswith('U:') and str(D.meta(tk).get('category') or '').startswith(LEV_CATS)
+
+
+def syn_levels(dates, yields_pct, mat, basis=365):
+    """금리 시계열(%) → 총수익 지수(첫날 1) · basis: 현금(만기 0)의 날수 기준"""
     lv = np.ones(len(dates))
     for i in range(1, len(dates)):
         y0, y1 = yields_pct[i - 1] / 100.0, yields_pct[i] / 100.0
         dd = dates[i] - dates[i - 1]
-        r = (y0 * dd / 365.0) if mat == 0 else par_bond_ret(y0, y1, mat, dd)
+        r = (y0 * dd / float(basis)) if mat == 0 else par_bond_ret(y0, y1, mat, dd)
         lv[i] = lv[i - 1] * (1.0 + r)
     return lv
 
@@ -300,13 +318,13 @@ class Data:
                 y = self.series('Y:' + src)
                 if y is not None and len(y['d']):
                     yv = np.round(y['c'], 4)                  # 화면이 받는 금리 파일과 같은 자릿수
-                    lv = syn_levels(y['d'], yv, mat)
+                    lv = syn_levels(y['d'], yv, mat, SYN_BASIS.get(key, 365))
                     s = {'d': y['d'], 'c': lv, 'a': lv, 'v_d': z0, 'v_a': np.zeros(0), 'y': yv}
             else:
                 r = self.rates.get(src)
                 if r and r['d']:
                     d = np.array(r['d'], np.int32); v = np.round(np.array(r['v'], np.float64), 4)
-                    lv = syn_levels(d, v, mat)
+                    lv = syn_levels(d, v, mat, SYN_BASIS.get(key, 365))
                     s = {'d': d, 'c': lv, 'a': lv, 'v_d': z0, 'v_a': np.zeros(0), 'y': v}
         elif key in ZSIM:
             cal = self.series(KR_CAL_KEY)['d'].astype(np.int64)
@@ -559,10 +577,12 @@ class Engine:
         self._lv[k] = out
         return out
 
-    def cash_ret(self, cur, cal_name):
-        k = ('CASH', cur, cal_name)
+    def cash_ret(self, cur, cal_name, key=None):
+        """현금 일 수익 (달력 위) — key: 쓸 금리(없으면 통화의 기본 현금 R:KRW·R:USD · 레버리지 식은 R:FF)"""
+        k = ('CASH', cur, cal_name, key)
         if k not in self._lv:
-            key = 'R:KRW' if cur == 'KRW' else 'R:USD' if cur == 'USD' else None
+            if key is None:
+                key = 'R:KRW' if cur == 'KRW' else 'R:USD' if cur == 'USD' else None
             if key is None:
                 self._lv[k] = np.zeros(len(self.cal[cal_name]))
             else:
@@ -883,7 +903,7 @@ def main():
     if a.only:
         targets = a.only.split(',')
     targets.sort(key=lambda k: ((uni.get(k) or {}).get('start') or 0, k))
-    cands = sorted(k for k, v in uni.items() if v.get('n', 0) > 30 and not v.get('err') and k not in EXCLUDE and k not in KRX_AUX) + sorted(SYN) + ['F:USDKRW', 'X:SPXTR'] \
+    cands = sorted(k for k, v in uni.items() if v.get('n', 0) > 30 and not v.get('err') and k not in EXCLUDE and k not in KRX_AUX) + sorted(k for k in SYN if k not in SYN_NOCAND) + ['F:USDKRW', 'X:SPXTR'] \
         + sorted(z for z in ZSIM if D.series(z) is not None)     # 모의 커버드콜 (코스피 200·VKOSPI 가 있을 때)
     log('대상 %d · 후보 %d' % (len(targets), len(cands)))
     # 안전장치: 지난 식이 쓰던 옵션 전략 지수(C: Cboe · D: 한국거래소 — 화면이 r/<키>.json 으로 받는 것)의 절반 넘게 이번 자료에 없으면
@@ -1309,7 +1329,7 @@ def fit_target(D, E, mats, tk, recipes, explain, log):
         if bask is not None and bask[1][0] < score[0] * (1 - NEAR_REL) - NEAR_ABS:   # 바스켓은 체인이 없어 과거가 짧은 편 → 분명히 나을 때만
             sel, score, method, bw = bask[0], bask[1], 'basket', bask[2]
         return {'sel': sel, 'score': score, 'method': method, 'bw': bw, 'folds': folds, 'cash': cash_score, 'corr': corr, 'order': order,
-                'bask': bask, 'yt': yt, 'cashr': cash, 'good': good, 'top': top1}
+                'bask': bask, 'yt': yt, 'cashr': cash, 'good': good, 'top': top1, 'a0': a0}
 
     def overlay(R, a0):
         """콜 매도 덧씌우기: 기초자산(이름·기초지수가 가리키는 지수·종목, 없으면 콜 매도가 없는 상위 후보 — 노출이 양수)에 만기 주기·행사가·변동성 배수를
@@ -1427,11 +1447,22 @@ def fit_target(D, E, mats, tk, recipes, explain, log):
             return None
         method = 'cash'
     Xs = np.column_stack([c for _, c in sel]) if sel else np.zeros((n, 0))
+    cr = None
     if method == 'basket':
         w = np.array(R['bw'])
         d = float(np.mean((np.log1p(yt) - np.log1p(cash + Xs @ w))[good]))
     else:
         w, d = fit_final(yt, cash, Xs, good)
+        W = float(sum(float(wi) for (vk, _), wi in zip(sel, w) if len(vk) <= 3))     # 노출 합 (콜 매도 덧씌우기 열 빼고)
+        if method == 'fit' and tcur == 'USD' and sel and (W >= LEV_HI or W <= LEV_LO) and is_lev_etf(D, tk):
+            # 레버리지·인버스: 현금·이자 = 연방기금 금리 — 대상 통화 현금을 뺀 열('n'·'u')은 x − f = (x − c) − (f − c) 로 바꿔 같은 후보로 다시 맞춤
+            a0 = R['a0']
+            fr = E.cash_ret(tcur, cal_name, LEV_RATE)[a0:a0 + n]
+            dlt = fr - cash
+            Xf = np.column_stack([c - dlt if len(vk) <= 3 and vk[2] in ('n', 'u') else c for vk, c in sel])
+            score = evaluate(yt, fr, Xf, R['folds'], good, pri([vk[0] for vk, _ in sel], [len(vk) > 3 for vk, _ in sel]))
+            w, d = fit_final(yt, fr, Xf, good)
+            cr = LEV_RATE
     if any(abs(float(wi)) > (WZ_MAX if len(vk) > 3 else W_MAX) for (vk, _), wi in zip(sel, w)) or score[0] > E_DROP:
         if explain:
             log(tk, '버림: 배수 %s · 오차 %.3f' % (np.round(w, 2).tolist(), score[0]))
@@ -1442,6 +1473,8 @@ def fit_target(D, E, mats, tk, recipes, explain, log):
     r['d'] = round(d * 252.0, 6)
     r['e'] = [round(score[1], 5), round(score[2], 5), round(score[0], 5), len(R['folds'])]
     r['k'] = method
+    if cr:
+        r['cr'] = cr                                      # 현금·이자 금리 (없으면 통화 기본 R:USD·R:KRW)
     if short:
         r['short'] = 1
     if R.get('cc'):
@@ -1659,7 +1692,7 @@ def bt_levels(D, E, r, getF=None):
     iS = int(np.searchsorted(cal, r['s']))
     if iS < 1 or iS >= len(cal):
         return None
-    cash = E.cash_ret(tcur, cal_name)
+    cash = E.cash_ret(tcur, cal_name, r.get('cr'))       # 레버리지·인버스 식은 'cr'(연방기금 금리) — 화면 btBuildLevels·MBT levels 와 같음
     m0 = cash.copy()
     for t in r['m']:
         key, lag, w, var, fcur = t[0], int(t[1]), float(t[2]), t[3], t[4]
@@ -1738,7 +1771,7 @@ def write_out(out, recipes, D, only, force=False):
     for i, sh in enumerate(shards):
         json.dump({'updated': now, 'e': sh}, open(os.path.join(out, '%d.json' % i), 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
     # 화면이 받는 보조 자료 — 금리(현금·채권 지수를 같은 식으로) · 원/달러 15:30 종가 · S&P 500 TR 앞부분
-    used = {f[0] for r in recipes.values() for f in r['m']} | {'R:KRW', 'R:USD'}
+    used = {f[0] for r in recipes.values() for f in r['m']} | {'R:KRW', 'R:USD'} | {r['cr'] for r in recipes.values() if r.get('cr')}
     for k in sorted(k for k in used if opt_idx(k)):    # 옵션 전략 지수 C: Cboe · D: 한국거래소 (정리한 일봉 그대로 — 화면이 같은 값으로 계산)
         s = D.series(k)
         if s is None or not len(s['d']):
@@ -1756,7 +1789,7 @@ def write_out(out, recipes, D, only, force=False):
         if s is None:
             continue
         j = _ser(s['d'], s['y'], 4)
-        json.dump({'updated': now, 'k': k, 'mat': SYN[k][1], 'cur': SYN[k][2], 'd0': j['d0'], 'dd': j['dd'], 'y': j['v']},
+        json.dump(dict({'updated': now, 'k': k, 'mat': SYN[k][1], 'cur': SYN[k][2], 'd0': j['d0'], 'dd': j['dd'], 'y': j['v']}, **({'b': SYN_BASIS[k]} if k in SYN_BASIS else {})),
                   open(os.path.join(out, 'r', k.replace(':', '_') + '.json'), 'w', encoding='utf-8'), separators=(',', ':'))
     f = D.series('F:USDKRW')
     j = _ser(f['d'], f['c'], 2)
