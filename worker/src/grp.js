@@ -13,7 +13,7 @@
  *   - give: 주문 PC 가 넘김(사용자 요청 want · 주 PC 로 돌려주기) · bye: 묶음에서 빠짐(주문 PC 면 비움)
  *   - put: 주문 PC 만 공유 상태 저장 (ver 이 같을 때만 → +1)
  *   - sec: 비밀값 묶음(어느 PC 든 · sec_at 이 같을 때만) · tok: 접속 토큰(만료가 더 늦은 것만 — 토스는 새로 받으면 옛 토큰이 무효라 모든 PC 가 같은 토큰을 씀)
- *   - req: 대기 PC 화면에서 '자동매매 켜기/끄기' 요청 → 주문 PC 가 다음 실행에 반영
+ *   - req: 대기 PC 화면에서 '자동매매 켜기/끄기' 요청 → 주문 PC 가 다음 실행에 반영 (72루틴 k 'enabled' · SMA 200 k 'smaEnabled' → sma 칸)
  * · 남용 막기: 묶음 20개 · 묶음마다 PC 8대 · 본문 1MB · 60일 넘게 조용한 묶음·PC 지움(cron)
  * · GET /grp → { ok, now, ready } (연결·시계 확인 · ready = 표 있음) */
 const MAX_GROUPS = 20, MAX_PCS = 8, MAX_BODY = 1000000, MAX_STATE = 950000, MAX_SEC = 32000, MAX_TOK = 4000;
@@ -159,8 +159,12 @@ export async function grp(req, env, json) {
   }
   if (op === 'want') { await DB.prepare(SQL.want).bind(b.on === false ? (g.want === m ? null : g.want) : m, now, id).run(); return json({ ok: true, now }); }
   if (op === 'req') {
-    if (b.k !== 'enabled' || typeof b.on !== 'boolean') return json({ ok: false, error: 'req' }, 400);
-    await DB.prepare(SQL.req).bind(JSON.stringify({ k: 'enabled', on: b.on, at: now, by: m }), now, id).run();
+    /* 72루틴(k 'enabled')과 SMA 200(k 'smaEnabled' — 2026-10-22) 요청을 한 칸에 따로 — 한쪽 요청이 다른 쪽 요청을 지우지 않음 */
+    if ((b.k !== 'enabled' && b.k !== 'smaEnabled') || typeof b.on !== 'boolean') return json({ ok: false, error: 'req' }, 400);
+    const cur = parse(g.req) || {}, sma = cur.sma && typeof cur.sma === 'object' ? { on: !!cur.sma.on, at: int(cur.sma.at), by: String(cur.sma.by || '') } : null;
+    const nx = b.k === 'enabled' ? Object.assign({ k: 'enabled', on: b.on, at: now, by: m }, sma ? { sma } : {})
+      : Object.assign(cur.k === 'enabled' ? { k: 'enabled', on: !!cur.on, at: int(cur.at), by: String(cur.by || '') } : {}, { sma: { on: b.on, at: now, by: m } });
+    await DB.prepare(SQL.req).bind(JSON.stringify(nx), now, id).run();
     return json({ ok: true, now });
   }
   if (op === 'tok') {

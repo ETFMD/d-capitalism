@@ -160,6 +160,14 @@ r = await call({ t: T1, m: B, op: 'hello', e: 4, n: 'PC2', r: 2 }); ok(r.j.owner
 r = await call({ t: T1, m: A, op: 'req', k: 'enabled', on: false }); r = await call({ t: T1, m: B, op: 'hello', e: 4 });
 ok(r.j.req && r.j.req.k === 'enabled' && r.j.req.on === false && r.j.req.by === A && r.j.req.at === clock, '켜기/끄기 요청', r.j.req);
 r = await call({ t: T1, m: A, op: 'req', k: 'other', on: true }); ok(r.s === 400, '모르는 요청 → 400', r);
+/* SMA 200 켜기/끄기 요청(2026-10-22) — 72루틴 요청과 한 칸에 따로 · 서로 지우지 않음 */
+const at72 = clock;
+r = await call({ t: T1, m: B, op: 'req', k: 'smaEnabled', on: true }); r = await call({ t: T1, m: B, op: 'hello', e: 4 });
+ok(r.j.req && r.j.req.k === 'enabled' && r.j.req.on === false && r.j.req.at === at72 && r.j.req.sma && r.j.req.sma.on === true && r.j.req.sma.by === B && r.j.req.sma.at === clock, 'SMA 200 요청 — 72루틴 요청은 그대로', r.j.req);
+const atS = clock;
+r = await call({ t: T1, m: A, op: 'req', k: 'enabled', on: true }); r = await call({ t: T1, m: B, op: 'hello', e: 4 });
+ok(r.j.req && r.j.req.k === 'enabled' && r.j.req.on === true && r.j.req.by === A && r.j.req.sma && r.j.req.sma.on === true && r.j.req.sma.at === atS, '72루틴 요청 — SMA 200 요청은 그대로', r.j.req);
+r = await call({ t: T1, m: A, op: 'req', k: 'smaEnabled', on: 'yes' }); ok(r.s === 400, 'SMA 200 요청 on 이 참/거짓이 아니면 400', r);
 // tok — 만료가 더 늦은 것만
 r = await call({ t: T1, m: A, op: 'tok', b: 'toss', s: blob('t1'), exp: clock + D }); ok(r.j.ok && r.j.changed, '접속 토큰 저장', r.j);
 r = await call({ t: T1, m: B, op: 'tok', b: 'toss', s: blob('t0'), exp: clock + D - M }); ok(r.j.ok && !r.j.changed, '더 일찍 만료되는(옛) 토큰은 안 바꿈', r.j);
