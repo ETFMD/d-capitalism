@@ -6974,18 +6974,18 @@ var TAX = (function () {
     var n = 2 * mat, r = y1 / 2, price = Math.abs(r) < 1e-9 ? y0 / 2 * n + 1 : (y0 / 2) * (1 - Math.pow(1 + r, -n)) / r + Math.pow(1 + r, -n);
     return price - 1 + carry;
   }
-  function btSynLevels(d, y, mat) {
-    var lv = new Array(d.length); lv[0] = 1;
+  function btSynLevels(d, y, mat, basis) {             /* basis: 현금(만기 0)의 날수 기준 — 없으면 365 · 연방기금 금리(R_FF) 360 */
+    var lv = new Array(d.length), B = basis || 365; lv[0] = 1;
     for (var i = 1; i < d.length; i++) {
       var y0 = y[i - 1] / 100, y1 = y[i] / 100, dd = d[i] - d[i - 1];
-      lv[i] = lv[i - 1] * (1 + (mat === 0 ? y0 * dd / 365 : btParRet(y0, y1, mat, dd)));
+      lv[i] = lv[i - 1] * (1 + (mat === 0 ? y0 * dd / B : btParRet(y0, y1, mat, dd)));
     }
     return lv;
   }
   function btParseRate(j) {                             /* data/etfbt/r/<키>.json → { d, y, mat, cur, a: 지수 } */
     if (!j || !j.y || j.dd.length !== j.y.length - 1) return null;
     var d = [j.d0]; for (var i = 0; i < j.dd.length; i++) d.push(d[i] + j.dd[i]);
-    return { d: d, y: j.y, mat: j.mat, cur: j.cur, a: btSynLevels(d, j.y, j.mat) };
+    return { d: d, y: j.y, mat: j.mat, cur: j.cur, a: btSynLevels(d, j.y, j.mat, j.b) };
   }
   /* 현금 일 수익 (달력 위) — 금리 자료 첫날 전은 첫 금리로 */
   function btCash(rate, cal) {
@@ -7373,6 +7373,7 @@ var TAX = (function () {
   function btDeps(rc, depth, out) {
     var kr = rc.c === 'KRW';
     out[kr ? 'N:KOSPI' : 'Y:^GSPC'] = 1; out[kr ? 'R:KRW' : 'R:USD'] = 1;
+    if (rc.cr) out[rc.cr] = 1;                                                /* 레버리지·인버스 식의 현금·이자 금리(연방기금 R:FF — scripts/etf_bt_fit.py LEV_RATE) */
     rc.m.forEach(function (t) {
       var fc = t[4] || rc.c; out[t[0]] = 1;
       if (t[0] === 'X:SPXTR') out['Y:^SP500TR'] = 1;                         /* 이어 붙인 S&P 500 TR = 앞부분 파일 + ^SP500TR */
@@ -7397,7 +7398,8 @@ var TAX = (function () {
     }
     if (!put) cal.push(rc.s);
     var rate = function (c) { return S.dep[c === 'KRW' ? 'R:KRW' : 'R:USD']; };
-    var cashT = btCash(rate(rc.c), cal), memo = {};
+    if (rc.cr && !S.dep[rc.cr]) return null;                                  /* 현금·이자 금리 파일을 못 받으면 백테스트 없음(다른 금리로 틀리게 계산하지 않게) */
+    var cashT = btCash(rc.cr ? S.dep[rc.cr] : rate(rc.c), cal), memo = {};
     var cashOf = function (c) { if (c === rc.c) return cashT; if (c !== 'KRW' && c !== 'USD') return cal.map(function () { return 0; }); return memo[c] || (memo[c] = btCash(rate(c), cal)); };
     var fxs = {}; Object.keys(FXSYM).forEach(function (c) { var f = S.dep['Y:' + FXSYM[c]]; if (f) fxs[c] = { d: f.d, a: f.a, inv: !/USD=X$/.test(FXSYM[c]) }; });
     var u = S.dep['F:USDKRW'];
@@ -7446,7 +7448,7 @@ var TAX = (function () {
     return out;
   }
   /* 식 설명 (표 이름 아래) — 'SPY×원/달러' · 'QQQ 2배(환헤지)' · '상위 보유 종목 10개' · 'CD91 금리' (영문 화면은 지수·금리 이름을 영어로) */
-  var BT_EN = { 'R:KRW': 'CD 91-day rate', 'R:CALL': 'call rate', 'R:USD': 'U.S. T-bill rate', 'B:MSB1': 'MSB 1Y', 'B:KTB1': 'KTB 1Y', 'B:MSB2': 'MSB 2Y', 'B:KTB3': 'KTB 3Y',
+  var BT_EN = { 'R:KRW': 'CD 91-day rate', 'R:CALL': 'call rate', 'R:USD': 'U.S. T-bill rate', 'R:FF': 'U.S. federal funds rate', 'B:MSB1': 'MSB 1Y', 'B:KTB1': 'KTB 1Y', 'B:MSB2': 'MSB 2Y', 'B:KTB3': 'KTB 3Y',
                 'B:CORP3': 'Corporate 3Y (AA-)', 'B:KTB5': 'KTB 5Y', 'B:KTB10': 'KTB 10Y', 'B:KTB20': 'KTB 20Y', 'B:KTB30': 'KTB 30Y', 'B:KTB50': 'KTB 50Y', 'B:UST5': 'UST 5Y',
                 'B:UST10': 'UST 10Y', 'B:UST30': 'UST 30Y', 'F:USDKRW': 'USD/KRW', 'X:SPXTR': 'S&P 500 TR', 'N:KOSPI': 'KOSPI', 'N:KOSDAQ': 'KOSDAQ', 'N:KPI200': 'KOSPI 200' };
   function btLabel(rc) {
@@ -12987,6 +12989,7 @@ window.MBT = (function () {
   function collect(rc, depth, out) {
     var kr = rc.c === 'KRW';
     out[kr ? 'N:KOSPI' : 'Y:^GSPC'] = 1; out[kr ? 'R:KRW' : 'R:USD'] = 1;
+    if (rc.cr) out[rc.cr] = 1;                                          /* 레버리지·인버스 식의 현금·이자 금리 (ETF 차트 비교 btDeps 와 같음) */
     var subs = [];
     rc.m.forEach(function (t) {
       var fc = t[4] || rc.c; out[t[0]] = 1;
@@ -13022,7 +13025,8 @@ window.MBT = (function () {
     for (var i = 0; i < cs.d.length; i++) { if (calName === 'US' && cs.d[i] < US_FROM) continue; if (!put && cs.d[i] >= rc.s) { if (cs.d[i] !== rc.s) cal.push(rc.s); put = true; } cal.push(cs.d[i]); }
     if (!put) cal.push(rc.s);
     var rate = function (c) { return DEP[c === 'KRW' ? 'R:KRW' : 'R:USD']; };
-    var cashT = X.btCash(rate(rc.c), cal), memo = {};
+    if (rc.cr && !DEP[rc.cr]) return null;
+    var cashT = X.btCash(rc.cr ? DEP[rc.cr] : rate(rc.c), cal), memo = {};
     var cashOf = function (c) { if (c === rc.c) return cashT; if (c !== 'KRW' && c !== 'USD') return cal.map(function () { return 0; }); return memo[c] || (memo[c] = X.btCash(rate(c), cal)); };
     var fxs = {}; Object.keys(FXSYM).forEach(function (c) { var f = DEP['Y:' + FXSYM[c]]; if (f) fxs[c] = { d: f.d, a: f.a, inv: !/USD=X$/.test(FXSYM[c]) }; });
     var u = DEP['F:USDKRW'];

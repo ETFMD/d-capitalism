@@ -2773,9 +2773,11 @@ const sll = (...a) => a.join('\n');
 // 과최적화 탐색기 1위 설정 (프리셋)
 function slFit(n, eng, goal, span, cagr, dd, params) {
   const E = eng === '9sig' ? '9sig' : 'SMA', G = goal === 'ret' ? '최고 수익' : '최저 낙폭';
+  // 원래 1953년부터 찾은 후보 — 이 사이트 자료는 1971년부터(그 전 나스닥 값은 검증할 수 없는 가상값이라 뺌)라 탐색기에서는 1971–2025 탭
+  const now = /^1953/.test(span) ? '의 ‘' + G + ' ' + span.replace(/^1953/, '1971') + '’ 탭(이 사이트 자료는 1971년부터 — 그 전 나스닥 값은 검증할 수 없는 가상값이라 뺌)' : '';
   return {
     n, name: E + ' · ' + G + ' ' + span, tag: 'overfit',
-    rules: sll(E + ' 과최적화 탐색기의 ‘' + G + ' ' + span + '’ 후보를 처음 찾을 때 1위였던 설정 — 그 구간에 맞춘 값(당시 표본 안 CAGR ' + cagr + '%, 낙폭 ' + dd + '%). 지금 계산으로 다시 돌린 값과 순위는 탐색기 표에서 볼 수 있습니다.',
+    rules: sll(E + ' 과최적화 탐색기의 ‘' + G + ' ' + span + '’ 후보를 처음 찾을 때 1위였던 설정 — 그 구간에 맞춘 값(당시 표본 안 CAGR ' + cagr + '%, 낙폭 ' + dd + '%). 지금 계산으로 다시 돌린 값과 순위는 탐색기 표' + now + '에서 볼 수 있습니다.',
       '앱의 ' + E + ' 엔진 그대로 돌아가므로 써 보면 모든 손잡이를 바꿀 수 있습니다.',
       '그 구간을 뒤져 고른 값이라 다른 구간은 훨씬 나빠 보일 것으로 예상하세요 — 추천이 아니라 과최적화의 차이를 보여 주려고 둔 것입니다.'),
     reported: '처음 찾을 때 ' + span + ' 표본 안: CAGR ' + cagr + '% / 낙폭 −' + dd + '%',
@@ -3033,7 +3035,7 @@ const SL_MONTH = 1000;                // 새 달 첫 거래일마다 더하는 �
 // 다섯 칸: 전체 + 두 전환점(닷컴 고점 2000 1분기 · 금융위기 바닥 2009 1분기)으로 자른 네 구간
 // 진입은 앱과 같게 경계 분기의 '직전 분기말' — 끝은 경계 이하 마지막 분기말(null = 마지막 날)
 const SL_ERAS = [
-  { key: '1953', from: '1953-01-01', to: null, label: ['1953–', '오늘'], sub: '전체 기간' },
+  { key: '1971', from: '1971-01-01', to: null, label: ['1971–', '오늘'], sub: '전체 기간' },
   { key: '1980', from: '1980-01-01', to: '2000-03-31', label: ['1980–', '2000 1분기'], sub: '거품 전 상승기' },
   { key: '2000', from: '2000-03-31', to: '2009-03-31', label: ['2000 1분기–', '2009 1분기'], sub: '닷컴 고점 → 금융위기 바닥' },
   { key: '2009', from: '2009-03-31', to: '2025-12-31', label: ['2009 1분기–', '2025 4분기'], sub: '금융위기 뒤 상승장' },
@@ -3197,7 +3199,7 @@ function slStats(e) {
 const SL_PAGE = 8;   // 한 쪽 카드 수 (카드마다 계산이 여러 번 돌아서)
 const SLU = { el: null, page: 1, q: '', token: 0, back: null, tip: null, active: null };
 const SL_WIP = '공개된 글을 바탕으로 이 앱에서 다시 구현한 전략들이며, 합성 자료 위에서 시작 $10K + 매달 $1,000, 세금 없음으로 백테스트했습니다. '
-  + '실제 결과는 더 나쁩니다: 자주 사고파는 전략은 세금과 슬리피지에 크게 깎이고, 여기 있는 3배 전략 대부분은 1953년부터 보면 어딘가에서 80% 넘는 낙폭(몇몇은 거의 100%)을 겪었습니다. '
+  + '실제 결과는 더 나쁩니다: 자주 사고파는 전략은 세금과 슬리피지에 크게 깎이고, 여기 있는 3배 전략 대부분은 1971년부터 보면 어딘가에서 80% 넘는 낙폭(몇몇은 거의 100%)을 겪었습니다. '
   + '대략적인 비교로만 보세요 — 오류를 고치고 빠진 전략을 채우면서 숫자는 바뀔 수 있습니다.';
 
 // 짧은 금액: $10K · $257K · $22M · $1.3B
@@ -3564,9 +3566,21 @@ function ssPersistSaved() {
   try { localStorage.setItem(SS_LS.saved, JSON.stringify(S.saved.filter((c) => !c._tr).map((c) => { const o = Object.assign({}, c); delete o._tr; return o; }))); } catch (e) {}
 }
 
+// ── 진입·청산 분기 번호(e·x) ─────────────────────────────────────────
+// 번호는 '자료 첫 분기'부터 센 것 — 자료 시작이 바뀌어도(2026-10-21: 1953 → 1971-02-05, 그 전 나스닥 값은 검증할 수 없는 가상값이라 뺌)
+// 예전 링크·저장값이 같은 분기를 가리키게 첫 분기말 날짜 q0 를 함께 적음 · q0 가 없으면 예전 자료(첫 분기말 1953-03-31) 기준
+const SS_Q0_OLD = '1953-03-31';
+const ssQKey = (d) => (+d.slice(0, 4)) * 4 + Math.floor((+d.slice(5, 7) - 1) / 3);
+function ssQShift(i, q0) {
+  if (!DS.q || !DS.q.length) return i;
+  const k = ssQKey(typeof q0 === 'string' && /^\d{4}-\d\d-\d\d$/.test(q0) ? q0 : SS_Q0_OLD) + i - ssQKey(DS.q[0][0]);
+  return Math.max(0, Math.min(DS.q.length - 1, k));
+}
+const ssQ0 = () => (DS.q && DS.q.length ? DS.q[0][0] : SS_Q0_OLD);
+
 // ── 입력·보기 저장 ───────────────────────────────────────────────────
 function ssPersistMain() {
-  const o = { i: S.iPos, m: ssPosToMonthly(S.mPos), a: S.raise, r: ssPosToRate(+S.base.invested.r), e: S.e, x: S.x, ed: S.ed, xd: S.xd,
+  const o = { i: S.iPos, m: ssPosToMonthly(S.mPos), a: S.raise, r: ssPosToRate(+S.base.invested.r), e: S.e, x: S.x, q0: ssQ0(), ed: S.ed, xd: S.xd,
     l: S.log, f: S.infl, hd: Object.keys(S.hide).filter((k) => S.hide[k]) };
   try { localStorage.setItem(SS_LS.main, JSON.stringify(o)); } catch (e) {}
 }
@@ -3577,8 +3591,8 @@ function ssApplyMain(o, fromLink) {
   if (num(o.m) != null) S.mPos = ssMonthlyToPos(num(o.m));
   if (o.a != null && SS_RAISE_OPTS.some((x) => x === String(o.a))) S.raise = String(o.a);
   if (num(o.r) != null) S.base.invested.r = String(ssRateToPos(num(o.r)));
-  if (num(o.e) != null) S.e = Math.max(0, Math.round(num(o.e)));
-  if (num(o.x) != null) S.x = Math.max(0, Math.round(num(o.x)));
+  if (num(o.e) != null) S.e = ssQShift(Math.max(0, Math.round(num(o.e))), o.q0);
+  if (num(o.x) != null) S.x = ssQShift(Math.max(0, Math.round(num(o.x))), o.q0);
   S.ed = typeof o.ed === 'string' && /^\d{4}-\d\d-\d\d$/.test(o.ed) ? o.ed : (fromLink ? '' : S.ed);
   S.xd = typeof o.xd === 'string' && /^\d{4}-\d\d-\d\d$/.test(o.xd) ? o.xd : (fromLink ? '' : S.xd);
   if (o.l != null) S.log = !!o.l;
@@ -3624,7 +3638,7 @@ async function ssUnpack(tok) {
 
 // 지금 화면 상태 → 공유용 묶음 (원본 공유 링크와 같은 범위: 보이는 저장 전략·거래내역·분석 창·고정 구간 포함)
 function ssShareState() {
-  const o = { v: 1, i: S.iPos, m: ssPosToMonthly(S.mPos), a: S.raise, r: ssPosToRate(+S.base.invested.r), e: S.e, x: S.x };
+  const o = { v: 1, i: S.iPos, m: ssPosToMonthly(S.mPos), a: S.raise, r: ssPosToRate(+S.base.invested.r), e: S.e, x: S.x, q0: ssQ0() };
   if (S.ed) o.ed = S.ed;
   if (S.xd) o.xd = S.xd;
   if (S.base.bh.ul !== 'tqqq') o.bu = S.base.bh.ul;
@@ -4890,7 +4904,7 @@ function ssCtls9(owner) {
   const c = (k) => ssCtl('9sig', owner, k);
   const stock = 100 - (+p.cash || 0);
   return '<div class="ss-cg">'
-    + '<a class="ss-explore" target="_blank" rel="noopener" href="' + SS_EXPLORER['9sig'] + '">🔬 과최적화 탐색기 — 1953·1990·2010년부터 기간별로 가장 잘 맞았던 9sig 설정 ↗</a>'
+    + '<a class="ss-explore" target="_blank" rel="noopener" href="' + SS_EXPLORER['9sig'] + '">🔬 과최적화 탐색기 — 1971·1990·2010년부터 기간별로 가장 잘 맞았던 9sig 설정 ↗</a>'
     + '<p class="ss-line">시작 금액의 ' + c('cash') + ' 를 ' + c('park') + ssTipI('안전 몫(현금 %)은 기본적으로 현금으로 두고 아래 이자를 받습니다. QQQ·SPY 등을 고르면 그 몫을 그 종목으로 들고 있게 되고, 새 돈과 리밸런스도 그 종목으로 사고팝니다(현금 이자는 붙지 않음). 레버리지 종목을 고르면 두 몫 모두 레버리지가 됩니다.') + ' 로 두고, 나머지 <b>' + stock + '%</b>로 ' + c('ul') + ' 를 삽니다.</p>'
     + (p.park === 'cash' ? '<p class="ss-line">그 현금에는 연 ' + c('cr') + ' 이자가 붙습니다.' + ssTipI('리밸런스 사이에 9sig 가 들고 있는 현금이 받는 연이자입니다. SMA 전략·현금 복리 선의 이자와는 따로입니다.') + '</p>' : '')
     + '<p class="ss-line">' + c('per') + ssTipI('리밸런스 주기입니다. 원래 9sig 는 분기마다 9% 목표라서, 옆의 성장률은 \'고른 주기마다\'로 읽힙니다 — 분기 + 9% 면 목표가 분기마다 9% 씩 큽니다.') + ' 리밸런스하고 목표를 ' + c('g') + ' 씩 키웁니다.' + ssTipI('3배 ETF(TQQQ·SPXL)에는 분기 9% 가 표준입니다. 2배(QLD·SSO)라면 낮추세요.') + '</p>'
@@ -4911,7 +4925,7 @@ function ssCtls9(owner) {
 function ssCtlsSma(owner) {
   const p = ssParamsOf('sma', owner), c = (k) => ssCtl('sma', owner, k);
   return '<div class="ss-cg">'
-    + '<a class="ss-explore" target="_blank" rel="noopener" href="' + SS_EXPLORER.sma + '">🔬 과최적화 탐색기 — 1953·1990·2010년부터 기간별로 가장 잘 맞았던 SMA 설정 ↗</a>'
+    + '<a class="ss-explore" target="_blank" rel="noopener" href="' + SS_EXPLORER.sma + '">🔬 과최적화 탐색기 — 1971·1990·2010년부터 기간별로 가장 잘 맞았던 SMA 설정 ↗</a>'
     + '<p class="ss-line">' + c('sig') + ' 종가가 ' + c('win') + '일 이동평균 위에 있으면 ' + c('ul') + ' 를 삽니다.</p>'
     + '<p class="ss-line">살 때는 평균보다 ' + c('eb') + ' 이상 위, 팔 때는 ' + c('xb') + ' 이상 아래여야 합니다.</p>'
     + '<p class="ss-line">신호가 ' + c('cb') + ' 일 이어져야 사고, ' + c('cs') + ' 일 이어져야 팝니다.' + ssTipI('잦은 들락날락을 막습니다.\n가격이 선 반대편에 이 날수만큼 머물러야 거래합니다.\n\n예: 3 —\nQQQ 가 하루 선 아래로 내려갔다 반등하면 팔지 않습니다. 3일 연속 아래에서 마감해야 팝니다.\n\n0 = 처음 넘는 날 바로 거래.') + '</p>'
@@ -6684,9 +6698,9 @@ const SS_PROMPT = `# 백테스트 전략 코드 부탁
   - data.sso  SSO  (S&P 500 2배)
   - data.spxl SPXL (S&P 500 3배)
   - data.sqqq SQQQ (나스닥100 −3배 인버스 — 나스닥이 내리면 오름)
-  상장 전 기간은 지수로 재현한 값이라 TQQQ·SQQQ 도 1953년부터 있습니다.
+  상장 전 기간은 지수로 재현한 값이라 TQQQ·SQQQ 도 1971년 2월 5일(자료 첫날)부터 있습니다.
 - data.nfci : 미국 시카고 연은 금융 여건 지수(NFCI). 주간 발표값을 발표 지연(7일)을 두고 거래일마다 채운 것이라 미리 알 수 없는 값은 없습니다.
-  가격이 아니라 지표입니다(0 보다 크면 평소보다 돈줄이 빡빡함, +0.5 넘으면 신용 불안). 1971년 전은 NaN 이니 쓰기 전에 isFinite() 로 확인하세요.
+  가격이 아니라 지표입니다(0 보다 크면 평소보다 돈줄이 빡빡함, +0.5 넘으면 신용 불안). 자료 첫날 무렵 발표 전 날은 NaN 일 수 있으니 쓰기 전에 isFinite() 로 확인하세요.
 - 종목 id(위 소문자 이름)로 data[id] 처럼 꺼낼 수 있습니다 — 종목을 설정으로 고르게 할 때 이렇게 쓰세요.
 - 아주 이른 날짜 몇 개는 가격이 0 일 수 있습니다. 나눗셈 전에 막으세요.
 - 배열은 전체 기간입니다. 이동 평균을 미리 채우려고 p.startIdx 앞의 값을 읽는 것은 괜찮지만,

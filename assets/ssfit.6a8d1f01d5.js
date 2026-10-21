@@ -108,6 +108,7 @@ function ssfLink(D, r, P) {
   const name = D.kind === '9sig' ? '9sig ' + ssfTick(p.ul) + ' · ' + (SSF_PER_KO[p.per] || p.per) + ' · ' + ssfTick(p.park)
     : 'SMA ' + [p.ul, p.sig, p.out, p.bga].map(ssfTick).join('/');
   const o = { v: 1, i: 333, m: 500, a: '0', r: 4, e: SSF.cur ? SSF.cur.e : 0, hd: ['bh', 'invested'], sc: [{ t: D.kind, n: name, p, c: D.kind === '9sig' ? '#22d3ee' : '#a3e635' }] };
+  if (D.q0) o.q0 = D.q0;   // e 를 센 첫 분기말 (자료가 1971 부터 — 없으면 시뮬레이터가 예전 1953 기준으로 읽음)
   const bytes = new TextEncoder().encode(JSON.stringify(o));
   let s = '';
   for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
