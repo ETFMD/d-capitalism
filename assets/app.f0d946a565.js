@@ -18759,7 +18759,7 @@ var SMB = (function () {
     var biggest = function (i) { var best = 'cash', bv = cash; for (var j = 0; j < ASSETS.length; j++) { var k = ASSETS[j]; if (sh[k] > 0) { var v = sh[k] * (px(i, k) || 0); if (v > bv) { bv = v; best = k; } } } return best; };
     /* 사기 — sim: 시뮬레이터처럼 금액 안에서 수수료(주식 = 금액 × (1 − 수수료) ÷ 가격 · 소수 주) · real: 1주 단위 · 체결 금액 × 수수료를 따로 */
     function buy(i, k, amt) {
-      var p0 = px(i, k);
+      var p0 = px(i, k); if (!(amt > 0) || !(p0 > 0)) return null;
       if (!real) { var q = amt * (1 - cost) / p0; sh[k] += q; fees += amt * cost; taxBuy(i, k, q, amt); return { k: k, q: q, amt: amt * (1 - cost), fee: amt * cost, spend: amt }; }
       var n = Math.floor(amt / (p0 * (1 + cost)) + 1e-9);
       while (n > 0 && n * p0 * (1 + cost) > cash + 1e-9) n--;
@@ -18779,9 +18779,13 @@ var SMB = (function () {
     var tgt = wantAsset(state, bg), b0 = null;
     if (tgt !== 'cash') { var p00 = px(r0, tgt); if (p00 > 0) { if (!real) { b0 = buy(r0, tgt, cash); cash = 0; } else b0 = buy(r0, tgt, cash); } }
     var ease = 0, lastSell = a - 1e9, lastBuy = a - 1e9, outWhy = state === 'out' ? (K.oh > 0 && ohAt && ohAt[g0] != null && ohAt[g0] >= K.oh ? 'hot' : 'below') : null;
-    /* full = 시뮬레이터라면 현금이 0 인 상태(목표 종목을 다 산 뒤) — 실전의 잔돈(1주 값 미만)·분배금·이자는 이때 생긴 현금이라
-       사고팔 날짜(결제 대기 · 나눠 사기 횟수)에 끼어들지 않게 따로 다룸 → 실전도 시뮬레이터와 같은 날 사고팖 */
-    var full = !!b0;
+    /* 시뮬레이터 장부 그림자 — 사고팔 '날짜'(결제 대기 · 나눠 사기 횟수 · 판 날)는 시뮬레이터(소수 주)를 그대로 따름
+       · hasCash = 시뮬레이터라면 현금이 0 보다 큰가 · pos[k] = 시뮬레이터라면 k 를 들고 있나
+       · 실전의 1주 단위 차이(1주 값이 안 돼 못 산 회차 · 다 산 뒤 남은 잔돈 · 분배금 · 양도세를 1주 올림으로 판 뒤 남은 돈)는 금액만 바꾸고 날짜는 바꾸지 않음
+       · 시뮬 방식(세금 없음)에선 hasCash = (현금 > 0) · pos[k] = (보유 > 0) 이 늘 같아 시뮬레이터와 똑같이 움직임 */
+    var pos = {}, bought0 = tgt !== 'cash' && px(r0, tgt) > 0, hasCash = !bought0;
+    if (bought0) pos[tgt] = true;
+    var posOnly = function (k) { for (var q in pos) if (pos[q] && q !== k) return false; return true; };
     var held = biggest(r0);
     var ul0 = px(r0, K.ul);
     var ready = tgt === 'cash' ? true : (ul0 > 0 && px(r0, tgt) > 0);
@@ -18813,15 +18817,18 @@ var SMB = (function () {
       if (!ready) ready = tgt === 'cash' || px(m, tgt) > 0;
       var canSell = K.settle === 0 || m - lastBuy >= K.settle;
       if (tgt !== before) ease = (tgt === 'cash' || bg !== 'normal' || bgBefore !== 'normal') ? 0 : (tgt === K.ul ? K.din || 0 : K.dout || 0);
-      var sold = false, S = [], B = [];
+      var sold = false, simSold = false, simBuy = false, S = [], B = [];
       if (canSell) {
         for (var j = 0; j < ASSETS.length; j++) {
           var k = ASSETS[j];
-          if (k !== tgt && sh[k] > 0) { var pk = px(m, k); if (pk > 0) { var sx = sell(m, k, sh[k]); S.push(sx); sold = true; pSell(m, k, sx, bg === 'gtfo' ? 'bubble' : state === 'out' ? outWhy : 'switch'); } }
+          if (k !== tgt && (pos[k] || sh[k] > 0) && px(m, k) > 0) {
+            simSold = true; pos[k] = false;
+            if (sh[k] > 0) { var sx = sell(m, k, sh[k]); S.push(sx); sold = true; pSell(m, k, sx, bg === 'gtfo' ? 'bubble' : state === 'out' ? outWhy : 'switch'); }
+          }
         }
-        if (sold) lastSell = m;
+        if (simSold) { lastSell = m; hasCash = true; }
       }
-      if (sold) { held = 'cash'; nSell++; full = false; }
+      if (sold) { held = 'cash'; nSell++; }
       /* 해외주식 양도세: 해가 바뀌면 그해 세금 확정 → 다음 해 5월 31일 이후 첫 거래일에 납부 (그날 사기 전에 — 산 주식을 바로 팔아 수수료를 두 번 내지 않게) */
       var tpay = 0, tq = 0;
       if (tx) {
@@ -18830,14 +18837,16 @@ var SMB = (function () {
           var T = tx.list[t];
           if (T.paid != null || d < (T.y + 1) + '-05-31') continue;
           if (!(T.tax > 0)) { T.paid = '-'; continue; }
-          var usd = T.tax / o.tax.fx(m);
+          var usd = T.tax / o.tax.fx(m), short0 = cash < usd - 1e-9;
           for (var j3 = 0; j3 < ASSETS.length && cash < usd - 1e-9; j3++) {
             var k3 = ASSETS[j3]; if (!(sh[k3] > 0)) continue;
             var p3 = px(m, k3); if (!(p3 > 0)) continue;
-            var nd = (usd - cash) / (p3 * (1 - cost - sec)), sq = Math.min(sh[k3], real ? Math.ceil(nd - 1e-9) : nd);
+            var nd = (usd - cash) / (p3 * (1 - cost - sec)), sq = Math.min(sh[k3], real ? Math.ceil(nd - 1e-9) : nd), all3 = sq >= sh[k3];
             var sx3 = sell(m, k3, sq); S.push(Object.assign({ tax: true }, sx3)); tq += sq;
             pSell(m, k3, sx3, 'tax');
+            if (all3 && (!real || cash < usd - 1e-9)) pos[k3] = false;   /* 시뮬레이터도 다 팔았을 때만 (실전 1주 올림으로 다 판 것은 시뮬레이터엔 조금 남음) */
           }
+          if (short0) hasCash = false;   /* 모자라서 팔아 낸 날 — 시뮬레이터는 모자란 만큼만 팔아 현금이 0 이 됨 */
           var pay = Math.min(usd, Math.max(0, cash)), ext = usd - pay;
           cash -= pay; taxPaid += usd; tpay += usd; T.paid = d; T.usd = usd;
           if (ext > 1e-9) { taxExt += ext; T.ext = ext; }
@@ -18845,18 +18854,18 @@ var SMB = (function () {
         }
       }
       var canBuy = K.settle === 0 || m - lastSell >= K.settle;
-      if (canBuy && ready && tgt !== 'cash' && cash > 0) {
+      if (canBuy && ready && tgt !== 'cash' && (hasCash || cash > 0)) {
         var pt = px(m, tgt);
         if (pt > 0) {
           var amt, bx;
-          if (full) {
-            /* 다 산 뒤 생긴 현금(실전의 잔돈·분배금·이자): 들고 있는 게 목표 종목뿐이면 1주 단위로 더 삼 — 결제 대기·나눠 사기 횟수는 건드리지 않음
-               (시뮬레이터는 이때 현금이 0 이라 아무 일도 없음 · 시뮬 방식에선 양도세 낸 뒤 남은 소수점 잔돈만 해당 → 사지 않음) */
-            if (real && onlyHolds(tgt)) { bx = buy(m, tgt, cash); if (bx) { bx.top = true; B.push(bx); pBuy(m, bx); } }
+          if (!hasCash) {
+            /* 시뮬레이터라면 현금 0 인데 실전에 남은 돈(잔돈·분배금·이자): 시뮬레이터도 실전도 목표 종목만 들고 있으면 1주 단위로 더 삼
+               — 결제 대기·나눠 사기 횟수는 건드리지 않음 (시뮬 방식에선 양도세 낸 뒤 남은 소수점 잔돈만 해당 → 사지 않음) */
+            if (real && onlyHolds(tgt) && posOnly(tgt)) { bx = buy(m, tgt, cash); if (bx) { bx.top = true; B.push(bx); pBuy(m, bx); } }
           } else {
             if (ease > 1) { amt = cash * (1 / ease); if (!real) { bx = buy(m, tgt, amt); cash -= amt; } else bx = buy(m, tgt, amt); ease--; }
-            else { amt = cash; if (!real) { bx = buy(m, tgt, amt); cash = 0; } else bx = buy(m, tgt, amt); if (ease === 1) ease = 0; full = true; }
-            lastBuy = m;   /* 시뮬레이터와 같은 날을 '산 날'로 (실전에서 그 회차 금액이 1주 값보다 작아 못 산 날도 — 시뮬레이터는 소수 주로 삼) */
+            else { amt = cash; if (!real) { bx = buy(m, tgt, amt); cash = 0; } else bx = buy(m, tgt, amt); if (ease === 1) ease = 0; hasCash = false; }
+            lastBuy = m; pos[tgt] = true; simBuy = true;   /* 시뮬레이터가 산 날(실전에서 그 회차 금액이 1주 값보다 작아 못 산 날도 — 시뮬레이터는 소수 주로 삼) */
             if (bx) { B.push(bx); nBuy++; pBuy(m, bx); held = tgt; }
           }
         }
@@ -18866,7 +18875,7 @@ var SMB = (function () {
       if (DV) for (var j2 = 0; j2 < ASSETS.length; j2++) { var k2 = ASSETS[j2], dvv = DV[k2] ? DV[k2][m] : 0; if (dvv > 0 && sh0[k2] > 0) { var g = sh0[k2] * dvv * (1 - divTax); dc += g; cash += g; divs += g; } }
       var e = value(m) - taxExt; eq.push(e);
       if (biggest(m) !== 'cash') inDays++;
-      if (keep) rows.push({ i: m, g: gm, st: state, st0: st0, want: want, pend: pendN, bg: bg, tgt: tgt, why: why0, ow: outWhy, b: B, s: S, div: dc, int: it, tax: tpay, txq: tq, cash: cash, sh: Object.assign({}, sh), eq: e, held: held, ease: ease });
+      if (keep) rows.push({ i: m, g: gm, sb: simBuy, ss: simSold, st: state, st0: st0, want: want, pend: pendN, bg: bg, tgt: tgt, why: why0, ow: outWhy, b: B, s: S, div: dc, int: it, tax: tpay, txq: tq, cash: cash, sh: Object.assign({}, sh), eq: e, held: held, ease: ease });
     }
     var last = b, liq = cash - taxExt, hv = 0;
     for (var j4 = 0; j4 < ASSETS.length; j4++) { var k4 = ASSETS[j4]; if (sh[k4] > 0) { var v4 = sh[k4] * px(last, k4); hv += v4; liq += v4 * (1 - cost - sec); } }
@@ -18961,8 +18970,8 @@ var SMB = (function () {
   }
   function one(D, p, o, s, to) {
     var x = {}, k; for (k in o) x[k] = o[k]; x.from = s; x.to = to; x.rows = false;
-    var R = run(D, p, x), st = stats(R), K = R.K, h = bh(D, K.ul, s, to, o.capital, o);
-    return { s: s, d: D.d[s], days: st.days, cagr: st.cagr, liq: st.cagrLiq, mdd: st.mdd, bh: h.cagr, bhN: h.net, bhMdd: h.mdd, inF: R.inDays / R.n };
+    var R = run(D, p, x), st = stats(R), K = R.K, h = bh(D, K.ul, R.from, to, o.capital, o);
+    return { s: R.from, d: D.d[R.from], days: st.days, cagr: st.cagr, liq: st.cagrLiq, mdd: st.mdd, bh: h.cagr, bhN: h.net, bhMdd: h.mdd, inF: R.inDays / R.n };
   }
 
   return { ASSETS: ASSETS, UNLEV: UNLEV, PRESET: PRESET, OPTS: OPTS, DED: DED, RATE: RATE, clean: clean, knobs: knobs, used: used, sma: sma, rsi: rsi, ind: ind,

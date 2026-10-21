@@ -198,30 +198,47 @@ const pick = a => a[Math.floor(rnd() * a.length)];
     const t = D.px.tqqq, s0 = t.findIndex(x => x > 0), rt = SMB.rsi(t, 30);
     check('RSI: 실제 TQQQ 는 상장 뒤 30일째부터', rt[s0 + 29] == null && rt[s0 + 30] != null, [D.d[s0]]);
   }
-  {   /* 실전(1주 단위 · 분배금 · 잔돈 다시 사기) vs 시뮬 방식 — 같은 자료 · 큰 원금 · 수수료 0 · 세금 없음: 날마다 신호·목표·나눠 사기 남은 횟수, 판 날, (잔돈이 아닌) 산 날이 같아야 함 */
-    const NT = FULL ? 600 : 150; let nT = 0, nTop = 0, nSet = 0;
-    const cases = [];
+  {   /* 실전(1주 단위 · 분배금 · 잔돈 다시 사기 · 양도세 1주 올림) vs 시뮬 방식 — 같은 자료로 날마다 신호·목표·나눠 사기 남은 횟수 · 시뮬레이터가 산 날(sb) · 판 날(ss) 이 같아야 함
+         · 원금: 아주 작음($150 · 1주도 못 사는 회차가 생김) ~ 아주 큼 · 수수료 0 ~ 0.25% · lag 0/1 · 결제 대기 2일 이상을 자주
+         · 양도세를 넣는 경우는 분배금을 뺀 자료(D0)로 — 분배금만큼 실전 현금이 많아 '세금 낼 현금이 모자란가'가 달라지는 것은 금액 차이라서 */
+    const D0 = Object.assign({}, D, { dv: null, _ind: D._ind });
+    const NT = FULL ? 800 : 200; let nT = 0, nTop = 0, nSet = 0, nTax = 0, nSmall = 0, nNoBuy = 0;
+    const cases = [[Object.assign({}, SMB.PRESET, { settle: '3' }), 0, 1e10, 0, false, true], [Object.assign({}, SMB.PRESET, { settle: '5' }), 0, 1e10, 0, false, true], [Object.assign({}, SMB.PRESET), 1, 1e10, 0, false, true]];
     for (let t = 0; t < NT; t++) {
       const p = {}; for (const k in SMB.OPTS) p[k] = rnd() < 0.5 ? SMB.PRESET[k] : pick(SMB.OPTS[k])[0];
       for (const k of ['sig', 'ul', 'out', 'bga']) if (p[k] === 'sqqq') p[k] = SMB.PRESET[k];
       if (t % 3 === 0) p.settle = pick(['2', '3', '4', '5']);
-      cases.push([p, rnd() < 0.5 ? 1 : 0]);
+      cases.push([p, rnd() < 0.5 ? 1 : 0, pick([150, 3000, 1e5, 1e7, 1e10]), pick([0, 0.001, 0.0025]), rnd() < 0.35, false]);
     }
-    cases.unshift([Object.assign({}, SMB.PRESET, { settle: '3' }), 0], [Object.assign({}, SMB.PRESET, { settle: '5' }), 0], [Object.assign({}, SMB.PRESET), 1]);
-    for (const [p, lag] of cases) {
-      const fv = SMB.firstValid(D, p, lag); if (fv < 0 || fv > N - 120) continue;
-      const a = cases.indexOf(cases.find(c => c[0] === p)) < 3 ? fv : fv + Math.floor(rnd() * (N - fv - 100)), b = a < fv + 1 ? N - 1 : Math.min(N - 1, a + 60 + Math.floor(rnd() * 4000));
-      const base = { from: a, to: b, capital: 1e10, fee: 0, sec: 0, intTax: 0, tax: null, rows: true, lag };
-      const Rs = SMB.run(D, p, Object.assign({ mode: 'sim' }, base)), Rr = SMB.run(D, p, Object.assign({ mode: 'real', divTax: 0.15 }, base));
-      nT++; if (+p.settle >= 2) nSet++;
+    for (const [p, lag, cap, fee, withTax, full] of cases) {
+      const DD = withTax ? D0 : D, fv = SMB.firstValid(DD, p, lag); if (fv < 0 || fv > N - 120) continue;
+      const a = full ? fv : fv + Math.floor(rnd() * (N - fv - 100)), b = full ? N - 1 : Math.min(N - 1, a + 60 + Math.floor(rnd() * 4000));
+      const base = { from: a, to: b, capital: cap, fee, sec: 0, intTax: 0, tax: withTax ? { fx: i => fx[i], method: pick(['fifo', 'avg']) } : null, rows: true, lag };
+      const Rs = SMB.run(DD, p, Object.assign({ mode: 'sim' }, base)), Rr = SMB.run(DD, p, Object.assign({ mode: 'real', divTax: 0.15, sec: 0.0000206 }, base));
+      nT++; if (+p.settle >= 2) nSet++; if (withTax) nTax++; if (cap <= 3000) nSmall++;
       for (let j = 0; j < Rs.rows.length; j++) {
         const x = Rs.rows[j], y = Rr.rows[j];
-        const bs = x.b.length > 0, br = y.b.some(q => !q.top), ss = x.s.length > 0, sr = y.s.length > 0;
         if (y.b.some(q => q.top)) nTop++;
-        if (x.st !== y.st || x.tgt !== y.tgt || x.ease !== y.ease || x.bg !== y.bg || bs !== br || ss !== sr) { check('실전 = 시뮬 방식과 같은 날 사고팖', false, [D.d[x.i], lag, p, [x.st, y.st, x.tgt, y.tgt, x.ease, y.ease, bs, br, ss, sr]]); break; }
+        if (j && y.sb && !y.b.length) nNoBuy++;
+        if (j && !withTax && (x.sb !== x.b.length > 0 || x.ss !== x.s.length > 0)) { check('시뮬 방식: 산 날·판 날 표시 = 실제 매매', false, [D.d[x.i], p]); break; }
+        if (j && (x.st !== y.st || x.tgt !== y.tgt || x.ease !== y.ease || x.bg !== y.bg || !!x.sb !== !!y.sb || !!x.ss !== !!y.ss)) {
+          check('실전 = 시뮬 방식과 같은 날 사고팖', false, [D.d[x.i], lag, cap, fee, withTax, p, [x.st, y.st, x.tgt, y.tgt, x.ease, y.ease, x.sb, y.sb, x.ss, y.ss]]); break;
+        }
+        if (y.b.some(q => q.top) && (y.sb || SMB.ASSETS.some(k => k !== y.tgt && y.sh[k] > 0))) { check('잔돈 매수는 목표 종목만 들고 있을 때 · 결정한 매수와 같은 날 아님', false, [D.d[y.i], p]); break; }
       }
     }
-    check('실전 = 시뮬 방식 날짜 (' + nT + '번 · 결제 대기 2일 이상 ' + nSet + '번 · 잔돈 매수 ' + nTop + '일)', nT > 50 && nSet > 15 && nTop > 100, [nT, nSet, nTop]);
+    check('실전 = 시뮬 방식 날짜 (' + nT + '번 · 결제 대기 2일 이상 ' + nSet + ' · 양도세 ' + nTax + ' · 작은 원금 ' + nSmall + ' · 잔돈 매수 ' + nTop + '일 · 1주도 못 산 회차 ' + nNoBuy + '일)',
+      nT > 100 && nSet > 30 && nTax > 30 && nSmall > 30 && nTop > 100 && nNoBuy > 10, [nT, nSet, nTax, nSmall, nTop, nNoBuy]);
+    /* 검토에서 나온 두 경우 그대로 */
+    { const p = { sig: 'tqqq', win: '110', ul: 'qld', eb: '10', xb: '8', cb: '3', cs: '2', settle: '2', ohw: '4', oh: '45', coolw: '2', cool: '65', out: 'qqq', cr: '7.5', din: '11', dout: '126', bga: 'spy', bg: '50', bgw: '130' };
+      const a = D.d.indexOf('2015-02-02'), o = { from: a, to: N - 1, capital: 1e5, fee: 0.0025, sec: 0.0000206, divTax: 0.15, intTax: 0, tax: { fx: i => fx[i], method: 'fifo' }, rows: true };
+      const R = SMB.run(D, p, Object.assign({ mode: 'real' }, o)), i = D.d.indexOf('2018-05-31'), r = R.rows.find(x => x.i === i + 1);
+      check('세금 낸 날 남은 잔돈이 나눠 사기·매도를 막지 않음(2018-06-01 QLD 매도)', a > 0 && i > 0 && r && r.s.some(s => s.k === 'qld' && !s.tax), r && r.s); }
+    { const p = { sig: 'qqq', win: '220', ul: 'qld', eb: '1.5', xb: '15', cs: '10', settle: '0', ohw: '15', oh: '50', coolw: '17', cool: '75', out: 'spxl', cr: '1', din: '63', dout: '10', bga: 'qld', bg: '15', bgw: '40' };
+      const a = D.d.indexOf('2023-06-26'), o = { from: a, to: N - 1, capital: 150, fee: 0, intTax: 0, tax: null, rows: true, lag: 1 };
+      const Rs = SMB.run(D, p, Object.assign({ mode: 'sim' }, o)), Rr = SMB.run(D, p, Object.assign({ mode: 'real', divTax: 0.15 }, o));
+      const bad2 = Rr.rows.filter((y, j) => y.b.some(q => q.top) && Rs.rows[j].ease !== y.ease);
+      check('아무것도 못 든 채 목표가 바뀌면 잔돈 매수가 아니라 나눠 사기로', a > 0 && Rr.rows.every((y, j) => y.ease === Rs.rows[j].ease && !!y.sb === !!Rs.rows[j].sb) && !bad2.length); }
   }
   {   /* 하루 늦게(lag 1) = 신호 종목을 하루 민 계열로 같은 날 판단(lag 0) — 시뮬레이터 자료의 빈 칸(SQQQ)에 '하루 민 QQQ'(첫날 0)를 넣어 비교 */
     const Dz = { d: Dsim.d, px: Object.assign({}, Dsim.px), dv: null, kind: 'sim' };
