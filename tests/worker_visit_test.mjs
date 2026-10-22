@@ -1,4 +1,4 @@
-// Worker 방문자 수(POST /hit · worker/src/index.js hit()) 단독 확인 (node tests/worker_visit_test.mjs · run_regression.py 가 부름)
+// Worker 방문자 수(POST /hit · worker/src/index.js hit()) + 15분 cron 의 Actions 실행 시각(실적발표 캘린더 earnDue) 단독 확인 (node tests/worker_visit_test.mjs · run_regression.py 가 부름)
 //  · 네이버 애널리틱스 '방문자수'와 같은 기준: 브라우저 번호(id)마다 하루(한국 시간) 1번 — 같은 IP 의 다른 브라우저는 따로 셈 (예전 IP 기준과 다른 점)
 //  · 같은 브라우저 다시 → 그대로 · 날짜가 바뀌면 다시 1번 · 번호 원문·IP 원문은 D1 에 없음(해시만)
 //  · 번호 없는 요청(예전 화면 캐시) → IP 기준 · 잘못된 번호 → IP 기준
@@ -94,5 +94,25 @@ ok(db.prepare("SELECT COUNT(*) AS n FROM visits WHERE day < '2026-10-21'").get()
   '03시 정리: 2일 지난 해시·IP별 개수 삭제', { v: db.prepare('SELECT day, COUNT(*) n FROM visits GROUP BY day').all(), c: db.prepare('SELECT day, COUNT(*) n FROM vcap GROUP BY day').all() });
 ok(db.prepare('SELECT SUM(n) AS n FROM daily').get().n === 47, '정리해도 날짜별 합계는 그대로', db.prepare('SELECT * FROM daily').all());
 
+// 15분 cron 이 실행시키는 GitHub Actions — 실적발표 캘린더는 매시간(:00~:14) + 발표가 몰리는 때 30분마다(:30~:44)
+const realFetch = globalThis.fetch;
+async function fired(kst) {   // kst = 'YYYY-MM-DDTHH:MM' (한국 시간)
+  const calls = [];
+  globalThis.fetch = async (u) => { calls.push(String(u)); return new Response(null, { status: 204 }); };
+  const t = Date.parse(kst + ':00+09:00'); clock = t;
+  const w = [];
+  await worker.scheduled({ scheduledTime: t }, { ...env, GH_TOKEN: 'x' }, { waitUntil: (p) => w.push(p) });
+  await Promise.allSettled(w);
+  globalThis.fetch = realFetch;
+  return calls.filter((u) => /dispatches$/.test(u)).map((u) => u.split('/workflows/')[1].split('/')[0]);
+}
+let f = await fired('2026-10-22T13:00'); ok(f.includes('update-earnings.yml'), '매시간 :00 칸 → 실적 캘린더 실행', f);
+f = await fired('2026-10-22T13:30'); ok(!f.includes('update-earnings.yml'), '평일 13:30(발표 몰리지 않는 때) → 실적은 안 함', f);
+f = await fired('2026-10-22T16:30'); ok(f.includes('update-earnings.yml'), '평일 16:30(국내 잠정실적 공시) → 30분마다', f);
+f = await fired('2026-10-22T06:30'); ok(f.includes('update-earnings.yml'), '목 06:30(미국 장 마감 뒤 발표) → 30분마다', f);
+f = await fired('2026-10-22T21:30'); ok(f.includes('update-earnings.yml'), '목 21:30(미국 장 전 발표) → 30분마다', f);
+f = await fired('2026-10-25T21:30'); ok(!f.includes('update-earnings.yml'), '일요일 21:30 → 30분 칸은 안 함', f);
+f = await fired('2026-10-22T13:15'); ok(!f.includes('update-earnings.yml'), ':15 칸 → 안 함(한 시간에 많아야 2번)', f);
+f = await fired('2026-10-25T09:00'); ok(f.includes('update-earnings.yml'), '주말에도 매시간', f);
 console.log(`worker_visit_test: ${oks}개 통과 · ${fails}개 실패`);
 process.exit(fails ? 1 : 0);

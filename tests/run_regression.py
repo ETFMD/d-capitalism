@@ -3354,6 +3354,13 @@ def main():
         if _r.returncode != 0:
             fail('sma200', '엔진 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:400])
 
+    # 실적발표 캘린더: 야후가 늦은 미국 실적을 나스닥 달력 값으로 먼저(nq_merge) — 네트워크 없이
+    if not a.etf_audit:
+        _r = subprocess.run([sys.executable, os.path.join(ROOT, 'tests', 'earn_nq_test.py')], capture_output=True, text=True, timeout=120)
+        print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'earn_nq_test: 출력 없음', flush=True)
+        if _r.returncode != 0:
+            fail('earn', '나스닥 잠정 실적(nq_merge) 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:300])
+
     # 외부 광고·방문 분석 서버(일시 오류가 잦고 사이트 기능과 무관) — 실패해도 사이트 오류로 보지 않음
     THIRD = ('clarity.ms', 'bing.com', 'naver.com', 'naver.net', 'pstatic.net', 'googlesyndication', 'doubleclick',
              'google-analytics', 'googletagmanager', 'adtrafficquality', 'googleadservices', 'gstatic.com', 'kakao', 'withgoogle.com')

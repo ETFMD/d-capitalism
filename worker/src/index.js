@@ -36,6 +36,7 @@
  * /sns/* → SNS 자동 게시(유튜브 쇼츠·인스타그램 릴스·스레드·페이스북 릴스) — 관리자 전용 · 영상 공개 주소 /sns/m/<id>.mp4 · OAuth 콜백 /sns/cb/<sns> (worker/src/sns.js)
  *
  * 15분마다(cron) GitHub Actions '시세 데이터 갱신'을 직접 실행시킴 (GitHub 자체 예약 실행은 자주 늦어지거나 누락됨)
+ *   · '실적발표 캘린더 갱신'도 매시간(발표가 몰리는 때 30분마다) · '아파트 시세 순위 갱신' 2시간마다 — earnDue()
  *   · 한국장과 공시 시간(평일 09~20시)·미국장(평일 22~07시, 한국 시간) 15분마다, 그 밖에는 3시간마다
  *   · GH_TOKEN(저장소 1개·Actions 쓰기 권한만 있는 토큰) 비밀값이 있을 때만 동작 · GET /status 로 마지막 실행 결과 확인
  */
@@ -47,6 +48,7 @@ import { board } from './board.js';   /* 건의 게시판 (/board · 사이트 /
 const REPO = 'ETFMD/d-capitalism';
 const WORKFLOW = 'update-market-data.yml';
 const APT_WORKFLOW = 'update-apt-rank.yml';   // 아파트 시세 순위 (2시간마다)
+const EARN_WORKFLOW = 'update-earnings.yml';  // 실적발표 캘린더 (1시간마다 · 발표가 몰리는 시간엔 30분마다)
 const BOT = /bot|crawl|spider|slurp|bingpreview|facebookexternalhit|kakaotalk-scrap|yeti|daum|headless|lighthouse|preview|python|curl|wget|java\/|go-http|axios|node-fetch/i;
 
 const CNN_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
@@ -115,6 +117,15 @@ async function dispatch(env, workflow) {
     .bind(workflow ? 'dispatch:' + workflow : 'dispatch', now, JSON.stringify({ status, ok: status === 204, detail })).run();
 }
 
+/* 실적발표 캘린더를 언제 다시 받을지 (한국 시간 h·m · dow 0=일) — 매시간 1번(:00~:14 칸) + 발표가 몰리는 때는 30분마다(:30~:44 칸도)
+ *  · 미국 장 마감 뒤 발표(amc) 05~08시 화~토 · 미국 장 전 발표(bmo) 19~22시 월~금 · 국내 잠정실적 공시 07~09시·15~18시 월~금 */
+function earnDue(h, m, dow) {
+  const slot = m < 15 ? 0 : (m >= 30 && m < 45 ? 30 : -1);
+  if (slot === 0) return true;
+  if (slot !== 30) return false;
+  const wk = dow >= 1 && dow <= 5;
+  return (h >= 5 && h < 9 && dow >= 2 && dow <= 6) || (wk && h >= 19 && h < 23) || (wk && ((h >= 7 && h < 10) || (h >= 15 && h < 19)));
+}
 function kstDay(ms) {
   return new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);   // YYYY-MM-DD (한국 시간)
 }
@@ -462,9 +473,10 @@ export default {
       if (url.pathname === '/hb') return await hb(req, env, json);   /* 72루틴 PC 프로그램 생존 신호 (PC 프로그램이 부름 · 브라우저 아님) */
       if (url.pathname === '/grp') return await grp(req, env, json);   /* 72루틴 PC 여러 대 — 주문 권한·공유 상태 (PC 프로그램이 부름) */
       if (url.pathname === '/status' && req.method === 'GET') {
-        const [row, ap] = await env.DB.batch([env.DB.prepare('SELECT t, v FROM cache WHERE k = ?').bind('dispatch'), env.DB.prepare('SELECT t, v FROM cache WHERE k = ?').bind('dispatch:' + APT_WORKFLOW)]);
+        const [row, ap, er] = await env.DB.batch([env.DB.prepare('SELECT t, v FROM cache WHERE k = ?').bind('dispatch'), env.DB.prepare('SELECT t, v FROM cache WHERE k = ?').bind('dispatch:' + APT_WORKFLOW),
+          env.DB.prepare('SELECT t, v FROM cache WHERE k = ?').bind('dispatch:' + EARN_WORKFLOW)]);
         const one = (x) => { const r = x.results && x.results[0]; return r ? { ...JSON.parse(r.v), at: new Date(r.t * 1000).toISOString() } : null; };
-        return json({ token: !!env.GH_TOKEN, lastDispatch: one(row), aptDispatch: one(ap) });
+        return json({ token: !!env.GH_TOKEN, lastDispatch: one(row), aptDispatch: one(ap), earnDispatch: one(er) });
       }
       if (url.pathname === '/etf' && req.method === 'GET') return await etfChart(env, url, cors, json);
       if (url.pathname === '/q' && req.method === 'GET') return await liveQuote(url, cors, json);   /* 실시간 시세 (프리·정규·애프터) */
@@ -511,6 +523,7 @@ export default {
     ctx.waitUntil(hbScan(env, Date.now()).catch(() => 0));               // 72루틴 PC 생존 감시: 놓친 주문 시각·오래 조용함 (HB_KEY 있을 때만)
     if (!env.GH_TOKEN) return;
     if (h % 2 === 0 && m < 15) ctx.waitUntil(dispatch(env, APT_WORKFLOW));     // 아파트 실거래: 2시간마다 (공공 API 하루 한도 안에서 가장 자주)
+    if (earnDue(h, m, dow)) ctx.waitUntil(dispatch(env, EARN_WORKFLOW));     // 실적발표 캘린더 (GitHub 자체 예약 실행은 하루 4~7번만 돌아 발표 반영이 몇 시간씩 늦었음)
     const weekday = dow >= 1 && dow <= 5, usOpen = (h >= 22 && dow >= 1 && dow <= 5) || (h < 7 && dow >= 2 && dow <= 6);
     const market = (weekday && h >= 9 && h < 20) || usOpen;           // 09~20시: 한국장 + 장 마감 뒤 ETF 분배금 공시 시간
     if (!market && !(h % 3 === 0 && m < 15)) return;                    // 장 밖에는 3시간마다

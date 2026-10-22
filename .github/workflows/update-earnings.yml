@@ -1,7 +1,7 @@
 name: 실적발표 캘린더 갱신
 
 # 코스피 TOP 100 · 미국 상장 TOP 100 실적발표일·실적·PER (data/earnings.json · earnings_kr.json · earnings_us.json)
-#  · 2시간마다(매시 23분 기준) + 한국·미국 장 마감 직후 — 주가·시가총액·PER = 최근 확정 종가 × 주식 수(매일 바뀜) · 잠정실적·IR 일정·미국 발표일·EPS 2시간 안에 반영
+#  · 매시간(발표가 몰리는 때 30분마다 — 방문자 수 Worker 15분 cron 이 실행시킴 · worker/src/index.js earnDue) + 아래 GitHub 예약(늦거나 빠질 때 대비) — 주가·시가총액·PER = 최근 확정 종가 × 주식 수(매일 바뀜) · 잠정실적·IR 일정·미국 발표일·EPS 1시간(발표가 몰리는 때 30분) 안에 반영
 #  · 재무표는 회사마다 20시간에 한 번 + 최근 4일 안에 발표한 회사는 매번 다시 받음 (스크립트가 시간 예산 안에서 나눠 받음)
 #  · 내용이 바뀐 경우에만 커밋
 on:
@@ -19,7 +19,9 @@ permissions:
   contents: write
 
 concurrency:
-  group: market-data          # 다른 데이터 갱신과 같은 그룹 → data/ 커밋이 겹치지 않음
+  # 자기 그룹 — 15분마다 도는 '시세 데이터 갱신'(market-data 그룹)과 같은 그룹이면, 앞 실행이 도는 동안 기다리던 실적 실행이
+  # 다음 시세 실행에 밀려 취소될 수 있음(한 그룹에 대기는 1개만). 커밋 파일이 서로 달라(data/earnings*) 아래 pull --rebase 로 충분
+  group: earnings
   cancel-in-progress: false
 
 jobs:

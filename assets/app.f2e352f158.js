@@ -5783,7 +5783,7 @@ var TAX = (function () {
 
 /* ════════════════════════════════════════
    [EARN] 실적발표 캘린더 — data/earnings.json(달력·목록 요약) · earnings_kr.json / earnings_us.json(기업별 분기·연간 표 — 기업을 열 때만 받음)
-   · 자료: scripts/update_earnings.py (Actions '실적발표 캘린더 갱신' 2시간마다)
+   · 자료: scripts/update_earnings.py (Actions '실적발표 캘린더 갱신' — 방문자 수 Worker 가 1시간마다·발표가 몰리는 때 30분마다 실행시킴)
    · 날짜는 그 시장의 날짜(국내 = 한국, 미국 = 미국 동부) · 미국 장 전/장 후 발표는 한국 시간도 함께 표시
    · 관심 기업: localStorage 'er-fav' (이 브라우저에만) · 주소 #co=kr-005930 / #co=us-AAPL 로 기업 상세 바로 열기
 ════════════════════════════════════════ */
@@ -6028,7 +6028,7 @@ var TAX = (function () {
     var main;
     if (r.mk === 'kr') main = '영업이익 ' + (isNum(l.op) ? amt(l.op, r) : '—');
     else main = 'EPS ' + (isNum(l.eps) ? comma(l.eps, 2) : '—') + (isNum(l.epsE) ? ' <small style="display:inline">(예상 ' + comma(l.epsE, 2) + ')</small>' : '');
-    return main + '<small>' + esc((l.pd ? l.pd + ' · ' : '') + md(l.d)) + (isNum(l.sp) ? ' · 예상 대비 ' + spTxt(l.sp) : '') + '</small>';
+    return main + '<small>' + esc((l.pd ? l.pd + ' · ' : '') + md(l.d)) + (isNum(l.sp) ? ' · 예상 대비 ' + spTxt(l.sp) : '') + (l.src === 'nasdaq' ? ' · <span class="er-dim" title="야후 파이낸스가 아직 반영하지 않아 나스닥 실적 달력 값을 먼저 보여 줍니다">나스닥 잠정</span>' : '') + '</small>';
   }
   function table() {
     var list = listRows(), fv = favs();
@@ -6085,7 +6085,7 @@ var TAX = (function () {
     var t = up ? up.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
     var pk = (d.kr || []).map(function (r) { return r.pd; }).filter(Boolean).sort().pop(), pu = (d.us || []).map(function (r) { return r.pd; }).filter(Boolean).sort().pop();
     var nus = (d.us || []).filter(function (r) { return !r.x; }).length, nsox = (d.us || []).filter(function (r) { return r.sox; }).length;
-    $('er-note').innerHTML = '마지막 갱신 ' + esc(t) + ' (2시간마다 + 한국·미국 장 마감 직후 자동) · <b>주가·시가총액·PER·PBR·EV/EBITDA = 최근 확정 종가' + (pk ? '(국내 ' + esc(md(pk)) : '(') + (pu ? ' · 미국 ' + esc(md(pu)) : '') + ') × 주식 수</b> — 장중에는 전일 종가, 장 마감 뒤에는 그날 종가로 매일 바뀝니다 · ' +
+    $('er-note').innerHTML = '마지막 갱신 ' + esc(t) + ' (1시간마다 · 발표가 몰리는 시간엔 30분마다 자동) · <b>주가·시가총액·PER·PBR·EV/EBITDA = 최근 확정 종가' + (pk ? '(국내 ' + esc(md(pk)) : '(') + (pu ? ' · 미국 ' + esc(md(pu)) : '') + ') × 주식 수</b> — 장중에는 전일 종가, 장 마감 뒤에는 그날 종가로 매일 바뀝니다 · ' +
       '국내 코스피 시가총액 상위 ' + (d.kr || []).length + '곳(우선주·ETF 제외) · 미국 상장 시가총액 상위 ' + nus + '곳' + (nsox ? ' · 필라델피아 반도체 지수(SOX) ' + nsox + '종목' + (d.sox && d.sox.d ? '(' + esc(md(d.sox.d)) + ' 구성)' : '') : '') + ' · 날짜는 그 나라 날짜(미국 = 동부) · ' +
       'PER = 후행(최근 4분기 실제 EPS) · 혼합(올해 실제+예상 EPS) · <b>선행(내년 예상 EPS)</b> · ROE·ROIC = 최근 4분기 · 부채비율 = 부채총계 ÷ 자본총계(금융사는 높게 나오는 게 정상)<br>자료: ' + esc(d.source || '') + ' — 참고용이며 투자 권유가 아닙니다.';
   }
@@ -6159,7 +6159,7 @@ var TAX = (function () {
       c.push(['예상 대비(서프라이즈)', isNum(l.sp) ? spTxt(l.sp) : '—', isNum(l.opE) ? '예상 영업이익 ' + amt(l.opE, r) : '발표 전 예상치 없음']);
     } else {
       c.push(['발표일', l.d.replace(/-/g, '.'), (l.pd || '') + ' 분기']);
-      c.push(['EPS 실제', isNum(l.eps) ? comma(l.eps, 2) : '—', '주당순이익 (보고 통화)']);
+      c.push(['EPS 실제', isNum(l.eps) ? comma(l.eps, 2) : '—', l.src === 'nasdaq' ? '나스닥 실적 달력 잠정치 — 야후 반영 뒤 바뀔 수 있음' : '주당순이익 (보고 통화)']);
       c.push(['EPS 예상', isNum(l.epsE) ? comma(l.epsE, 2) : '—', '발표 직전 애널리스트 평균']);
       c.push(['예상 대비(서프라이즈)', isNum(l.sp) ? spTxt(l.sp) : '—', isNum(l.sp) ? (l.sp >= 0 ? '예상보다 좋음(beat)' : '예상보다 나쁨(miss)') : '']);
     }
@@ -6202,7 +6202,7 @@ var TAX = (function () {
     return h;
   }
   function ftable(tb, r) {
-    if (!tb || !tb.p || !tb.p.length) return '<p class="er-unit">재무표를 아직 받지 못했습니다. 다음 갱신(2시간 안)에 채워집니다.</p>';
+    if (!tb || !tb.p || !tb.p.length) return '<p class="er-unit">재무표를 아직 받지 못했습니다. 다음 갱신(1시간 안)에 채워집니다.</p>';
     var h = '<div class="er-ft-wrap"><table class="er-ft"><thead><tr><th class="rl">항목</th>' + tb.p.map(function (p, i) { return '<th class="' + (isE(tb, i) ? 'e' : '') + '">' + qLabel(p, S.ftab, r) + (tb.pre === i ? ' (잠정)' : tb.e[i] ? ' (E)' : '') + '</th>'; }).join('') + '</tr></thead><tbody>';
     var any = false;
     FROWS.forEach(function (fr) {

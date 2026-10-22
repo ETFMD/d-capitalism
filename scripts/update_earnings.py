@@ -482,12 +482,60 @@ def raw(o, *ks):
     return o if isinstance(o, (int, float)) else None
 
 
-def nasdaq_times(days=45):
-    """앞으로 days 일의 나스닥 실적 달력 → {(기호, 날짜): 'bmo'|'amc'|None}"""
+NQ_RES = {}   # 나스닥 달력의 발표 결과 {(기호, 발표일): {'a': 실제 EPS, 'e': 예상 EPS, 'pe': 'YYYY.MM'}} — 야후가 늦게 반영할 때 대신 씀
+
+
+def _nq_money(v):
+    """'$7.25' · '($0.12)' → 7.25 · -0.12 (없거나 'N/A' 면 None)"""
+    t = str(v or '').strip().replace(',', '')
+    neg = t.startswith('(') and t.endswith(')')
+    t = t.strip('()').replace('$', '')
+    try:
+        x = float(t)
+    except ValueError:
+        return None
+    return -x if neg else x
+
+
+def _nq_pe(v):
+    """'Sep/2026' → '2026.09'"""
+    m = re.fullmatch(r'([A-Za-z]{3})/(\d{4})', str(v or '').strip())
+    mons = ('jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec')
+    if not m or m.group(1).lower() not in mons: return None
+    return '%s.%02d' % (m.group(2), mons.index(m.group(1).lower()) + 1)
+
+
+def nq_merge(s, fin, today_ny, res=None):
+    """야후가 아직 이번 발표를 넣지 않았으면(지난 발표일이 나스닥 발표일보다 앞) 나스닥 달력의 실제·예상 EPS 로 이번 발표를 hist 끝에 붙임
+    → 지난 실적·서프라이즈·다음 발표일이 발표 직후 바로 바뀜 · 야후가 반영하면(다음 재무표 받기) 야후 값으로 바뀜 · 붙인 줄은 'src': 'nasdaq'
+    · 지난 실행에 붙인 나스닥 줄은 먼저 빼고 다시 판단 · 같은 분기(회계 분기 끝)를 야후가 이미 다른 날짜로 넣었으면 붙이지 않음(예: 서던 코퍼 — 야후 10-19 · 나스닥 10-21)
+    · 바뀐 게 없으면 fin 그대로(같은 객체) 돌려줌"""
+    res = NQ_RES if res is None else res
+    old = (fin or {}).get('hist') or []
+    hh = [x for x in old if not x.get('src')]
+    last_d = hh[-1]['d'] if hh else ''
+    pes = {x.get('pe') for x in hh}
+
+    def new_q(d_, v):
+        if v.get('pe'): return v['pe'] not in pes
+        return not last_d or (datetime.date.fromisoformat(d_) - datetime.date.fromisoformat(last_d)).days > 30
+    nq = sorted((d_, v) for (s_, d_), v in res.items() if s_ == s and last_d < d_ <= today_ny and v.get('a') is not None and new_q(d_, v))
+    if nq:
+        d_, v = nq[-1]
+        a_, e_ = v['a'], v.get('e')
+        hh.append({'d': d_, 'pe': v.get('pe'), 'a': r2(a_, 3), 'e': r2(e_, 3), 'sp': r2((a_ - e_) / abs(e_) * 100, 1) if e_ else None, 'src': 'nasdaq'})
+    if hh == old:
+        return fin
+    return dict(fin or {}, hist=hh)
+
+
+def nasdaq_times(days=45, back=7):
+    """나스닥 실적 달력(지난 back 일 ~ 앞으로 days 일) → {(기호, 날짜): 'bmo'|'amc'|None}
+    · 지난 날짜에 실제 EPS 가 있으면 NQ_RES 에도 담음 (야후 earningsChart 는 발표 뒤 하루 넘게 늦는 회사가 있음 — 2026-10-21 META·SAP·IBM)"""
     out = {}
     d0 = datetime.datetime.now(NY).date()
     bad = 0
-    for i in range(-3, days):
+    for i in range(-back, days):
         if bad >= 3: log('나스닥 달력 연속 실패 — 나머지 날짜는 건너뜀 (야후 시각으로 대신)'); break
         d = d0 + datetime.timedelta(days=i)
         if d.weekday() >= 5: continue
@@ -498,7 +546,11 @@ def nasdaq_times(days=45):
         bad = 0
         for r in ((j.get('data') or {}).get('rows') or []):
             t = r.get('time') or ''
-            out[((r.get('symbol') or '').replace('/', '-'), d.isoformat())] = 'bmo' if 'pre' in t else 'amc' if 'after' in t else None
+            sym = (r.get('symbol') or '').replace('/', '-')
+            out[(sym, d.isoformat())] = 'bmo' if 'pre' in t else 'amc' if 'after' in t else None
+            a = _nq_money(r.get('eps'))
+            if i <= 0 and a is not None:
+                NQ_RES[(sym, d.isoformat())] = {'a': a, 'e': _nq_money(r.get('epsForecast')), 'pe': _nq_pe(r.get('fiscalQuarterEnding'))}
         time.sleep(0.15)
     return out
 
@@ -921,6 +973,10 @@ def build_us(prev_sum, prev_det):
     for rank, u in enumerate(uni, 1):
         s = u['s']; qq = q.get(s) or {}; o = det['co'].setdefault(s, {})
         fin = o.get('fin') or {}
+        fin2 = nq_merge(s, fin, today_ny)
+        if fin2 is not fin:
+            fin = fin2
+            if fin.get('q') or fin.get('y'): o['fin'] = fin   # 기업 상세(earnings_us.json)에도 · 재무표가 아직 없는 회사는 저장하지 않음(재무표 받기 순서가 밀리지 않게)
         o['n'] = u['n']
         price = u['p']                      # 확정 종가
         fx = u.get('f') or 1.0              # 야후 비율(현재가 기준)을 확정 종가 기준으로 바꾸는 배수
@@ -970,6 +1026,7 @@ def build_us(prev_sum, prev_det):
         if h:
             l = h[-1]
             ls = {'d': l['d'], 'pd': l.get('pe'), 'eps': l.get('a'), 'epsE': l.get('e'), 'sp': l.get('sp')}
+            if l.get('src'): ls['src'] = l['src']
         tq, ty = fin.get('q'), fin.get('y')
         k = {}
         if tq or ty:
