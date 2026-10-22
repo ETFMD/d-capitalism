@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """실적발표 캘린더 — 야후가 늦게 반영한 미국 실적을 나스닥 달력 값으로 먼저 보여 주는 nq_merge()·숫자 읽기 단독 확인
 (python3 tests/earn_nq_test.py · run_regression.py 가 부름 · 네트워크 없음)"""
-import os, sys
+import os, re, sys
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'scripts'))
 import update_earnings as U
 
@@ -32,5 +33,9 @@ ok(U.nq_merge('META', fin, '2026-10-22', {('META', '2026-10-21'): {'a': None, 'e
 f4 = U.nq_merge('META', fin, '2026-10-22', {('META', '2026-10-21'): {'a': -0.5, 'e': None, 'pe': None}})
 ok(f4['hist'][-1]['sp'] is None and f4['hist'][-1]['a'] == -0.5, '예상치 없음 → 서프라이즈 없음 · 회계 분기 모르면 30일 넘게 지난 발표만', f4['hist'][-1])
 ok(U.nq_merge('META', {'hist': [{'d': '2026-10-10', 'pe': None}]}, '2026-10-22', {('META', '2026-10-21'): {'a': 1.0, 'e': 1.0, 'pe': None}})['hist'][-1].get('src') is None, '회계 분기 모르고 30일 안이면 같은 발표로 보고 붙이지 않음')
+# 워크플로: 앞 실행을 기다린 실행도 main 최신본에서 시작(옛 커밋에서 다시 만들면 같은 자료 파일끼리 충돌해 실패) · 자기 그룹에서 차례대로
+W = open(os.path.join(ROOT, '.github', 'workflows', 'update-earnings.yml'), encoding='utf-8').read()
+ok(re.search(r'actions/checkout@v\d+\n\s+with:\n(?:\s+#.*\n)*\s+ref: \$\{\{ github\.ref \}\}', W) is not None, '실적 워크플로 checkout 이 main 최신본(ref: github.ref)')
+ok(re.search(r'group: earnings\n\s+cancel-in-progress: false', W) is not None, '실적 워크플로 자기 그룹 · 진행 중 취소 안 함')
 print('earn_nq_test: %d개 통과 · %d개 실패' % (oks, fails))
 sys.exit(1 if fails else 0)
