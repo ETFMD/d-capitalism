@@ -1443,8 +1443,8 @@ def aspeed2_check(page, base, fail, local):
     ys = page.evaluate("() => { const vm = ASPEED.videoMaker('h'), M = Math.round(ASPEED.state().sim.o.sec * 30), out = []; for (let i = 0; i <= M + 75; i++) { vm.frame(Math.min(1, i / (M - 1)), i ? 1 / 30 : 0); out.push(vm.ymax()); } vm.done(); return out; }")   # 실제 영상과 같은 장 수
     jm = max(abs(ys[i] / ys[i - 1] - 1) for i in range(1, len(ys)))
     if jm > 0.10: fail('asset-speed', '영상 세로 축이 한 장에 %.1f%% 바뀜 (부드럽게 줄고 늘어야 함 · 미리 보기 0.8초 + 0.35초 완화면 한 장 10%% 안)' % (jm * 100))
-    # 영상 가장자리 여백: 16:9 가장자리 5% · 9:16 왼쪽 64·오른쪽 192·위 128·아래 420(유튜브 쇼츠 오른쪽 단추 줄·아래 글) — 그 밖은 배경색뿐
-    # · 9:16 날짜·순위 칸은 쇼츠·릴스 UI 가 덮지 않는 가운데 칸(가로 48~888 · 세로 288~1248) 안 · 그래프는 그 아래 · 선 끝 이름은 그래프 칸 안 · 순위는 9:16 도 8줄(5위 이상 늘 보임)
+    # 영상 가장자리 여백: 16:9 가장자리 5% · 9:16 좌우 64·위 128·아래 220 — 그 밖은 배경색뿐
+    # · 9:16 은 그래프가 위에 크게(칸 높이 600 이상) · 순위는 그래프 아래 · 순위 오른쪽 끝 920 안(쇼츠 오른쪽 단추 줄에 금액이 덜 가리게) (사용자 결정 2026-10-24) · 선 끝 이름은 그래프 칸 안 · 순위는 9:16 도 8줄(5위 이상 늘 보임)
     # · 마지막 장면은 배경음악 출처 줄(긴 출처)까지 넣고 같은 검사
     # · 그래프 선 끝 이름도 5개 이상 · 기간·조건 줄: '과거 수익률은 미래를 보장하지 않음' 이 잘리지 않고 들어감 · 점선 안내는 실제 상장 전 가상 구간이 있을 때만
     for kind in ('h', 'v'):
@@ -1466,15 +1466,15 @@ def aspeed2_check(page, base, fail, local):
             if x['n'] < min(5, x['assets']):
                 fail('asset-speed', '영상 %s 그래프 선 끝 이름이 %d개만 보임 (자산 %d개 · 5개 이상 보여야 함)' % (kind, x['n'], x['assets']))
             if kind == 'v':
-                b = x['box']; rk, dt, chb = b['rank'], b['date'], b['chart']
-                if not (rk['x'] >= 48 and rk['x'] + rk['w'] <= 888 and rk['y'] >= 288 and rk['y'] + rk['h'] <= 1248 and dt['y0'] >= 288 and dt['y1'] <= rk['y']):
-                    fail('asset-speed', '영상 9:16 날짜·순위가 쇼츠 UI 에 가릴 수 있는 곳에 있음 (가운데 칸 48~888 × 288~1248 밖): 날짜 %s · 순위 %s' % (dt, rk))
-                if not (chb['y'] >= rk['y'] + rk['h'] and chb['x'] + chb['w'] <= 888 and chb['h'] >= 300):
-                    fail('asset-speed', '영상 9:16 그래프 칸 이상 (순위 아래 · 오른쪽 888 안 · 높이 300 이상): %s' % chb)
+                b = x['box']; rk, chb = b['rank'], b['chart']
+                if not (chb['y'] + chb['h'] <= rk['y'] and chb['h'] >= 600 and chb['w'] >= 950):
+                    fail('asset-speed', '영상 9:16 그래프가 위에 크게 있지 않음 (순위 위 · 높이 600 이상 · 폭 950 이상): 그래프 %s · 순위 %s' % (chb, rk))
+                if not (rk['x'] + rk['w'] <= 920 and rk['y'] + rk['h'] <= 1700):
+                    fail('asset-speed', '영상 9:16 순위 칸이 쇼츠 UI 쪽으로 너무 나감 (오른쪽 920 · 아래 1700 안): %s' % rk)
             if x['bad'] or x['lbad']:
                 fail('asset-speed', '영상 %s 안전 여백 이상 (장면 %d%%): 안전 영역 밖 그림 %d점 · 칸 밖 이름 %d개 · 안전 영역 %s' % (kind, x['frac'] * 100, x['bad'], x['lbad'], x['S']))
         sf = r[0]['S']
-        want = {'h': (96, 60, 1824, 1020), 'v': (64, 128, 888, 1500)}[kind]
+        want = {'h': (96, 60, 1824, 1020), 'v': (64, 128, 1016, 1700)}[kind]
         if (sf['x0'], sf['y0'], sf['x1'], sf['y1']) != want:
             fail('asset-speed', '영상 %s 안전 영역이 바뀜: %s (기대 %s)' % (kind, sf, want))
     # MP4 16:9 (2초 · 이 브라우저에 H.264 인코더가 없으면 내장 인코더) — 파일이 H.264 MP4 이고 프레임 수가 맞는지

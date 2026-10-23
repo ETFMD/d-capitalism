@@ -23307,12 +23307,12 @@ var WIF = (function () {
   /* ── 영상(MP4): 1920×1080 · 1080×1920 캔버스에 한 장씩 그려 H.264 로 ── */
   /* 영상 틀 — 모든 그림(제목·부제목·날짜·그래프·이름·순위·진행 막대)은 가장자리 여백 safe 안쪽에만 (바깥은 배경색뿐 · 회귀 검사가 픽셀로 확인)
      · 16:9 (유튜브 일반 영상): 가장자리 5% (방송 '글자 안전 영역')
-     · 9:16 (쇼츠·릴스): 왼쪽 64px · 오른쪽 192px · 위 128px · 아래 420px — 유튜브 쇼츠 화면의 오른쪽 단추 줄(좋아요·댓글·공유 — 오른쪽 192px)과
-       아래 글(채널·제목·소리 — 아래 약 22%)에 가리지 않게 (사용자 요청 2026-10-23: 쇼츠 UI 에 순위가 가려짐 · 그 전 2026-10-19 결정 '광고 안전 영역(위 15%·아래 35%)처럼 크게 비우지 않음'은 유지)
-       · 배치: 머리(제목·부제목·조건) → 날짜·넣은 돈 → 순위 막대 → 그래프 → 출처·진행 막대 — 날짜·순위는 어느 기기·플랫폼에서도 비어 있는 가운데 칸(가로 48~888 · 세로 288~1248)에 들어감(회귀 검사) */
+     · 9:16 (쇼츠·릴스): 좌우 64px · 위 128px · 아래 220px — 그래프를 위에 크게, 순위 막대를 그 아래에 (사용자 결정 2026-10-24: 그래프가 중심 · 쇼츠 UI 에 어느 정도 가려져도 됨)
+       · 쇼츠 UI 와 덜 겹치게만: 아래를 예전 160 → 220 으로 올려 순위가 아래 글(채널·제목)에 덜 가리고, 순위 막대는 오른쪽을 96px 더 비워(rankR) 금액 글자가 오른쪽 단추 줄에 덜 가림
+       · 2026-10-19 결정 '광고 안전 영역(위 15%·아래 35%)처럼 크게 비우지 않음' · 2026-10-23 의 '순위를 제목 아래 가운데로' 배치는 그래프가 작아져 되돌림 */
   var LAY = {
     h: { W: 1920, H: 1080, safe: { l: 96, r: 96, t: 60, b: 60 }, fs: 22, efs: 24, lw: 2, rows: 12, rowMax: 62, nameW: 150, valW: 130, chartW: 1100 },
-    v: { W: 1080, H: 1920, safe: { l: 64, r: 192, t: 128, b: 420 }, fs: 24, efs: 28, lw: 2.6, rows: 8, rowMax: 58, nameW: 200, valW: 170 }
+    v: { W: 1080, H: 1920, safe: { l: 64, r: 64, t: 128, b: 220 }, rankR: 96, fs: 24, efs: 28, lw: 2.6, rows: 8, rowMax: 58, nameW: 200, valW: 170 }
   };
   function theme() {
     var light = document.documentElement.getAttribute('data-theme') === 'light';
@@ -23384,11 +23384,10 @@ var WIF = (function () {
       ctx.font = '500 26px ' + F; G.ml = packLines(metaP, CW, 2); G.mlh = 34;
       var rowH = L.rowMax, rk = (cap + (more ? 1 : 0)) * rowH;
       G.cred = credit ? 36 : 0;                                /* 진행 막대 위 한 줄: 배경음악 출처 */
-      G.bar = Y1 - 6; G.rowH = rowH;
-      G.dateTop = G.meta + (G.ml.length - 1) * G.mlh + 22; G.date = G.dateTop + 46;   /* 날짜 · 넣은 돈 (순위 바로 위 — 쇼츠 UI 에 가리지 않는 칸) */
-      G.rank = { x: X0, y: G.dateTop + 66, w: CW, h: rk };
-      G.cardY = G.rank.y + rk + 22; G.cardB = G.bar - 18 - G.cred;
+      G.bar = Y1 - 6; G.rank = { x: X0, y: G.bar - 18 - G.cred - rk, w: CW - (L.rankR || 0), h: rk }; G.rowH = rowH;   /* 순위: 그래프 아래 · 오른쪽 rankR 만큼 더 비움 */
+      G.cardY = G.meta + (G.ml.length - 1) * G.mlh + 26; G.cardB = G.rank.y - 18;
       G.chart = { x: X0, y: G.cardY, w: CW, h: G.cardB - G.cardY };
+      G.head = 64;                                             /* 그래프 칸 위쪽 줄: 날짜 · 넣은 돈 */
     }
     if (credit) {                                              /* 출처 줄 글자 크기: 칸에 들어갈 때까지 줄임 (16:9 는 위 오른쪽 · 9:16 은 진행 막대 위) */
       ctx.font = '600 ' + (kind === 'h' ? 22 : 28) + 'px ' + F; var brandW = ctx.measureText('d-capitalism.com · 자산 속도 시뮬레이터').width;
@@ -23410,15 +23409,15 @@ var WIF = (function () {
       G.tl.forEach(function (ln, i) { ctx.fillText(fitText(ctx, ln, G.tw), X0, G.title + i * Math.round(G.tf * 1.12)); });
       ctx.fillStyle = T.acc; ctx.font = '700 ' + (kind === 'h' ? 36 : 44) + 'px ' + F; ctx.fillText(fitText(ctx, sub, kind === 'h' ? G.tw : CW), X0, G.sub);
       ctx.fillStyle = T.text3; ctx.font = '500 ' + (kind === 'h' ? 22 : 26) + 'px ' + F; G.ml.forEach(function (ln, i) { ctx.fillText(ln, X0, G.meta + i * G.mlh); });
-      /* 그래프 칸 · 날짜·넣은 돈 (16:9 은 오른쪽 위 · 9:16 은 순위 바로 위) */
+      /* 그래프 칸 · 날짜·넣은 돈 (16:9 은 오른쪽 위 · 9:16 은 그래프 칸 위쪽 줄) */
       ctx.fillStyle = T.card; rr(ctx, G.chart.x, G.chart.y, G.chart.w, G.chart.h, 24); ctx.fill();
       ctx.drawImage(ccv, cx, cy);
       if (kind === 'h') {
         ctx.textAlign = 'right'; ctx.fillStyle = T.text; ctx.font = '700 50px ' + MONO; ctx.fillText(dateText(sim, kk), X1, G.date);
         ctx.font = '500 24px ' + F; ctx.fillStyle = T.text3; ctx.fillText(fitText(ctx, invText(sim, kk), 380), X1, G.inv); ctx.textAlign = 'left';
       } else {
-        ctx.fillStyle = T.text; ctx.font = '700 46px ' + MONO; ctx.fillText(dateText(sim, kk), X0, G.date);
-        ctx.textAlign = 'right'; ctx.font = '500 26px ' + F; ctx.fillStyle = T.text3; ctx.fillText(fitText(ctx, invText(sim, kk), CW * 0.5), X1, G.date - 4); ctx.textAlign = 'left';
+        ctx.fillStyle = T.text; ctx.font = '700 46px ' + MONO; ctx.fillText(dateText(sim, kk), cx + 4, G.chart.y + pad + 44);
+        ctx.textAlign = 'right'; ctx.font = '500 26px ' + F; ctx.fillStyle = T.text3; ctx.fillText(fitText(ctx, invText(sim, kk), cw * 0.5), cx + cw - 4, G.chart.y + pad + 40); ctx.textAlign = 'left';
       }
       /* 순위 막대 (값 사이를 보간 · 자리는 부드럽게 옮겨 감 · 칸 밖으로 나간 줄은 잘라 냄) */
       var R = G.rank, inner = kind === 'h' ? 24 : 0, rx = R.x + inner, ry = R.y + inner, rw = R.w - 2 * inner, rh = R.h - 2 * inner;
@@ -23451,7 +23450,7 @@ var WIF = (function () {
       ctx.fillStyle = T.line; rr(ctx, X0, G.bar, CW, 6, 3); ctx.fill();
       if (t > 0) { ctx.fillStyle = T.acc; rr(ctx, X0, G.bar, Math.max(6, CW * t), 6, 3); ctx.fill(); }
     }
-    return { cv: cv, ctx: ctx, frame: frame, ymax: function () { return ch.scales.y.max; }, labels: function () { return { lab: ch._lab || [], top: ch.chartArea.top, bottom: ch.chartArea.bottom, h: ch.height }; }, safe: { x0: X0, y0: Y0, x1: X1, y1: Y1 }, ranks: cap, box: { rank: G.rank, chart: G.chart, date: kind === 'v' ? { y0: G.dateTop, y1: G.date + 10 } : null }, meta: G.ml.slice(), credit: credit || '', creditPx: G.cf || 0, bg: T.bg, done: function () { ch.destroy(); } };
+    return { cv: cv, ctx: ctx, frame: frame, ymax: function () { return ch.scales.y.max; }, labels: function () { return { lab: ch._lab || [], top: ch.chartArea.top, bottom: ch.chartArea.bottom, h: ch.height }; }, safe: { x0: X0, y0: Y0, x1: X1, y1: Y1 }, ranks: cap, box: { rank: G.rank, chart: G.chart }, meta: G.ml.slice(), credit: credit || '', creditPx: G.cf || 0, bg: T.bg, done: function () { ch.destroy(); } };
   }
   var MUX = null;
   function loadMuxer() {
