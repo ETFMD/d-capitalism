@@ -23012,7 +23012,7 @@ var WIF = (function () {
         scales: {
           x: { type: 'linear', min: 0, max: 1, grid: { display: false }, border: { color: grid },
                afterBuildTicks: function (ax) {                 /* 눈금은 해가 바뀌는 달(1월)에만 · 너무 많으면 몇 해씩 건너뜀 */
-                 var first = (12 - sim.s0 % 12) % 12, yrs = Math.max(1, Math.ceil((ax.max / 12) / (narrow ? 4 : 7))), t = [];
+                 var first = (12 - sim.s0 % 12) % 12, yrs = Math.max(1, Math.ceil((ax.max / 12) / (narrow ? 4 : opt.xn || 7))), t = [];   /* opt.xn = 가로 눈금 최대 개수(9:16 영상 5) */
                  for (var x = first; x <= ax.max + 1e-9; x += 12 * yrs) t.push({ value: x });
                  if (!t.length) t.push({ value: 0 });
                  ax.ticks = t;
@@ -23307,11 +23307,12 @@ var WIF = (function () {
   /* ── 영상(MP4): 1920×1080 · 1080×1920 캔버스에 한 장씩 그려 H.264 로 ── */
   /* 영상 틀 — 모든 그림(제목·부제목·날짜·그래프·이름·순위·진행 막대)은 가장자리 여백 safe 안쪽에만 (바깥은 배경색뿐 · 회귀 검사가 픽셀로 확인)
      · 16:9 (유튜브 일반 영상): 가장자리 5% (방송 '글자 안전 영역')
-     · 9:16 (쇼츠·릴스): 좌우 64px(6%) · 위 128px(7%) · 아래 160px(8%) — 화면 끝에 붙어 잘려 보이지 않을 만큼만 살짝 안쪽으로
-       (사용자 결정 2026-10-19: 플랫폼 광고 안전 영역(위 15%·아래 35%)처럼 크게 비우지 않음) */
+     · 9:16 (쇼츠·릴스): 왼쪽 64px · 오른쪽 192px · 위 128px · 아래 420px — 유튜브 쇼츠 화면의 오른쪽 단추 줄(좋아요·댓글·공유 — 오른쪽 192px)과
+       아래 글(채널·제목·소리 — 아래 약 22%)에 가리지 않게 (사용자 요청 2026-10-23: 쇼츠 UI 에 순위가 가려짐 · 그 전 2026-10-19 결정 '광고 안전 영역(위 15%·아래 35%)처럼 크게 비우지 않음'은 유지)
+       · 배치: 머리(제목·부제목·조건) → 날짜·넣은 돈 → 순위 막대 → 그래프 → 출처·진행 막대 — 날짜·순위는 어느 기기·플랫폼에서도 비어 있는 가운데 칸(가로 48~888 · 세로 288~1248)에 들어감(회귀 검사) */
   var LAY = {
     h: { W: 1920, H: 1080, safe: { l: 96, r: 96, t: 60, b: 60 }, fs: 22, efs: 24, lw: 2, rows: 12, rowMax: 62, nameW: 150, valW: 130, chartW: 1100 },
-    v: { W: 1080, H: 1920, safe: { l: 64, r: 64, t: 128, b: 160 }, fs: 24, efs: 28, lw: 2.6, rows: 8, rowMax: 58, nameW: 200, valW: 170 }
+    v: { W: 1080, H: 1920, safe: { l: 64, r: 192, t: 128, b: 420 }, fs: 24, efs: 28, lw: 2.6, rows: 8, rowMax: 58, nameW: 200, valW: 170 }
   };
   function theme() {
     var light = document.documentElement.getAttribute('data-theme') === 'light';
@@ -23383,10 +23384,11 @@ var WIF = (function () {
       ctx.font = '500 26px ' + F; G.ml = packLines(metaP, CW, 2); G.mlh = 34;
       var rowH = L.rowMax, rk = (cap + (more ? 1 : 0)) * rowH;
       G.cred = credit ? 36 : 0;                                /* 진행 막대 위 한 줄: 배경음악 출처 */
-      G.bar = Y1 - 6; G.rank = { x: X0, y: G.bar - 18 - G.cred - rk, w: CW, h: rk }; G.rowH = rowH;
-      G.cardY = G.meta + (G.ml.length - 1) * G.mlh + 26; G.cardB = G.rank.y - 18;
+      G.bar = Y1 - 6; G.rowH = rowH;
+      G.dateTop = G.meta + (G.ml.length - 1) * G.mlh + 22; G.date = G.dateTop + 46;   /* 날짜 · 넣은 돈 (순위 바로 위 — 쇼츠 UI 에 가리지 않는 칸) */
+      G.rank = { x: X0, y: G.dateTop + 66, w: CW, h: rk };
+      G.cardY = G.rank.y + rk + 22; G.cardB = G.bar - 18 - G.cred;
       G.chart = { x: X0, y: G.cardY, w: CW, h: G.cardB - G.cardY };
-      G.head = 64;                                             /* 그래프 칸 위쪽 줄: 날짜 · 넣은 돈 */
     }
     if (credit) {                                              /* 출처 줄 글자 크기: 칸에 들어갈 때까지 줄임 (16:9 는 위 오른쪽 · 9:16 은 진행 막대 위) */
       ctx.font = '600 ' + (kind === 'h' ? 22 : 28) + 'px ' + F; var brandW = ctx.measureText('d-capitalism.com · 자산 속도 시뮬레이터').width;
@@ -23395,7 +23397,7 @@ var WIF = (function () {
     }
     var pad = 16, cx = G.chart.x + pad, cy = G.chart.y + pad + (G.head || 0), cw = G.chart.w - 2 * pad, chh = G.chart.h - 2 * pad - (G.head || 0);
     var ccv = document.createElement('canvas'); ccv.width = cw; ccv.height = Math.max(120, chh);
-    var ch = new Chart(ccv.getContext('2d'), chartConfig(sim, { fixed: true, fs: L.fs, efs: L.efs, lw: L.lw, padR: kind === 'h' ? 250 : 260, tick: T.text3 }));
+    var ch = new Chart(ccv.getContext('2d'), chartConfig(sim, { fixed: true, fs: L.fs, efs: L.efs, lw: L.lw, padR: kind === 'h' ? 250 : 260, xn: kind === 'h' ? 7 : 5, tick: T.text3 }));
     var ypos = {};
     function frame(t, dt) {
       var pos = setChartT(ch, sim, t, dt), k = Math.min(sim.N - 1, Math.floor(pos)), f = pos - k, kk = Math.min(sim.N - 1, Math.round(pos));
@@ -23408,15 +23410,15 @@ var WIF = (function () {
       G.tl.forEach(function (ln, i) { ctx.fillText(fitText(ctx, ln, G.tw), X0, G.title + i * Math.round(G.tf * 1.12)); });
       ctx.fillStyle = T.acc; ctx.font = '700 ' + (kind === 'h' ? 36 : 44) + 'px ' + F; ctx.fillText(fitText(ctx, sub, kind === 'h' ? G.tw : CW), X0, G.sub);
       ctx.fillStyle = T.text3; ctx.font = '500 ' + (kind === 'h' ? 22 : 26) + 'px ' + F; G.ml.forEach(function (ln, i) { ctx.fillText(ln, X0, G.meta + i * G.mlh); });
-      /* 그래프 칸 (+ 9:16 은 칸 위쪽 줄에 날짜·넣은 돈) */
+      /* 그래프 칸 · 날짜·넣은 돈 (16:9 은 오른쪽 위 · 9:16 은 순위 바로 위) */
       ctx.fillStyle = T.card; rr(ctx, G.chart.x, G.chart.y, G.chart.w, G.chart.h, 24); ctx.fill();
       ctx.drawImage(ccv, cx, cy);
       if (kind === 'h') {
         ctx.textAlign = 'right'; ctx.fillStyle = T.text; ctx.font = '700 50px ' + MONO; ctx.fillText(dateText(sim, kk), X1, G.date);
         ctx.font = '500 24px ' + F; ctx.fillStyle = T.text3; ctx.fillText(fitText(ctx, invText(sim, kk), 380), X1, G.inv); ctx.textAlign = 'left';
       } else {
-        ctx.fillStyle = T.text; ctx.font = '700 46px ' + MONO; ctx.fillText(dateText(sim, kk), cx + 4, G.chart.y + pad + 44);
-        ctx.textAlign = 'right'; ctx.font = '500 26px ' + F; ctx.fillStyle = T.text3; ctx.fillText(fitText(ctx, invText(sim, kk), cw * 0.5), cx + cw - 4, G.chart.y + pad + 40); ctx.textAlign = 'left';
+        ctx.fillStyle = T.text; ctx.font = '700 46px ' + MONO; ctx.fillText(dateText(sim, kk), X0, G.date);
+        ctx.textAlign = 'right'; ctx.font = '500 26px ' + F; ctx.fillStyle = T.text3; ctx.fillText(fitText(ctx, invText(sim, kk), CW * 0.5), X1, G.date - 4); ctx.textAlign = 'left';
       }
       /* 순위 막대 (값 사이를 보간 · 자리는 부드럽게 옮겨 감 · 칸 밖으로 나간 줄은 잘라 냄) */
       var R = G.rank, inner = kind === 'h' ? 24 : 0, rx = R.x + inner, ry = R.y + inner, rw = R.w - 2 * inner, rh = R.h - 2 * inner;
@@ -23449,7 +23451,7 @@ var WIF = (function () {
       ctx.fillStyle = T.line; rr(ctx, X0, G.bar, CW, 6, 3); ctx.fill();
       if (t > 0) { ctx.fillStyle = T.acc; rr(ctx, X0, G.bar, Math.max(6, CW * t), 6, 3); ctx.fill(); }
     }
-    return { cv: cv, ctx: ctx, frame: frame, ymax: function () { return ch.scales.y.max; }, labels: function () { return { lab: ch._lab || [], top: ch.chartArea.top, bottom: ch.chartArea.bottom, h: ch.height }; }, safe: { x0: X0, y0: Y0, x1: X1, y1: Y1 }, ranks: cap, meta: G.ml.slice(), credit: credit || '', creditPx: G.cf || 0, bg: T.bg, done: function () { ch.destroy(); } };
+    return { cv: cv, ctx: ctx, frame: frame, ymax: function () { return ch.scales.y.max; }, labels: function () { return { lab: ch._lab || [], top: ch.chartArea.top, bottom: ch.chartArea.bottom, h: ch.height }; }, safe: { x0: X0, y0: Y0, x1: X1, y1: Y1 }, ranks: cap, box: { rank: G.rank, chart: G.chart, date: kind === 'v' ? { y0: G.dateTop, y1: G.date + 10 } : null }, meta: G.ml.slice(), credit: credit || '', creditPx: G.cf || 0, bg: T.bg, done: function () { ch.destroy(); } };
   }
   var MUX = null;
   function loadMuxer() {
