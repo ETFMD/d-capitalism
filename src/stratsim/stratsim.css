@@ -128,6 +128,8 @@ html[data-theme="light"] .ss-isel { color-scheme: light; }
 .ss-pillbtn:hover { border-color: var(--accent); }
 .ss-logbtn { left: 0; bottom: 0; }
 .ss-inflbtn { left: 40px; top: 4px; }
+.ss-zoombtn { left: 44px; bottom: 0; color: var(--accent); border-color: rgba(49,130,246,.45); }   /* 휠로 확대했을 때만 (42-chart.js SZ) */
+.ss-zoombtn[hidden] { display: none; }
 
 /* 마우스 풍선 카드 */
 #ss-tip { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 5; }

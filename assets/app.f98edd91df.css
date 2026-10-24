@@ -1001,6 +1001,16 @@ html[data-theme="light"] #page-muhan,html[data-theme="light"] #page-vr,html[data
 .mh-ok{color:var(--m-ok)}.mh-bad{color:var(--m-bad)}.mh-warn{color:var(--m-warn)}.mh-info{color:var(--m-info)}.mh-rev{color:var(--m-rev)}.mh-ac{color:var(--m-ac)}
 .mh-small{font-size:11px}.mh-tiny{font-size:10px}
 .mh-btn{border:1px solid var(--m-bd);background:var(--m-s2);color:var(--m-tx);border-radius:10px;padding:8px 12px;font:inherit;font-size:13px;cursor:pointer}
+/* 무한매수법 '세부 규칙 · 세금·수수료' 접기 단추 — 사이트 공통 아코디언(.inc-sec > summary · #mb-set .mb-acc)과 같은 모양: 카드형 줄 · 왼쪽 파란 막대 · 요약은 제목 아래 줄(기본값과 다르면 파란색) · 둥근 ▼(펼치면 ▲) */
+.mh-acc>.mh-acc-h{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"t a" "v a";column-gap:10px;row-gap:3px;width:100%;margin:0;padding:11px 12px 11px 14px;font:inherit;color:inherit;text-align:left;cursor:pointer;user-select:none;border-radius:12px;background:rgba(var(--fg-rgb),0.03);border:1px solid rgba(var(--fg-rgb),0.07);transition:background .15s,border-color .15s}
+.mh-acc>.mh-acc-h:hover{background:rgba(49,130,246,0.06);border-color:rgba(49,130,246,0.2)}
+.mh-acc>.mh-acc-h:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mh-acc.is-open>.mh-acc-h{border-radius:12px 12px 0 0}
+.mh-acc .inc-sec-t{grid-area:t;white-space:normal;font-size:13.5px}
+.mh-acc .inc-sec-v{grid-area:v;min-width:0;max-width:none;text-align:left;padding-left:12px;font-size:11.5px;white-space:normal;line-height:1.45}
+.mh-acc .acc-arrow{grid-area:a;align-self:center}
+.mh-acc.is-open .acc-arrow{transform:rotate(180deg)}
+.mh-acc .mh-acc-in{padding:12px 14px 14px}
 .mh-btn:hover{border-color:var(--m-ac-b)}.mh-btn:disabled{opacity:.45;cursor:not-allowed}
 .mh-btn-p{background:var(--m-ac);color:var(--m-on-ac);border-color:var(--m-ac);font-weight:700}
 .mh-btn-sel{background:var(--m-ac-s);border-color:var(--m-ac);color:var(--m-ac);font-weight:600}

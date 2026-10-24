@@ -159,8 +159,9 @@ const ssDatePick = {
     const pop = this.st.pop, bound = side === 'e' ? this.effExit() : this.effEntry();
     const d0 = DS.days[0].date, d1 = DS.days[DS.days.length - 1].date;
     const minY = +d0.slice(0, 4), minM = +d0.slice(5, 7) - 1, maxY = +d1.slice(0, 4), maxM = +d1.slice(5, 7) - 1;
-    pop.querySelector('.ss-dcm').value = String(m);
-    pop.querySelector('.ss-dcy').value = String(y);
+    // select 를 콕 집어 찾음 — 사이트 공통 고르기([CSEL])가 select 앞에 같은 class 의 단추를 두므로 '.ss-dcy' 만 쓰면 단추가 잡힘
+    pop.querySelector('select.ss-dcm').value = String(m);
+    pop.querySelector('select.ss-dcy').value = String(y);
     pop.querySelector('[data-nav="-1"]').disabled = y < minY || (y === minY && m <= minM);
     pop.querySelector('[data-nav="1"]').disabled = y > maxY || (y === maxY && m >= maxM);
     const dow = new Date(Date.UTC(y, m, 1)).getUTCDay(), dim = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
@@ -215,19 +216,21 @@ const ssDatePick = {
       if (ev.target.closest('.ss-dcclr')) { if (side === 'e') S.ed = ''; else S.xd = ''; this.close(); ssChanged(); }
     });
     pop.addEventListener('change', (ev) => {
-      if (!ev.target.matches('.ss-dcm, .ss-dcy')) return;
-      let yy = +pop.querySelector('.ss-dcy').value, mm = +pop.querySelector('.ss-dcm').value;
+      if (!ev.target.matches('select.ss-dcm, select.ss-dcy')) return;
+      let yy = +pop.querySelector('select.ss-dcy').value, mm = +pop.querySelector('select.ss-dcm').value;
       const d0 = DS.days[0].date, d1 = DS.days[DS.days.length - 1].date;
       const lo = { y: +d0.slice(0, 4), m: +d0.slice(5, 7) - 1 }, hi = { y: +d1.slice(0, 4), m: +d1.slice(5, 7) - 1 };
       if (yy < lo.y || (yy === lo.y && mm < lo.m)) { yy = lo.y; mm = lo.m; }
       if (yy > hi.y || (yy === hi.y && mm > hi.m)) { yy = hi.y; mm = hi.m; }
       this.st.y = yy; this.st.m = mm; this.grid(side, yy, mm);
     });
-    this._dd = (e) => { if (this.st && !this.st.pop.contains(e.target) && e.target !== this.st.trig && !this.st.trig.contains(e.target)) this.close(); };
+    // 바깥을 누르면 닫음 — 단, 연도·월 고르기 목록(.cs-menu)은 사이트 공통 고르기([CSEL])가 <body> 끝에 따로 띄우므로 '안'으로 봄
+    // (예전: 목록에서 연도를 누르는 순간 달력이 닫혀 연도·월을 바꿀 수 없었음)
+    this._dd = (e) => { const t = e.target; if (this.st && !this.st.pop.contains(t) && t !== this.st.trig && !this.st.trig.contains(t) && !(t.closest && t.closest('.cs-menu'))) this.close(); };
     this._kd = (e) => { if (e.key === 'Escape') this.close(); };
     this._rp = () => { if (this.st) this.pos(this.st.pop, this.st.trig); };
     this._sc = (e) => {
-      if (!this.st || this.st.pop.contains(e.target)) return;
+      if (!this.st || this.st.pop.contains(e.target) || (e.target.closest && e.target.closest('.cs-menu'))) return;   // 목록 안 스크롤은 무시
       const r = this.st.trig.getBoundingClientRect();
       if (r.bottom < 0 || r.top > window.innerHeight || (!r.width && !r.height)) { this.close(); return; }
       this.pos(this.st.pop, this.st.trig);

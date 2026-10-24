@@ -4304,10 +4304,37 @@ function ssDayDeltaFor(ds, today) {
   return y != null ? ssDayChange(today, y) : null;
 }
 const ssDeltaText = (d) => { const s = d.pct >= 0 ? '+' : ''; return '(' + s + d.pct.toFixed(1) + '% · ' + s + ssMoney(d.abs) + ')'; };
+// ── 휠 확대·축소 (마우스 · 2026-10-24) — 그림 영역 위에서 휠 = 마우스 자리의 날짜를 고정한 채 기간(가로)만 확대·축소
+//    · Shift+휠 또는 가로 휠 = 옆으로 이동 · 더블클릭·[전체 보기] = 처음대로 · 전체 보기에서 더 줄이면 막지 않음(페이지가 스크롤)
+//    · 세로축은 보이는 기간의 값에 맞춰 다시(Chart.js 가 x 범위 안 점만 봄 · 보통 눈금은 0 고정을 풂) · 끌어서 구간 고르기는 그대로
+//    · 범위는 날짜(라벨)로 기억 → 계산이 다시 돌아도 같은 날짜 범위 · 그 날짜가 없어지면(기간·간격이 바뀜) 전체로
+const SZ = { lo: null, hi: null }, SS_ZMIN = 4;   // 가장 좁게: 라벨 4칸
+function ssZoomIdx(c) {
+  if (!SZ.lo) return null;
+  const L = c.data.labels || [], i0 = L.indexOf(SZ.lo), i1 = L.indexOf(SZ.hi);
+  if (i0 < 0 || i1 < 0 || i1 - i0 < Math.min(SS_ZMIN, L.length - 1) || (i0 === 0 && i1 === L.length - 1)) { SZ.lo = SZ.hi = null; return null; }
+  return [i0, i1];
+}
+function ssZoomApply(c) {
+  const z = ssZoomIdx(c), x = c.options.scales.x, y = c.options.scales.y;
+  if (z) { x.min = z[0]; x.max = z[1]; } else { delete x.min; delete x.max; }
+  if (!S.log) { y.min = z ? undefined : 0; y.beginAtZero = !z; }
+  const b = document.getElementById('ss-zoom');
+  if (b) b.hidden = !z;
+}
+function ssZoomSet(c, i0, i1) {
+  const L = c.data.labels, n = L.length;
+  if (i0 <= 0 && i1 >= n - 1) SZ.lo = SZ.hi = null; else { SZ.lo = L[Math.max(0, i0)]; SZ.hi = L[Math.min(n - 1, i1)]; }
+  ssZoomApply(c); c.update('none');
+}
+function ssZoomReset() { if (!SZ.lo || !ssChart) return; SZ.lo = SZ.hi = null; ssZoomApply(ssChart); ssChart.update('none'); }
+// 선 끝 이름표를 붙일 라벨 번호: 확대했으면 보이는 마지막 날
+function ssEndIdx(c) { const z = ssZoomIdx(c); return z ? z[1] : c.data.labels.length - 1; }
+
 const ssEndLabels = {
   id: 'ssEndLabels',
   beforeLayout(c) {
-    const last = c.data.labels.length - 1;
+    const last = ssEndIdx(c), atEnd = last === c.data.labels.length - 1;
     if (last < 0) return;
     const cx = c.ctx, compact = window.innerWidth <= 600;
     let maxW = 0;
@@ -4320,7 +4347,7 @@ const ssEndLabels = {
       if (!compact) {
         cx.font = '500 11px ' + SS_MONO;
         let w = cx.measureText(ssMoney(Math.round(v))).width;
-        if (R.ctx && R.ctx.latest) { const d = ssDayDeltaFor(ds, v); if (d) { cx.font = '600 9px ' + SS_MONO; w += 5 + cx.measureText(ssDeltaText(d)).width; } }
+        if (atEnd && R.ctx && R.ctx.latest) { const d = ssDayDeltaFor(ds, v); if (d) { cx.font = '600 9px ' + SS_MONO; w += 5 + cx.measureText(ssDeltaText(d)).width; } }
         maxW = Math.max(maxW, w);
       }
     });
@@ -4332,7 +4359,7 @@ const ssEndLabels = {
     if (!area) return;
     const infl = document.getElementById('ss-infl');
     if (infl) { const bx = Math.round(area.left + 4), by = Math.round(area.top + 4); if (infl._lx !== bx || infl._ly !== by) { infl.style.left = bx + 'px'; infl.style.top = by + 'px'; infl._lx = bx; infl._ly = by; } }
-    const compact = window.innerWidth <= 600, last = c.data.labels.length - 1;
+    const compact = window.innerWidth <= 600, last = ssEndIdx(c), atEnd = last === c.data.labels.length - 1;
     if (last < 0) return;
     const ys = c.scales.y;
     const items = c.data.datasets.map((ds, i) => {
@@ -4354,7 +4381,7 @@ const ssEndLabels = {
     const x = area.right + 8, ak = ssActiveKey();
     for (const it of items) {
       // 라벨 → 선 끝 점까지 점선 이끔선 · 끝 점(패널이 열린 선은 크게)
-      const tipR = it.ds._key === ak ? 5 : 3, endX = area.right;
+      const tipR = it.ds._key === ak ? 5 : 3, endX = Math.min(area.right, c.scales.x.getPixelForValue(last));
       cx.setLineDash([2, 2]); cx.lineWidth = 1; cx.strokeStyle = it.color; cx.fillStyle = it.color;
       cx.beginPath(); cx.moveTo(x - 2, it.y); cx.lineTo(endX, it.oy); cx.stroke();
       cx.setLineDash([]);
@@ -4369,7 +4396,7 @@ const ssEndLabels = {
       cx.font = '500 11px ' + SS_MONO; cx.textBaseline = 'top';
       const vs = ssMoney(Math.round(it.v));
       cx.fillText(vs, x, it.y + 1);
-      if (R.ctx && R.ctx.latest) {
+      if (atEnd && R.ctx && R.ctx.latest) {
         const d = ssDayDeltaFor(it.ds, it.v);
         if (d) { const w = cx.measureText(vs).width; cx.font = '600 9px ' + SS_MONO; cx.fillStyle = d.pct >= 0 ? SS_UP : SS_DOWN; cx.fillText(ssDeltaText(d), x + w + 5, it.y + 2); }
       }
@@ -4394,6 +4421,7 @@ const ssMarkers = {
     if (!log.length || !labs.length) return;
     const valOf = cfg.type === 'sma' ? (ev) => ev.total : (r) => +r.value;
     cx.save();
+    cx.beginPath(); cx.rect(area.left - 8, area.top - 8, area.right - area.left + 16, area.bottom - area.top + 16); cx.clip();   // 확대했을 때 그림 영역 밖 상세선·표시는 잘라 냄
     const pts = [];
     for (let i = 0; i < labs.length; i++) if (ds.data[i] != null) pts.push({ x: xs.getPixelForValue(i), v: ds.data[i] });
     for (const ev of log) { const v = valOf(ev); if (v > 0 && ev.date != null) pts.push({ x: ssXForDate(c, ev.date), v: v * ssInflFactor(ev.date, labs[0]) }); }
@@ -4436,6 +4464,7 @@ const ssRangePlugin = {
     const T = ssTheme(), xs = c.scales.x, lo = Math.min(SR.a, SR.b), hi = Math.max(SR.a, SR.b);
     const x1 = xs.getPixelForValue(lo), x2 = xs.getPixelForValue(hi), cx = c.ctx;
     cx.save();
+    cx.beginPath(); cx.rect(area.left, area.top, area.right - area.left, area.bottom - area.top); cx.clip();   // 확대해 구간 일부가 밖이면 음영은 안쪽만
     cx.fillStyle = 'rgba(49,130,246,0.12)';
     cx.fillRect(Math.min(x1, x2), area.top, Math.abs(x2 - x1) || 1, area.bottom - area.top);
     cx.strokeStyle = 'rgba(49,130,246,0.55)'; cx.lineWidth = 1;
@@ -4460,6 +4489,7 @@ const ssRangePlugin = {
     const map = SR.map, ys = c.scales.y;
     if (!map || !ys) return;
     cx.save();
+    cx.beginPath(); cx.rect(area.left - 4, area.top - 4, area.right - area.left + 8, area.bottom - area.top + 8); cx.clip();
     const mx = (x1 + x2) / 2, items = [];
     const PF = '700 10px ' + SS_MONO, RF = '600 8px ' + SS_MONO;
     for (const ds of c.data.datasets) {
@@ -4671,6 +4701,7 @@ function ssChartUpdate() {
   ch.options.scales.y.type = S.log ? 'logarithmic' : 'linear';
   ch.options.scales.y.beginAtZero = !S.log;
   ch.options.scales.y.min = S.log ? undefined : 0;
+  ssZoomApply(ch);   // 확대해 둔 날짜 범위 유지(없어진 날짜면 전체로)
   ch.update('none');
   if (SR.a != null && SR.b != null) {   // 라벨이 바뀌면 고정 구간을 날짜로 다시 찾음
     if (S.pin) { const L = ch.data.labels, i1 = L.indexOf(S.pin[0]), i2 = L.indexOf(S.pin[1]); if (i1 >= 0 && i2 >= 0) { SR.a = i1; SR.b = i2; SR.map = ssRangeChange(Math.min(i1, i2), Math.max(i1, i2)); } else { SR.a = SR.b = null; SR.map = null; S.pin = null; } }
@@ -4690,6 +4721,44 @@ function ssWireChart() {
     if (hit) ssShowMarkerTip(hit); else ssHideMarkerTip();
   });
   cv.addEventListener('mouseleave', () => { ssHideMarkerTip(); if (SM.hover !== null) { SM.hover = null; ch.draw(); } });
+  // 휠 확대·축소 · Shift/가로 휠 이동 (위 SZ 설명)
+  cv.addEventListener('wheel', (e) => {
+    const a = ch.chartArea, L = ch.data.labels || [], n = L.length;
+    if (!a || n < SS_ZMIN + 2) return;
+    const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+    if (mx < a.left || mx > a.right || my < a.top || my > a.bottom) return;   // 그림 영역 밖(눈금·이름표) = 평소처럼 페이지 스크롤
+    const z = ssZoomIdx(ch), i0 = z ? z[0] : 0, i1 = z ? z[1] : n - 1, span = i1 - i0;
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+    const pan = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
+    if (pan) {
+      if (!z) return;
+      e.preventDefault();
+      const d = (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * unit;
+      if (!d) return;
+      let step = Math.round(span * Math.max(-0.5, Math.min(0.5, d / 1000)));
+      if (!step) step = Math.sign(d);
+      let s0 = i0 + step, s1 = i1 + step;
+      if (s0 < 0) { s1 -= s0; s0 = 0; }
+      if (s1 > n - 1) { s0 -= s1 - (n - 1); s1 = n - 1; }
+      if (s0 !== i0) ssZoomSet(ch, s0, s1);
+      return;
+    }
+    const dy = e.deltaY * unit;
+    if (!dy || (!z && dy > 0)) return;                    // 전체 보기에서 더 줄이기 = 막지 않음(페이지 스크롤)
+    e.preventDefault();
+    let ns = Math.round(span * Math.pow(2, Math.max(-1, Math.min(1, dy / 400))));   // 휠 한 칸(100) ≈ 16% · 트랙패드는 조금씩
+    if (ns === span) ns = span + Math.sign(dy);
+    ns = Math.max(Math.min(SS_ZMIN, n - 1), Math.min(n - 1, ns));
+    const at = Math.min(i1, Math.max(i0, ch.scales.x.getValueForPixel(mx))), ratio = span ? (at - i0) / span : 0.5;
+    let s0 = Math.round(at - ratio * ns), s1 = s0 + ns;
+    if (s0 < 0) { s1 -= s0; s0 = 0; }
+    if (s1 > n - 1) { s0 -= s1 - (n - 1); s1 = n - 1; }
+    s0 = Math.max(0, s0);
+    if (s0 !== i0 || s1 !== i1) ssZoomSet(ch, s0, s1);
+  }, { passive: false });
+  cv.addEventListener('dblclick', () => ssZoomReset());
+  const zb = document.getElementById('ss-zoom');
+  if (zb) zb.addEventListener('click', () => ssZoomReset());
   // 끌어서 구간 고르기 (마우스) — 놓으면 사라짐, Shift 를 누른 채 놓으면 고정
   cv.addEventListener('mousedown', (e) => {
     if (ssIsTouch() || !ch.chartArea) return;
@@ -6083,8 +6152,9 @@ const ssDatePick = {
     const pop = this.st.pop, bound = side === 'e' ? this.effExit() : this.effEntry();
     const d0 = DS.days[0].date, d1 = DS.days[DS.days.length - 1].date;
     const minY = +d0.slice(0, 4), minM = +d0.slice(5, 7) - 1, maxY = +d1.slice(0, 4), maxM = +d1.slice(5, 7) - 1;
-    pop.querySelector('.ss-dcm').value = String(m);
-    pop.querySelector('.ss-dcy').value = String(y);
+    // select 를 콕 집어 찾음 — 사이트 공통 고르기([CSEL])가 select 앞에 같은 class 의 단추를 두므로 '.ss-dcy' 만 쓰면 단추가 잡힘
+    pop.querySelector('select.ss-dcm').value = String(m);
+    pop.querySelector('select.ss-dcy').value = String(y);
     pop.querySelector('[data-nav="-1"]').disabled = y < minY || (y === minY && m <= minM);
     pop.querySelector('[data-nav="1"]').disabled = y > maxY || (y === maxY && m >= maxM);
     const dow = new Date(Date.UTC(y, m, 1)).getUTCDay(), dim = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
@@ -6139,19 +6209,21 @@ const ssDatePick = {
       if (ev.target.closest('.ss-dcclr')) { if (side === 'e') S.ed = ''; else S.xd = ''; this.close(); ssChanged(); }
     });
     pop.addEventListener('change', (ev) => {
-      if (!ev.target.matches('.ss-dcm, .ss-dcy')) return;
-      let yy = +pop.querySelector('.ss-dcy').value, mm = +pop.querySelector('.ss-dcm').value;
+      if (!ev.target.matches('select.ss-dcm, select.ss-dcy')) return;
+      let yy = +pop.querySelector('select.ss-dcy').value, mm = +pop.querySelector('select.ss-dcm').value;
       const d0 = DS.days[0].date, d1 = DS.days[DS.days.length - 1].date;
       const lo = { y: +d0.slice(0, 4), m: +d0.slice(5, 7) - 1 }, hi = { y: +d1.slice(0, 4), m: +d1.slice(5, 7) - 1 };
       if (yy < lo.y || (yy === lo.y && mm < lo.m)) { yy = lo.y; mm = lo.m; }
       if (yy > hi.y || (yy === hi.y && mm > hi.m)) { yy = hi.y; mm = hi.m; }
       this.st.y = yy; this.st.m = mm; this.grid(side, yy, mm);
     });
-    this._dd = (e) => { if (this.st && !this.st.pop.contains(e.target) && e.target !== this.st.trig && !this.st.trig.contains(e.target)) this.close(); };
+    // 바깥을 누르면 닫음 — 단, 연도·월 고르기 목록(.cs-menu)은 사이트 공통 고르기([CSEL])가 <body> 끝에 따로 띄우므로 '안'으로 봄
+    // (예전: 목록에서 연도를 누르는 순간 달력이 닫혀 연도·월을 바꿀 수 없었음)
+    this._dd = (e) => { const t = e.target; if (this.st && !this.st.pop.contains(t) && t !== this.st.trig && !this.st.trig.contains(t) && !(t.closest && t.closest('.cs-menu'))) this.close(); };
     this._kd = (e) => { if (e.key === 'Escape') this.close(); };
     this._rp = () => { if (this.st) this.pos(this.st.pop, this.st.trig); };
     this._sc = (e) => {
-      if (!this.st || this.st.pop.contains(e.target)) return;
+      if (!this.st || this.st.pop.contains(e.target) || (e.target.closest && e.target.closest('.cs-menu'))) return;   // 목록 안 스크롤은 무시
       const r = this.st.trig.getBoundingClientRect();
       if (r.bottom < 0 || r.top > window.innerHeight || (!r.width && !r.height)) { this.close(); return; }
       this.pos(this.st.pop, this.st.trig);
@@ -7022,7 +7094,8 @@ function ssShellHtml() {
   return '<div class="ss-top">'
     + '<span class="ss-fetched" id="ss-fetched" hidden title="미국 장이 열린 동안 한 시간마다(마감 뒤 한 번 더) 새 일봉을 받습니다 — 자료 출처는 아래 설명글">가격 자료 갱신 <b id="ss-fetched-t"></b></span>'
     + '<div class="ss-topr"><details class="ss-res" id="ss-res"><summary>자료실 <i>▾</i></summary><div class="ss-resl">'
-    + '<a href="tqqq-intraday/">TQQQ 장중 흐름</a><a href="9sig-overfit/">9sig 과최적화 탐색기</a><a href="sma-overfit/">SMA 과최적화 탐색기</a></div></details>'
+    + '<a href="tqqq-intraday/">TQQQ 장중 흐름</a><a href="9sig-overfit/">9sig 과최적화 탐색기</a><a href="sma-overfit/">SMA 과최적화 탐색기</a>'
+    + '<a href="muhan/">무한매수법</a><a href="muhan-backtest/">무한매수법 백테스트</a><a href="vr/">밸류리밸런싱 VR 5.0</a><a href="vr-backtest/">밸류리밸런싱 VR 5.0 백테스트</a></div></details>'   // 상단 메뉴 '투자전략 자료실'과 같은 목록(2026-10-24)
     + '<button type="button" class="ss-btn ss-sharebtn" id="ss-share" data-ss-share title="지금 설정 그대로 열리는 링크 복사">' + SS_SVG.link + '<span>링크 복사</span></button></div></div>'
     + '<div class="ss-layout">'
     + '<aside class="ss-side card"><div class="ss-sidehead"><button type="button" class="ss-btn ss-anbtn" id="ss-an-open">' + SS_SVG.grid + ' 분석 표</button></div>'
@@ -7040,7 +7113,8 @@ function ssShellHtml() {
     + '<div class="ss-chartbox" id="ss-chartbox"><canvas id="ss-chart" role="img" aria-label="전략별 평가액 차트"></canvas>'
     + '<div class="ss-loading" id="ss-loading"><div class="ss-spin"></div><div id="ss-loading-t">가격 자료를 불러오는 중…</div></div>'
     + '<button type="button" class="ss-pillbtn ss-logbtn" id="ss-log" aria-pressed="false" title="세로축을 로그 눈금으로">로그</button>'
-    + '<button type="button" class="ss-pillbtn ss-inflbtn" id="ss-infl" aria-pressed="false" title="모든 선을 연 3% 물가로 할인 — 첫 날 기준의 실질 금액으로 보기">물가 반영</button></div>'
+    + '<button type="button" class="ss-pillbtn ss-inflbtn" id="ss-infl" aria-pressed="false" title="모든 선을 연 3% 물가로 할인 — 첫 날 기준의 실질 금액으로 보기">물가 반영</button>'
+    + '<button type="button" class="ss-pillbtn ss-zoombtn" id="ss-zoom" hidden title="확대를 풀고 전체 기간 보기 (그래프 더블클릭도 같음)">전체 보기</button></div>'
     + '<div id="ss-tip"></div>'
     + '<div class="ss-period"><button type="button" class="ss-play" id="ss-play-l" aria-pressed="false" title="한 분기씩 뒤로 · 재생">◀</button>'
     + '<div class="ss-range2" id="ss-range"><div class="ss-rtrack"></div><div class="ss-rfill"></div>'
@@ -8598,7 +8672,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 else ssBoot();
 // 시험·문제 확인용 읽기 손잡이 (tests/run_regression.py 등) — 화면·계산에는 영향 없음
 window.SSM = Object.freeze({
-  get S() { return S; }, get R() { return R; }, get DS() { return DS; },
+  get S() { return S; }, get R() { return R; }, get DS() { return DS; }, get chart() { return ssChart; }, get zoom() { return { lo: SZ.lo, hi: SZ.hi }; },
   ready: () => ssReady, render: () => ssRender(), add: (entry) => ssAddFromLibrary(entry),
   openCfg: (id) => ssOpenCfgPanel(id), openBase: (k) => ssOpenBasePanel(k),
 });

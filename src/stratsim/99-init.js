@@ -98,7 +98,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 else ssBoot();
 // 시험·문제 확인용 읽기 손잡이 (tests/run_regression.py 등) — 화면·계산에는 영향 없음
 window.SSM = Object.freeze({
-  get S() { return S; }, get R() { return R; }, get DS() { return DS; },
+  get S() { return S; }, get R() { return R; }, get DS() { return DS; }, get chart() { return ssChart; }, get zoom() { return { lo: SZ.lo, hi: SZ.hi }; },
   ready: () => ssReady, render: () => ssRender(), add: (entry) => ssAddFromLibrary(entry),
   openCfg: (id) => ssOpenCfgPanel(id), openBase: (k) => ssOpenBasePanel(k),
 });

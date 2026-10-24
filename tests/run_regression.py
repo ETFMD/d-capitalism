@@ -251,6 +251,11 @@ MUHANOPT_JS = """async () => {
     fill('[data-in="su:avgOff"]', '25'); const disA = $('[data-act="su-start"]').disabled; fill('[data-in="su:avgOff"]', '-1.5');
     fill('[data-in="su:cap"]', '20000');
     const sum = ($('.mh-sumore') || {}).innerText || '';
+    { const w = $('.mh-sumore'), h = w && w.querySelector(':scope > button.mh-acc-h[data-act="su-more"]'), t = h && h.querySelector('.inc-sec-t'), v = h && h.querySelector('.inc-sec-v'), a = h && h.querySelector('.acc-arrow');
+      const bar = t && getComputedStyle(t, '::before');   /* 2026-10-24 사용자 지정: 종합소득세 계산기와 같은 공통 아코디언 모양 */
+      ok('세부 규칙 접기 단추 = 공통 아코디언 모양 (왼쪽 파란 막대 · 요약(기본값과 다르면 파란색) · 둥근 ▼ · 펼침 = is-open·aria-expanded·▲)', !!(h && t && v && a && w.classList.contains('mh-acc') && w.classList.contains('is-open') && h.getAttribute('aria-expanded') === 'true'
+        && bar.width === '3px' && bar.backgroundColor === 'rgb(49, 130, 246)' && getComputedStyle(a).borderRadius === '50%' && v.classList.contains('on')
+        && getComputedStyle(a).transform !== 'none' && w.querySelector('.mh-acc-in [data-act="su-fee"]')), h && h.outerHTML.slice(0, 160)); }
     ok('세부 규칙 요약 (기본값과 다른 것) · 범위 밖 평단 괴리율이면 시작하기 꺼짐', disA && /평단 괴리 −1\\.5%/.test(sum) && /단리/.test(sum) && /RSI 60 이하/.test(sum) && /정액/.test(sum) && /수수료 0\\.1%/.test(sum) && /이동평균/.test(sum) && /연말 절세/.test(sum) && /분배금 끔/.test(sum), sum.slice(0, 200));
     click('[data-act="su-start"]'); await W(300);
     /* 시작한 세션(SOXL)의 시세 받기가 다 끝난 뒤 — 시작 화면에선 시세를 받지 않음 · 주문표(정액) 확인 · 뒤늦은 응답이 ④ 합성 시세를 덮지 않게 */
@@ -2944,6 +2949,44 @@ def stratsim_check(br, base, fail, ignorable):
                 and len(g['cfg']) == 2 and abs(g['cfg'][0][1] - want['cfg'][0][0]) < 1e-6 and abs(g['cfg'][1][1] - want['cfg'][1][0]) < 1e-3
             if not ok:
                 fail('strategy-simulator', '고정 구간 숫자가 Node 엔진과 다름: 화면 %s · Node %s' % (json.dumps(g, ensure_ascii=False)[:240], json.dumps(want)[:200]))
+        # 1-1) 정확한 날짜 달력: 연도·월 고르기 목록(사이트 공통 [CSEL] — <body> 끝에 뜸)을 눌러도 달력이 닫히지 않고 그 달로 바뀜 → 날짜 고르기 (2026-10-24 고침)
+        for side, yv, mv in (('e', '2016', '8'), ('x', '2022', '5')):
+            pg.click('#ss-pick-' + side); pg.wait_for_timeout(300)
+            pg.click('.ss-dcal button.ss-dcy'); pg.wait_for_timeout(250)
+            pg.click('.cs-menu.open .cs-opt[data-v="%s"]' % yv); pg.wait_for_timeout(250)
+            ok1 = pg.evaluate("() => !!document.querySelector('.ss-dcal')")
+            if ok1:
+                pg.click('.ss-dcal button.ss-dcm'); pg.wait_for_timeout(250)
+                pg.click('.cs-menu.open .cs-opt[data-v="%s"]' % mv); pg.wait_for_timeout(250)
+            dc = pg.evaluate("() => { const p = document.querySelector('.ss-dcal'); if (!p) return null; const d = p.querySelector('.ss-dcd:not([disabled])'); return { y: p.querySelector('select.ss-dcy').value, m: p.querySelector('select.ss-dcm').value, yl: p.querySelector('button.ss-dcy').innerText, d: d && d.dataset.date }; }")
+            want_ym = '%s-%02d' % (yv, int(mv) + 1)
+            if not ok1 or not dc or dc['y'] != yv or dc['m'] != mv or yv not in dc['yl'] or not dc['d'] or not dc['d'].startswith(want_ym):
+                fail('strategy-simulator', '날짜 달력(%s): 연도·월 목록에서 고르면 달력이 닫히거나 그 달로 안 바뀜: %s' % (side, dc)); pg.keyboard.press('Escape'); break
+            pg.click('.ss-dcal .ss-dcd:not([disabled])'); pg.wait_for_timeout(1500)
+            got = pg.evaluate("(s) => [s === 'e' ? SSM.S.ed : SSM.S.xd, !!document.querySelector('.ss-dcal')]", side)
+            if got[0] != dc['d'] or got[1]:
+                fail('strategy-simulator', '날짜 달력(%s): 고른 날짜가 들어가지 않음: %s (기대 %s)' % (side, got, dc['d']))
+        # 1-2) 마우스 휠 확대·축소: 그림 영역 위 휠 = 기간 확대(세로축도 보이는 기간에) · [전체 보기] 보임 · Shift+휠 = 이동 · 더블클릭 = 전체 · 전체에서 더 줄이면 페이지 스크롤
+        pg.evaluate("() => scrollTo(0, 0)"); pg.wait_for_timeout(200)
+        zs = lambda: pg.evaluate("() => { const c = SSM.chart; return { n: c.data.labels.length, x0: c.scales.x.min, x1: c.scales.x.max, ymax: c.scales.y.max, btn: !document.getElementById('ss-zoom').hidden, sy: scrollY }; }")
+        z0 = zs()
+        pt = pg.evaluate("() => { const c = SSM.chart, r = c.canvas.getBoundingClientRect(), a = c.chartArea; return { x: r.left + a.left + (a.right - a.left) * 0.3, y: r.top + (a.top + a.bottom) / 2 }; }")
+        pg.mouse.move(pt['x'], pt['y'])
+        for _ in range(5): pg.mouse.wheel(0, -100); pg.wait_for_timeout(60)
+        z1 = zs()
+        pg.keyboard.down('Shift')
+        for _ in range(2): pg.mouse.wheel(0, 100); pg.wait_for_timeout(60)
+        pg.keyboard.up('Shift')
+        z2 = zs()
+        pg.mouse.dblclick(pt['x'], pt['y']); pg.wait_for_timeout(200)
+        z3 = zs()
+        for _ in range(2): pg.mouse.wheel(0, 100); pg.wait_for_timeout(120)
+        z4 = zs()
+        if not (z0['x0'] == 0 and z0['x1'] == z0['n'] - 1 and not z0['btn']
+                and z1['x1'] - z1['x0'] < (z0['n'] - 1) * 0.6 and z1['btn'] and z1['ymax'] < z0['ymax']
+                and z2['x0'] > z1['x0'] and z2['x1'] - z2['x0'] == z1['x1'] - z1['x0']
+                and z3['x0'] == 0 and z3['x1'] == z3['n'] - 1 and not z3['btn'] and z4['sy'] > 0):
+            fail('strategy-simulator', '휠 확대·축소 이상: 처음 %s · 확대 %s · Shift 이동 %s · 더블클릭 %s · 전체에서 줄이기 %s' % (z0, z1, z2, z3, z4))
         # 2) 라이브러리 · 써 보기 (사용자 코드 전략)
         pg.evaluate("() => { for (const k of Object.keys(localStorage)) if (k.startsWith('dc_ss_')) localStorage.removeItem(k); }")
         pg.goto(base + 'strategy-simulator/', wait_until='load'); pg.wait_for_timeout(2500)
@@ -3493,6 +3536,12 @@ def main():
         shown = page.evaluate("tabs => tabs.filter(t => document.getElementById('drop-' + t))", [r['tab'] for r in routes if r.get('admin')])
         if shown:
             fail('', '관리자 전용 화면이 상단 메뉴에 보임: ' + ', '.join(shown))
+        # 투자 메뉴 '투자전략 자료실'(ssres) 안: 투자전략 시뮬레이터 · 무한매수법 · 무한매수법 백테스트 · VR 5.0 · VR 5.0 백테스트 · 장중 흐름 · 과최적화 탐색기 2 (사용자 지정 2026-10-24) — 메뉴 바로 아래에는 없음
+        ss = page.evaluate("""() => { const p = document.querySelector('#grp-invest-drop .drop-parent[data-sub="ssres"]'); return p ? { sub: [...p.querySelectorAll('.drop-sub-in > .drop-item')].map(b => b.id),
+            top: [...document.querySelectorAll('#grp-invest-drop > .drop-item')].map(b => b.id) } : null; }""")
+        want_ss = ['drop-stratsim', 'drop-muhan', 'drop-muhanbt', 'drop-vr', 'drop-vrbt', 'drop-ssintra', 'drop-ss9fit', 'drop-sssmafit']
+        if not ss or ss['sub'] != want_ss or set(want_ss) & set(ss['top']):
+            fail('', "투자 메뉴 '투자전략 자료실' 항목이 다름: %s (기대 %s · 메뉴 바로 아래에는 없어야 함)" % (ss, want_ss))
         for q, want in [('연봉', '연봉'), ('무한', '무한매수법'), ('취득세', '취득세'), ('배당', '배당')]:
             res = page.evaluate("""async q => { const i = document.getElementById('ss-input'); i.focus(); i.value = q;
                 i.dispatchEvent(new Event('input', { bubbles: true })); await new Promise(r => setTimeout(r, 300));

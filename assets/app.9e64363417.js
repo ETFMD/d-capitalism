@@ -14517,13 +14517,13 @@ function mhApp(P) {
       (help ? '<p class="mh-help">' + help + '</p>' : '') + '</div>';
   }
   var FEE_BTNS = [['0.25', '기본 0.25%'], ['0.1', '0.1%'], ['0.07', '이벤트 0.07%'], ['0', '0%']];
-  function setupMore(u, v) {
+  function setupMore(u, v) {   /* 접기 단추 = 사이트 공통 아코디언 모양(종합소득세·무한매수법 백테스트와 같음 — 왼쪽 파란 막대 · 요약 · 둥근 ▼) · CSS .mh-acc */
     var sm = setupOpts(u), c = setupCalc(u), old = v !== '4.0';
-    var h = '<div class="mh-sumore"><button class="mh-btn' + (u.more ? ' mh-btn-sel' : '') + '" style="width:100%;text-align:left;display:flex;justify-content:space-between;gap:8px;align-items:center" data-act="su-more" aria-expanded="' + !!u.more + '">' +
-      '<span style="min-width:0"><b style="font-size:13px">⚙ 세부 규칙 · 세금·수수료</b><span class="mh-tiny ' + (sm.length ? 'mh-ac' : 'mh-faint') + '" style="display:block;margin-top:2px;white-space:normal">' + (sm.length ? esc(sm.join(' · ')) : '무한매수법 백테스트와 같은 선택 · 지금은 모두 기본값') + '</span></span>' +
-      '<span class="mh-faint">' + (u.more ? '▴' : '▾') + '</span></button>';
+    var h = '<div class="mh-sumore mh-acc' + (u.more ? ' is-open' : '') + '"><button type="button" class="mh-acc-h" data-act="su-more" aria-expanded="' + !!u.more + '">' +
+      '<span class="inc-sec-t">세부 규칙 · 세금·수수료</span><span class="inc-sec-v' + (sm.length ? ' on' : '') + '">' + (sm.length ? esc(sm.join(' · ')) : '무한매수법 백테스트와 같은 선택 · 지금은 모두 기본값') + '</span>' +
+      '<span class="acc-arrow" aria-hidden="true">▼</span></button>';
     if (!u.more) return h + (!c.okA || !c.okF ? '<p class="mh-tiny mh-bad" style="margin:6px 0 0">세부 규칙에 범위를 벗어난 값이 있어요 — 펼쳐서 고쳐 주세요</p>' : '') + '</div>';
-    h += '<div style="display:flex;flex-direction:column;gap:14px;margin-top:12px">';
+    h += '<div class="inc-sec-in mh-acc-in" style="display:flex;flex-direction:column;gap:14px">';
     if (old) {
       if (v === '1.0' || v === '2.0' || v === '2.1') h += '<div><label class="mh-lbl">평단 LOC 괴리율 (%)</label><input class="mh-in" type="number" step="0.5" min="-20" max="20" value="' + esc(u.avgOff) + '" data-in="su:avgOff" aria-label="평단 LOC 괴리율">' +
         '<p class="mh-help">원문 0% · −20~20% · 평단 LOC 매수 가격 = 평단 × (1 + 이 값)' + (c.okA ? '' : ' · <span class="mh-bad">−20~20 사이로 입력하세요</span>') + '</p></div>';
@@ -15945,7 +15945,7 @@ function mhApp(P) {
   function presetNote(u) {
     var p = u.preset; if (!p) return '';
     var pc = function (x, d) { return x == null || !isFinite(x) ? '—' : (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x * 100).toFixed(d) + '%'; }, extra = [], so = setupOpts(u);
-    if (so.length) extra.push('세부 규칙·세금·수수료도 그대로: ' + esc(so.join(' · ')) + ' (아래 \'⚙ 세부 규칙 · 세금·수수료\'에서 확인·변경)');
+    if (so.length) extra.push('세부 규칙·세금·수수료도 그대로: ' + esc(so.join(' · ')) + ' (아래 \'세부 규칙 · 세금·수수료\'에서 확인·변경)');
     if (u.custom) extra.push(esc(u.name) + '는 TQQQ·SOXL 이 아니라 커스텀 종목으로 기록돼요 (자동 시세·차트 없음, 종가 직접 입력)');
     if (p.rej === 'clamp' || p.rej === 'skip') extra.push('백테스트의 증권사 주문 거부(' + (p.rej === 'clamp' ? '한도로 낮춰 넣기' : '그날 건너뛰기') + ')는 계산 가정이라 기록에는 없어요 — 실제로 주문이 거부되면 \'LOC 매수 상한\' 카드의 한도를 참고하세요');
     if (p.fill === 'open' || p.fill === 'pre') extra.push('백테스트의 주문 넣는 때(' + (p.fill === 'open' ? '정규장 시작 전 주문' : '프리장 시작 주문') + ')는 계산 가정이라 기록에는 없어요 — 실제 주문을 그때 넣으면 같은 효과예요');
