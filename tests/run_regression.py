@@ -1377,6 +1377,26 @@ def aspeed_check(page, base, fail, local):
             page.wait_for_function("ASPEED.state().sim && ASPEED.state().sim.list.some(x => x.key === 'k:069500')", timeout=30000)
         except Exception:
             fail('asset-speed', '검색한 KODEX 200(069500) 시세를 불러와 더하지 못함')
+        # 검색한 미국 ETF(QQQM · 긴 영문 이름) → 영상 그래프 선 끝 이름·순위·제목 = 티커 (사용자 지정 2026-10-24)
+        page.fill('#as-q', 'QQQM'); page.wait_for_timeout(1500)
+        page.evaluate("""() => { const box = document.getElementById('as-res'), i = box._items.findIndex(x => x.k === 'u' && x.s === 'QQQM'); if (i >= 0) document.querySelector('#as-res button[data-i="' + i + '"]').click(); }""")
+        try:
+            page.wait_for_function("ASPEED.state().sim && ASPEED.state().sim.list.some(x => x.key === 'u:QQQM')", timeout=30000)
+            v = page.evaluate("() => { const vm = ASPEED.videoMaker('v'); vm.frame(1, 0); const r = { names: vm.names, title: ASPEED.name('u:QQQM') }; vm.done(); return r; }")
+            if 'QQQM' not in v['names'] or any('Invesco' in x for x in v['names']) or v['title'] != 'QQQM':
+                fail('asset-speed', '영상 그래프에서 미국 ETF 가 티커로 안 나옴: %s' % v)
+        except Exception:
+            fail('asset-speed', '검색한 미국 ETF(QQQM) 시세를 불러와 더하지 못함')
+    # 영상용 이름(ASPEED.name = tagName): 미국 ETF(ETF 목록 · 분류 '미국 ETF'·'미국 상장')는 이름 길이와 상관없이 티커 · 미국 주식 우리말 이름·미국 지수·기본 자산·국내 종목은 그대로
+    nm = page.evaluate("""() => { const S = ASPEED.state(), M = { 'u:QQQM': ['Invesco NASDAQ 100 ETF', '미국 ETF'], 'u:VTI': ['Vanguard', '미국 상장'], 'u:AAPL': ['애플', '미국 주식'],
+          'u:^GSPC': ['S&P 500 지수', '미국 지수'], 'k:069500': ['KODEX 200', '국내 ETF'] }, had = {};
+        for (const k in M) { had[k] = S.built[k + '|meta']; S.built[k + '|meta'] = { name: M[k][0], tag: M[k][1] }; }
+        const r = Object.fromEntries(Object.keys(M).concat(['SPY', 'QQQ']).map(k => [k, ASPEED.name(k)]));
+        for (const k in M) { if (had[k]) S.built[k + '|meta'] = had[k]; else delete S.built[k + '|meta']; }
+        return r; }""")
+    want_nm = {'u:QQQM': 'QQQM', 'u:VTI': 'VTI', 'u:AAPL': '애플', 'u:^GSPC': 'S&P 500 지수', 'k:069500': 'KODEX 200', 'SPY': 'S&P 500', 'QQQ': '나스닥 100'}
+    if nm != want_nm:
+        fail('asset-speed', '영상용 이름(미국 ETF = 티커) 이상: %s (기대 %s)' % (nm, want_nm))
     aspeed2_check(page, base, fail, local)
     page.evaluate("() => { try { localStorage.removeItem('as.cfg2'); } catch (e) {} }")
 

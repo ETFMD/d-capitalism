@@ -36932,7 +36932,7 @@ var WIF = (function () {
     var tick = opt.tick || cssVar('--text3', '#888'), grid = 'rgba(128,128,128,0.14)', narrow = !!opt.narrow, fs = opt.fs || 11;
     var ds = sim.list.map(function (x) {
       var c = colOf(x.key), macro = x.key === 'M2' || x.key === 'CPI', rk = x.realK;
-      var d = { label: short(x.key), data: [], borderColor: c, backgroundColor: c, borderWidth: (macro ? 1.6 : 2) * (opt.lw || 1), borderDash: macro ? [5, 4] : [], pointRadius: 0, tension: 0, fill: false };
+      var d = { label: opt.fixed ? tagName(x.key) : short(x.key), data: [],   /* 영상(fixed): 미국 ETF 는 티커 (tagName) */ borderColor: c, backgroundColor: c, borderWidth: (macro ? 1.6 : 2) * (opt.lw || 1), borderDash: macro ? [5, 4] : [], pointRadius: 0, tension: 0, fill: false };
       if (rk > 0) d.segment = { borderDash: function (cx) { return cx.p1.parsed.x <= rk ? [2 * (opt.lw || 1), 3 * (opt.lw || 1)] : undefined; } };   /* 상장 전 가상 구간 = 잘게 끊긴 점선 */
       return d;
     });
@@ -37261,9 +37261,13 @@ var WIF = (function () {
   function fitText(ctx, t, w) { if (ctx.measureText(t).width <= w) return t; while (t.length > 1 && ctx.measureText(t + '…').width > w) t = t.slice(0, -1); return t + '…'; }
   function wrap(ctx, t, w) { var out = [], line = ''; String(t).split(' ').forEach(function (word) { var tryL = line ? line + ' ' + word : word; if (ctx.measureText(tryL).width > w && line) { out.push(line); line = word; } else line = tryL; }); if (line) out.push(line); return out; }
   /* 영상 제목 '코스피 vs S&P 500' (거시 선 M2·물가는 기준선이라 빼고 · 5개 이상이면 앞 3개 + 외 N개) · 부제목 '1,000만원 한 번에 투자 · 10년 6개월' */
-  function tagName(key) {   /* 제목·순위 막대용 짧은 이름: 검색한 미국 종목의 긴 영문 이름(예: Invesco NASDAQ 100 ETF)은 티커(QQQM)로 */
+  function tagName(key) {   /* 영상(제목·순위 막대·그래프 선 끝 이름)용 짧은 이름
+       · 검색한 미국 ETF(ETF 목록 data/etf_list.json 에서 고른 것 — 검색 분류 '미국 ETF'·'미국 상장')는 이름 길이와 상관없이 티커(QQQM·SCHD·SOXL …) (사용자 지정 2026-10-24)
+       · 그 밖의 검색 미국 종목은 긴 영문 이름일 때만 티커 · 기본 자산(S&P 500·나스닥 100 등 우리말 이름)·국내 종목은 그대로 */
     var n = short(key);
-    return n.length > 12 && /^u:/.test(key) ? key.slice(2) : n;
+    if (!/^u:/.test(key) || /^u:\^/.test(key)) return n;   /* 미국 지수(^GSPC 등)는 이름 그대로 */
+    var t = info(key).tag;
+    return t === '미국 ETF' || t === '미국 상장' || n.length > 12 ? key.slice(2) : n;
   }
   function titleText(sim) {
     var xs = sim.list.filter(function (x) { return x.key !== 'M2' && x.key !== 'CPI'; }); if (!xs.length) xs = sim.list;
@@ -37388,7 +37392,7 @@ var WIF = (function () {
       ctx.fillStyle = T.line; rr(ctx, X0, G.bar, CW, 6, 3); ctx.fill();
       if (t > 0) { ctx.fillStyle = T.acc; rr(ctx, X0, G.bar, Math.max(6, CW * t), 6, 3); ctx.fill(); }
     }
-    return { cv: cv, ctx: ctx, frame: frame, ymax: function () { return ch.scales.y.max; }, labels: function () { return { lab: ch._lab || [], top: ch.chartArea.top, bottom: ch.chartArea.bottom, h: ch.height }; }, safe: { x0: X0, y0: Y0, x1: X1, y1: Y1 }, ranks: cap, box: { rank: G.rank, chart: G.chart }, meta: G.ml.slice(), credit: credit || '', creditPx: G.cf || 0, bg: T.bg, done: function () { ch.destroy(); } };
+    return { cv: cv, ctx: ctx, frame: frame, ymax: function () { return ch.scales.y.max; }, labels: function () { return { lab: ch._lab || [], top: ch.chartArea.top, bottom: ch.chartArea.bottom, h: ch.height }; }, safe: { x0: X0, y0: Y0, x1: X1, y1: Y1 }, names: ch.data.datasets.map(function (d) { return d.label; }), ranks: cap, box: { rank: G.rank, chart: G.chart }, meta: G.ml.slice(), credit: credit || '', creditPx: G.cf || 0, bg: T.bg, done: function () { ch.destroy(); } };
   }
   var MUX = null;
   function loadMuxer() {
@@ -38113,7 +38117,7 @@ var WIF = (function () {
     }).catch(function () { S.ready = false; $('as-src').textContent = '자료를 불러오지 못했습니다. 잠시 후 다시 열어 주세요.'; });
   }
   window.asRender = function () { if (PG.classList.contains('active')) { if (!window.dcAdmin.ok()) { window.dcAdmin.when(window.asRender); return; } if (!S.ready) init(); else if (S.sim) makeChart(); } else if (S.playing) pause(); };   /* [ADMIN] 관리자 확인 뒤에만 */
-  window.ASPEED = { state: function () { return S; }, simulate: simulate, series: series, mseries: mseries, need: function () { return need(inputs()); }, video: makeVideo, videoMaker: videoMaker, openFull: openFull, closeFull: closeFull,
+  window.ASPEED = { state: function () { return S; }, name: tagName, simulate: simulate, series: series, mseries: mseries, need: function () { return need(inputs()); }, video: makeVideo, videoMaker: videoMaker, openFull: openFull, closeFull: closeFull,
     sns: { texts: snsTexts, state: function () { return SNS; }, video: snsVideo, load: snsLoad },
     bgm: { list: function () { return BGM.list; }, load: bgmList, pick: bgmPick, ok: bgmOk, sec: videoSec, credit: bgmCredit, decode: bgmDecode, render: bgmRender, next: function () { return BGM.next; } } };   /* 회귀 검사용 */
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.asRender); else setTimeout(window.asRender, 0);
