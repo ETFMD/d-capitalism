@@ -71,7 +71,7 @@ for k, c in C.items():
     ok(c['from'] == s[0][0] and c['cur'] == s[-1][1] and c['last'] >= s[-1][0], '%s 시작·현재·기준일' % k, (c['from'], c['cur'], c['last']))
     if not c['end']:
         age = (datetime.date.fromisoformat(today) - datetime.date.fromisoformat(c['last'])).days
-        ok(age <= (21 if k in U.CORE else 120), '%s 자료가 너무 오래됨 (%d일)' % (k, age))
+        ok(age <= (45 if k in U.CORE else 120), '%s 자료가 너무 오래됨 (%d일)' % (k, age))   # 원본 하나가 잠깐 멈춘 것(21일 넘으면 errs 에 기록)으로 다른 나라 갱신까지 막지 않게 — 그보다 오래면 실패로 알림
     evs = c['ev']
     ok(all(evs[i][0] <= evs[i + 1][0] for i in range(len(evs) - 1)) and all(e[3] in 'mxcbp' for e in evs), '%s 결정 기록 정렬·종류' % k)
     for e in evs:

@@ -35,8 +35,8 @@ var SITE_EN = (document.documentElement.getAttribute('lang') || '').indexOf('en'
     return Promise.race([p, new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, ms); })]);
   }
   /* 파일별 갱신 주기(신선도)와 다운로드 제한 시간 — 큰 파일을 불필요하게 두 번 받지 않도록 */
-  var FRESH_MS = { 'apt_rank.json': 4 * 3600e3, 'salary_rank.json': 7 * 86400e3, 'asset_rank.json': 7 * 86400e3, 'mcap.json': 26 * 3600e3, 'etfcagr.json': 7 * 3600e3, 'history.json': 22 * 3600e3, 'dxy.json': 7 * 3600e3, 'home.json': 7 * 3600e3, 'whatif.json': 20 * 3600e3, 'muhan_bt.json': 26 * 3600e3, 'apt_area.json': 26 * 3600e3, 'realty.json': 7 * 86400e3, 'etf_list.json': 7 * 86400e3, 'usdkrw.json': 7 * 86400e3, 'earnings.json': 150 * 60e3, 'earnings_kr.json': 150 * 60e3, 'earnings_us.json': 150 * 60e3 };   /* 기본 40분 */
-  var BIG = { 'apt_rank.json': 1, 'dxy.json': 1, 'etfcagr.json': 1, 'history.json': 1, 'compare.json': 1, 'muhan.json': 1, 'whatif.json': 1, 'etf_list.json': 1, 'usdkrw.json': 1, 'earnings_kr.json': 1, 'earnings_us.json': 1 };
+  var FRESH_MS = { 'apt_rank.json': 4 * 3600e3, 'salary_rank.json': 7 * 86400e3, 'asset_rank.json': 7 * 86400e3, 'mcap.json': 26 * 3600e3, 'etfcagr.json': 7 * 3600e3, 'history.json': 22 * 3600e3, 'dxy.json': 7 * 3600e3, 'home.json': 7 * 3600e3, 'whatif.json': 20 * 3600e3, 'muhan_bt.json': 26 * 3600e3, 'apt_area.json': 26 * 3600e3, 'realty.json': 7 * 86400e3, 'etf_list.json': 7 * 86400e3, 'usdkrw.json': 7 * 86400e3, 'earnings.json': 150 * 60e3, 'earnings_kr.json': 150 * 60e3, 'earnings_us.json': 150 * 60e3, 'rates.json': 12 * 3600e3 };   /* 기본 40분 · rates.json: 하루 6번 갱신(바뀐 게 없으면 그대로라 최대 반나절) */
+  var BIG = { 'apt_rank.json': 1, 'dxy.json': 1, 'etfcagr.json': 1, 'history.json': 1, 'compare.json': 1, 'muhan.json': 1, 'whatif.json': 1, 'etf_list.json': 1, 'usdkrw.json': 1, 'earnings_kr.json': 1, 'earnings_us.json': 1, 'rates.json': 1 };
   function getJSON(url, ms) {
     return timeout(nativeFetch(url, { cache: 'no-cache' }), ms || 6000)
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
@@ -6421,6 +6421,330 @@ var TAX = (function () {
 })();
 
 /* ════════════════════════════════════════
+   [RATES] 전세계 금리 — data/rates.json (scripts/update_rates.py · Actions '전세계 금리 갱신' 하루 6번)
+   · 나라마다 금리 '변화점'([날짜, 값])만 받아 계단식 선으로 그림 (값은 다음 변화점 전날까지 유지) — 끝 날 = 자료 기준일(유로 가입으로 끝난 나라는 그날)
+   · 기간: 1~30년·전체 단추 + 날짜 칸 + 그래프 위 휠(확대·축소 · Shift = 이동 · 더블클릭 = 고른 기간)
+   · 기간 비교 표: 시작·끝 금리 · 변화 · 최고·최저 · 인상·인하 횟수(결정 기록 m/x/c — 기준 변경 b 는 셈하지 않음)
+   · 결정 기록 종류: m 회의(동결 포함) · x 회의 밖(임시) · c 금리가 바뀐 날(회의 일정 자료가 없는 나라·시기) · b 기준 변경(정의가 바뀐 날) · p 결과 대기(회의는 했지만 자료에 아직 없음 — 동결로 세지 않음)
+   · '오늘'은 보는 사람 시계(한국 시간) 기준 — 자료 기준일(today)이 어제여도 지난 일정은 빼고 D-day 는 오늘부터
+   · 공유 링크·내 저장함: window.dcStateX['world-rates'] (고른 나라·기간·결정 기록 나라·보기)
+════════════════════════════════════════ */
+(function () {
+  var MAIN = ['KR', 'US', 'XM', 'JP', 'CN', 'TW', 'GB'];
+  var DEF = { sel: ['KR', 'US', 'XM', 'JP', 'CN', 'TW'], per: '20Y', d0: '', d1: '', hc: 'KR', hf: 'all', upf: 'main' };
+  var S = { d: null, C: {}, sel: DEF.sel.slice(), per: DEF.per, d0: '', d1: '', hc: DEF.hc, hf: DEF.hf, upf: DEF.upf, zoom: null, hn: 40, chart: null, loading: null, timer: null };
+  var COL = { US: '#3182f6', KR: '#f04452', XM: '#f5a524', XMR: '#c58a1a', JP: '#e64980', CN: '#d9480f', TW: '#12b886', GB: '#7950f2', CH: '#868e96',
+              SE: '#1098ad', NO: '#5c7cfa', DK: '#be4bdb', PL: '#82c91e', CZ: '#fd7e14', HU: '#20c997', CA: '#e03131', AU: '#fab005', IN: '#40c057' };
+  var EXTRA = ['#4c6ef5', '#f06595', '#94d82d', '#22b8cf', '#ff922b', '#845ef7', '#51cf66', '#ffd43b', '#339af0', '#ff6b6b', '#63e6be', '#cc5de8'];
+  var RG = { as: '아시아', eu: '유럽', am: '미주', oc: '오세아니아', me: '중동·아프리카' };
+  var WD = ['일', '월', '화', '수', '목', '금', '토'];
+  var KIND = { m: '회의', x: '임시', c: '변경', b: '기준 변경', p: '결과 대기' };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function dn(s) { var a = s.split('-'); return Math.round(Date.UTC(+a[0], +a[1] - 1, +(a[2] || 1)) / 864e5); }
+  function ds(n) { return new Date(n * 864e5).toISOString().slice(0, 10); }
+  function dot(s) { return s.slice(0, 4) + '.' + (+s.slice(5, 7)) + '.' + (+s.slice(8, 10)); }
+  function md(s) { var d = new Date(dn(s) * 864e5); return (d.getUTCMonth() + 1) + '.' + d.getUTCDate() + '(' + WD[d.getUTCDay()] + ')'; }
+  function today() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); }
+  function TD() { var t = today(); return S.d && S.d.today > t ? S.d.today : t; }   /* 오늘(한국 시간) — 자료가 몇 시간 늦어도 지난 일정이 '다음'으로 남지 않게 */
+  function nxOf(c) { var t = TD(); return (c.nx || []).filter(function (x) { return x.d ? x.d >= t : x.m >= t.slice(0, 7); }); }
+  function fr(v) { if (v == null || !isFinite(v)) return '—'; var a = Math.abs(v), t = a >= 100 ? v.toFixed(a >= 1000 ? 0 : 1) : v.toFixed(3).replace(/0$/, ''); return (a >= 1000 ? Number(t).toLocaleString('en-US') : t); }
+  function pct(v) { return fr(v) + '%'; }
+  function dp(v) { if (v == null || !isFinite(v)) return '—'; var r = Math.round(v * 1000) / 1000; return (r > 0 ? '+' : r < 0 ? '−' : '') + fr(Math.abs(r)) + '%p'; }
+  function cls(v) { return v > 1e-9 ? 'wr-up' : v < -1e-9 ? 'wr-dn' : 'wr-0'; }
+  function colOf(k) { if (COL[k]) return COL[k]; var i = 0, ks = Object.keys(S.C).filter(function (x) { return !COL[x]; }).sort(); i = ks.indexOf(k); return EXTRA[(i < 0 ? 0 : i) % EXTRA.length]; }
+  function nm(c) { return c.ko; }
+  function rate(c, v) { return c.c === 'US' && c.rng && v === c.cur ? fr(c.rng[0]) + '~' + pct(c.rng[1]) : pct(v); }
+  /* 변화점 [[날짜, 값]] 에서 날짜의 값 (첫 변화점 전이면 null) */
+  function valAt(s, d) { var lo = 0, hi = s.length - 1, r = null; while (lo <= hi) { var m = (lo + hi) >> 1; if (s[m][0] <= d) { r = s[m][1]; lo = m + 1; } else hi = m - 1; } return r; }
+  function endOf(c) { var t = TD(); return c.end ? c.last : (c.last > t ? c.last : t); }   /* 그릴 끝 날: 유로 가입 등으로 끝난 나라는 마지막 날 · 나머지는 오늘(금리는 다음 결정 전까지 그대로) */
+  function range() {
+    var t = TD(), x1 = S.d1 || t, x0 = S.d0;
+    if (S.zoom) return { x0: ds(S.zoom[0]), x1: ds(S.zoom[1]) };
+    if (!x0) {
+      if (S.per === 'ALL') { x0 = S.sel.reduce(function (a, k) { var c = S.C[k]; return c && (!a || c.from < a) ? c.from : a; }, '') || '1950-01-01'; }
+      else { var y = parseInt(S.per, 10) || 20; x0 = ds(dn(x1) - Math.round(y * 365.25)); }
+    }
+    if (x0 > x1) { var tt = x0; x0 = x1; x1 = tt; }
+    return { x0: x0, x1: x1 };
+  }
+
+  /* ── 주요국 카드 ── */
+  function kpis() {
+    var h = MAIN.map(function (k) {
+      var c = S.C[k]; if (!c) return '';
+      var lc = null; for (var i = c.ev.length - 1; i >= 0; i--) { var e = c.ev[i]; if (e[1] !== e[2] && e[3] !== 'b' && e[3] !== 'p') { lc = e; break; } }
+      var nx = nxOf(c)[0], nt = '', dd = nx && nx.d ? dn(nx.d) - dn(TD()) : 0;
+      if (nx) nt = nx.d ? (dd === 0 ? '오늘 ' + md(nx.d) + ' 발표' : '다음 ' + md(nx.d) + ' · D-' + dd) : '다음 ' + (+nx.m.slice(5, 7)) + '월 중(추정)';
+      var v = c.rng ? '<small>' + fr(c.rng[0]) + '~</small>' + pct(c.rng[1]) : pct(c.cur);
+      return '<button type="button" class="card wr-kpi' + (S.hc === k ? ' on' : '') + '" data-kpi="' + k + '" title="' + esc(c.bank) + ' — 눌러서 결정 기록 보기">' +
+        '<span class="wr-kpi-n"><i style="background:' + colOf(k) + '"></i>' + esc(c.ko) + '</span><span class="wr-kpi-b">' + esc(c.bank) + '</span>' +
+        '<b class="wr-kpi-v">' + v + '</b>' +
+        '<span class="wr-kpi-c">' + (lc ? dot(lc[0]) + ' <span class="' + cls(lc[1] - lc[2]) + '">' + dp(lc[1] - lc[2]) + '</span>' : '변경 기록 없음') + '</span>' +
+        '<span class="wr-kpi-x">' + esc(nt || '다음 일정 없음') + '</span></button>';
+    }).join('');
+    $('wr-kpis').innerHTML = h;
+  }
+
+  /* ── 나라 칩 · 더하기 ── */
+  function chips() {
+    $('wr-chips').innerHTML = S.sel.map(function (k) {
+      var c = S.C[k]; if (!c) return '';
+      return '<span class="wr-chip"><i style="background:' + colOf(k) + '"></i>' + esc(c.ko) + (S.sel.length > 1 ? '<button type="button" data-rm="' + k + '" aria-label="' + esc(c.ko) + ' 빼기">✕</button>' : '') + '</span>';
+    }).join('');
+    var sel = $('wr-add'), byRg = {};
+    Object.keys(S.C).forEach(function (k) { if (S.sel.indexOf(k) < 0) (byRg[S.C[k].rg] = byRg[S.C[k].rg] || []).push(S.C[k]); });
+    var h = '<option value="">＋ 나라 더하기' + (S.sel.length >= 10 ? ' (최대 10개)' : '') + '</option>';
+    ['as', 'eu', 'am', 'oc', 'me'].forEach(function (r) {
+      var L = (byRg[r] || []).sort(function (a, b) { return (b.main - a.main) || (a.end - b.end) || a.ko.localeCompare(b.ko, 'ko'); });
+      if (L.length) h += '<optgroup label="' + RG[r] + '">' + L.map(function (c) { return '<option value="' + c.c + '">' + esc(c.ko + (c.end ? ' (~' + c.last.slice(0, 4) + ')' : '')) + '</option>'; }).join('') + '</optgroup>';
+    });
+    sel.innerHTML = h; sel.value = ''; sel.disabled = S.sel.length >= 10;
+  }
+
+  /* ── 차트 ── */
+  function series(c, x0, x1) {
+    var s = c.s, e = endOf(c), a = x0 > c.from ? x0 : c.from, b = x1 < e ? x1 : e, out = [];
+    if (a > b) return out;
+    var v0 = valAt(s, a); if (v0 != null) out.push({ x: dn(a), y: v0 });
+    for (var i = 0; i < s.length; i++) if (s[i][0] > a && s[i][0] <= b) out.push({ x: dn(s[i][0]), y: s[i][1] });
+    var vb = valAt(s, b); if (vb != null) out.push({ x: dn(b), y: vb });
+    return out;
+  }
+  var vline = { id: 'wrVline', afterDatasetsDraw: function (ch) { if (ch._rtx == null) return; var a = ch.chartArea, x = ch.scales.x.getPixelForValue(ch._rtx), cx = ch.ctx; if (x < a.left || x > a.right) return; cx.save(); cx.strokeStyle = 'rgba(128,128,128,.55)'; cx.setLineDash([3, 3]); cx.beginPath(); cx.moveTo(x, a.top); cx.lineTo(x, a.bottom); cx.stroke(); cx.restore(); } };
+  function tickYears(ax) {
+    var y0 = new Date(ax.min * 864e5).getUTCFullYear(), y1 = new Date(ax.max * 864e5).getUTCFullYear(), span = y1 - y0 + 1, w = ax.width || 600;
+    var maxN = Math.max(3, Math.floor(w / 62)), st = [1, 2, 5, 10, 20, 25, 50].find(function (s) { return span / s <= maxN; }) || 50, t = [];
+    if (span <= 2) {   /* 2년 안: 분기마다 */
+      for (var y = y0; y <= y1; y++) for (var m = 0; m < 12; m += (span <= 1 ? 2 : 3)) { var x = Math.round(Date.UTC(y, m, 1) / 864e5); if (x >= ax.min && x <= ax.max) t.push({ value: x }); }
+    } else for (var yy = Math.ceil(y0 / st) * st; yy <= y1; yy += st) { var xx = Math.round(Date.UTC(yy, 0, 1) / 864e5); if (xx >= ax.min && xx <= ax.max) t.push({ value: xx }); }
+    ax.ticks = t.length ? t : [{ value: ax.min }];
+  }
+  function chart() {
+    var cv = $('wr-chart'); if (!cv || typeof Chart === 'undefined' || !S.d) return;
+    var r = range(), dsets = S.sel.map(function (k) {
+      var c = S.C[k]; if (!c) return null;
+      return { label: c.ko, _k: k, data: series(c, r.x0, r.x1), borderColor: colOf(k), backgroundColor: colOf(k), borderWidth: k === 'KR' || k === 'US' ? 2.4 : 1.8, pointRadius: 0, stepped: 'before', fill: false, spanGaps: false };
+    }).filter(Boolean);
+    var cs = getComputedStyle(document.documentElement), tick = cs.getPropertyValue('--text3').trim() || '#888', grid = 'rgba(128,128,128,0.14)';
+    var single = (r.x1.slice(0, 4) - r.x0.slice(0, 4)) <= 2;
+    if (!S.chart) {
+      S.chart = new Chart(cv.getContext('2d'), {
+        type: 'line', data: { datasets: dsets }, plugins: [vline],
+        options: { responsive: true, maintainAspectRatio: false, animation: false, parsing: false, normalized: true,
+          events: ['mousemove', 'mouseout'], plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          layout: { padding: { right: 8, top: 6 } },
+          scales: {
+            x: { type: 'linear', grid: { display: false }, border: { color: grid }, afterBuildTicks: tickYears,
+                 ticks: { color: tick, maxRotation: 0, autoSkip: false, font: { size: 11 }, callback: function (v) { var d = new Date(v * 864e5); return S.chart && S.chart._q ? d.getUTCFullYear() + '.' + (d.getUTCMonth() + 1) : String(d.getUTCFullYear()); } } },
+            y: { grid: { color: grid }, border: { display: false }, ticks: { color: tick, font: { size: 11 }, maxTicksLimit: 7, callback: function (v) { return fr(v) + '%'; } } }
+          } } });
+      wire(cv);
+    } else { S.chart.data.datasets = dsets; }
+    var xs = S.chart.options.scales.x; xs.min = dn(r.x0); xs.max = dn(r.x1); S.chart._q = single;
+    S.chart.options.scales.x.ticks.color = tick; S.chart.options.scales.y.ticks.color = tick;
+    S.chart.update('none');
+    $('wr-zreset').hidden = !S.zoom;
+    if ($('wr-d0') !== document.activeElement) $('wr-d0').value = r.x0;
+    if ($('wr-d1') !== document.activeElement) $('wr-d1').value = r.x1;
+    document.querySelectorAll('#wr-per .chart-tab').forEach(function (b) { b.classList.toggle('active', !S.zoom && !S.d0 && !S.d1 && b.getAttribute('data-per') === S.per); });
+    cmp(r);
+  }
+  function tip(e) {
+    var ch = S.chart, a = ch && ch.chartArea, t = $('wr-tip'); if (!a) return;
+    var rc = ch.canvas.getBoundingClientRect(), px = e.clientX - rc.left, py = e.clientY - rc.top;
+    if (px < a.left || px > a.right || py < a.top || py > a.bottom) { t.style.display = 'none'; if (ch._rtx != null) { ch._rtx = null; ch.draw(); } return; }
+    var x = Math.round(ch.scales.x.getValueForPixel(px)), d = ds(x), rows = [];
+    S.sel.forEach(function (k) { var c = S.C[k]; if (!c || d < c.from || d > endOf(c)) return; var v = valAt(c.s, d); if (v != null) rows.push([c, v]); });
+    rows.sort(function (p, q) { return q[1] - p[1]; });
+    t.innerHTML = '<b>' + dot(d) + '</b>' + (rows.length ? rows.map(function (r) { return '<div><span><i style="background:' + colOf(r[0].c) + '"></i>' + esc(r[0].ko) + '</span><em>' + (r[0].c === 'US' && d >= '2008-12-16' ? fr(r[1] - 0.25) + '~' : '') + pct(r[1]) + '</em></div>'; }).join('') : '<div>자료 없음</div>');
+    t.style.display = 'block';
+    var bw = $('wr-chartbox').clientWidth, tw = t.offsetWidth, left = px + 14 + tw > bw ? px - tw - 14 : px + 14;
+    t.style.left = Math.max(0, left) + 'px'; t.style.top = Math.max(0, Math.min(py - 20, a.bottom - t.offsetHeight)) + 'px';
+    ch._rtx = x; ch.draw();
+  }
+  function wire(cv) {
+    cv.addEventListener('mousemove', tip);
+    cv.addEventListener('mouseleave', function () { $('wr-tip').style.display = 'none'; if (S.chart) { S.chart._rtx = null; S.chart.draw(); } });
+    cv.addEventListener('wheel', function (e) {   /* 휠: 마우스 자리 날짜를 고정한 채 확대·축소 · Shift/가로 휠: 이동 · 고른 기간 밖으로는 넓히지 않음(전체 자료 범위까지) */
+      var ch = S.chart, a = ch && ch.chartArea; if (!a) return;
+      var rc = cv.getBoundingClientRect(), px = e.clientX - rc.left, py = e.clientY - rc.top;
+      if (px < a.left || px > a.right || py < a.top || py > a.bottom) return;
+      var r = range(), lo = dn(r.x0), hi = dn(r.x1), span = hi - lo, min = dn(S.sel.reduce(function (m, k) { var c = S.C[k]; return c && c.from < m ? c.from : m; }, TD())), max = dn(TD());
+      var pan = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY);
+      if (pan) {
+        e.preventDefault();
+        var dd = (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * (e.deltaMode === 1 ? 16 : 1), st = Math.round(span * Math.max(-0.5, Math.min(0.5, dd / 1000))) || Math.sign(dd) * 7;
+        lo += st; hi += st; if (lo < min) { hi += min - lo; lo = min; } if (hi > max) { lo -= hi - max; hi = max; }
+      } else {
+        var dy = e.deltaY * (e.deltaMode === 1 ? 16 : 1); if (!dy) return;
+        if (dy > 0 && lo <= min && hi >= max) return;          /* 다 보이는데 더 줄이기 = 페이지 스크롤 */
+        e.preventDefault();
+        var ns = Math.round(span * Math.pow(2, Math.max(-1, Math.min(1, dy / 400)))); ns = Math.max(60, Math.min(max - min, ns));
+        var at = ch.scales.x.getValueForPixel(px), f = span ? (at - lo) / span : 0.5;
+        lo = Math.round(at - f * ns); hi = lo + ns; if (lo < min) { hi += min - lo; lo = min; } if (hi > max) { lo -= hi - max; hi = max; } if (lo < min) lo = min;
+      }
+      S.zoom = [lo, hi]; chart();
+    }, { passive: false });
+    cv.addEventListener('dblclick', function () { if (S.zoom) { S.zoom = null; chart(); } });
+  }
+
+  /* ── 기간 비교 표 ── */
+  function cmp(r) {
+    $('wr-c-d0').textContent = dot(r.x0); $('wr-c-d1').textContent = dot(r.x1);
+    var rows = S.sel.map(function (k) {
+      var c = S.C[k]; if (!c) return null;
+      var a = r.x0 > c.from ? r.x0 : c.from, e = endOf(c), b = r.x1 < e ? r.x1 : e;
+      if (a > b) return { c: c, none: true };
+      var v0 = valAt(c.s, a), v1 = valAt(c.s, b), hi = v0, hid = a, lo = v0, lod = a, up = 0, dnn = 0;
+      c.s.forEach(function (p) { if (p[0] > a && p[0] <= b) { if (p[1] > hi) { hi = p[1]; hid = p[0]; } if (p[1] < lo) { lo = p[1]; lod = p[0]; } } });
+      c.ev.forEach(function (ev) { if (ev[3] !== 'b' && ev[0] >= a && ev[0] <= b) { if (ev[1] > ev[2]) up++; else if (ev[1] < ev[2]) dnn++; } });
+      return { c: c, a: a, b: b, v0: v0, v1: v1, hi: hi, hid: hid, lo: lo, lod: lod, up: up, dn: dnn };
+    }).filter(Boolean);
+    $('wr-cmp').innerHTML = rows.map(function (x) {
+      var nmh = '<span class="wr-nm"><i style="background:' + colOf(x.c.c) + '"></i>' + esc(x.c.ko) + '</span><small>' + esc(x.c.bank) + '</small>';
+      if (x.none) return '<tr><td>' + nmh + '</td><td colspan="6" class="wr-est">이 기간에는 자료가 없습니다 (' + dot(x.c.from) + ' ~ ' + dot(endOf(x.c)) + ')</td></tr>';
+      return '<tr><td>' + nmh + '</td><td class="n">' + pct(x.v0) + (x.a > (S.zoom ? ds(S.zoom[0]) : range().x0) ? '<small>' + dot(x.a) + '부터</small>' : '') + '</td><td class="n">' + pct(x.v1) + (x.b < range().x1 ? '<small>' + dot(x.b) + '</small>' : '') + '</td>' +
+        '<td class="n ' + cls(x.v1 - x.v0) + '">' + dp(x.v1 - x.v0) + '</td><td class="n">' + pct(x.hi) + '<small>' + dot(x.hid) + '</small></td><td class="n">' + pct(x.lo) + '<small>' + dot(x.lod) + '</small></td>' +
+        '<td class="n"><span class="wr-up">' + x.up + '</span> · <span class="wr-dn">' + x.dn + '</span></td></tr>';
+    }).join('') || '<tr><td colspan="7" class="wr-empty">나라를 골라 주세요</td></tr>';
+    var g = '';
+    if (S.sel.indexOf('KR') >= 0 && S.sel.indexOf('US') >= 0) {
+      var e = r.x1, kr = valAt(S.C.KR.s, e < endOf(S.C.KR) ? e : endOf(S.C.KR)), us = valAt(S.C.US.s, e < endOf(S.C.US) ? e : endOf(S.C.US));
+      if (kr != null && us != null) g = dot(e) + ' 한미 금리 차(한국 − 미국 상단): <b class="' + cls(kr - us) + '">' + dp(kr - us) + '</b>' + (kr < us ? ' — 한국 금리가 더 낮은 \'역전\' 상태' : '');
+    }
+    $('wr-gap').innerHTML = g;
+    var notes = S.sel.map(function (k) { var c = S.C[k]; return c && c.note ? '<b>' + esc(c.ko) + '</b> ' + esc(c.note) : ''; }).filter(Boolean);
+    $('wr-notes').innerHTML = (notes.length ? notes.join('<br>') + '<br>' : '') + '자료: ' + esc(S.d.src) + '. 차트의 끝은 각 나라 자료의 기준일까지이며, 그 뒤 결정이 아직 반영되지 않았을 수 있습니다.';
+  }
+
+  /* ── 발표 일정 · 최근 결정 ── */
+  function upcoming() {
+    var t = TD(), lim = ds(dn(t) + 183), main = S.upf === 'main', L = [];
+    Object.keys(S.C).forEach(function (k) {
+      var c = S.C[k]; if (c.end || (main && !c.main) || k === 'XMR') return;
+      nxOf(c).forEach(function (x) { if ((x.d && x.d <= lim) || (x.m && x.m + '-28' <= lim)) L.push({ c: c, d: x.d, m: x.m, e: x.e, s: x.s }); });
+    });
+    L.sort(function (a, b) { return (a.d || a.m + '-15').localeCompare(b.d || b.m + '-15') || b.c.main - a.c.main; });
+    $('wr-next').innerHTML = L.map(function (x) {
+      var dd = x.d ? dn(x.d) - dn(t) : null;
+      return '<tr' + (dd === 0 ? ' class="wr-today"' : '') + '><td>' + (x.d ? md(x.d) + '<span class="wr-dday">' + (dd === 0 ? '오늘' : 'D-' + dd) + '</span>' : (+x.m.slice(5, 7)) + '월 중<span class="wr-est"> 추정</span>') + '</td>' +
+        '<td><span class="wr-nm"><i style="background:' + colOf(x.c.c) + '"></i>' + esc(x.c.ko) + '</span><small>' + esc(x.c.bank) + '</small>' + (x.e ? '<br><span class="wr-est">' + esc(x.e) + '</span>' : '') + '</td><td class="n">' + rate(x.c, x.c.cur) + '</td></tr>';
+    }).join('') || '<tr><td colspan="3" class="wr-empty">앞으로 6개월 안에 알려진 일정이 없습니다</td></tr>';
+    var from = ds(dn(t) - 60), R = [];
+    Object.keys(S.C).forEach(function (k) {
+      var c = S.C[k]; if (c.end || (main && !c.main) || k === 'XMR') return;
+      c.ev.forEach(function (e) { if (e[0] >= from && e[0] <= t && e[3] !== 'b') R.push({ c: c, e: e }); });
+    });
+    R.sort(function (a, b) { return b.e[0].localeCompare(a.e[0]) || b.c.main - a.c.main; });
+    $('wr-recent').innerHTML = R.map(function (x) {
+      var e = x.e, ch = e[1] - e[2];
+      return '<tr><td>' + md(e[0]) + '</td><td><span class="wr-nm"><i style="background:' + colOf(x.c.c) + '"></i>' + esc(x.c.ko) + '</span></td><td>' + badge(e) + '</td><td class="n">' + (x.c.c === 'US' && e[0] >= '2008-12-16' ? fr(e[1] - 0.25) + '~' : '') + pct(e[1]) + (ch ? ' <small class="' + cls(ch) + '">' + dp(ch) + '</small>' : '') + '</td></tr>';
+    }).join('') || '<tr><td colspan="4" class="wr-empty">최근 60일 결정이 없습니다</td></tr>';
+  }
+  function badge(e) {
+    var ch = e[1] - e[2];
+    if (e[3] === 'b') return '<span class="wr-badge b" title="대표 금리의 종류가 바뀐 날 — 실제 인상·인하가 아님">기준 변경</span>';
+    if (e[3] === 'p') return '<span class="wr-badge p" title="회의는 열렸지만 결과가 아직 자료에 들어오지 않았습니다 — 다음 갱신 때 인상·인하·동결로 바뀝니다">결과 대기</span>';
+    var w = ch > 1e-9 ? '인상' : ch < -1e-9 ? '인하' : '동결';
+    return '<span class="wr-badge ' + (ch > 1e-9 ? 'up' : ch < -1e-9 ? 'dn' : '') + '">' + (e[3] === 'x' ? '임시 ' : '') + w + '</span>';
+  }
+
+  /* ── 결정 기록 ── */
+  function histSel() {
+    var s = $('wr-hc'), keys = Object.keys(S.C).sort(function (a, b) {
+      var A = S.C[a], B = S.C[b], ia = MAIN.indexOf(a), ib = MAIN.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || (B.main - A.main) || (A.end - B.end) || A.ko.localeCompare(B.ko, 'ko');
+    });
+    s.innerHTML = keys.map(function (k) { var c = S.C[k]; return '<option value="' + k + '">' + esc(c.ko + ' · ' + c.bank + (c.end ? ' (~' + c.last.slice(0, 4) + ')' : '')) + '</option>'; }).join('');
+    s.value = S.C[S.hc] ? S.hc : 'KR';
+  }
+  function hist() {
+    var c = S.C[S.hc] || S.C.KR; if (!c) return;
+    var E = c.ev.slice().reverse().filter(function (e) { return S.hf === 'all' || e[1] !== e[2]; });
+    var m = c.ev.filter(function (e) { return e[3] === 'm'; }), up = 0, dw = 0, hold = 0, xx = 0, b = 0;
+    c.ev.forEach(function (e) { if (e[3] === 'b') { b++; return; } if (e[3] === 'p') return; if (e[3] === 'x') xx++; if (e[1] > e[2]) up++; else if (e[1] < e[2]) dw++; else hold++; });
+    var first = c.ev.length ? c.ev[0][0] : null;
+    var sum = '<b>' + esc(c.ko) + '</b> ' + esc(c.bank) + ' · 지금 ' + rate(c, c.cur) + ' (기준일 ' + dot(c.last) + ')<br>';
+    if (m.length) sum += dot(m[0][0]) + '부터 회의 ' + m.length + '번' + (first < m[0][0] ? ' (그 전 ' + dot(first) + '부터는 금리가 바뀐 날만)' : '') + ' · 인상 ' + up + ' · 인하 ' + dw + ' · 동결 ' + hold + (xx ? ' · 회의 밖(임시) ' + xx : '') + (b ? ' · 기준 변경 ' + b : '');
+    else sum += (first ? dot(first) + '부터 ' : '') + '금리가 바뀐 날 ' + (up + dw) + '번(인상 ' + up + ' · 인하 ' + dw + ')' + (b ? ' · 기준 변경 ' + b : '') + ' — 이 나라는 지난 회의 일정 자료가 없어 동결 회의는 나오지 않고, 날짜는 새 금리가 적용된 날(발표일과 며칠 다를 수 있음)입니다';
+    if (c.mkt && c.mkt.length) sum += '<br><span class="wr-est">' + c.mkt[0] + '~' + c.mkt[c.mkt.length - 1] + '년 중 시장금리 구간(한 해 40번 넘게 바뀜)은 결정 기록에서 뺐습니다</span>';
+    if (c.note) sum += '<br><span class="wr-est">' + esc(c.note) + '</span>';
+    $('wr-hsum').innerHTML = sum;
+    var us = c.c === 'US';
+    $('wr-hist').innerHTML = E.slice(0, S.hn).map(function (e) {
+      var ch = e[1] - e[2], rg = us && e[0] >= '2008-12-16';
+      return '<tr><td>' + dot(e[0]) + ' <small>' + WD[new Date(dn(e[0]) * 864e5).getUTCDay()] + '</small></td><td>' + badge(e) + '</td>' +
+        '<td class="n">' + (ch ? (rg && e[0] > '2008-12-16' ? fr(e[2] - 0.25) + '~' : '') + pct(e[2]) + ' → ' : '') + (rg ? fr(e[1] - 0.25) + '~' : '') + pct(e[1]) + '</td>' +
+        '<td class="n ' + cls(ch) + '">' + (ch ? dp(ch) : '—') + '</td></tr>';
+    }).join('') || '<tr><td colspan="4" class="wr-empty">기록이 없습니다</td></tr>';
+    var more = E.length - S.hn; $('wr-hmore').hidden = more <= 0; $('wr-hmore').textContent = '더 보기 (' + Math.min(more, 40) + '개 · 남은 ' + more + '개)';
+    document.querySelectorAll('#wr-hf .chart-tab').forEach(function (x) { x.classList.toggle('active', x.getAttribute('data-hf') === S.hf); });
+    document.querySelectorAll('#wr-kpis .wr-kpi').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-kpi') === S.hc); });
+  }
+
+  function render() {
+    if (!S.d) return;
+    $('wr-asof').textContent = '자료 ' + dot(S.d.today) + ' · ' + new Date(S.d.updated).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' }) + ' 갱신';
+    S.sel = S.sel.filter(function (k) { return S.C[k]; }); if (!S.sel.length) S.sel = DEF.sel.slice();
+    kpis(); chips(); chart(); upcoming(); histSel(); hist();
+    document.querySelectorAll('#wr-upf .chart-tab').forEach(function (x) { x.classList.toggle('active', x.getAttribute('data-upf') === S.upf); });
+  }
+  async function load() {
+    if (!window.mdLoad) return;
+    var d = await window.mdLoad('rates.json').catch(function () { return null; });
+    if (d && d.countries && d.countries.length) {
+      if (S.d && S.d.updated === d.updated) return;
+      S.d = d; S.C = {}; d.countries.forEach(function (c) { S.C[c.c] = c; });
+      render();
+    } else if (!S.d) $('wr-cmp').innerHTML = '<tr><td colspan="7" class="wr-empty">금리 자료를 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.</td></tr>';
+  }
+  window.wrRender = function () {
+    var pg = $('page-rates'); if (!pg || !pg.classList.contains('active')) { clearInterval(S.timer); S.timer = null; return; }
+    if (!S.loading) S.loading = load().finally(function () { setTimeout(function () { S.loading = null; }, 5 * 60 * 1000); });
+    if (S.d) render();
+    if (!S.timer) S.timer = setInterval(function () {   /* 열려 있는 동안 30분마다 새 자료 확인 */
+      if (!$('page-rates').classList.contains('active')) { clearInterval(S.timer); S.timer = null; return; }
+      if (!document.hidden) { S.loading = null; load(); }
+    }, 30 * 60 * 1000);
+  };
+
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t.closest || !t.closest('#page-rates')) return;
+    var b;
+    if ((b = t.closest('#wr-per [data-per]'))) { S.per = b.getAttribute('data-per'); S.d0 = S.d1 = ''; S.zoom = null; chart(); return; }
+    if ((b = t.closest('[data-rm]'))) { var k = b.getAttribute('data-rm'); S.sel = S.sel.filter(function (x) { return x !== k; }); chips(); chart(); return; }
+    if (t.closest('#wr-main')) { S.sel = DEF.sel.slice(); chips(); chart(); return; }
+    if (t.closest('#wr-zreset')) { S.zoom = null; chart(); return; }
+    if ((b = t.closest('#wr-upf [data-upf]'))) { S.upf = b.getAttribute('data-upf'); upcoming(); document.querySelectorAll('#wr-upf .chart-tab').forEach(function (x) { x.classList.toggle('active', x === b); }); return; }
+    if ((b = t.closest('#wr-hf [data-hf]'))) { S.hf = b.getAttribute('data-hf'); S.hn = 40; hist(); return; }
+    if (t.closest('#wr-hmore')) { S.hn += 40; hist(); return; }
+    if ((b = t.closest('[data-kpi]'))) { S.hc = b.getAttribute('data-kpi'); S.hn = 40; $('wr-hc').value = S.hc; hist(); var h = $('wr-hc'); if (h && h.scrollIntoView) h.closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.id) return;
+    if (t.id === 'wr-add' && t.value) { if (S.sel.indexOf(t.value) < 0 && S.sel.length < 10) S.sel.push(t.value); chips(); chart(); return; }
+    if (t.id === 'wr-hc') { S.hc = t.value; S.hn = 40; hist(); return; }
+    if (t.id === 'wr-d0' || t.id === 'wr-d1') {
+      var v0 = $('wr-d0').value, v1 = $('wr-d1').value;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v0) && /^\d{4}-\d{2}-\d{2}$/.test(v1)) { S.d0 = v0; S.d1 = v1 > TD() ? TD() : v1; S.zoom = null; chart(); }
+    }
+  });
+  new MutationObserver(function () { if (S.chart && S.d && $('page-rates').classList.contains('active')) chart(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  /* 공유 링크·내 저장함 */
+  window.dcStateX = window.dcStateX || {};
+  window.dcStateX['world-rates'] = {
+    get: function () { return { sel: S.sel.slice(), per: S.per, d0: S.zoom ? ds(S.zoom[0]) : S.d0, d1: S.zoom ? ds(S.zoom[1]) : S.d1, hc: S.hc, hf: S.hf, upf: S.upf }; },
+    set: function (v) { if (!v) return; S.sel = Array.isArray(v.sel) && v.sel.length ? v.sel.slice(0, 10) : DEF.sel.slice(); S.per = v.per || DEF.per; S.d0 = v.d0 || ''; S.d1 = v.d1 || ''; S.zoom = null; S.hc = v.hc || DEF.hc; S.hf = v.hf || DEF.hf; S.upf = v.upf || DEF.upf; S.hn = 40; if (S.d) render(); },
+    def: { sel: DEF.sel.slice(), per: DEF.per, d0: '', d1: '', hc: DEF.hc, hf: DEF.hf, upf: DEF.upf }
+  };
+  window.WRdebug = { S: S, valAt: valAt, range: range, series: series, nxOf: nxOf, TD: TD, badge: badge };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.wrRender); else window.wrRender();
+})();
+
+
+/* ════════════════════════════════════════
    [SRANK] 국내 나의 연봉 순위 — data/salary_rank.json (Actions '연봉 순위 자료 갱신': 매주 확인)
    국세청 근로소득 백분위(천분위): 상위 0.1~1%(0.1%p) + 2~100%(1%p) 구간별 인원·총급여 합계
    · 경계 연봉: 구간 평균을 구간 가운데에 두고 직선으로 이음 · 상위 0.1% 안은 파레토 분포(위 두 누적 평균으로 α 추정)
@@ -9975,6 +10299,7 @@ function switchSubTab(tab, grpId, btn) {
   if (tab === 'mcap' && window.mcRender) window.mcRender();
   if (window.asRender) window.asRender();   /* [ASPEED] 자산 속도 시뮬레이터: 열리면 그리고, 다른 탭이면 재생 멈춤 */
   if (window.erRender) window.erRender();   /* [EARN] 실적발표 캘린더: 열리면 그리고, 다른 탭이면 자동 갱신 중지 */
+  if (window.wrRender) window.wrRender();   /* [RATES] 전세계 금리: 열리면 그리고, 다른 탭이면 자동 갱신 중지 */
   if (tab === 'aptrank' && window.apRender) window.apRender();
   if (window.dvRender) window.dvRender();   /* ETF 분배 달력: 열리면 그리고, 다른 탭이면 자동 갱신 중지 */
   if (tab === 'muhan') requestAnimationFrame(function(){ requestAnimationFrame(function(){ if (typeof muhanInit === 'function') muhanInit(); }); });
