@@ -34,11 +34,9 @@ export const NEWS_FEEDS = [
   { k: 'prne', n: 'PR Newswire', m: 'us', p: 'full', every: 5, u: 'https://www.prnewswire.com/rss/financial-services-latest-news/earnings-list.rss' },
   { k: 'prnm', n: 'PR Newswire', m: 'us', p: 'full', every: 8, u: 'https://www.prnewswire.com/rss/financial-services-latest-news/acquisitions-mergers-and-takeovers-list.rss' },
   { k: 'fed', n: '미국 연준', m: 'us', p: 'full', every: 10, u: 'https://www.federalreserve.gov/feeds/press_all.xml' },
-  // 국내 (제목 그대로 · AI 는 종목·중요도만)
-  { k: 'hk', n: '한국경제', m: 'kr', p: 'tag', every: 3, u: 'https://www.hankyung.com/feed/finance' },
+  // 국내 (제목 그대로 · AI 는 종목·중요도만) — 한국경제·헤럴드경제·서울경제는 Cloudflare 서버 접속을 막아(403) 뺌 (2026-10-24 배포 확인)
   { k: 'asiae', n: '아시아경제', m: 'kr', p: 'tag', every: 3, u: 'https://www.asiae.co.kr/rss/stock.htm' },
-  { k: 'hd', n: '헤럴드경제', m: 'kr', p: 'tag', every: 5, tz: '+09:00', u: 'https://biz.heraldcorp.com/rss/google/finance' },
-  { k: 'sed', n: '서울경제', m: 'kr', p: 'tag', every: 5, u: 'https://www.sedaily.com/rss/finance' },
+  { k: 'nsis', n: '뉴시스', m: 'kr', p: 'tag', every: 3, u: 'https://www.newsis.com/RSS/economy.xml' },
   { k: 'cb', n: '조선비즈', m: 'kr', p: 'tag', every: 5, u: 'https://biz.chosun.com/arc/outboundfeeds/rss/category/stock/?outputType=xml' },
   { k: 'ed', n: '이데일리', m: 'kr', p: 'tag', every: 5, u: 'http://rss.edaily.co.kr/stock_news.xml' },
   { k: 'fn', n: '파이낸셜뉴스', m: 'kr', p: 'tag', every: 6, u: 'https://www.fnnews.com/rss/r20/fn_realnews_stock.xml' },
@@ -257,15 +255,16 @@ export async function newsTick(env, now = Date.now(), opts = {}) {
 }
 
 /* ── AI 정리 ── */
-const SYS = `너는 한국 개인 투자자를 위한 금융 뉴스 편집자다. 받은 기사 목록을 한국어로 정리해 JSON 배열만 출력한다(설명·코드블록 없이).
-각 기사마다 {"i":번호,"t":"한국어 제목","s":"요약","k":["종목"],"imp":중요도,"sen":방향,"rel":true/false} 를 만든다.
+const SYS = `너는 한국 개인 투자자를 위한 금융 뉴스 편집자다. 받은 기사 목록을 한국어로 정리해 JSON 배열만 출력한다(설명·코드블록·생각 과정 없이).
+각 기사마다 {"i":번호,"t":"한국어 제목","s":"요약","k":["종목"],"imp":중요도,"sen":방향,"rel":true/false} 를 만든다. 기사마다 따로 판단하고, 다른 기사의 내용·종목을 섞지 않는다.
 규칙:
-- t: 원문 제목을 자연스러운 한국어로 옮긴 제목(45자 안팎). 숫자·회사명·티커는 그대로 살리고, 과장·추측을 더하지 않는다. mode 가 "tag" 이면 t 는 "" (원문 제목을 그대로 쓴다).
+- t: 원문 제목을 자연스러운 한국어 기사 제목으로(45자 안팎). 숫자·티커는 그대로, 과장·추측을 더하지 않는다. mode 가 "tag" 이면 t 는 "".
+- 회사·인물·기관 이름은 한국 언론이 쓰는 표기로: Nvidia 엔비디아, Berkshire Hathaway 버크셔 해서웨이, Eli Lilly 일라이 릴리, Chevron 셰브론, ExxonMobil 엑슨모빌, Goldman Sachs 골드만삭스, JPMorgan JP모건, Morgan Stanley 모건스탠리, Vanguard 뱅가드, BlackRock 블랙록, Alphabet 알파벳, Meta 메타, Broadcom 브로드컴, Micron 마이크론, Palantir 팔란티어, Netflix 넷플릭스, Costco 코스트코, Federal Reserve/Fed 연준, Treasury 미 재무부, Powell 파월 의장, Netanyahu 네타냐후 총리, Warren Buffett 워런 버핏, Jensen Huang 젠슨 황. 한국어 표기가 확실하지 않은 고유명사는 영어 그대로 쓴다.
 - s: mode 가 "full" 이고 원문 요약문(d)이 있을 때만, d 와 제목에 있는 사실만으로 1~2문장(110자 이하) 한국어 요약. 원문에 없는 수치·원인·전망을 지어내지 않는다. d 가 없거나 mode 가 "tag" 면 "".
-- k: 기사가 직접 다루는 상장 종목·ETF 최대 5개. 미국은 대문자 티커(Apple→AAPL, 엔비디아→NVDA), 한국은 종목명(삼성전자). 확실하지 않으면 넣지 않는다. 지수·원자재·코인만 다루면 [].
-- imp: 3 = 시장 전체를 움직일 뉴스(연준·한국은행 금리 결정, 물가·고용 지표 발표, 지수 급등락, 초대형주 실적·전쟁 등 큰 사건), 2 = 개별 대형주·업종에 중요한 뉴스(실적, 인수합병, 규제, 가이던스), 1 = 그 밖.
+- k: 이 기사의 제목·요약문에 이름이 직접 나오는 상장 종목·ETF 만, 최대 5개. 미국은 대문자 티커(Apple→AAPL, Nvidia→NVDA), 한국은 종목명(삼성전자). tickers 힌트는 기사와 직접 관련 있을 때만 쓴다. 확실하지 않으면 넣지 않는다. 지수·원자재·코인만 다루면 [].
+- imp: 3 = 시장 전체를 움직일 뉴스(연준·한국은행 금리 결정, 물가·고용 지표 발표, 지수 급등락, 초대형주 실적, 전쟁 등 큰 사건), 2 = 개별 대형주·업종에 중요한 뉴스(실적, 인수합병, 규제, 가이던스), 1 = 그 밖(전망 칼럼·종목 추천 글 포함).
 - sen: 관련 종목·시장 기준 1 = 호재, -1 = 악재, 0 = 중립·알 수 없음.
-- rel: 주식·채권·환율·금리·원자재·경제지표·기업·중앙은행 등 투자와 관련 있으면 true, 생활 정보·광고성 글·투자와 무관한 사건이면 false.`;
+- rel: 주식·채권·환율·금리·원자재·경제지표·기업·중앙은행 등 투자와 관련 있으면 true. 건강·보험·연금 가입 요령 같은 생활 정보, 광고성 글, 투자와 무관한 사건·사고면 false.`;
 
 function neurons(model, usage, inChars, outChars) {
   const m = AI_MODELS.find((x) => x[0] === model) || AI_MODELS[0];
@@ -362,7 +361,7 @@ async function aiStep(env, now) {
       spent += neurons(md, r && r.usage, SYS.length + user.length, txt.length);
       parsed = aiParse(txt);
       if (parsed && parsed.length) { model = md; break; }
-      err = 'parse:' + md;
+      err = 'parse:' + md + ' · ' + (r && typeof r === 'object' ? Object.keys(r).join(',') : typeof r) + ' · ' + String(txt || JSON.stringify(r) || '').slice(0, 300);   // 모델 답 앞부분(점검용 · 공개 뉴스 정리문뿐)
     } catch (e) {
       const msg = String(e && e.message || e);
       err = md + ': ' + msg.slice(0, 140);

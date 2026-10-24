@@ -98,7 +98,7 @@ if (SERVE) {
   const now = clock = realNow();
   Date.now = () => realNow();
   const by = {};   // 원본마다 60건 아래로 나눔 (RSS 한 번에 60건까지 읽음)
-  const usK = ['sa', 'invs', 'inve', 'invr'], krK = ['hk', 'asiae'];
+  const usK = ['sa', 'invs', 'inve', 'invr'], krK = ['nsis', 'asiae'];
   for (let i = 0; i < 240; i++) {   // 묶음(200)보다 많이 → '지난 뉴스 더 보기' 확인
     const us = i % 3 !== 2, t = now - i * 3 * 60e3, k = us ? usK[i % 4] : krK[i % 2];
     (by[k] = by[k] || []).push(item({ title: us ? `Apple shares ${i % 4 === 0 ? 'falls' : 'rise'} after report ${i}` : `삼성전자 ${i}번째 소식 하락`, link: `https://example.com/${us ? 'us' : 'kr'}/${i}?utm_source=x`, date: rfc(t), desc: us ? `Synthetic summary sentence number ${i} for layout tests only.` : '본문 요약' }));
@@ -168,7 +168,7 @@ if (SERVE) {
   ]) };
   FEEDS[FU.invs] = { body: rss([item({ title: 'Apple beats estimates', link: 'https://inv.com/apple', date: '2026-10-26 13:20:00', desc: 'Same story elsewhere.' }),
     item({ title: 'Fed signals pause', link: 'https://inv.com/fed', date: '2026-10-26 13:10:00', desc: 'Policy makers signaled a pause.' })]) };
-  FEEDS[FU.hk] = { body: rss([item({ title: '삼성전자 3분기 실적 발표', link: 'https://hk.com/1', date: rfc(T - 9 * 60e3) }), item({ title: '쿠폰 행사 안내', link: 'https://hk.com/2', date: rfc(T - 8 * 60e3) })]) };
+  FEEDS[FU.nsis] = { body: rss([item({ title: '삼성전자 3분기 실적 발표', link: 'https://hk.com/1', date: rfc(T - 9 * 60e3) }), item({ title: '쿠폰 행사 안내', link: 'https://hk.com/2', date: rfc(T - 8 * 60e3) })]) };
   FEEDS[FU.ynm] = { body: rss([item({ title: '코스피 하락 마감', link: 'https://yna.co.kr/view/1', date: rfc(T - 4 * 60e3), desc: '연합뉴스 요약문 (쓰면 안 됨)' })], '<copyright>AI 학습 및 활용 금지</copyright>') };
   FEEDS[FU.cnbc] = { status: 403, body: 'blocked' };
   FEEDS[FU.wsj] = { throw: 'network down' };
@@ -262,8 +262,8 @@ if (SERVE) {
   db.exec("DELETE FROM news_kv WHERE k LIKE 'ai:2026%'");
   db.prepare("INSERT OR REPLACE INTO news_kv (k, v, t) VALUES ('ai:' || ?, '6000', ?)").run(day, clock);
   FEEDS[FU.sa] = { body: rss([item({ title: 'Saving us item', link: 'https://sa.com/sv', date: rfc(clock), desc: 'Saving.' })]) };
-  FEEDS[FU.hk] = { body: rss([item({ title: '절약 국내 기사', link: 'https://hk.com/sv', date: rfc(clock) })]) };
-  db.exec("UPDATE news_feed SET next = 0 WHERE k IN ('sa','hk')"); db.exec("UPDATE news SET st = 2 WHERE st = 0"); aiCalls = [];
+  FEEDS[FU.nsis] = { body: rss([item({ title: '절약 국내 기사', link: 'https://hk.com/sv', date: rfc(clock) })]) };
+  db.exec("UPDATE news_feed SET next = 0 WHERE k IN ('sa','nsis')"); db.exec("UPDATE news SET st = 2 WHERE st = 0"); aiCalls = [];
   min(1); await N.newsTick(env, clock, { feeds: 40 });
   ok(aiCalls.length === 1 && JSON.parse(aiCalls[0].inp.messages[1].content.replace(/^\/no_think\n/, '')).every((x) => x.mode === 'full') && rows("SELECT st FROM news WHERE t0='Saving us item'")[0].st === 1
      && rows("SELECT st FROM news WHERE t0='절약 국내 기사'")[0].st === 0, '한도 60% 넘음 → 해외 기사만 AI', aiCalls.length);
@@ -334,9 +334,10 @@ if (SERVE) {
   db.exec('UPDATE news_feed SET next = 0, wm = 0');
   const t0 = performance.now(); await N.newsTick(env, clock, { noAi: true }); const ms = performance.now() - t0;
   console.log(`  (참고) 원본 6개 × 120건 처음 수집 ${ms.toFixed(1)}ms — node 기준, 기사 넣기·해시 포함`);
-  const t1 = performance.now(); min(5); db.exec('UPDATE news_feed SET next = 0'); await N.newsTick(env, clock, { noAi: true }); const ms2 = performance.now() - t1;
+  const n1 = rows('SELECT COUNT(*) AS c FROM news')[0].c;
+  const t1 = performance.now(); min(5); db.exec('UPDATE news_feed SET next = 0'); const r2 = await N.newsTick(env, clock, { noAi: true }); const ms2 = performance.now() - t1;
   console.log(`  (참고) 같은 원본 다시(새 기사 없음) ${ms2.toFixed(1)}ms`);
-  ok(ms2 < ms, '다시 받을 때는 이미 있는 기사를 거르고 넣지 않음(더 빠름)', [ms, ms2]);
+  ok(r2.added === 0 && rows('SELECT COUNT(*) AS c FROM news')[0].c === n1 && n1 > 60, '다시 받을 때는 이미 있는 기사를 거르고 넣지 않음', [r2.added, n1]);
 
   Date.now = realNow;
   console.log(`worker_news_test: ${oks}개 통과 · ${fails}개 실패`);
