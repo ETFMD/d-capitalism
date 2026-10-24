@@ -80,7 +80,7 @@ const AI = {
     const items = JSON.parse(inp.messages[1].content.replace(/^\/no_think\n/, ''));
     const out = items.map((x) => ({
       i: x.i,
-      t: x.mode === 'full' ? '한국어 제목: ' + x.title.slice(0, 20) : '무시돼야 함',
+      t: x.mode === 'full' ? (aiMode === 'thai' ? '인ไซ트 ' : '') + '한국어 제목: ' + x.title.slice(0, 20) : '무시돼야 함',
       s: x.mode === 'full' && x.d ? '요약: ' + x.d.slice(0, 30) : (x.mode === 'tag' ? '무시돼야 함' : ''),
       k: /Apple/.test(x.title) ? ['AAPL', '$nvda', 'bad ticker!!', 'TSLA', 'MSFT', 'AMZN', 'GOOG'] : (/삼성전자/.test(x.title) ? ['삼성전자'] : []),
       imp: /Fed|금리/.test(x.title) ? 3 : 7,
@@ -224,6 +224,8 @@ if (SERVE) {
   await N.newsTick(env, clock, { feeds: 0 });
   ok(rows("SELECT st FROM news WHERE t0 = 'Fed signals pause'")[0].st === 1 && rows("SELECT imp FROM news WHERE t0 = 'Fed signals pause'")[0].imp === 3, '생각 태그·코드블록이 섞인 답도 JSON 만 꺼냄 · 중요도 3');
   ok(N.aiParse('<think>생각 [1,2]</think>\n```json\n[{"i":3,"t":"c"}]\n```')[0].i === 3 && N.aiParse('[{"i":1,"t":"테슬라 "로보택시" 출시"},{"i":2,"t":"정상"},{"i":3,"t":"잘')[0].i === 2 && N.aiParse('앞말 [{"i":1,"t":"a"}] 뒷말')[0].t === 'a' && N.aiParse('{"items":[{"i":2}]}')[0].i === 2 && N.aiParse('없음') === null, 'AI 답 꺼내기(앞뒤 말 · {items})');
+  ok(N.aiClean({ k: ['NETanyahu', 'Ethereum', 'SPX', 'INDU', 'nvda', 'BRK.B', '삼성전자'] }, 'full', 'us').k.join() === 'NVDA,BRK.B', '미국 기사 종목: 대문자 티커만 · 지수 기호·이름·한글 빼기', N.aiClean({ k: ['NETanyahu', 'Ethereum', 'SPX', 'nvda', 'BRK.B', '삼성전자'] }, 'full', 'us').k);
+  ok(N.aiClean({ k: ['삼성전자', '005930', 'Samsung', 'SK하이닉스', 'TSLA', 'KOSPI'] }, 'tag', 'kr').k.join() === '삼성전자,005930,SK하이닉스,TSLA', '국내 기사 종목: 한글 종목명·6자리 코드·미국 티커 · 영어 이름·지수 빼기');
   ok(N.aiText({ choices: [{ message: { content: 'x' } }] }) === 'x' && N.aiText({ response: { a: 1 } }) === '{"a":1}' && N.aiText('s') === 's', 'AI 답 형식 여러 가지');
   // 이상한 답 3번 → 원문 그대로(st 2)
   FEEDS[FU.sa] = { body: rss([item({ title: 'Junk test item', link: 'https://sa.com/j', date: rfc(clock), desc: 'Junk.' })]) };
@@ -243,6 +245,15 @@ if (SERVE) {
   db.exec("UPDATE news_feed SET next = 0 WHERE k = 'sa'"); aiCalls = [];
   min(1); await N.newsTick(env, clock, { feeds: 1 });
   ok(aiCalls.length === 1 && aiCalls[0].model === N.AI_MODELS[1][0], '다음 번엔 기억한 모델부터', aiCalls.map((c) => c.model));
+  // 이상한 글자(태국 문자 등)가 섞인 제목 → 다시
+  FEEDS[FU.sa] = { body: rss([item({ title: 'Odd script item', link: 'https://sa.com/odd', date: rfc(clock), desc: 'Odd.' })]) };
+  db.exec("UPDATE news_feed SET next = 0 WHERE k = 'sa'"); aiMode = 'thai';
+  min(1); await N.newsTick(env, clock, { feeds: 1 });
+  let odd = rows("SELECT st, tries, t FROM news WHERE t0 = 'Odd script item'")[0];
+  ok(odd.st === 0 && odd.tries === 1 && odd.t === null, '한국어 제목에 엉뚱한 문자(태국 문자 등) → 저장하지 않고 다음에 다시', odd);
+  aiMode = 'ok'; min(1); await N.newsTick(env, clock, { feeds: 0 });
+  odd = rows("SELECT st, t FROM news WHERE t0 = 'Odd script item'")[0];
+  ok(odd.st === 1 && /^한국어 제목/.test(odd.t), '다시 정리 → 정상', odd);
   // 하루 한도
   FEEDS[FU.sa] = { body: rss([item({ title: 'Quota item', link: 'https://sa.com/q', date: rfc(clock), desc: 'Quota.' })]) };
   db.exec("UPDATE news_feed SET next = 0 WHERE k = 'sa'"); aiMode = 'quota';

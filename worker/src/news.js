@@ -148,7 +148,7 @@ export function parseFeed(xml, feed, since = 0) {
     const nt = plain(tag(x, 'nasdaq:tickers'));
     if (nt) hint.push(...nt.split(/[,\s]+/));
     for (const m of x.matchAll(/<category[^>]*domain="https:\/\/seekingalpha\.com\/symbol\/([A-Z0-9.\-]{1,10})"/g)) hint.push(m[1]);
-    const tks = [...new Set(hint.map((s) => s.toUpperCase()).filter((s) => /^[A-Z][A-Z0-9.\-]{0,9}$/.test(s)))].slice(0, 8);
+    const tks = [...new Set(hint.map((s) => s.toUpperCase()).filter((s) => /^[A-Z][A-Z0-9.\-]{0,9}$/.test(s) && !NOT_TK.has(s)))].slice(0, 8);
     out.push({ url, t0, d0, ts: Number.isFinite(ts) ? ts : NaN, hint: tks.join(',') });
   }
   return out;
@@ -298,11 +298,15 @@ export function aiParse(txt) {
   return out.length ? out : null;
 }
 const clip = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
-export function aiClean(o, mode) {
+const NOT_TK = new Set(['SPX', 'INDU', 'COMP', 'NDX', 'RUT', 'VIX', 'DJI', 'DJIA', 'IXIC', 'GSPC', 'NYA', 'SOX', 'TNX', 'DXY', 'US10Y', 'KOSPI', 'KOSDAQ']);   // 지수 기호(사고팔 수 있는 종목이 아님)
+const ODD = /[\u0E00-\u0E7F\u0600-\u06FF\u0400-\u04FF\u0900-\u097F\u0590-\u05FF]/;   // 한국어·영어 기사에 나올 리 없는 문자(태국·아랍·키릴·데바나가리·히브리) — 모델이 섞어 쓴 글자
+export function aiClean(o, mode, mk) {
   const t = mode === 'full' ? clip(o && o.t, 90) : '';
   const s = mode === 'full' ? clip(o && o.s, 220) : '';
   let k = Array.isArray(o && o.k) ? o.k : (typeof (o && o.k) === 'string' ? o.k.split(/[,\s]+/) : []);
-  k = [...new Set(k.map((x) => String(x).trim().replace(/^\$/, '')).filter((x) => /^[A-Z][A-Z0-9.\-]{0,9}$/.test(x) || /^[가-힣A-Za-z0-9&.\-·]{2,20}$/.test(x)).map((x) => (/^[a-z.\-]+$/i.test(x) && x.length <= 6 ? x.toUpperCase() : x)))].slice(0, 5);
+  // 미국 기사: 대문자 티커만(소문자 짧은 것은 대문자로) · 국내 기사: 한글이 든 종목명 또는 6자리 코드, 그리고 미국 티커
+  k = [...new Set(k.map((x) => String(x).trim().replace(/^\$/, '')).map((x) => (/^[a-z][a-z.\-]{0,5}$/.test(x) ? x.toUpperCase() : x))
+    .filter((x) => (/^[A-Z][A-Z0-9.\-]{0,9}$/.test(x) && !NOT_TK.has(x)) || (mk === 'kr' && (/^(?=.*[가-힣])[가-힣A-Za-z0-9&.\-·]{2,20}$/.test(x) || /^\d{6}$/.test(x)))))].slice(0, 5);
   const imp = [1, 2, 3].includes(Number(o && o.imp)) ? Number(o.imp) : 1;
   const sen = [-1, 0, 1].includes(Number(o && o.sen)) ? Number(o.sen) : 0;
   const rel = !(o && (o.rel === false || o.rel === 'false'));
@@ -379,9 +383,10 @@ async function aiStep(env, now) {
   for (let i = 0; i < list.length; i++) {
     const r = list[i], f = FEED[r.src] || { p: 'full' }, o = byI.get(i + 1);
     if (!o) { stmts.push(env.DB.prepare('UPDATE news SET tries = tries + 1 WHERE id = ?').bind(r.id)); continue; }
-    const c = aiClean(o, f.p === 'tag' ? 'tag' : 'full');
+    const c = aiClean(o, f.p === 'tag' ? 'tag' : 'full', f.m);
+    if (c.rel && f.p !== 'tag' && (!c.t || ODD.test(c.t + c.s))) { stmts.push(env.DB.prepare('UPDATE news SET tries = tries + 1 WHERE id = ?').bind(r.id)); continue; }   // 해외 기사인데 한국어 제목이 없거나 이상한 글자 → 다음에 다시
     stmts.push(env.DB.prepare('UPDATE news SET t = ?, s = ?, tk = ?, imp = ?, sen = ?, st = ?, u = ? WHERE id = ?')
-      .bind(c.t || null, c.s || null, c.k.length ? c.k.join(',') : (r.hint || null), c.imp, c.sen, c.rel ? 1 : 3, now, r.id));
+      .bind(c.t || null, c.s || null, c.k.join(',') || null, c.imp, c.sen, c.rel ? 1 : 3, now, r.id));   // 종목은 AI 판단만(원본 힌트의 관련 ETF·지수는 섞지 않음)
     n++;
   }
   await env.DB.batch(stmts);
