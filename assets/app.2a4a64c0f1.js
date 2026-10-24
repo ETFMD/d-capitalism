@@ -6743,6 +6743,189 @@ var TAX = (function () {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.wrRender); else window.wrRender();
 })();
 
+/* ════════════════════════════════════════
+   [NEWS] 디코딩 뉴스 — Worker GET /news (worker/src/news.js · 1분 cron 이 RSS 를 모아 Workers AI 로 한국어 정리)
+   · 처음: /news (최신 200건) → 열려 있는 동안 30초마다 /news?after=<v> (바뀐 것만 · 없으면 same) · 30분마다 전체 다시
+   · 기사: {i 번호, ts 발행(ms), u 바뀐 시각, m us|kr, s 원본, l 주소, t 제목(한국어 또는 원문), o 원문 제목, x 요약, k 종목, p 중요도, e 방향, a 0 정리 중·1 AI·2 원문}
+   · 지난 뉴스: /news?before=<가장 오래된 ts>&m= (50건씩)
+   · 새 기사가 위에 붙어도 보던 자리 그대로(맨 위 보이는 기사 기준으로 스크롤 맞춤) · 아래를 보고 있으면 '새 뉴스 N건' 단추
+   · 공유 링크·내 저장함: window.dcStateX['news'] (시장·중요만·찾기)
+════════════════════════════════════════ */
+(function () {
+  var DEF = { mk: 'all', imp: false, q: '' };
+  var S = { ep: null, items: new Map(), v: 0, at: 0, src: {}, mk: 'all', imp: false, q: '', timer: null, busy: false, err: 0, newIds: new Set(), pend: 0, more: true, lastOk: 0, lastFull: 0, loadingMore: false, tickN: 0 };
+  var KEEP = 1200, POLL = 30000, FULL = 30 * 60000;
+  var fT = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false });
+  var fS = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  var fD = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
+  var WD = ['일', '월', '화', '수', '목', '금', '토'];
+  function $(id) { return document.getElementById(id); }
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function active() { var pg = $('page-news'); return !!(pg && pg.classList.contains('active')); }
+  function endpoint() {
+    if (S.ep) return Promise.resolve(S.ep);
+    return (window.mdLoad ? window.mdLoad('counter.json') : Promise.resolve(null)).then(function (c) { S.ep = (c && c.endpoint) || null; return S.ep; }, function () { return null; });
+  }
+  function dayKey(t) { return fD.format(new Date(t)); }
+  function dayLabel(k) {
+    var a = k.split('-'), d = new Date(Date.UTC(+a[0], +a[1] - 1, +a[2])), today = dayKey(Date.now()), yd = dayKey(Date.now() - 864e5);
+    return (+a[1]) + '월 ' + (+a[2]) + '일 (' + WD[d.getUTCDay()] + ')' + (k === today ? ' · 오늘' : k === yd ? ' · 어제' : '');
+  }
+  function ago(t) {
+    var m = Math.floor((Date.now() - t) / 60000);
+    if (m < 1) return '방금'; if (m < 60) return m + '분 전'; if (m < 1440) return Math.floor(m / 60) + '시간 전'; return Math.floor(m / 1440) + '일 전';
+  }
+  function srcName(k) { var x = S.src[k]; return x ? x[0] : k; }
+  function srcPol(k) { var x = S.src[k]; return x ? x[1] : 'full'; }
+  /* 찾기: 종목은 정확히(대소문자 무시) · 그 밖은 제목·원문 제목·요약·종목·원본 이름에 들어 있으면 */
+  function match(x) {
+    if (S.mk !== 'all' && x.m !== S.mk) return false;
+    if (S.imp && !(x.p >= 2)) return false;
+    var q = S.q.trim().toLowerCase(); if (!q) return true;
+    var ks = (x.k || []).map(function (k) { return String(k).toLowerCase(); });
+    return q.split(/\s+/).every(function (w) {
+      w = w.replace(/^\$/, '');
+      if (ks.indexOf(w) >= 0) return true;
+      return ((x.t || '') + ' ' + (x.o || '') + ' ' + (x.x || '') + ' ' + ks.join(' ') + ' ' + srcName(x.s)).toLowerCase().indexOf(w) >= 0;
+    });
+  }
+  function sorted() { return Array.from(S.items.values()).sort(function (a, b) { return b.ts - a.ts || (a.i < b.i ? -1 : 1); }); }
+  function card(x) {
+    var url = /^https?:\/\//.test(x.l || '') ? x.l : '#', pol = srcPol(x.s);
+    var tk = (x.k || []).map(function (k) { return '<button type="button" class="dn-tk' + (x.e > 0 ? ' up' : x.e < 0 ? ' dn' : '') + '" data-tk="' + esc(k) + '" title="' + esc(k) + ' 뉴스만 보기' + (x.e > 0 ? ' · AI 판단: 호재' : x.e < 0 ? ' · AI 판단: 악재' : '') + '">' + esc(k) + '</button>'; }).join('');
+    var mark = x.a === 1 ? '<span class="dn-ai" title="해외 기사: 원문 RSS 제목·요약문으로 AI 가 한국어 정리 · 국내 기사: AI 는 종목·중요도만">AI 정리</span> ' : (x.a === 0 && pol !== 'none' ? '<span class="dn-wait">정리 중…</span> ' : '');
+    return '<article class="dn-it p' + (x.p || 1) + (S.newIds.has(x.i) ? ' new' : '') + '" data-id="' + esc(x.i) + '">' +
+      '<div class="dn-meta"><time datetime="' + new Date(x.ts).toISOString() + '">' + fT.format(new Date(x.ts)) + '</time><span class="dn-ago" data-ts="' + x.ts + '">' + ago(x.ts) + '</span>' +
+      '<span class="dn-mkb ' + (x.m === 'kr' ? 'kr' : 'us') + '">' + (x.m === 'kr' ? '국내' : '미국') + '</span>' +
+      (x.p === 3 ? '<span class="dn-impb p3">중요</span>' : x.p === 2 ? '<span class="dn-impb p2">주목</span>' : '') + '</div>' +
+      '<h3 class="dn-t"><a href="' + esc(url) + '" target="_blank" rel="noopener nofollow">' + esc(x.t) + '</a></h3>' +
+      (x.x ? '<p class="dn-x">' + esc(x.x) + '</p>' : '') +
+      (x.o ? '<p class="dn-o" lang="en">원문: ' + esc(x.o) + '</p>' : '') +
+      '<div class="dn-foot">' + tk + '<span class="dn-src">' + mark + esc(srcName(x.s)) + ' · <a href="' + esc(url) + '" target="_blank" rel="noopener nofollow">원문 ↗</a></span></div></article>';
+  }
+  /* 보던 자리 기억: 화면 위쪽에 보이는 첫 기사 */
+  function anchor() {
+    var list = $('dn-list'); if (!list) return null;
+    var its = list.querySelectorAll('.dn-it');
+    for (var i = 0; i < its.length; i++) { var r = its[i].getBoundingClientRect(); if (r.bottom > 90) return { id: its[i].getAttribute('data-id'), top: r.top }; }
+    return null;
+  }
+  function render() {
+    var list = $('dn-list'); if (!list) return;
+    var an = window.scrollY > 0 ? anchor() : null;
+    var all = sorted(), L = all.filter(match), h = '', day = '';
+    var showN = Math.min(L.length, 400);
+    for (var i = 0; i < showN; i++) {
+      var x = L[i], dk = dayKey(x.ts);
+      if (dk !== day) { day = dk; h += '<div class="dn-day">' + esc(dayLabel(dk)) + '</div>'; }
+      h += card(x);
+    }
+    if (!L.length) h = '<div class="dn-empty">' + (S.items.size ? '조건에 맞는 뉴스가 없습니다' + (S.q ? ' — 찾기 칸을 비우거나 다른 낱말로 찾아 보세요' : '') : (S.lastOk ? '아직 모은 뉴스가 없습니다. 잠시 뒤 다시 확인합니다.' : (S.err ? '뉴스를 불러오지 못했습니다 — 잠시 뒤 자동으로 다시 시도합니다.' : '뉴스를 불러오는 중입니다…'))) + '</div>';
+    list.innerHTML = h;
+    S.newIds.clear();
+    if (an) {   // 위에 새 기사가 붙거나 요약이 늘어나도 보던 기사가 같은 자리에
+      var el = list.querySelector('.dn-it[data-id="' + an.id + '"]');
+      if (el) { var d = el.getBoundingClientRect().top - an.top; if (Math.abs(d) > 1) window.scrollBy(0, d); }
+    }
+    var us = 0, kr = 0; L.forEach(function (x) { if (x.m === 'kr') kr++; else us++; });
+    $('dn-count').textContent = L.length ? (L.length + '건' + (S.mk === 'all' ? ' · 미국 ' + us + ' · 국내 ' + kr : '') + (L.length > showN ? ' (최근 ' + showN + '건 표시)' : '')) : '';
+    $('dn-more').hidden = !S.more || !S.lastOk || !S.items.size;
+    document.querySelectorAll('#dn-mk .chart-tab').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-mk') === S.mk); });
+    $('dn-imp').setAttribute('aria-pressed', S.imp ? 'true' : 'false');
+    if ($('dn-q') !== document.activeElement) $('dn-q').value = S.q;
+    live();
+  }
+  function live() {
+    var el = $('dn-live'), t = $('dn-live-t'); if (!el) return;
+    el.classList.toggle('on', !!S.lastOk && S.err < 2); el.classList.toggle('err', S.err >= 2);
+    var newest = 0; S.items.forEach(function (x) { if (x.ts > newest) newest = x.ts; });
+    t.textContent = S.err >= 2 ? '연결이 잠시 끊겼습니다 — 30초마다 다시 시도' + (S.lastOk ? ' (마지막 확인 ' + fS.format(new Date(S.lastOk)) + ')' : '')
+      : S.lastOk ? '실시간 · ' + fS.format(new Date(S.lastOk)) + ' 확인' + (newest ? ' · 가장 새 기사 ' + ago(newest) : '') : '불러오는 중…';
+  }
+  function scrolledDown() { var list = $('dn-list'); return !!list && list.getBoundingClientRect().top < -150; }
+  function pill() { var b = $('dn-newpill'); if (!b) return; b.hidden = !(S.pend > 0 && active() && scrolledDown()); $('dn-newn').textContent = S.pend; }
+  function merge(d, full) {
+    var added = 0;
+    if (d.src) S.src = d.src;
+    if (full && d.items) {   // 전체: 묶음 범위(가장 오래된 것 이후) 안에서 묶음에 없는 기사는 지움(숨겨진 기사 등)
+      var min = Infinity, ids = new Set(); d.items.forEach(function (x) { ids.add(x.i); if (x.ts < min) min = x.ts; });
+      S.items.forEach(function (x, id) { if (x.ts >= min && !ids.has(id)) S.items.delete(id); });
+    }
+    (d.items || []).forEach(function (x) {
+      if (!S.items.has(x.i)) { added++; if (S.lastOk) S.newIds.add(x.i); }
+      S.items.set(x.i, x);
+    });
+    (d.gone || []).forEach(function (id) { S.items.delete(id); });
+    if (S.items.size > KEEP) sorted().slice(KEEP).forEach(function (x) { S.items.delete(x.i); });
+    if (d.v) S.v = d.v; if (d.at) S.at = d.at;
+    return added;
+  }
+  function load(force) {
+    if (S.busy) return Promise.resolve();
+    S.busy = true;
+    return endpoint().then(function (ep) {
+      if (!ep) throw new Error('no endpoint');
+      var full = force || !S.v || Date.now() - S.lastFull > FULL;
+      return fetch(ep + '/news' + (full ? '' : '?after=' + S.v), { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(function (d) {
+        var had = !!S.lastOk, added = 0;
+        if (!d.same) added = merge(d, !d.part);
+        if (full) S.lastFull = Date.now();
+        S.lastOk = Date.now(); S.err = 0;
+        if (had && added && scrolledDown()) S.pend += added;
+        if (!had || added || !d.same) render(); else live();
+        pill();
+      });
+    }).catch(function () { S.err++; live(); if (!S.lastOk) render(); }).finally(function () { S.busy = false; });
+  }
+  function more() {
+    if (S.loadingMore || !S.items.size) return;
+    var oldest = Infinity; S.items.forEach(function (x) { if ((S.mk === 'all' || x.m === S.mk) && x.ts < oldest) oldest = x.ts; });
+    if (!isFinite(oldest)) oldest = Date.now();
+    S.loadingMore = true; $('dn-more').textContent = '불러오는 중…';
+    endpoint().then(function (ep) {
+      return fetch(ep + '/news?before=' + oldest + (S.mk !== 'all' ? '&m=' + S.mk : ''), { cache: 'no-store' }).then(function (r) { return r.json(); });
+    }).then(function (d) {
+      (d.items || []).forEach(function (x) { if (!S.items.has(x.i)) S.items.set(x.i, x); });
+      S.more = !!d.more; KEEP = Math.max(KEEP, S.items.size);
+      render();
+    }).catch(function () {}).finally(function () { S.loadingMore = false; $('dn-more').textContent = '지난 뉴스 더 보기'; });
+  }
+  function tick() {   /* 30초마다 (열려 있고 보이는 동안만) — '몇 분 전'도 함께 새로 */
+    if (!active()) { clearInterval(S.timer); S.timer = null; return; }
+    if (document.hidden) return;
+    load();
+    document.querySelectorAll('#dn-list .dn-ago').forEach(function (e) { e.textContent = ago(+e.getAttribute('data-ts')); });
+  }
+  window.dnRender = function () {
+    if (!active()) { clearInterval(S.timer); S.timer = null; return; }
+    if (!S.timer) S.timer = setInterval(tick, POLL);
+    render();
+    load();
+  };
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && active() && S.lastOk && Date.now() - S.lastOk > 20000) load(); });
+  window.addEventListener('scroll', function () { if (S.pend && !scrolledDown()) S.pend = 0; pill(); }, { passive: true });
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t.closest || !t.closest('#page-news')) return;
+    var b;
+    if ((b = t.closest('#dn-mk [data-mk]'))) { S.mk = b.getAttribute('data-mk'); S.more = true; render(); return; }
+    if (t.closest('#dn-imp')) { S.imp = !S.imp; render(); return; }
+    if ((b = t.closest('[data-tk]'))) { S.q = b.getAttribute('data-tk'); render(); var c = $('dn-mk'); if (c && c.scrollIntoView) c.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    if (t.closest('#dn-newpill')) { S.pend = 0; pill(); var l = $('dn-list'); if (l) window.scrollTo({ top: Math.max(0, l.getBoundingClientRect().top + window.scrollY - 160), behavior: 'smooth' }); return; }
+    if (t.closest('#dn-more')) { more(); return; }
+  });
+  var qT = null;
+  document.addEventListener('input', function (e) { if (e.target && e.target.id === 'dn-q') { clearTimeout(qT); qT = setTimeout(function () { S.q = e.target.value; render(); }, 180); } });
+  /* 공유 링크·내 저장함 */
+  window.dcStateX = window.dcStateX || {};
+  window.dcStateX['news'] = {
+    get: function () { return { mk: S.mk, imp: S.imp, q: S.q }; },
+    set: function (v) { if (!v) return; S.mk = ['all', 'us', 'kr'].indexOf(v.mk) >= 0 ? v.mk : DEF.mk; S.imp = !!v.imp; S.q = typeof v.q === 'string' ? v.q.slice(0, 60) : ''; render(); },
+    def: { mk: DEF.mk, imp: DEF.imp, q: DEF.q }
+  };
+  window.DNdebug = { S: S, render: render, load: load, match: match, ago: ago, merge: merge };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.dnRender); else window.dnRender();
+})();
+
 
 /* ════════════════════════════════════════
    [SRANK] 국내 나의 연봉 순위 — data/salary_rank.json (Actions '연봉 순위 자료 갱신': 매주 확인)
@@ -10300,6 +10483,7 @@ function switchSubTab(tab, grpId, btn) {
   if (window.asRender) window.asRender();   /* [ASPEED] 자산 속도 시뮬레이터: 열리면 그리고, 다른 탭이면 재생 멈춤 */
   if (window.erRender) window.erRender();   /* [EARN] 실적발표 캘린더: 열리면 그리고, 다른 탭이면 자동 갱신 중지 */
   if (window.wrRender) window.wrRender();   /* [RATES] 전세계 금리: 열리면 그리고, 다른 탭이면 자동 갱신 중지 */
+  if (window.dnRender) window.dnRender();   /* [NEWS] 디코딩 뉴스: 열리면 받고 30초마다 새 뉴스 · 다른 탭이면 멈춤 */
   if (tab === 'aptrank' && window.apRender) window.apRender();
   if (window.dvRender) window.dvRender();   /* ETF 분배 달력: 열리면 그리고, 다른 탭이면 자동 갱신 중지 */
   if (tab === 'muhan') requestAnimationFrame(function(){ requestAnimationFrame(function(){ if (typeof muhanInit === 'function') muhanInit(); }); });
