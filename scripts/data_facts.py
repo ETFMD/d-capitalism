@@ -732,7 +732,66 @@ def autosum_earn():
                 '확정 일정은 회사 공시(IR)·회사 발표 날짜만 넣었습니다. 아래 캘린더는 페이지를 열 때 최신 자료로 다시 그려집니다.')
 
 
-AUTOSUM = {'mcap': autosum_mcap, 'fx': autosum_fx, 'apt': autosum_apt, 'earn': autosum_earn}
+def _rt(v):
+    """금리 3.5 → 3.50% · 1.875 → 1.875%"""
+    t = f'{v:.3f}'.rstrip('0')
+    if len(t.split('.')[1]) < 2:
+        t = f'{v:.2f}'
+    return t + '%'
+
+
+def _rtp(v):
+    r = round(v, 3)
+    return ('+' if r > 0 else '−' if r < 0 else '') + _rt(abs(r)).replace('%', '%p')
+
+
+def autosum_rates():
+    """[RATES] 전세계 금리 — 주요국 지금 기준금리 · 최근 변경 · 다음 발표 · 한미 금리 차 · 최근 60일 결정"""
+    r = _load('rates.json')
+    C = {c['c']: c for c in r.get('countries') or []}
+    keys = [k for k in ('KR', 'US', 'XM', 'JP', 'CN', 'TW', 'GB', 'CH', 'SE', 'NO', 'PL', 'CZ', 'HU') if k in C]
+    if len(keys) < 10:
+        raise ValueError(f'rates.json 주요국 {len(keys)}개')
+    td = datetime.date.fromisoformat(r['today'])
+    rows = []
+    for k in keys:
+        c = C[k]
+        last = next((e for e in reversed(c['ev']) if e[1] != e[2] and e[3] != 'b'), None)
+        nx = (c.get('nx') or [None])[0]
+        cur = (_rt(c['rng'][0]).rstrip('%') + '~' + _rt(c['rng'][1])) if c.get('rng') else _rt(c['cur'])
+        rows.append([f'{esc(c["ko"])}<br><small>{esc(c["bank"])}</small>', (cur, 'n'),
+                     (f'{ymd_dot(last[0])} {_rtp(last[1] - last[2])}' if last else '—', 'n'),
+                     (_md(nx['d']) if nx and nx.get('d') else (f'{int(nx["m"][5:7])}월 중(추정)' if nx and nx.get('m') else '—'), 'n')])
+    li = []
+    kr, us = C['KR']['cur'], C['US']['cur']
+    li.append(f'{ymd_ko(td)} 기준 한국 기준금리는 {_rt(kr)}, 미국 연방기금금리 목표 범위는 {_rt(C["US"]["rng"][0]).rstrip("%")}~{_rt(us)}로 '
+              f'한미 금리 차(한국 − 미국 상단)는 {_rtp(kr - us)}입니다.' + (' 한국 금리가 미국보다 낮은 역전 상태입니다.' if kr < us else ''))
+    hi = max((C[k] for k in keys), key=lambda c: c['cur']); lo = min((C[k] for k in keys), key=lambda c: c['cur'])
+    li.append(f'표의 주요 {len(keys)}개 나라·지역 가운데 기준금리가 가장 높은 곳은 {esc(hi["ko"])}({_rt(hi["cur"])}), 가장 낮은 곳은 {esc(lo["ko"])}({_rt(lo["cur"])})입니다.')
+    rec = []
+    for c in C.values():
+        if c.get('end') or c['c'] == 'XMR':
+            continue
+        for e in c['ev']:
+            if e[3] != 'b' and e[1] != e[2] and 0 <= (td - datetime.date.fromisoformat(e[0])).days <= 60:
+                rec.append((e[0], c, e))
+    rec.sort(key=lambda t: t[0], reverse=True)
+    if rec:
+        up = sum(1 for t in rec if t[2][1] > t[2][2])
+        li.append(f'최근 60일 동안 금리를 바꾼 곳은 {len(rec)}번(인상 {up} · 인하 {len(rec) - up})입니다: '
+                  + ', '.join(f'{esc(c["ko"])} {ymd_dot(d)} {_rtp(e[1] - e[2])}' for d, c, e in rec[:8]) + (' 등' if len(rec) > 8 else '') + '.')
+    else:
+        li.append('최근 60일 동안 금리를 바꾼 나라는 없습니다.')
+    up30 = sorted(((x['d'], C[k]) for k in keys for x in (C[k].get('nx') or []) if x.get('d') and 0 <= (datetime.date.fromisoformat(x['d']) - td).days <= 30), key=lambda t: (t[0], keys.index(t[1]['c'])))
+    if up30:
+        li.append('앞으로 30일 안의 금리 발표: ' + ', '.join(f'{_md(d)} {esc(c["ko"])}' for d, c in up30) + '.')
+    inner = _tbl(['나라 · 중앙은행', ('지금 금리', 'n'), ('최근 변경', 'n'), ('다음 발표', 'n')], rows) + _ul(li)
+    return _sec('rates', '주요국 기준금리 요약 — 지금 금리와 다가오는 발표', f'주요국 기준금리 <small>{_when(r["updated"])} 갱신 · 자동 갱신</small>', inner,
+                f'자료: {esc(r.get("src", ""))} (data/rates.json). 미국은 목표 범위(표의 숫자는 상단), 유로존은 ECB 예금금리, 중국은 LPR 1년, 대만은 재할인율입니다. '
+                '아래 차트·일정·결정 기록은 페이지를 열 때 최신 자료로 다시 그려집니다.')
+
+
+AUTOSUM = {'mcap': autosum_mcap, 'fx': autosum_fx, 'apt': autosum_apt, 'earn': autosum_earn, 'rates': autosum_rates}
 
 
 def autosum(key, src_text=None):

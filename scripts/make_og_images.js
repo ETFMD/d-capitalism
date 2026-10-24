@@ -1,6 +1,6 @@
 /* 공유 미리보기 이미지(1200×630) 생성 — assets/og/<경로>.png
    routes.json 의 도구 이름·설명으로 그림. 도구를 추가·이름 변경했을 때만 다시 실행하면 됩니다.
-   실행: node scripts/make_og_images.js   (playwright-core 와 Chromium, 한글 글꼴(Noto Sans CJK KR) 필요) */
+   실행: node scripts/make_og_images.js   (playwright-core 와 Chromium, 한글 글꼴(Noto Sans CJK KR) 필요) · 일부만: OG_ONLY=경로,경로 */
 const fs = require('fs'), path = require('path');
 const { chromium } = require(process.env.PW_CORE || 'playwright-core');
 const ROOT = path.join(__dirname, '..');
@@ -44,7 +44,8 @@ function page(r, home) {
 (async () => {
   const b = await chromium.launch(process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {});
   const pg = await b.newPage({ viewport: { width: 1200, height: 630 } });
-  const list = [{ ...cfg.home, path: 'home', home: true }, ...cfg.routes];
+  const only = (process.env.OG_ONLY || '').split(',').filter(Boolean);   /* 새 도구만: OG_ONLY=world-rates node scripts/make_og_images.js (나머지 이미지는 그대로) */
+  const list = [{ ...cfg.home, path: 'home', home: true }, ...cfg.routes].filter(r => !only.length || only.includes(r.path));
   for (const r of list) {
     await pg.setContent(page(r, r.home), { waitUntil: 'load' });
     await pg.screenshot({ path: path.join(ROOT, 'assets/og', r.path + '.png') });

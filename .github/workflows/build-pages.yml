@@ -11,7 +11,7 @@ on:
   # (봇의 push 는 GITHUB_TOKEN 이라 push 이벤트로는 이 워크플로가 안 돌기 때문에 workflow_run 으로 연결)
   # 자본가 서재 책 표지 갱신 → 새 표지(books/cover · content/books/covers.json)를 /books/·투자 공부 글에 반영
   workflow_run:
-    workflows: ['시가총액 순위 갱신', '실적발표 캘린더 갱신', '자본가 서재 책 표지 갱신']
+    workflows: ['시가총액 순위 갱신', '실적발표 캘린더 갱신', '자본가 서재 책 표지 갱신', '전세계 금리 갱신']
     types: [completed]
   push:
     branches: [main]

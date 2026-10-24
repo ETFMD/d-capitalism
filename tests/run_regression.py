@@ -1121,7 +1121,7 @@ def admin_lock_check(page, base, fail, routes):
 
 ADS_TAG = 'pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8051182229751523'
 STATIC_PAGES = ('about/', 'terms/', 'privacy/', 'disclaimer/')
-AUTOSUM_OF = {'mcap': 'mcap', 'fx': 'fx', 'aptrank': 'apt', 'earn': 'earn'}   # 탭 → [AUTOSUM:키] (자료 화면 자동 요약 · scripts/data_facts.py)
+AUTOSUM_OF = {'mcap': 'mcap', 'fx': 'fx', 'aptrank': 'apt', 'earn': 'earn', 'rates': 'rates'}   # 탭 → [AUTOSUM:키] (자료 화면 자동 요약 · scripts/data_facts.py)
 HUB_GUIDE = ('me', 'pay', 'realty', 'capital')                              # 단계 해설 [HUB-GUIDE] 을 넣은 허브(영역)
 
 
@@ -3162,6 +3162,101 @@ def earn_data_check(fail, d, where='earn'):
     return len(kr), len(us)
 
 
+RATES_JS = """async () => {
+  const W = ms => new Promise(r => setTimeout(r, ms)), R = [], ok = (n, c, i) => R.push({ name: n, ok: !!c, info: i }), $ = q => document.querySelector(q), $$ = q => [...document.querySelectorAll(q)];
+  for (let i = 0; i < 80 && !(window.WRdebug && WRdebug.S.d && WRdebug.S.chart); i++) await W(100);
+  const S = WRdebug.S, C = S.C, d = S.d;
+  if (!S.d) { ok('자료를 불러오지 못함', false); return R; }
+  ok('주요국 카드 7개(한국·미국·유로존·일본·중국·대만·영국) · 숫자', $$('#wr-kpis .wr-kpi').length === 7 && $$('#wr-kpis .wr-kpi-v').every(e => /\\d%/.test(e.textContent)), $$('#wr-kpis .wr-kpi-v').map(e => e.textContent));
+  ok('미국 카드 = 목표 범위(하단~상단)', /~/.test($('[data-kpi="US"] .wr-kpi-v').textContent), $('[data-kpi="US"] .wr-kpi-v').textContent);
+  ok('처음 차트 = 6개 나라 · 20년', S.chart.data.datasets.length === 6 && Math.abs(S.chart.scales.x.max - S.chart.scales.x.min - 7305) < 3, [S.chart.data.datasets.length, S.chart.scales.x.max - S.chart.scales.x.min]);
+  /* 기간 비교 표 = 금리 흐름(valAt) */
+  const rg = WRdebug.range(), rows = $$('#wr-cmp tr');
+  const kr0 = WRdebug.valAt(C.KR.s, rg.x0), kr1 = WRdebug.valAt(C.KR.s, rg.x1 < C.KR.last ? rg.x1 : C.KR.last);
+  ok('기간 비교 표: 나라마다 한 줄 · 한국 시작·끝 금리 = 자료', rows.length === 6 && rows[0].cells[1].textContent.startsWith(kr0.toFixed(2)) && rows[0].cells[2].textContent.startsWith(kr1.toFixed(2)), [rows.length, rows[0] && rows[0].innerText, kr0, kr1]);
+  ok('한미 금리 차 줄', /한미 금리 차/.test($('#wr-gap').textContent) && /%p/.test($('#wr-gap').textContent), $('#wr-gap').textContent);
+  /* 기간 단추 · 날짜 칸 */
+  $('#wr-per [data-per="1Y"]').click(); await W(80);
+  ok('1년 단추 → 365일', Math.abs(S.chart.scales.x.max - S.chart.scales.x.min - 365) <= 1 && $('#wr-per [data-per="1Y"]').classList.contains('active'), S.chart.scales.x.max - S.chart.scales.x.min);
+  $('#wr-per [data-per="ALL"]').click(); await W(80);
+  const allMin = Math.min(...S.sel.map(k => Date.parse(C[k].from) / 864e5));
+  ok('전체 → 고른 나라 가장 이른 기록부터', Math.abs(S.chart.scales.x.min - allMin) < 1, [S.chart.scales.x.min, allMin]);
+  const d0 = $('#wr-d0'), d1 = $('#wr-d1'); d0.value = '2008-01-01'; d1.value = '2010-12-31'; d1.dispatchEvent(new Event('change', { bubbles: true })); await W(80);
+  ok('날짜 칸 → 그 기간 · 기간 단추 꺼짐', WRdebug.range().x0 === '2008-01-01' && WRdebug.range().x1 === '2010-12-31' && !$('#wr-per .chart-tab.active'), WRdebug.range());
+  const us08 = $$('#wr-cmp tr').find(r => /미국/.test(r.cells[0].textContent));
+  ok('2008~2010 미국 기간 변화 = 4.25% → 0.25% (−4.00%p)', us08 && us08.cells[1].textContent.startsWith('4.25%') && us08.cells[2].textContent.startsWith('0.25%') && /−4\\.00%p/.test(us08.cells[3].textContent), us08 && us08.innerText);
+  /* 나라 더하기·빼기 */
+  const add = $('#wr-add'); add.value = 'GB'; add.dispatchEvent(new Event('change', { bubbles: true })); await W(80);
+  ok('나라 더하기(영국) → 7개 · 칩·표 줄', S.sel.includes('GB') && S.chart.data.datasets.length === 7 && $$('#wr-chips .wr-chip').length === 7 && $$('#wr-cmp tr').length === 7, S.sel);
+  add.value = 'DE'; add.dispatchEvent(new Event('change', { bubbles: true })); await W(80);
+  const de = $$('#wr-cmp tr').find(r => /독일/.test(r.cells[0].textContent));
+  ok('유로 가입으로 끝난 나라(독일): 2008~2010 에는 자료 없음 표시 · 선 없음', C.DE.end && C.DE.last <= '1999-01-01' && de && /자료가 없습니다/.test(de.innerText) && S.chart.data.datasets.find(x => x._k === 'DE').data.length === 0, de && de.innerText);
+  $('#wr-per [data-per="ALL"]').click(); await W(80);
+  const deL = S.chart.data.datasets.find(x => x._k === 'DE').data;
+  ok('전체 기간: 독일 선은 1998.12.31 에서 끝남', deL.length > 10 && deL[deL.length - 1].x === Date.parse('1998-12-31') / 864e5, deL.slice(-1));
+  $('#wr-chips [data-rm="DE"]').click(); $('#wr-chips [data-rm="GB"]').click(); await W(80);
+  ok('빼기 → 6개', S.sel.length === 6 && S.chart.data.datasets.length === 6, S.sel);
+  /* 휠 확대 · 더블클릭 */
+  $('#wr-per [data-per="20Y"]').click(); await W(80);
+  const cv = $('#wr-chart'), ca = S.chart.chartArea, rc = cv.getBoundingClientRect(), cx = rc.left + (ca.left + ca.right) / 2, cy = rc.top + (ca.top + ca.bottom) / 2;
+  const span0 = S.chart.scales.x.max - S.chart.scales.x.min;
+  for (let i = 0; i < 4; i++) cv.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: cx, clientY: cy, bubbles: true, cancelable: true }));
+  await W(80);
+  const span1 = S.chart.scales.x.max - S.chart.scales.x.min;
+  ok('휠 → 기간 확대 · [전체 기간으로] 보임', span1 < span0 * 0.7 && !$('#wr-zreset').hidden, [span0, span1]);
+  cv.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); await W(80);
+  ok('더블클릭 → 고른 기간(20년)', Math.abs(S.chart.scales.x.max - S.chart.scales.x.min - span0) < 2 && $('#wr-zreset').hidden);
+  /* 일정 · 최근 결정 */
+  const nx = $$('#wr-next tr');
+  ok('다가오는 발표 줄 · 날짜 오름차순 · D-일', nx.length >= 5 && /D-\\d+|오늘/.test(nx[0].innerText), nx.slice(0, 3).map(r => r.innerText));
+  $('#wr-upf [data-upf="all"]').click(); await W(60);
+  ok('전체 나라 일정 ≥ 주요국 일정', $$('#wr-next tr').length >= nx.length, [$$('#wr-next tr').length, nx.length]);
+  $('#wr-upf [data-upf="main"]').click(); await W(60);
+  /* 결정 기록 */
+  ok('결정 기록 처음 = 한국 40줄 · 회의 요약', $('#wr-hc').value === 'KR' && $$('#wr-hist tr').length === 40 && /회의 \\d+번/.test($('#wr-hsum').textContent), $('#wr-hsum').textContent);
+  const kev = C.KR.ev.slice().reverse()[0], first = $$('#wr-hist tr')[0];
+  ok('첫 줄 = 가장 최근 결정(날짜·금리)', first.cells[0].textContent.startsWith(kev[0].slice(0, 4) + '.' + (+kev[0].slice(5, 7)) + '.' + (+kev[0].slice(8, 10))) && first.cells[2].textContent.includes(kev[1].toFixed(2)), [first.innerText, kev]);
+  $('#wr-hf [data-hf="chg"]').click(); await W(60);
+  ok('바뀐 것만 → 동결 없음', $$('#wr-hist tr').every(r => !/동결/.test(r.cells[1].textContent)), $$('#wr-hist tr').slice(0, 3).map(r => r.innerText));
+  $('#wr-hf [data-hf="all"]').click(); $('#wr-hmore').click(); await W(60);
+  ok('더 보기 → 80줄', $$('#wr-hist tr').length === 80);
+  $('[data-kpi="US"]').click(); await W(120);
+  ok('미국 카드 → 미국 결정 기록 · 범위 표기', $('#wr-hc').value === 'US' && /~/.test($$('#wr-hist tr')[0].cells[2].textContent), $$('#wr-hist tr')[0].innerText);
+  const hc = $('#wr-hc'); hc.value = 'SE'; hc.dispatchEvent(new Event('change', { bubbles: true })); await W(60);
+  ok('회의 일정 없는 나라(스웨덴) → 바뀐 날만 · 안내', /바뀐 날/.test($('#wr-hsum').textContent) && $$('#wr-hist tr').every(r => !/동결/.test(r.cells[1].textContent)), $('#wr-hsum').textContent.slice(0, 120));
+  /* 결과 대기 · 보는 사람 '오늘' 기준 일정 */
+  const pb = WRdebug.badge(['2026-01-01', 1, 1, 'p']).replace(/<[^>]+>/g, '');   /* 보이는 글자만 (설명 title 에는 '동결' 낱말이 있음) */
+  ok('결과 대기 표시(동결로 쓰지 않음)', /결과 대기/.test(pb) && !/동결/.test(pb), pb);
+  const td = WRdebug.TD(), fk = { nx: [{ d: '2000-01-01' }, { d: td }, { m: '2000-01' }, { d: '2999-01-01' }] };
+  ok('지난 일정은 빼고 오늘 일정은 남김(한국 시간 오늘 기준)', JSON.stringify(WRdebug.nxOf(fk)) === JSON.stringify([{ d: td }, { d: '2999-01-01' }]) && td >= d.today, WRdebug.nxOf(fk));
+  /* 공유 상태 */
+  const X = window.dcStateX && window.dcStateX['world-rates'];
+  X.set({ sel: ['KR', 'US'], per: '5Y', d0: '', d1: '', hc: 'JP', hf: 'chg', upf: 'all' }); await W(80);
+  const g = X.get();
+  ok('공유 상태 되살리기(나라·기간·결정 기록·보기)', S.chart.data.datasets.length === 2 && g.per === '5Y' && $('#wr-hc').value === 'JP' && g.hf === 'chg' && g.upf === 'all', g);
+  X.set(X.def); await W(80);
+  ok('기본값으로 되돌리기', S.sel.join() === 'KR,US,XM,JP,CN,TW' && S.per === '20Y' && S.hc === 'KR');
+  return R;
+}"""
+
+
+def rates_check(page, base, fail, errs, ignorable):
+    """[RATES] 전세계 금리 (/world-rates/) — 화면 흐름 RATES_JS · 휴대폰 넘침 · 콘솔 오류"""
+    errs.clear()
+    page.set_viewport_size({'width': 1440, 'height': 900})
+    page.goto(base + 'world-rates/', wait_until='load'); page.wait_for_timeout(800)
+    for t in page.evaluate(RATES_JS):
+        if not t['ok']:
+            fail('rates', '%s%s' % (t['name'], (' — ' + str(t.get('info'))[:300]) if t.get('info') else ''))
+    page.set_viewport_size({'width': 360, 'height': 800}); page.wait_for_timeout(300)
+    r = page.evaluate("() => [document.documentElement.scrollWidth, innerWidth, document.querySelectorAll('#wr-kpis .wr-kpi').length]")
+    if r[0] > r[1] + 1:
+        fail('rates', '휴대폰(360)에서 가로 넘침 %s' % r)
+    for t in [t for t, u in errs if not ignorable(t, u)][:3]:
+        fail('rates', '콘솔 오류: ' + t[:200])
+    page.set_viewport_size({'width': 1440, 'height': 900})
+
+
 def earn_check(page, base, fail, errs, ignorable):
     errs.clear()
     if base.startswith('http://127.0.0.1') or base.startswith('http://localhost'):
@@ -3430,6 +3525,13 @@ def main():
         print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'earn_nq_test: 출력 없음', flush=True)
         if _r.returncode != 0:
             fail('earn', '나스닥 잠정 실적(nq_merge) 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:300])
+
+    # [RATES] 전세계 금리: data/rates.json 형식·결정 기록 = 금리 흐름·알려진 결정 · 계산 함수 — 네트워크 없이
+    if not a.etf_audit:
+        _r = subprocess.run([sys.executable, os.path.join(ROOT, 'tests', 'rates_test.py')], capture_output=True, text=True, timeout=120)
+        print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'rates_test: 출력 없음', flush=True)
+        if _r.returncode != 0:
+            fail('rates', '전세계 금리 자료 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:400])
 
     # 외부 광고·방문 분석 서버(일시 오류가 잦고 사이트 기능과 무관) — 실패해도 사이트 오류로 보지 않음
     THIRD = ('clarity.ms', 'bing.com', 'naver.com', 'naver.net', 'pstatic.net', 'googlesyndication', 'doubleclick',
@@ -4453,6 +4555,10 @@ def main():
         if 'earnings-calendar/' in paths:
             print('[5] 실적발표 캘린더', flush=True)
             earn_check(page, base, fail, errs, ignorable)
+        # [RATES] 전세계 금리 — 주요국 카드·차트·기간·나라 더하기/빼기·기간 비교 표(= 금리 흐름)·한미 금리 차·일정·결정 기록·휠 확대·공유 상태
+        if 'world-rates/' in paths:
+            print('[5b] 전세계 금리', flush=True)
+            rates_check(page, base, fail, errs, ignorable)
         # [COMMUNITY] 건의 게시판 — 실제 Worker 코드를 가짜 서버로 띄워 손님·회원·관리자 흐름 (실제 계정·게시판 안 건드림)
         if 'suggest/' in paths:
             print('[6] 건의 게시판', flush=True)

@@ -1,0 +1,51 @@
+name: 전세계 금리 갱신
+
+# [RATES] 전세계 기준금리 (data/rates.json) — scripts/update_rates.py
+#  · 하루 6번(한국 시간): 08:10(미국 FOMC 성명서·뉴욕연은 새 범위) · 10:40·12:40(한국은행·중국 LPR·일본은행 결정 뒤) · 17:40 · 21:40·23:40(영란은행·ECB 결정 뒤)
+#  · BIS 정책금리(전 국가)는 보통 며칠 늦게 갱신 → 주요국은 공식 기관 최신값으로 보강(미국·유로존·영국·한국·중국·대만)
+#  · 지난 회의 목록은 처음 한 번 받아 data/rates.json 에 두고 뒤로는 올해·내년만 · 내용이 바뀐 경우에만 커밋
+on:
+  schedule:
+    - cron: '10 23 * * *'
+    - cron: '40 1 * * *'
+    - cron: '40 3 * * *'
+    - cron: '40 8 * * *'
+    - cron: '40 12 * * *'
+    - cron: '40 14 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['scripts/update_rates.py', '.github/workflows/update-rates.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rates
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}   # 앞 실행을 기다린 실행도 시작 시점 main 최신본에서 (옛 커밋에서 만들면 같은 자료 파일끼리 충돌)
+      - name: 금리 자료 수집
+        run: python3 scripts/update_rates.py
+      - name: 자료 검사
+        run: python3 tests/rates_test.py
+      - name: 변경된 경우에만 커밋
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898099+github-actions[bot]@users.noreply.github.com'
+          git add data/rates.json
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git commit -m "chore: 전세계 금리 갱신"
+          for i in 1 2 3; do
+            git pull --rebase --autostash && git push && exit 0
+            git rebase --abort 2>/dev/null || true
+            sleep 5
+          done
+          exit 1
