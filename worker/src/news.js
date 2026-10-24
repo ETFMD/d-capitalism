@@ -50,7 +50,7 @@ const ITEM_MAX_AGE = 48 * 3600e3;          // 이보다 오래된 기사는 넣�
 const KEEP_DAYS = 90;                      // 보관 기간
 const SNAP_N = 200;                        // 묶음에 넣는 최신 기사 수
 const AI_BATCH = 6;                        // AI 한 번에 정리하는 기사 수
-const AI_WINDOW = 24 * 3600e3;             // 이보다 오래 기다린 기사는 AI 없이(원문 그대로) 보여 줌
+const AI_WINDOW = 12 * 3600e3;             // 이보다 오래 기다린 기사는 AI 없이(원문 그대로) 보여 줌
 const AI_TRIES = 3;
 export const AI_DAILY_CAP = 9000;          // 하루(UTC) 뉴런 상한 — 무료 10,000 안에서 여유
 /* Workers AI 모델 (앞에서부터 시도 · 실패하면 다음) — 값: [입력·출력 100만 토큰당 뉴런] (Cloudflare 가격표) */
@@ -244,9 +244,10 @@ export async function newsTick(env, now = Date.now(), opts = {}) {
   }
   let changed = res.added > 0;
   if (!opts.noAi) {
-    const a = await aiStep(env, now);
+    let a = await aiStep(env, now);
     res.ai = a.n; res.aiInfo = a.info;
-    if (a.n) changed = true;
+    if (a.info && a.info.full && !opts.oneAi) { a = await aiStep(env, now); res.ai += a.n; }   // 밀린 기사가 많으면 한 번 더 (처음 배포·발표가 몰릴 때)
+    if (res.ai) changed = true;
   }
   if (changed || opts.forceSnap || !(await env.DB.prepare("SELECT 1 AS x FROM news_kv WHERE k='snap'").first())) {
     await buildSnap(env, now); res.snap = true;
@@ -285,14 +286,15 @@ export function aiText(r) {
 }
 /* 모델 답에서 JSON 배열 꺼내기 (생각 태그·코드블록·앞뒤 말 무시) */
 export function aiParse(txt) {
-  let s = String(txt || '').replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```(?:json)?/gi, '');
+  const s = String(txt || '').replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```(?:json)?/gi, '');
   const a = s.indexOf('['), b = s.lastIndexOf(']');
-  if (a < 0 || b <= a) {
-    const o = s.indexOf('{'), p = s.lastIndexOf('}');
-    if (o >= 0 && p > o) { try { const v = JSON.parse(s.slice(o, p + 1)); if (Array.isArray(v.items)) return v.items; if (v && v.i != null) return [v]; } catch (e) {} }
-    return null;
-  }
-  try { const v = JSON.parse(s.slice(a, b + 1)); return Array.isArray(v) ? v : null; } catch (e) { return null; }
+  if (a >= 0 && b > a) { try { const v = JSON.parse(s.slice(a, b + 1)); if (Array.isArray(v)) return v; } catch (e) {} }
+  const o = s.indexOf('{'), p = s.lastIndexOf('}');
+  if (o >= 0 && p > o) { try { const v = JSON.parse(s.slice(o, p + 1)); if (v && Array.isArray(v.items)) return v.items; if (v && v.i != null) return [v]; } catch (e) {} }
+  // 전체가 JSON 이 아니면(따옴표 하나 잘못·끝이 잘림) 기사 하나씩 {…} 를 따로 읽어 살릴 수 있는 것만
+  const out = [];
+  for (const m of s.matchAll(/\{[^{}]*\}/g)) { try { const x = JSON.parse(m[0]); if (x && x.i != null) out.push(x); } catch (e) {} }
+  return out.length ? out : null;
 }
 const clip = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 export function aiClean(o, mode) {
@@ -355,13 +357,14 @@ async function aiStep(env, now) {
     try {
       const r = await env.AI.run(md, {
         messages: [{ role: 'system', content: SYS }, { role: 'user', content: (md.includes('qwen3') ? '/no_think\n' : '') + user }],
-        max_tokens: 1600, temperature: 0.2,
+        max_tokens: 2400, temperature: 0.2,
       });
       const txt = aiText(r);
       spent += neurons(md, r && r.usage, SYS.length + user.length, txt.length);
       parsed = aiParse(txt);
       if (parsed && parsed.length) { model = md; break; }
-      err = 'parse:' + md + ' · ' + (r && typeof r === 'object' ? Object.keys(r).join(',') : typeof r) + ' · ' + String(txt || JSON.stringify(r) || '').slice(0, 300);   // 모델 답 앞부분(점검용 · 공개 뉴스 정리문뿐)
+      const raw = String(txt || JSON.stringify(r) || '');
+      err = 'parse:' + md + ' · ' + (r && typeof r === 'object' ? Object.keys(r).join(',') : typeof r) + ' · ' + raw.length + '자 · ' + JSON.stringify(r && r.usage || null) + ' · ' + raw.slice(0, 160) + ' … ' + raw.slice(-200);   // 모델 답 앞부분(점검용 · 공개 뉴스 정리문뿐)
     } catch (e) {
       const msg = String(e && e.message || e);
       err = md + ': ' + msg.slice(0, 140);
@@ -382,6 +385,7 @@ async function aiStep(env, now) {
   }
   await env.DB.batch(stmts);
   info.model = model; info.spent = Math.round(spent); if (err) info.err = err;
+  info.full = !!model && list.length === AI_BATCH;
   return { n, info };
 }
 

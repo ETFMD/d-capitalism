@@ -213,16 +213,16 @@ if (SERVE) {
   const sm = all['삼성전자 3분기 실적 발표'];
   ok(sm.st === 1 && sm.t === null && sm.s === null && sm.tk === '삼성전자', "국내('tag'): AI 가 제목·요약을 써도 버리고 종목만", sm);
   ok(all['Big coupon deals today'].st === 3 && all['쿠폰 행사 안내'].st === 3, "투자와 무관(rel false) → 숨김(st 3)");
-  ok(aiCalls.length === 1 && JSON.parse(aiCalls[0].inp.messages[1].content).length === 6 && !aiCalls[0].inp.messages[1].content.includes('연합뉴스 요약문'), `AI 한 번에 6건 · 연합뉴스는 AI 에 보내지 않음`, aiCalls.length);
+  ok(aiCalls.length === 2 && JSON.parse(aiCalls[0].inp.messages[1].content).length === 6 && JSON.parse(aiCalls[1].inp.messages[1].content).length === 1 && !aiCalls.some((c) => c.inp.messages[1].content.includes('연합뉴스 요약문')), `AI 한 번에 6건 · 꽉 차면 한 번 더(밀린 기사) · 연합뉴스는 AI 에 보내지 않음`, aiCalls.length);
   const sent = JSON.parse(aiCalls[0].inp.messages[1].content);
   ok(sent.every((x) => x.mode === 'tag' ? !('d' in x) : true) && sent.find((x) => x.title === 'Apple falls on China news').d === 'Shares fell after a report.', "AI 에 보내는 것: full = 제목+RSS 요약문 · tag = 제목만");
   const used = rows("SELECT v FROM news_kv WHERE k LIKE 'ai:2026%'")[0];
-  ok(used && Math.abs(Number(used.v) - (900 * 9091 + 600 * 27273) / 1e6) < 0.2, 'AI 사용량(뉴런) = 모델 가격표 × 토큰', used);
+  ok(used && Math.abs(Number(used.v) - 2 * (900 * 9091 + 600 * 27273) / 1e6) < 0.2, 'AI 사용량(뉴런) = 모델 가격표 × 토큰 (2번)', used);
   // 남은 1건(Fed signals pause)은 다음 분에
   min(1); aiCalls = []; aiMode = 'think';
   await N.newsTick(env, clock, { feeds: 0 });
   ok(rows("SELECT st FROM news WHERE t0 = 'Fed signals pause'")[0].st === 1 && rows("SELECT imp FROM news WHERE t0 = 'Fed signals pause'")[0].imp === 3, '생각 태그·코드블록이 섞인 답도 JSON 만 꺼냄 · 중요도 3');
-  ok(N.aiParse('앞말 [{"i":1,"t":"a"}] 뒷말')[0].t === 'a' && N.aiParse('{"items":[{"i":2}]}')[0].i === 2 && N.aiParse('없음') === null, 'AI 답 꺼내기(앞뒤 말 · {items})');
+  ok(N.aiParse('<think>생각 [1,2]</think>\n```json\n[{"i":3,"t":"c"}]\n```')[0].i === 3 && N.aiParse('[{"i":1,"t":"테슬라 "로보택시" 출시"},{"i":2,"t":"정상"},{"i":3,"t":"잘')[0].i === 2 && N.aiParse('앞말 [{"i":1,"t":"a"}] 뒷말')[0].t === 'a' && N.aiParse('{"items":[{"i":2}]}')[0].i === 2 && N.aiParse('없음') === null, 'AI 답 꺼내기(앞뒤 말 · {items})');
   ok(N.aiText({ choices: [{ message: { content: 'x' } }] }) === 'x' && N.aiText({ response: { a: 1 } }) === '{"a":1}' && N.aiText('s') === 's', 'AI 답 형식 여러 가지');
   // 이상한 답 3번 → 원문 그대로(st 2)
   FEEDS[FU.sa] = { body: rss([item({ title: 'Junk test item', link: 'https://sa.com/j', date: rfc(clock), desc: 'Junk.' })]) };
