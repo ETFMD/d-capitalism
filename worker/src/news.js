@@ -54,8 +54,8 @@ const AI_WINDOW = 12 * 3600e3;             // 이보다 오래 기다린 기사�
 const AI_TRIES = 3;
 export const AI_DAILY_CAP = 9000;          // 하루(UTC) 뉴런 상한 — 무료 10,000 안에서 여유
 /* Workers AI 모델 (앞에서부터 시도 · 실패하면 다음) — 값: [입력·출력 100만 토큰당 뉴런] (Cloudflare 가격표) */
+// (gemma-4-26b 는 2026-10-24 배포 확인 때 생각 과정만으로 출력 한도(2,400 토큰)를 다 써 답이 비고 한 번에 77 뉴런 → 뺌)
 export const AI_MODELS = [
-  ['@cf/google/gemma-4-26b-a4b-it', 9091, 27273],
   ['@cf/qwen/qwen3-30b-a3b-fp8', 4625, 30475],
   ['@cf/meta/llama-3.1-8b-instruct-fp8-fast', 4119, 34868],
 ];
@@ -268,6 +268,7 @@ const SYS = `너는 한국 개인 투자자를 위한 금융 뉴스 편집자다
 - rel: 주식·채권·환율·금리·원자재·경제지표·기업·중앙은행 등 투자와 관련 있으면 true. 건강·보험·연금 가입 요령 같은 생활 정보, 광고성 글, 투자와 무관한 사건·사고면 false.`;
 
 function neurons(model, usage, inChars, outChars) {
+  if (usage && Number(usage.neurons) > 0) return Number(usage.neurons);   // Workers AI 가 알려 주는 실제 뉴런
   const m = AI_MODELS.find((x) => x[0] === model) || AI_MODELS[0];
   const pi = usage && Number(usage.prompt_tokens) > 0 ? Number(usage.prompt_tokens) : inChars / 2.2;
   const po = usage && Number(usage.completion_tokens) > 0 ? Number(usage.completion_tokens) : outChars / 1.6;

@@ -92,6 +92,7 @@ const AI = {
   },
 };
 const env = { DB, ALLOWED_ORIGINS: SITE, AI };
+const body = (c) => JSON.parse(c.inp.messages[1].content.replace(/^\/no_think\n/, ''));
 
 if (SERVE) {
   /* 화면 검사용: 미국·국내 기사 여러 개를 정리된 상태로 넣고, 새 기사는 /__add 로 (run_regression 이 '새 뉴스' 알림 확인) */
@@ -213,11 +214,11 @@ if (SERVE) {
   const sm = all['삼성전자 3분기 실적 발표'];
   ok(sm.st === 1 && sm.t === null && sm.s === null && sm.tk === '삼성전자', "국내('tag'): AI 가 제목·요약을 써도 버리고 종목만", sm);
   ok(all['Big coupon deals today'].st === 3 && all['쿠폰 행사 안내'].st === 3, "투자와 무관(rel false) → 숨김(st 3)");
-  ok(aiCalls.length === 2 && JSON.parse(aiCalls[0].inp.messages[1].content).length === 6 && JSON.parse(aiCalls[1].inp.messages[1].content).length === 1 && !aiCalls.some((c) => c.inp.messages[1].content.includes('연합뉴스 요약문')), `AI 한 번에 6건 · 꽉 차면 한 번 더(밀린 기사) · 연합뉴스는 AI 에 보내지 않음`, aiCalls.length);
-  const sent = JSON.parse(aiCalls[0].inp.messages[1].content);
+  ok(aiCalls.length === 2 && body(aiCalls[0]).length === 6 && body(aiCalls[1]).length === 1 && !aiCalls.some((c) => c.inp.messages[1].content.includes('연합뉴스 요약문')), `AI 한 번에 6건 · 꽉 차면 한 번 더(밀린 기사) · 연합뉴스는 AI 에 보내지 않음`, aiCalls.length);
+  const sent = body(aiCalls[0]);
   ok(sent.every((x) => x.mode === 'tag' ? !('d' in x) : true) && sent.find((x) => x.title === 'Apple falls on China news').d === 'Shares fell after a report.', "AI 에 보내는 것: full = 제목+RSS 요약문 · tag = 제목만");
   const used = rows("SELECT v FROM news_kv WHERE k LIKE 'ai:2026%'")[0];
-  ok(used && Math.abs(Number(used.v) - 2 * (900 * 9091 + 600 * 27273) / 1e6) < 0.2, 'AI 사용량(뉴런) = 모델 가격표 × 토큰 (2번)', used);
+  ok(used && Math.abs(Number(used.v) - 2 * (900 * 4625 + 600 * 30475) / 1e6) < 0.2, 'AI 사용량(뉴런) = 모델 가격표 × 토큰 (2번)', used);
   // 남은 1건(Fed signals pause)은 다음 분에
   min(1); aiCalls = []; aiMode = 'think';
   await N.newsTick(env, clock, { feeds: 0 });
@@ -237,7 +238,7 @@ if (SERVE) {
   db.exec("UPDATE news_feed SET next = 0 WHERE k = 'sa'"); aiMode = 'throw-first'; aiCalls = [];
   min(1); await N.newsTick(env, clock, { feeds: 1 });
   ok(rows("SELECT st FROM news WHERE t0 = 'Model switch item'")[0].st === 1 && aiCalls.map((c) => c.model).join() === N.AI_MODELS[0][0] + ',' + N.AI_MODELS[1][0]
-    && rows("SELECT v FROM news_kv WHERE k='ai:model'")[0].v === N.AI_MODELS[1][0] && aiCalls[1].inp.messages[1].content.startsWith('/no_think'), '첫 모델 실패 → 다음 모델(qwen3 은 생각 끔) · 그 모델을 기억', aiCalls.map((c) => c.model));
+    && rows("SELECT v FROM news_kv WHERE k='ai:model'")[0].v === N.AI_MODELS[1][0] && aiCalls[0].inp.messages[1].content.startsWith('/no_think') && !aiCalls[1].inp.messages[1].content.startsWith('/no_think'), '첫 모델 실패 → 다음 모델 · qwen3 만 생각 끔 · 그 모델을 기억', aiCalls.map((c) => c.model));
   FEEDS[FU.sa] = { body: rss([item({ title: 'Model remembered', link: 'https://sa.com/m2', date: rfc(clock), desc: 'Remember.' })]) };
   db.exec("UPDATE news_feed SET next = 0 WHERE k = 'sa'"); aiCalls = [];
   min(1); await N.newsTick(env, clock, { feeds: 1 });
@@ -265,7 +266,7 @@ if (SERVE) {
   FEEDS[FU.nsis] = { body: rss([item({ title: '절약 국내 기사', link: 'https://hk.com/sv', date: rfc(clock) })]) };
   db.exec("UPDATE news_feed SET next = 0 WHERE k IN ('sa','nsis')"); db.exec("UPDATE news SET st = 2 WHERE st = 0"); aiCalls = [];
   min(1); await N.newsTick(env, clock, { feeds: 40 });
-  ok(aiCalls.length === 1 && JSON.parse(aiCalls[0].inp.messages[1].content.replace(/^\/no_think\n/, '')).every((x) => x.mode === 'full') && rows("SELECT st FROM news WHERE t0='Saving us item'")[0].st === 1
+  ok(aiCalls.length === 1 && body(aiCalls[0]).every((x) => x.mode === 'full') && rows("SELECT st FROM news WHERE t0='Saving us item'")[0].st === 1
      && rows("SELECT st FROM news WHERE t0='절약 국내 기사'")[0].st === 0, '한도 60% 넘음 → 해외 기사만 AI', aiCalls.length);
   min(11); await N.newsTick(env, clock, { feeds: 0 });
   ok(rows("SELECT st FROM news WHERE t0='절약 국내 기사'")[0].st === 2, '그때 국내 기사는 10분 뒤 원문 그대로');
