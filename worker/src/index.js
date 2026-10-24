@@ -33,6 +33,7 @@
  *
  * POST /hb · GET /hb → 72루틴 자동매매 PC 프로그램 생존 신호 · 주문 시각이 지났는데 신호가 없으면 15분 cron 이 텔레그램으로 알림 (worker/src/hb.js)
  * POST /grp · GET /grp → 72루틴 자동매매 PC 여러 대 — 주문 권한(한 대만)·이어받기·암호화한 공유 상태 (worker/src/grp.js)
+ * GET /news · /news?after=u · /news?before=ts · /news/status → 디코딩 뉴스(미국·국내 주식 뉴스 한국어 정리) — 1분 cron 이 RSS 를 모아 Workers AI 로 정리 (worker/src/news.js)
  * /sns/* → SNS 자동 게시(유튜브 쇼츠·인스타그램 릴스·스레드·페이스북 릴스) — 관리자 전용 · 영상 공개 주소 /sns/m/<id>.mp4 · OAuth 콜백 /sns/cb/<sns> (worker/src/sns.js)
  *
  * 15분마다(cron) GitHub Actions '시세 데이터 갱신'을 직접 실행시킴 (GitHub 자체 예약 실행은 자주 늦어지거나 누락됨)
@@ -45,6 +46,7 @@ import { hb, hbScan } from './hb.js';   /* 72루틴 자동매매 PC 프로그램
 import { grp, grpScan } from './grp.js';   /* 72루틴 자동매매 PC 여러 대 (/grp) */
 import { sns } from './sns.js';   /* SNS 자동 게시 — 관리자 전용 (/sns/*) */
 import { board } from './board.js';   /* 건의 게시판 (/board · 사이트 /suggest/) */
+import { news, newsTick, newsClean } from './news.js';   /* 디코딩 뉴스 (/news · 1분 cron · 사이트 /news/) */
 const REPO = 'ETFMD/d-capitalism';
 const WORKFLOW = 'update-market-data.yml';
 const APT_WORKFLOW = 'update-apt-rank.yml';   // 아파트 시세 순위 (2시간마다)
@@ -497,6 +499,7 @@ export default {
         if (url.pathname !== '/auth/config' && !cors.ok) return json({ error: 'origin' }, 403);
         return await auth(req, env, url, json);
       }
+      if (url.pathname === '/news' || url.pathname === '/news/status') return await news(req, env, url, json);   /* 디코딩 뉴스 (worker/src/news.js) — 누구나 읽기 */
       if (url.pathname.startsWith('/sns/')) return await sns(req, env, url, json, cors, adminUser);   /* SNS 자동 게시 (worker/src/sns.js · 관리자 전용 + 영상 공개 주소·OAuth 콜백) */
       if (url.pathname.startsWith('/kr')) return await kr(req, env, url, json);
       if (url.pathname === '/apt' || url.pathname === '/apt/put') return await apt(req, env, url, json);
@@ -510,6 +513,12 @@ export default {
   },
   /* 15분마다: 시세 수집 실행 + 하루 한 번 오래된 방문 해시 정리 */
   async scheduled(event, env, ctx) {
+    if (event.cron === '* * * * *') {                                   // 1분마다: 디코딩 뉴스 수집·정리 (아래 15분 작업과 따로)
+      const t0 = event.scheduledTime || Date.now(), kk = new Date(t0 + 9 * 3600e3);
+      ctx.waitUntil(newsTick(env, Date.now()).catch((e) => console.log('newsTick', String(e && e.message || e))));
+      if (kk.getUTCHours() === 3 && kk.getUTCMinutes() === 7) ctx.waitUntil(newsClean(env).catch(() => 0));   // 매일 03:07 — 90일 지난 기사 정리
+      return;
+    }
     const t = new Date(event.scheduledTime || Date.now());
     const k = new Date(t.getTime() + 9 * 3600e3);                       // 한국 시간
     const h = k.getUTCHours(), m = k.getUTCMinutes(), dow = k.getUTCDay();   // 0=일

@@ -82,10 +82,19 @@ jobs:
           if [ -n "$kvid" ]; then printf '\n[[kv_namespaces]]\nbinding = "SNS_KV"\nid = "%s"\n' "$kvid" >> wrangler.toml; echo "::notice::SNS 영상 보관 KV 연결"; else echo "::warning::SNS 영상 보관 KV 를 찾거나 만들지 못했습니다 (API 토큰에 Workers KV 권한 필요) — SNS 자동 게시만 꺼집니다"; fi
           $W d1 execute "$DB" --remote --file schema.sql -y
           if ! $W deploy | tee deploy.log; then
-            [ -n "$kvid" ] || exit 1
-            echo "::warning::KV 연결과 함께 배포하지 못해 KV 없이 다시 배포합니다 (SNS 자동 게시만 꺼짐)"
-            sed -i '/^\[\[kv_namespaces\]\]/,$d' wrangler.toml
-            $W deploy | tee deploy.log
+            ok=0
+            # 디코딩 뉴스 Workers AI 연결([ai])이 원인일 수 있음 → 빼고 다시 (뉴스는 AI 정리 없이 원문 그대로 · 나머지 기능은 그대로)
+            if grep -q '^\[ai\]$' wrangler.toml; then
+              echo "::warning::Workers AI 연결과 함께 배포하지 못해 AI 없이 다시 배포합니다 (디코딩 뉴스는 원문 그대로)"
+              sed -i '/^\[ai\]$/,/^binding = "AI"$/d' wrangler.toml
+              $W deploy | tee deploy.log && ok=1
+            fi
+            if [ "$ok" = 0 ] && [ -n "$kvid" ]; then
+              echo "::warning::KV 연결과 함께 배포하지 못해 KV 없이 다시 배포합니다 (SNS 자동 게시만 꺼짐)"
+              sed -i '/^\[\[kv_namespaces\]\]/,$d' wrangler.toml
+              $W deploy | tee deploy.log && ok=1
+            fi
+            [ "$ok" = 1 ] || exit 1
           fi
           if ! $W secret list 2>/dev/null | grep -q '"SALT"'; then
             openssl rand -hex 32 | $W secret put SALT
@@ -119,6 +128,7 @@ jobs:
           st=$(curl -s -m 20 "$url/status" || true); echo "::notice::/status: $st"
           hbr=$(curl -s -m 20 "$url/hb" | grep -o '"ready":[a-z]*' || true); echo "::notice::/hb $hbr"
           gpr=$(curl -s -m 20 "$url/grp" | grep -o '"ready":[a-z]*' || true); echo "::notice::/grp $gpr"
+          nws=$(curl -s -m 20 "$url/news/status" | grep -o '"ai":[a-z]*' || true); echo "::notice::/news/status $nws (Workers AI 연결)"
           printf '{"endpoint":"%s"}\n' "$url" > ../data/counter.json
       - name: 주소 저장 (바뀐 경우에만 커밋)
         if: steps.chk.outputs.skip != '1'

@@ -13,4 +13,8 @@ database_name = "etfmd-visitors"
 database_id = "__D1_ID__"
 
 [triggers]
-crons = ["*/15 * * * *"]  # 15분마다: 시세 수집 실행(GH_TOKEN 있을 때) · 매일 03시대 오래된 해시 정리
+crons = ["*/15 * * * *", "* * * * *"]  # 15분마다: 시세 수집 실행(GH_TOKEN 있을 때) · 매일 03시대 오래된 해시 정리 / 1분마다: 디코딩 뉴스 수집·정리 (worker/src/news.js)
+
+# 디코딩 뉴스 한국어 정리 (Workers AI · 무료 하루 10,000 뉴런 안에서 · 연결이 안 되면 deploy-counter.yml 이 이 줄을 빼고 다시 배포 → 뉴스는 원문 그대로)
+[ai]
+binding = "AI"

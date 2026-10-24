@@ -3240,6 +3240,133 @@ RATES_JS = """async () => {
 }"""
 
 
+NEWS_JS = """async () => {
+  const W = ms => new Promise(r => setTimeout(r, ms)), R = [], ok = (n, c, i) => R.push({ name: n, ok: !!c, info: i }), $ = q => document.querySelector(q), $$ = q => [...document.querySelectorAll(q)];
+  for (let i = 0; i < 100 && !(window.DNdebug && DNdebug.S.lastOk && DNdebug.S.items.size); i++) await W(100);
+  const S = DNdebug.S;
+  if (!S.items.size) { ok('뉴스를 불러오지 못함', false, document.getElementById('dn-list').innerText.slice(0, 120)); return R; }
+  const cards = () => $$('#dn-list .dn-it');
+  ok('처음 목록: 200건(묶음) · 새 기사부터 · 날짜 머리', S.items.size === 200 && cards().length === 200 && $$('#dn-list .dn-day').length >= 1
+     && cards().every((c, i, A) => !i || +A[i - 1].querySelector('.dn-ago').dataset.ts >= +c.querySelector('.dn-ago').dataset.ts), [S.items.size, cards().length]);
+  const us = cards().find(c => c.querySelector('.dn-mkb.us') && c.querySelector('.dn-o'));
+  ok('해외 기사: 한국어 제목·요약·원문 제목·AI 정리·원문 링크(새 창·nofollow)', us && /한국어 제목/.test(us.querySelector('.dn-t').textContent) && us.querySelector('.dn-x') && us.querySelector('.dn-ai')
+     && us.querySelector('.dn-t a').target === '_blank' && /nofollow/.test(us.querySelector('.dn-t a').rel) && /^https:\\/\\/example\\.com\\//.test(us.querySelector('.dn-t a').href) && !/utm_/.test(us.querySelector('.dn-t a').href), us && us.innerText.slice(0, 200));
+  const kr = cards().find(c => c.querySelector('.dn-mkb.kr'));
+  ok('국내 기사: 제목 그대로 · 요약 없음 · 종목 단추', kr && /삼성전자/.test(kr.querySelector('.dn-t').textContent) && !kr.querySelector('.dn-x') && !kr.querySelector('.dn-o') && kr.querySelector('.dn-tk'), kr && kr.innerText.slice(0, 120));
+  ok('호재·악재 색(falls → 악재 파랑)', cards().some(c => /falls/.test(c.querySelector('.dn-o') ? c.querySelector('.dn-o').textContent : '') && c.querySelector('.dn-tk.dn')));
+  ok('실시간 표시', $('#dn-live').classList.contains('on') && /실시간/.test($('#dn-live-t').textContent), $('#dn-live-t').textContent);
+  // 시장 · 중요만 · 찾기 · 종목 단추
+  $('#dn-mk [data-mk="us"]').click(); await W(60);
+  ok('미국만', cards().length > 0 && cards().every(c => c.querySelector('.dn-mkb.us')) && $('#dn-mk [data-mk="us"]').classList.contains('active'), cards().length);
+  $('#dn-mk [data-mk="kr"]').click(); await W(60);
+  ok('국내만', cards().length > 0 && cards().every(c => c.querySelector('.dn-mkb.kr')), cards().length);
+  $('#dn-mk [data-mk="all"]').click(); $('#dn-imp').click(); await W(60);
+  ok('중요한 뉴스만 → 중요·주목만', cards().length >= 1 && cards().every(c => c.querySelector('.dn-impb')) && $('#dn-imp').getAttribute('aria-pressed') === 'true', cards().length);
+  $('#dn-imp').click(); await W(60);
+  const q = $('#dn-q'); q.value = 'apple 77'; q.dispatchEvent(new Event('input', { bubbles: true })); await W(300);
+  ok('찾기(낱말 여러 개 모두 포함 · 대소문자 무시)', cards().length >= 1 && cards().every(c => /apple/i.test(c.innerText) && /77/.test(c.innerText)), cards().map(c => c.querySelector('.dn-o') && c.querySelector('.dn-o').textContent).slice(0, 3));
+  q.value = 'aapl'; q.dispatchEvent(new Event('input', { bubbles: true })); await W(300);
+  ok('찾기: 티커는 정확히(aapl → AAPL 단추가 있는 기사)', cards().length >= 1 && cards().every(c => [...c.querySelectorAll('.dn-tk')].some(b => b.dataset.tk === 'AAPL')), cards().length);
+  q.value = ''; q.dispatchEvent(new Event('input', { bubbles: true })); await W(300);
+  const tkb = $('#dn-list .dn-tk[data-tk="삼성전자"]'); tkb.click(); await W(80);
+  ok('종목 단추 → 그 종목 뉴스만 · 찾기 칸에 표시', S.q === '삼성전자' && $('#dn-q').value === '삼성전자' && cards().every(c => [...c.querySelectorAll('.dn-tk')].some(b => b.dataset.tk === '삼성전자')), [S.q, cards().length]);
+  q.value = ''; q.dispatchEvent(new Event('input', { bubbles: true })); await W(300);
+  // 새 뉴스 (서버에 1건 추가 → 30초 갱신과 같은 load)
+  const base0 = S.v, n0 = S.items.size;
+  await fetch('/__news_add'); await DNdebug.load(); await W(80);
+  ok('새 뉴스 → 바뀐 것만 받아 맨 위에 · 강조', S.items.size === n0 + 1 && S.v > base0 && /Breaking: Apple test news/.test(cards()[0].querySelector('.dn-o').textContent) && cards()[0].classList.contains('new'), [S.items.size, cards()[0].innerText.slice(0, 80)]);
+  await DNdebug.load(); await W(50);
+  ok('바뀐 것 없음 → 그대로', S.items.size === n0 + 1);
+  // 아래를 보고 있을 때: 보던 기사 자리 그대로 + '새 뉴스 N건' 단추
+  const tgt = cards()[30]; tgt.scrollIntoView({ block: 'center' }); await W(120);
+  const id = tgt.dataset.id, y0 = tgt.getBoundingClientRect().top;
+  await fetch('/__news_add'); await DNdebug.load(); await W(120);
+  const y1 = $('#dn-list .dn-it[data-id="' + id + '"]').getBoundingClientRect().top;
+  ok('아래를 보는 중 새 뉴스 → 보던 기사가 같은 자리', Math.abs(y1 - y0) <= 2, [y0, y1]);
+  ok("'새 뉴스 1건' 단추", !$('#dn-newpill').hidden && $('#dn-newn').textContent === '1', [$('#dn-newpill').hidden, $('#dn-newn').textContent]);
+  $('#dn-newpill').click(); await W(900);
+  ok('단추 → 목록 위로 · 단추 사라짐', $('#dn-newpill').hidden && $('#dn-list').getBoundingClientRect().top > -50, $('#dn-list').getBoundingClientRect().top);
+  // 지난 뉴스 더 보기
+  const m0 = S.items.size; $('#dn-more').click();
+  for (let i = 0; i < 50 && S.items.size === m0; i++) await W(100);
+  ok('지난 뉴스 더 보기 → 오래된 기사 더 · 끝이면 단추 숨김', S.items.size > m0 && cards().length === Math.min(400, S.items.size), [m0, S.items.size]);
+  // 공유 상태
+  const X = window.dcStateX && window.dcStateX['news'];
+  X.set({ mk: 'kr', imp: true, q: '삼성' }); await W(60);
+  const g = X.get();
+  ok('공유 상태 되살리기', g.mk === 'kr' && g.imp === true && g.q === '삼성' && $('#dn-q').value === '삼성' && $('#dn-mk [data-mk="kr"]').classList.contains('active'), g);
+  X.set(X.def); await W(60);
+  ok('기본값으로', S.mk === 'all' && !S.imp && S.q === '' && cards().length > 200);
+  return R;
+}"""
+
+
+def news_check(ctx, base, fail, local):
+    """[NEWS] 디코딩 뉴스 /news/ — 실제 Worker 코드(worker/src/*.js)를 node:sqlite 로 띄운 가짜 서버(tests/worker_news_test.mjs --serve · 가짜 RSS·가짜 AI)에
+    이 검사 탭의 workers.dev 요청을 보냄 → 목록·필터·찾기·종목 단추·새 뉴스(바뀐 것만·보던 자리·알림 단추)·더 보기·공유 상태·휴대폰 넘침
+    · 실사이트는 먼저 진짜 Worker 로 뉴스가 실제로 모이고 있는지(읽기만 — 기사 수·최근 기사 시각·주소 형식)"""
+    if not shutil.which('node'):
+        fail('news', 'node 가 없어 디코딩 뉴스 화면 검사를 못 함'); return
+    if not local:   # 진짜 Worker(배포본) — 읽기만
+        pg = ctx.new_page(); errs0 = []
+        pg.on('pageerror', lambda e: errs0.append(str(e)))
+        try:
+            pg.goto(base + 'news/', wait_until='load', timeout=60000)
+            pg.wait_for_function("window.DNdebug && (DNdebug.S.lastOk || DNdebug.S.err >= 1)", timeout=40000)
+            r = pg.evaluate("""() => { const S = DNdebug.S, A = [...S.items.values()]; return { ok: !!S.lastOk, n: A.length, newest: A.reduce((m, x) => Math.max(m, x.ts), 0),
+                bad: A.filter(x => !/^https?:\\/\\//.test(x.l) || !x.t || ![0, 1, 2].includes(x.a)).length, us: A.filter(x => x.m === 'us').length, kr: A.filter(x => x.m === 'kr').length, ai: A.filter(x => x.a === 1).length } }""")
+            if not r['ok']: fail('news', '실제 Worker 로 뉴스를 불러오지 못함')
+            elif r['n'] < 20 or not r['us'] or not r['kr']: fail('news', '실제 Worker 뉴스가 너무 적음 %s' % r)
+            elif r['bad']: fail('news', '실제 Worker 뉴스 중 형식이 이상한 기사 %d건' % r['bad'])
+            elif time.time() * 1000 - r['newest'] > 6 * 3600e3: fail('news', '가장 새 기사가 6시간 넘게 지남 — 수집이 멈췄을 수 있음 %s' % r)
+            print('    실제 Worker 뉴스: %d건 (미국 %d · 국내 %d · AI 정리 %d)' % (r['n'], r['us'], r['kr'], r['ai']), flush=True)
+            if errs0: fail('news', '스크립트 오류(실제 Worker): ' + errs0[0][:160])
+        except Exception as e:
+            fail('news', '실제 Worker 뉴스 확인 오류: ' + str(e)[:160])
+        finally:
+            pg.close()
+    origin = re.match(r'^(https?://[^/]+)', base).group(1)
+    node = subprocess.Popen(['node', os.path.join(ROOT, 'tests', 'worker_news_test.mjs'), '--serve', '0', origin], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        line = node.stdout.readline()
+        if not line.startswith('{'):
+            fail('news', '뉴스 가짜 서버를 못 띄움 (node:sqlite — Node 22.13+ 필요): ' + (line + node.stderr.read(300))[:200]); return
+        npt = json.loads(line)['port']
+
+        def wk(route):
+            q = route.request
+            path = re.sub(r'^https?://[^/]+', '', q.url)
+            rq = urllib.request.Request('http://127.0.0.1:%d' % npt + path, method=q.method, headers={k: v for k, v in q.headers.items() if k.lower() in ('origin',)})
+            try:
+                r = urllib.request.urlopen(rq, timeout=20); st, hd, bd = r.status, dict(r.headers), r.read()
+            except urllib.error.HTTPError as e:
+                st, hd, bd = e.code, dict(e.headers), e.read()
+            route.fulfill(status=st, headers=hd, body=bd)
+
+        def add(route):
+            r = urllib.request.urlopen('http://127.0.0.1:%d/__add' % npt, timeout=20)
+            route.fulfill(status=200, headers={'Content-Type': 'application/json'}, body=r.read())
+        pg = ctx.new_page(); perr = []
+        pg.on('pageerror', lambda e: perr.append(str(e)))
+        pg.on('console', lambda m: perr.append(m.text) if m.type == 'error' and not m.text.startswith('Failed to load resource') else None)
+        pg.route(re.compile(r'^https://[^/]*workers\.dev/.*'), wk)
+        pg.route(re.compile(r'.*/__news_add$'), add)
+        pg.set_viewport_size({'width': 1280, 'height': 900})
+        pg.goto(base + 'news/', wait_until='load', timeout=60000)
+        for t in pg.evaluate(NEWS_JS):
+            if not t['ok']:
+                fail('news', '%s%s' % (t['name'], (' — ' + str(t.get('info'))[:300]) if t.get('info') else ''))
+        for w in (360, 390):
+            pg.set_viewport_size({'width': w, 'height': 800}); pg.wait_for_timeout(250)
+            r = pg.evaluate("() => [document.documentElement.scrollWidth, innerWidth, document.querySelectorAll('#dn-list .dn-it').length]")
+            if r[0] > r[1] + 1: fail('news', '휴대폰(%d)에서 가로 넘침 %s' % (w, r))
+        for t in [t for t in perr if 'workers.dev' not in t][:3]:
+            fail('news', '콘솔 오류: ' + t[:200])
+        pg.close()
+    finally:
+        node.kill()
+
+
 def rates_check(page, base, fail, errs, ignorable):
     """[RATES] 전세계 금리 (/world-rates/) — 화면 흐름 RATES_JS · 휴대폰 넘침 · 콘솔 오류"""
     errs.clear()
@@ -3490,6 +3617,13 @@ def main():
         print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'worker_sns_test: 출력 없음', flush=True)
         if _r.returncode != 0:
             fail('worker', 'SNS 자동 게시(/sns) 검사 실패: ' + (' | '.join(l.strip() for l in _r.stdout.splitlines() if '✗' in l) or _r.stderr.strip())[:300])
+
+    # Worker 디코딩 뉴스(/news · RSS 읽기·1분 수집·같은 기사 막기·AI 정리(full/tag/none)·한도·모델 바꾸기·바뀐 것만·더 보기·cron) 단독 확인 — 진짜 SQLite(node:sqlite)
+    if not a.etf_audit and shutil.which('node'):
+        _r = subprocess.run(['node', os.path.join(ROOT, 'tests', 'worker_news_test.mjs')], capture_output=True, text=True, timeout=120)
+        print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'worker_news_test: 출력 없음', flush=True)
+        if _r.returncode != 0:
+            fail('worker', '디코딩 뉴스(/news) 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stdout.strip()[-200:] or _r.stderr.strip())[:300])
 
     # Worker 건의 게시판(/board · 읽기·쓰기·고치기·지우기·공감·댓글·처리 상태·비밀글·닉네임 가림·횟수 제한·탈퇴 삭제) 단독 확인 — 진짜 SQLite(node:sqlite)
     if not a.etf_audit and shutil.which('node'):
@@ -4559,6 +4693,10 @@ def main():
         if 'world-rates/' in paths:
             print('[5b] 전세계 금리', flush=True)
             rates_check(page, base, fail, errs, ignorable)
+        # [NEWS] 디코딩 뉴스 — 실제 Worker 코드를 가짜 서버(가짜 RSS·AI)로 띄워 목록·필터·새 뉴스·더 보기 (실사이트는 먼저 진짜 Worker 읽기만)
+        if 'news/' in paths:
+            print('[5c] 디코딩 뉴스', flush=True)
+            news_check(ctx, base, fail, local)
         # [COMMUNITY] 건의 게시판 — 실제 Worker 코드를 가짜 서버로 띄워 손님·회원·관리자 흐름 (실제 계정·게시판 안 건드림)
         if 'suggest/' in paths:
             print('[6] 건의 게시판', flush=True)

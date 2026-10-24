@@ -33,3 +33,10 @@ CREATE INDEX IF NOT EXISTS board_cmt_pid ON board_cmt (pid, id);
 CREATE INDEX IF NOT EXISTS board_cmt_uid ON board_cmt (uid, created);
 CREATE TABLE IF NOT EXISTS board_vote (pid INTEGER NOT NULL, uid INTEGER NOT NULL, PRIMARY KEY (pid, uid));
 CREATE INDEX IF NOT EXISTS board_vote_uid ON board_vote (uid);
+-- 디코딩 뉴스 (/news · worker/src/news.js · 사이트 /news/): 기사(원문 제목·RSS 요약문·AI 한국어 제목·요약·종목·중요도 · st 0 정리 대기·1 AI 정리·2 원문 그대로·3 투자 무관(숨김)) · 원본별 수집 상태 · 묶음(snap)·AI 사용량 — 90일 지난 기사 매일 정리
+CREATE TABLE IF NOT EXISTS news (id TEXT PRIMARY KEY, th TEXT NOT NULL, src TEXT NOT NULL, mk TEXT NOT NULL, ts INTEGER NOT NULL, seen INTEGER NOT NULL, u INTEGER NOT NULL, url TEXT NOT NULL, t0 TEXT NOT NULL, d0 TEXT, hint TEXT, t TEXT, s TEXT, tk TEXT, imp INTEGER, sen INTEGER, st INTEGER NOT NULL DEFAULT 0, tries INTEGER NOT NULL DEFAULT 0);
+CREATE UNIQUE INDEX IF NOT EXISTS news_th ON news (th);
+CREATE INDEX IF NOT EXISTS news_ts ON news (ts);
+CREATE INDEX IF NOT EXISTS news_st ON news (st, ts);
+CREATE TABLE IF NOT EXISTS news_feed (k TEXT PRIMARY KEY, next INTEGER NOT NULL DEFAULT 0, etag TEXT, lm TEXT, last INTEGER, ok INTEGER, err TEXT, n INTEGER NOT NULL DEFAULT 0, fails INTEGER NOT NULL DEFAULT 0, wm INTEGER);
+CREATE TABLE IF NOT EXISTS news_kv (k TEXT PRIMARY KEY, v TEXT, t INTEGER);

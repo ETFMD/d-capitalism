@@ -275,6 +275,9 @@ def load_drop_tree(src):
             if items:
                 secs.append((name, items))
         DROP[g] = secs
+    # '투자 공부' 드롭다운([LEARN-DROP])의 도구 버튼(예: 디코딩 뉴스 drop-news) — 글 모음·서재는 링크(lk-)라 빼고 도구만 · 허브 없음(영역 열 대신 하단 '투자 공부' 열·소개 페이지에)
+    m = re.search(r'<div class="tab-dropdown" id="grp-learn-drop">(.*?)</div>', src, re.S)
+    DROP['learn'] = [('투자 공부', [t for t in re.findall(r'<button class="drop-item[^"]*"\s+id="drop-([a-z0-9]+)"', m.group(1)) if t in by_tab])] if m else []
     listed = {t for g in DROP for _, ts in DROP[g] for t in ts}
     lost = [x['tab'] for x in ROUTES if not x.get('hub') and x['tab'] not in listed and x['tab'] not in ADMIN]
     if lost:
@@ -400,6 +403,7 @@ def footmap(en=False):
         links = ''.join(f'<a href="learn/{esc(a["slug"])}/">{esc(a.get("short") or a["title"].split(" — ")[0])}</a>' for a in ARTS)
         if BOOKS:   # 자본가 서재(추천 도서)를 투자 공부 열 맨 위에
             links = f'<a href="books/">자본가 서재 · 추천 도서 {len(BOOKS["books"])}권</a>' + links
+        links = ''.join(link(by[t]) for _, ts in DROP.get('learn', []) for t in ts if t in by) + links   # 투자 공부 메뉴의 도구(디코딩 뉴스)를 맨 위에
         cols.insert(0, f'<div class="sf-col sf-learn"><p class="sf-h"><a href="learn/">투자 공부</a></p>{links}</div>')   # 상단 메뉴처럼 맨 앞(왼쪽)
     out = f'<nav class="sf-map" aria-label="{esc(T("전체 도구"))}"><div class="sf-cols">' + ''.join(cols) + '</div>'
     if band:
@@ -628,7 +632,8 @@ def about_map():
         items.append(f'<li><b>{head}</b> <small>{n}개</small><br><span class="tools">{" · ".join(links)}</span></li>')
     if ARTS:
         extra = f' · <a href="/books/">자본가 서재</a> <small>추천 도서 {len(BOOKS["books"])}권</small>' if BOOKS else ''
-        items.insert(0, f'<li><b><a href="/learn/">투자 공부</a></b> <small>글 {len(ARTS)}편</small>{extra}<br><span class="tools">'
+        tools = ''.join(f' · <a href="/{esc(by[t]["path"])}/">{esc(NAV_LABEL[t])}</a>' for _, ts in DROP.get('learn', []) for t in ts if t in by)   # 디코딩 뉴스
+        items.insert(0, f'<li><b><a href="/learn/">투자 공부</a></b> <small>글 {len(ARTS)}편</small>{extra}{tools}<br><span class="tools">'
                         + ' · '.join(f'<a href="/learn/{esc(a["slug"])}/">{esc(a.get("short") or a["title"].split(" — ")[0])}</a>' for a in ARTS) + '</span></li>')
     return '<ul class="amap">' + ''.join(items) + '</ul>'
 
