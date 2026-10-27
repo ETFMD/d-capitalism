@@ -31,7 +31,7 @@
   python tests/run_regression.py --base https://d-capitalism.com/ --etf-audit   # ETF 차트 비교 실제 가격 점검만
 실패가 하나라도 있으면 종료 코드 1
 """
-import re, argparse, html, functools, http.server, json, os, shutil, socketserver, subprocess, sys, tempfile, threading, time, urllib.error, urllib.parse, urllib.request
+import re, argparse, hashlib, html, functools, http.server, json, os, shutil, socketserver, subprocess, sys, tempfile, threading, time, urllib.error, urllib.parse, urllib.request
 
 from playwright.sync_api import sync_playwright
 
@@ -1156,8 +1156,20 @@ def seo_raw_check(path, raw, fail, route):
     n = len(re.findall(r'<h1\b', body))
     if not adm and n != 1:
         fail(path, '처음 받은 HTML 의 제목(h1) %d개 (기대 1개 — 검색엔진이 보는 제목)' % n)
-    if not re.search(r'<meta property="og:image" content="https://[^"]+">', raw):
-        fail(path, '공유 미리보기 이미지(og:image) 없음')
+    og = re.search(r'<meta property="og:image" content="https://d-capitalism\.com/assets/og/([a-z0-9-]+)\.png\?v=([0-9a-f]{8})">', raw)
+    if not og:
+        fail(path, '공유 미리보기 이미지(og:image)가 없거나 assets/og/<이름>.png?v=<해시> 형식이 아님 (해시가 없으면 카카오톡이 옛 이미지를 계속 씀)')
+    else:   # 이 페이지 자기 그림 · ?v= = 지금 이미지 파일 내용 해시 (scripts/make_og_images.js)
+        pth = path.strip('/')
+        pth = pth[3:] if pth.startswith('en/') else ('' if pth == 'en' else pth)
+        name = ('learn-' + pth.split('/', 1)[1]) if pth.startswith('learn/') else (pth or 'home')
+        if pth in STATIC_PAGES or pth.rstrip('/') in [x.strip('/') for x in STATIC_PAGES] or not os.path.exists(os.path.join(ROOT, 'assets', 'og', name + '.png')):
+            name = 'home'
+        f = os.path.join(ROOT, 'assets', 'og', name + '.png')
+        if og.group(1) != name:
+            fail(path, '공유 이미지가 이 페이지 그림이 아님: %s (기대 %s)' % (og.group(1), name))
+        elif os.path.exists(f) and hashlib.sha256(open(f, 'rb').read()).hexdigest()[:8] != og.group(2):
+            fail(path, '공유 이미지 ?v= 해시가 지금 파일과 다름 (%s) — 빌드를 다시 해야 함' % og.group(2))
     if re.search(r'\{\{[a-zA-Z0-9_.]+\}\}', body):
         fail(path, '채우지 않은 자동 값 {{…}} 이 HTML 에 남음')
     soc = social_cfg()   # [SNS-LINKS] 모든 페이지 하단: routes.json 순서·주소 그대로 · 새 창 · rel=me

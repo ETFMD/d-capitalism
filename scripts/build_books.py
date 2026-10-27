@@ -252,7 +252,7 @@ def write_page(d, site, analytics, write):
               {'@type': 'ListItem', 'position': 1, 'name': '홈', 'item': site},
               {'@type': 'ListItem', 'position': 2, 'name': '투자 공부', 'item': f'{site}learn/'},
               {'@type': 'ListItem', 'position': 3, 'name': '자본가 서재', 'item': url}]}]
-    head = BL._head(site, f'{title} | 디코딩 자본주의', desc, url, analytics, ld).replace('</style>', CSS + '</style>', 1)
+    head = BL._head(site, f'{title} | 디코딩 자본주의', desc, url, analytics, ld, 'books').replace('</style>', CSS + '</style>', 1)
     disc = f'<p class="bk-disc" id="bk-disc">{esc(d["disclosure"])}</p>\n' if any_cp else ''
     page = (head + BL._top('books/') +
             '<main class="wrap bk">\n<nav class="crumb" aria-label="현재 위치"><a href="/">홈</a> › <a href="/learn/">투자 공부</a> › 자본가 서재</nav>\n'

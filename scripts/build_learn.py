@@ -12,7 +12,7 @@
 · 본문 안 링크(/경로/)는 routes.json 의 도구 주소나 다른 글 주소여야 함 — 없는 주소면 빌드 실패(깨진 링크 방지)
 · 모든 글: 작성자·작성일·수정일·읽는 시간·목차·관련 계산기·다른 글·출처/면책 — 표준 라이브러리만
 """
-import html, json, os, re, sys
+import hashlib, html, json, os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import data_facts as DF   # 본문 {{키}} → data/*.json 최신 값 (자동 갱신)
 import social as SO       # 하단 공식 SNS 바로가기 [SNS-LINKS] (routes.json "social")
@@ -205,7 +205,18 @@ NAV = [('', '홈'), ('learn/', '투자 공부'), ('books/', '자본가 서재'),
        ('real-estate/', '부동산'), ('capitalist/', '자본가'), ('passive-income/', '불로소득'), ('suggest/', '커뮤니티')]
 
 
-def _head(site, title, desc, url, analytics, extra_ld):
+def og_url(site, name):
+    """공유 미리보기 이미지 주소 — assets/og/<name>.png (scripts/make_og_images.js) · 없으면 홈 이미지
+    · ?v=내용 해시: 이미지가 바뀌면 주소도 바뀌어 카카오톡·페이스북이 예전 이미지를 계속 쓰지 않음(예전에는 모든 글이 home.png 고정 주소라 옛 그림이 남았음)"""
+    rel = f'assets/og/{name}.png'
+    if not os.path.exists(os.path.join(ROOT, rel)):
+        print(f'  ※ 공유 이미지 없음 {rel} → 홈 이미지 (node scripts/make_og_images.js 로 만들기)')
+        rel = 'assets/og/home.png'
+    v = hashlib.sha256(open(os.path.join(ROOT, rel), 'rb').read()).hexdigest()[:8]
+    return f'{site}{rel}?v={v}'
+
+
+def _head(site, title, desc, url, analytics, extra_ld, og='home'):
     theme = ('(function(){try{var m=localStorage.getItem("site-theme")||"dark";var l=m==="light"||(m==="auto"&&window.matchMedia&&'
              'matchMedia("(prefers-color-scheme: light)").matches);document.documentElement.setAttribute("data-theme",l?"light":"dark");}'
              'catch(e){document.documentElement.setAttribute("data-theme","dark");}})();')
@@ -225,9 +236,12 @@ def _head(site, title, desc, url, analytics, extra_ld):
 <meta property="og:title" content="{esc(title)}">
 <meta property="og:description" content="{esc(desc)}">
 <meta property="og:url" content="{esc(url)}">
-<meta property="og:image" content="{esc(site)}assets/og/home.png">
+<meta property="og:image" content="{esc(og_url(site, og))}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta property="og:locale" content="ko_KR">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="{esc(og_url(site, og))}">
 <link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/assets/logo-192.png" type="image/png" sizes="192x192">
@@ -316,7 +330,7 @@ def write_all(arts, site, routes, analytics, write, books=None):
             f'<a class="tool bk-t" href="/books/#b-{esc(b["id"])}">' + _bk_img(b) +
             f'<div><b>{esc(b["title"])}</b><span>{esc(b["author"])} · {esc(b["line"].split(". ")[0].rstrip(".") + ".")}</span></div></a>' for b in bks) +
             '</div>\n<p class="note" style="margin:8px 0 0">단계별 추천 도서 전체는 <a href="/books/">자본가 서재</a>에서 볼 수 있습니다.</p>\n') if bks else ''
-        page = (_head(site, f'{a["title"]} | 디코딩 자본주의', a['desc'], url, analytics, ld) + _top('learn/') +
+        page = (_head(site, f'{a["title"]} | 디코딩 자본주의', a['desc'], url, analytics, ld, 'learn-' + a['slug']) + _top('learn/') +
                 f'<main class="wrap">\n<nav class="crumb" aria-label="현재 위치"><a href="/">홈</a> › <a href="/learn/">투자 공부</a> › {esc(CAT_NAME[a["cat"]])}</nav>\n'
                 f'<a class="cat" href="/learn/#{esc(a["cat"])}">{esc(CAT_NAME[a["cat"]])}</a>\n<h1>{esc(a["title"])}</h1>\n'
                 f'<p class="meta">글 <a href="/about/#operator">{AUTHOR}</a> · 작성 {_ymd(a["date"])}' + (f' · 수정 {_ymd(a["updated"])}' if a['updated'] != a['date'] else '') +
@@ -351,7 +365,7 @@ def write_all(arts, site, routes, analytics, write, books=None):
     ld = {'@context': 'https://schema.org', '@type': 'CollectionPage', 'name': '투자 공부', 'description': desc, 'url': url, 'inLanguage': 'ko-KR',
           'hasPart': [{'@type': 'Article', 'headline': a['title'], 'url': f'{site}learn/{a["slug"]}/'} for a in arts]}
     total = sum(a['chars'] for a in arts)
-    page = (_head(site, '투자 공부 — 노동자에서 자본가로 가는 글 모음 | 디코딩 자본주의', desc, url, analytics, ld) + _top('learn/') +
+    page = (_head(site, '투자 공부 — 노동자에서 자본가로 가는 글 모음 | 디코딩 자본주의', desc, url, analytics, ld, 'learn') + _top('learn/') +
             '<main class="wrap">\n<nav class="crumb" aria-label="현재 위치"><a href="/">홈</a> › 투자 공부</nav>\n<h1>투자 공부</h1>\n'
             f'<p class="meta">글 {len(arts)}편 · 운영자 <a href="/about/#operator">{AUTHOR}</a>가 직접 쓰고 고칩니다</p>\n'
             '<div class="lead">계산기는 답을 주지만, <b>왜 그런 답이 나오는지</b>는 알려 주지 않습니다. 이곳의 글은 디코딩 자본주의의 계산기와 데이터를 '
