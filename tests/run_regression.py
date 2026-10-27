@@ -1598,19 +1598,19 @@ def sma200_check(page, base, fail, local):
         fail('sma200', 'SMA 200 백테스트 결과가 나오지 않음 (60초)'); return
     try:
         d = page.evaluate("""() => { const S = S2debug.S(), ui = {}; document.querySelectorAll('#s2-root select[data-k]').forEach(e => ui[e.dataset.k] = e.value);
-            const pre = Object.assign({}, SMB.PRESET, { out: 'spy', cr: '0', din: '5', dout: '5' }); delete pre.cost;
+            const pre = Object.assign({}, SMB.PRESET, { out: 'spy', cr: '0', din: '5', dout: '5', xb: '0.8' }); delete pre.cost;
             return { ok: JSON.stringify(Object.keys(ui).sort().map(k => [k, ui[k]])) === JSON.stringify(Object.keys(pre).sort().map(k => [k, pre[k]])),
                      v: [document.getElementById('s2-cap').value, document.getElementById('s2-mode').value, document.getElementById('s2-fee').value, document.getElementById('s2-tax').value, document.getElementById('s2-itax').value,
                          [...document.querySelectorAll('#s2-per button.on')].map(b => b.dataset.p).join()] }; }""")
         if not d['ok'] or d['v'] != ['100000', 'real', '0.25', 'fifo', 'on', 'all']:
-            fail('sma200', '처음 기본값 이상 (기대: 라이브러리 SMA 200 조건 + 팔았을 때 SPY · 이자 0% · 나눠 사기 5 · 5거래일 · 원금 100000 · 실전 · 0.25% · 선입선출 · 이자세 · 전체): %s' % d)
+            fail('sma200', '처음 기본값 이상 (기대: 라이브러리 SMA 200 조건 + 팔 때 평균보다 0.8%% 아래 · 팔았을 때 SPY · 이자 0%% · 나눠 사기 5 · 5거래일 · 원금 100000 · 실전 · 0.25%% · 선입선출 · 이자세 · 전체): %s' % d)
         u = page.evaluate("""() => ({ secs: [...document.querySelectorAll('#s2-set details.s2-sec')].map(x => x.dataset.sec + (x.open ? '+' : '')).join(),
             btn: [...document.querySelectorAll('#s2-set .s2-btn')].map(x => x.innerText).join('|'), modes: [...document.querySelectorAll('#s2-mode option')].map(o => o.value).join() })""")
         if u != {'secs': 'sig,rsi,out,ease,bub,cost', 'btn': '계산|기본값 (실전)', 'modes': 'real,pre,sim'}:
             fail('sma200', '설정 묶음·단추·자료 칸 이상 (기대: 접힌 묶음 6개 · 계산|기본값 (실전) · real,pre,sim): %s' % u)
         # 맨 아래 규칙 설명서 — 기본 설정과 같은 값 · 양도세 5월 1일
         g = page.evaluate("() => { const e = document.getElementById('g-sma200'); if (!e) return null; const r = e.getBoundingClientRect(), x = document.getElementById('s2-root').getBoundingClientRect(); return { t: e.innerText, below: r.top >= x.bottom - 1, vis: r.height > 200 }; }")
-        need = ['SMA 200 백테스트 규칙 설명서', '$100,000', '2010년 11월 24일', 'QQQ 200일 이동평균', '9일 RSI 90 이상', '7일 RSI 80 미만', 'SPY · 현금 이자 연 0%', 'TQQQ를 살 때 5거래일 · SPY로 옮길 때 5거래일', '1/5, 1/4, 1/3, 1/2, 1/1', '40% 이상', '0.25%', '5월 1일', '250만 원']
+        need = ['SMA 200 백테스트 규칙 설명서', '$100,000', '2010년 11월 24일', 'QQQ 200일 이동평균', '9일 RSI 90 이상', '7일 RSI 80 미만', 'SPY · 현금 이자 연 0%', 'TQQQ를 살 때 5거래일 · SPY로 옮길 때 5거래일', '1/5, 1/4, 1/3, 1/2, 1/1', '40% 이상', '0.25%', '5월 1일', '250만 원', '팔 때 완충 0.8%', '0.8% 넘게']
         if not g or not g['below'] or not g['vis'] or [w for w in need if w not in g['t']] or '15거래일' in g['t']:
             fail('sma200', '규칙 설명서가 없거나 화면 아래가 아니거나 기본 설정 값이 빠짐(또는 예전 15거래일이 남음): %s' % (g and {'below': g['below'], 'vis': g['vis'], 'miss': [w for w in need if w not in g['t']], 'old15': '15거래일' in g['t']}))
         page.click('#s2-set [data-secall="1"]'); page.wait_for_timeout(100)   # 아래에서 조건을 바꾸려고 모두 펼침
@@ -1664,7 +1664,7 @@ def sma200_check(page, base, fail, local):
         # 상장 전 포함 — 단추는 뺐고(2026-10-22) 자료 칸에서 고름: 기본값 뒤 자료 칸만 바꾸면 기본값과 같은 조건 · 자료만 상장 전 재현 + 실제 일봉 (로컬은 Worker 대신 합성 자료라 시작일만 확인)
         page.click('#s2-def'); wait_new()
         page.select_option('#s2-mode', 'pre'); page.wait_for_function(ready, timeout=120000); page.evaluate("() => { window.__s2p = S2debug.last(); }"); page.wait_for_timeout(100)
-        q = page.evaluate("() => { const L = S2debug.last(), S = S2debug.S(); return { mode: S.mode, fee: S.fee, tax: S.tax, itax: S.itax, lag: S.lag, same: JSON.stringify(S.p) === JSON.stringify(Object.assign({}, SMB.PRESET, { out: 'spy', cr: '0', din: '5', dout: '5' })), from: L.D.d[L.from], noPre: L.D.noPre }; }")
+        q = page.evaluate("() => { const L = S2debug.last(), S = S2debug.S(); return { mode: S.mode, fee: S.fee, tax: S.tax, itax: S.itax, lag: S.lag, same: JSON.stringify(S.p) === JSON.stringify(Object.assign({}, SMB.PRESET, { out: 'spy', cr: '0', din: '5', dout: '5', xb: '0.8' })), from: L.D.d[L.from], noPre: L.D.noPre }; }")
         if q['mode'] != 'pre' or q['fee'] != 0.25 or q['tax'] != 'fifo' or q['itax'] != 'on' or q['lag'] != 0 or not q['same'] or (not local and (q['noPre'] or q['from'] >= '2000-01-01')):
             fail('sma200', "자료 칸 '상장 전 포함' 이상 (기대: 기본값과 같은 조건 · 상장 전 재현으로 2000년 전 시작): %s" % q)
         page.click('#s2-def'); wait_new()
@@ -1698,18 +1698,20 @@ def sma200_check(page, base, fail, local):
         page.set_viewport_size({'width': 1280, 'height': 900})
         # 예전 저장값: 예전 기본값(현금 · 4% · 판 표시 없음) 그대로였으면 한 번 새 기본값(SPY · 0%) · 직접 바꾼 값(QQQ · 2%)은 그대로 · 판 2에 저장된 현금 · 4%도 그대로
         #   나눠 사기: 판 3 전 저장값이 예전 기본값(15 · 15) 그대로면 한 번 5 · 5 · 직접 바꾼 값(10 · 15)과 판 3에 저장된 15 · 15는 그대로 (2026-10-25)
+        #   팔 때 완충: 판 4 전 저장값이 예전 기본값(0%) 그대로면 한 번 0.8% · 직접 바꾼 값(1.5%)과 판 4에 저장된 0%는 그대로 (2026-10-27)
         mig = []
-        for old, want in (({'sig': 'qqq', 'out': 'cash', 'cr': '4', 'win': '150'}, ['spy', '0', '150', '5', '5']), ({'out': 'qqq', 'cr': '2'}, ['qqq', '2', '200', '5', '5']),
-                          ({'v': 2, 'out': 'cash', 'cr': '4'}, ['cash', '4', '200', '5', '5']), ({'v': 2, 'out': 'spy', 'cr': '0', 'din': '10', 'dout': '15'}, ['spy', '0', '200', '10', '15']),
-                          ({'v': 3, 'out': 'spy', 'cr': '0', 'din': '15', 'dout': '15'}, ['spy', '0', '200', '15', '15'])):
+        for old, want in (({'sig': 'qqq', 'out': 'cash', 'cr': '4', 'win': '150'}, ['spy', '0', '150', '5', '5', '0.8']), ({'out': 'qqq', 'cr': '2'}, ['qqq', '2', '200', '5', '5', '0.8']),
+                          ({'v': 2, 'out': 'cash', 'cr': '4'}, ['cash', '4', '200', '5', '5', '0.8']), ({'v': 2, 'out': 'spy', 'cr': '0', 'din': '10', 'dout': '15'}, ['spy', '0', '200', '10', '15', '0.8']),
+                          ({'v': 3, 'out': 'spy', 'cr': '0', 'din': '15', 'dout': '15'}, ['spy', '0', '200', '15', '15', '0.8']), ({'v': 3, 'out': 'spy', 'cr': '0', 'din': '5', 'dout': '5', 'xb': '1.5'}, ['spy', '0', '200', '5', '5', '1.5']),
+                          ({'v': 4, 'out': 'spy', 'cr': '0', 'din': '5', 'dout': '5', 'xb': '0'}, ['spy', '0', '200', '5', '5', '0'])):
             v = old.pop('v', None); j = {'mode': 'real', 'p': old}
             if v: j['v'] = v
             page.evaluate("(j) => localStorage.setItem('s2-set', JSON.stringify(j))", j)
             page.goto(base + 'sma200/', wait_until='load')
             page.wait_for_function(ready, timeout=60000); page.evaluate("() => { window.__s2p = S2debug.last(); }")
-            got = page.evaluate("() => { const S = S2debug.S(); return [S.p.out, S.p.cr, S.p.win, S.p.din, S.p.dout, S.v, JSON.parse(localStorage.getItem('s2-set')).v]; }")
-            if got[:5] != want or got[5] != 3 or got[6] != 3: mig.append([j, got])
-        if mig: fail('sma200', '예전 저장값 옮기기 이상 (기대: 예전 기본값만 SPY · 0% / 5 · 5거래일 · 저장값 판 3): %s' % mig)
+            got = page.evaluate("() => { const S = S2debug.S(); return [S.p.out, S.p.cr, S.p.win, S.p.din, S.p.dout, S.p.xb, S.v, JSON.parse(localStorage.getItem('s2-set')).v]; }")
+            if got[:6] != want or got[6] != 4 or got[7] != 4: mig.append([j, got])
+        if mig: fail('sma200', '예전 저장값 옮기기 이상 (기대: 예전 기본값만 SPY · 0%% / 5 · 5거래일 / 팔 때 0.8%% · 저장값 판 4): %s' % mig)
         page.evaluate("() => { ['s2-set', 's2-scale', 's2-open'].forEach(k => localStorage.removeItem(k)); }")
     except Exception as e:
         fail('sma200', 'SMA 200 백테스트 검사 실패: %s' % str(e)[:200])

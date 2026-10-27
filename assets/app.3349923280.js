@@ -19548,7 +19548,7 @@ window.BTUI = (function () {
    · 조건 = 투자전략 시뮬레이터 라이브러리 'SMA 200' 편집 창의 손잡이 전부(선택지도 같음) + 72루틴 백테스트처럼 수수료·양도세(선입선출/이동평균/미포함) + 현금 이자 세금
    · 계산 방식(자료 칸): 실전(실제 일봉 data/etfcagr.json · 1주 단위 · 수수료 = 체결 금액 × 수수료율 · 매도 SEC · 분배금 원천징수 15%) / 상장 전 포함(상장 전 재현 + 실제 일봉 · 계산은 실전)
      / 투자전략 시뮬레이터 검증용(data/stratsim/prices.csv · 소수 주 — 라이브러리 조건(현금 · 4%) · 수수료 0.02% · 세금 미포함이면 시뮬레이터 SMA 200 과 같은 숫자)
-   · 기본값 = 라이브러리 'SMA 200' 조건 + 팔았을 때 SPY · 그 현금 이자 0% (2026-10-22) + 나눠 사기 5 · 5거래일 (2026-10-25) · 단추는 [계산]·[기본값 (실전)]만 ('상장 전 포함' 단추는 2026-10-22 뺌 — 자료 칸에서 고름)
+   · 기본값 = 라이브러리 'SMA 200' 조건 + 팔았을 때 SPY · 그 현금 이자 0% (2026-10-22) + 나눠 사기 5 · 5거래일 (2026-10-25) + 팔 때 평균보다 0.8% 아래 (2026-10-27) · 단추는 [계산]·[기본값 (실전)]만 ('상장 전 포함' 단추는 2026-10-22 뺌 — 자료 칸에서 고름)
    · 맨 아래 규칙 설명서(#g-sma200 — 기본 설정 기준, 정적 글)
    · 자료는 시세 봇이 날마다 갱신하는 파일을 열 때마다 받음(새 자료 자동 반영) · 설정은 이 브라우저에만 저장(localStorage 's2-set')
    · 관리자 확인([ADMIN] dcAdmin.when) 뒤에만 시작 — 그 전엔 자료도 받지 않음
@@ -19565,12 +19565,14 @@ window.BTUI = (function () {
      · '상장 전 포함'(상장 전 재현 + 실제 일봉)·'sim'(투자전략 시뮬레이터 검증용)은 자료 칸에서만 고름 — 고를 때 다른 조건은 그대로
        ('상장 전 포함' 단추는 사용자 지시로 뺌 2026-10-22 · 시뮬레이터와 같은 숫자를 보려면 수수료 0.02% · 세금 미포함 · 현금 · 4%)
      · 나눠 사기(din · dout)는 5거래일 (사용자 지시 2026-10-25 — 15→5 백테스트: 실제 일봉 세후 연평균 33.3%→37.9% · 시작일별 179곳 모두 5가 위 · MDD 비슷)
+     · 팔 때 완충(xb) 0.8% (사용자 결정 2026-10-27 — 이동평균 160~200일 × 팔 때 0~1% 55가지 시작일별 세후 비교에서 종합 1등: 실제 일봉 2010-11~ 세후 연 38.1%→40.8% · MDD −50.3%→−47.7% · 5·10년 보유 모든 시작일에서 위 · 1972~ 재현 자료에서도 나쁜 경우가 나빠지지 않음 · 평균 바로 아래 휩쏘 매도를 거름 — 이동평균 200일·살 때 0%·버블 보험 TQQQ 200일은 그대로)
      · v: 저장값 판 — 2 = SPY · 0% 기본값부터 (그 전 저장값 중 예전 기본값(현금 · 4%) 그대로였던 것은 한 번 새 기본값으로)
-            3 = 나눠 사기 5거래일부터 (그 전 저장값 중 예전 기본값(15 · 15) 그대로였던 것은 한 번 5 · 5로 — 직접 바꾼 값은 그대로) */
-  var SET_V = 3, DEF_OUT = 'spy', DEF_CR = '0', DEF_DAYS = '5';
+            3 = 나눠 사기 5거래일부터 (그 전 저장값 중 예전 기본값(15 · 15) 그대로였던 것은 한 번 5 · 5로 — 직접 바꾼 값은 그대로)
+            4 = 팔 때 완충 0.8%부터 (그 전 저장값 중 예전 기본값(0%) 그대로였던 것은 한 번 0.8%로 — 직접 바꾼 값은 그대로) */
+  var SET_V = 4, DEF_OUT = 'spy', DEF_CR = '0', DEF_DAYS = '5', DEF_XB = '0.8';
   function base(mode) {
     var p = {}, k; for (k in SMB.PRESET) p[k] = SMB.PRESET[k];
-    p.out = DEF_OUT; p.cr = DEF_CR; p.din = DEF_DAYS; p.dout = DEF_DAYS;
+    p.out = DEF_OUT; p.cr = DEF_CR; p.din = DEF_DAYS; p.dout = DEF_DAYS; p.xb = DEF_XB;
     return { v: SET_V, per: 'all', from: '', to: '', cap: CAP_DEF, mode: mode === 'pre' || mode === 'sim' ? mode : 'real', lag: 0, fee: 0.25, tax: 'fifo', itax: 'on', p: p };
   }
   function load() {
@@ -19581,6 +19583,7 @@ window.BTUI = (function () {
       if (typeof j.cap === 'number' && j.cap >= 100) s.cap = j.cap; if (typeof j.fee === 'number' && j.fee >= 0 && j.fee <= 5) s.fee = j.fee; if (j.p && typeof j.p === 'object') s.p = SMB.clean(j.p);
       if (!(j.v >= 2) && s.p.out === SMB.PRESET.out && s.p.cr === SMB.PRESET.cr) { s.p.out = DEF_OUT; s.p.cr = DEF_CR; }   /* 예전 기본값(현금 · 4%) 그대로였던 저장값 → 새 기본값 (직접 바꾼 값은 그대로) */
       if (!(j.v >= 3) && s.p.din === SMB.PRESET.din && s.p.dout === SMB.PRESET.dout) { s.p.din = DEF_DAYS; s.p.dout = DEF_DAYS; }   /* 예전 기본값(15 · 15) 그대로였던 저장값 → 5 · 5 (직접 바꾼 값은 그대로) */
+      if (!(j.v >= 4) && s.p.xb === SMB.PRESET.xb) s.p.xb = DEF_XB;   /* 예전 기본값(팔 때 0%) 그대로였던 저장값 → 0.8% (직접 바꾼 값은 그대로) */
     } } catch (e) {}
     s.v = SET_V;
     if (['real', 'pre', 'sim'].indexOf(s.mode) < 0) s.mode = 'real'; if (['fifo', 'avg', 'none'].indexOf(s.tax) < 0) s.tax = 'fifo'; if (s.itax !== 'off') s.itax = 'on';
@@ -19682,7 +19685,7 @@ window.BTUI = (function () {
       '<div class="f"><label for="s2-tax">양도세</label><select id="s2-tax"><option value="fifo"' + (S.tax === 'fifo' ? ' selected' : '') + '>포함 — 선입선출</option><option value="avg"' + (S.tax === 'avg' ? ' selected' : '') + '>포함 — 이동평균</option><option value="none"' + (S.tax === 'none' ? ' selected' : '') + '>미포함</option></select>' +
         '<span class="hint">해외주식: 1~12월(결제일 기준)에 판 이익을 원화로 더해 250만 원을 빼고 22% · 다음 해 5월 1일(휴장이면 다음 거래일)에 이 계좌 현금으로 냄(모자라면 그날 종가에 보유를 팔아서)</span></div>' +
       '<div class="f"><label for="s2-itax">현금 이자 세금</label><select id="s2-itax"><option value="on"' + (S.itax === 'on' ? ' selected' : '') + '>이자소득세 15.4% 뗌</option><option value="off"' + (S.itax === 'off' ? ' selected' : '') + '>미포함</option></select></div>');
-    h += '<div class="s2-row" style="margin-top:12px"><button type="button" class="s2-btn pri" id="s2-run">계산</button><button type="button" class="s2-btn" id="s2-def" title="상장 뒤 실제 일봉 · 라이브러리 SMA 200 조건(팔았을 때 SPY · 이자 0% · 나눠 사기 5거래일) · 수수료 0.25% · 양도세 선입선출 · 이자세 15.4%">기본값 (실전)</button>' +
+    h += '<div class="s2-row" style="margin-top:12px"><button type="button" class="s2-btn pri" id="s2-run">계산</button><button type="button" class="s2-btn" id="s2-def" title="상장 뒤 실제 일봉 · 라이브러리 SMA 200 조건(팔 때 평균보다 0.8% 아래 · 팔았을 때 SPY · 이자 0% · 나눠 사기 5거래일) · 수수료 0.25% · 양도세 선입선출 · 이자세 15.4%">기본값 (실전)</button>' +
       '<span class="s2-msg" id="s2-msg"></span></div></div>' +
       '<div id="s2-out"></div>';
     root.innerHTML = h;
