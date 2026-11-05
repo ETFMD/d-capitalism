@@ -2702,7 +2702,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .dca-menu { min-width:150px !important; }
   .dca-menu a.lang-opt { text-decoration:none; }
   /* [ADMIN] 관리자 전용 화면 잠금 · 계정 메뉴 '관리자 기능' */
-  #page-aspeed:not(.adm-ok) > :not(.adm-lock), #page-t72:not(.adm-ok) > :not(.adm-lock), #page-sma200:not(.adm-ok) > :not(.adm-lock), #page-soxl200:not(.adm-ok) > :not(.adm-lock), #page-t72bt:not(.adm-ok) > :not(.adm-lock) { display:none !important; }
+  #page-aspeed:not(.adm-ok) > :not(.adm-lock), #page-t72:not(.adm-ok) > :not(.adm-lock), #page-sma200:not(.adm-ok) > :not(.adm-lock), #page-soxl160:not(.adm-ok) > :not(.adm-lock), #page-t72bt:not(.adm-ok) > :not(.adm-lock) { display:none !important; }
   .adm-ok > .adm-lock { display:none !important; }
   .adm-lock { max-width:520px; margin:48px auto; padding:28px 24px; text-align:center; background:var(--bg2); border:1px solid var(--card-border); border-radius:16px; }
   .adm-t { font-size:18px; font-weight:700; color:var(--text); margin:0 0 8px; } .adm-p { font-size:14px; color:var(--text2); line-height:1.6; margin:0 0 16px; }
@@ -2733,7 +2733,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .dcl-s { font-size:11.5px; color:var(--text3); margin:16px 0 0; line-height:1.6; text-align:left; }
   @media (max-width: 600px) { .top-bar #dc-auth { order:2; } .top-bar:has(#dc-auth:not([hidden])) .site-search { flex:1 1 150px; } .dca-nm { display:none; } }   /* 좁은 화면: 둘째 줄(방문자 수 · 로그인 · 검색칸)에 넣어 상단이 한 줄 더 늘어나지 않게 */
 
-  /* [SMA200] 관리자 백테스트 화면 공통 모양(.bt2 — 'SMA 200 백테스트' /sma200/ · 'SOXL SMA 200 백테스트' /soxl-sma200/ · '72루틴 백테스트' /72-backtest/) — 72루틴 자동매매 프로그램 백테스트 탭과 같은 모양 · 사이트 색 변수 · 오름 빨강/내림 파랑 */
+  /* [SMA200] 관리자 백테스트 화면 공통 모양(.bt2 — 'SMA 200 백테스트' /sma200/ · 'SOXL SMA 160 백테스트' /soxl-sma160/ · '72루틴 백테스트' /72-backtest/) — 72루틴 자동매매 프로그램 백테스트 탭과 같은 모양 · 사이트 색 변수 · 오름 빨강/내림 파랑 */
   .bt2 { --s2-up:#f04452; --s2-dn:#3182f6; --s2-warn:#fe9800; }
   .bt2-root { max-width:1100px; margin:0 auto; padding:8px 16px 24px; font-size:14px; line-height:1.55; color:var(--text); }
   .bt2 .s2-card { background:var(--bg2); border:1px solid var(--card-border); border-radius:12px; padding:16px; margin-top:14px; min-width:0; }

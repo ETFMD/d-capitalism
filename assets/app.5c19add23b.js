@@ -19025,7 +19025,7 @@ if (typeof module !== 'undefined') module.exports = R72D;
 /* [/T72-DIST] */
 
 /* ════════════════════════════════════════════════════════════
-   [ADMIN] 관리자 전용 화면 (자산 속도 시뮬레이터 /asset-speed/ · 72루틴 /72/ · 72루틴 백테스트 /72-backtest/ · SMA 200 백테스트 /sma200/ · SOXL SMA 200 백테스트 /soxl-sma200/) — 사이트 운영자(현경흠) 계정으로 로그인했을 때만 열림
+   [ADMIN] 관리자 전용 화면 (자산 속도 시뮬레이터 /asset-speed/ · 72루틴 /72/ · 72루틴 백테스트 /72-backtest/ · SMA 200 백테스트 /sma200/ · SOXL SMA 160 백테스트 /soxl-sma160/) — 사이트 운영자(현경흠) 계정으로 로그인했을 때만 열림
    · 판단: Worker /auth/me 의 user.admin (worker/src/auth.js ADMIN_UIDS — 회원 번호로 판단, 닉네임 아님) · 72루틴 계정 기록(/udata/r72)도 Worker 가 관리자만 허용
    · 화면: 처음엔 내용을 감추고(CSS #page-… :not(.adm-ok)) '확인 중' → 관리자면 .adm-ok 를 붙이고 그 화면의 시작 함수(when 으로 맡긴 것)를 실행 · 아니면 안내 상자
    · 지난번 확인 결과(dc_auth.user.admin)가 있으면 바로 열고, 서버 확인이 다르게 오면 다시 닫음 · 서버에 닿지 못하면 지난 결과를 씀
@@ -19033,8 +19033,8 @@ if (typeof module !== 'undefined') module.exports = R72D;
    · 이 사이트 코드는 공개 저장소라 화면 코드 자체를 숨기지는 못함 — 막는 것은 '사용'(화면 열기·계정 기록)이다
 ════════════════════════════════════════════════════════════ */
 window.dcAdmin = (function () {
-  var PAGES = ['page-aspeed', 'page-t72', 'page-t72bt', 'page-sma200', 'page-soxl200'], LINKS = [['asset-speed/', '자산 속도 시뮬레이터'], ['72/', '72루틴'], ['72-backtest/', '72루틴 백테스트'], ['sma200/', 'SMA 200 백테스트'], ['soxl-sma200/', 'SOXL SMA 200 백테스트']];
-  var NAME = { 'page-aspeed': ['자산 속도 시뮬레이터', '는'], 'page-t72': ['72루틴', '은'], 'page-t72bt': ['72루틴 백테스트', '는'], 'page-sma200': ['SMA 200 백테스트', '는'], 'page-soxl200': ['SOXL SMA 200 백테스트', '는'] };   /* 잠금 안내 이름 · 조사 */
+  var PAGES = ['page-aspeed', 'page-t72', 'page-t72bt', 'page-sma200', 'page-soxl160'], LINKS = [['asset-speed/', '자산 속도 시뮬레이터'], ['72/', '72루틴'], ['72-backtest/', '72루틴 백테스트'], ['sma200/', 'SMA 200 백테스트'], ['soxl-sma160/', 'SOXL SMA 160 백테스트']];
+  var NAME = { 'page-aspeed': ['자산 속도 시뮬레이터', '는'], 'page-t72': ['72루틴', '은'], 'page-t72bt': ['72루틴 백테스트', '는'], 'page-sma200': ['SMA 200 백테스트', '는'], 'page-soxl160': ['SOXL SMA 160 백테스트', '는'] };   /* 잠금 안내 이름 · 조사 */
   var st = null, q = [];                        /* st: null = 확인 중 · true = 관리자 · false = 아님 */
   var TEST = window.__dcAdminTest === 1;        /* 회귀 검사 전용 탭(tests/run_regression.py 가 따로 연 탭의 시작 스크립트)만 — 화면 잠금만 풀고, 계정 기록(/udata/r72)은 Worker 가 관리자만 허용 */
   function cached() { try { var a = JSON.parse(localStorage.getItem('dc_auth') || 'null'); return !!(a && a.token && a.exp * 1000 > Date.now() && a.user && a.user.admin === true); } catch (e) { return false; } }
@@ -19110,7 +19110,7 @@ window.dcAdmin = (function () {
 /* [/T72] */
 
 /* ════════════════════════════════════════════════════════════
-   [SMA200-ENG] SMA 200 백테스트 계산 엔진 (SMB) — 관리자 화면 'SMA 200 백테스트'(/sma200/ · TQQQ) · 'SOXL SMA 200 백테스트'(/soxl-sma200/ · SOXL)와 앞으로의 SMA 자동매매 프로그램이 같이 쓸 순수 계산
+   [SMA200-ENG] SMA 200 백테스트 계산 엔진 (SMB) — 관리자 화면 'SMA 200 백테스트'(/sma200/ · TQQQ) · 'SOXL SMA 160 백테스트'(/soxl-sma160/ · SOXL)와 앞으로의 SMA 자동매매 프로그램이 같이 쓸 순수 계산
    · 종목: 시뮬레이터 7개(SIM) + 실제 일봉만 있는 SOXL·SOXX(EXT — 뒤에 붙여 TQQQ 화면 값은 그대로)
    · 매매 규칙 = 투자전략 시뮬레이터 SMA 엔진(src/stratsim/10-engine.js ssRunSma)을 그대로 옮김 — 판단(judge)·확인 횟수·결제 대기·나눠 사기·버블 보험·RSI·현금 이자·순서가 같음
      → '시뮬레이터와 같게' 방식(시뮬레이터 자료 · 소수 주 · 수수료를 매수 금액 안에서 · SEC·세금·이자세 없음)이면 시뮬레이터와 같은 값(tests/sma200_test.cjs 가 확인)
@@ -19123,7 +19123,7 @@ window.dcAdmin = (function () {
 var SMB = (function () {
   'use strict';
   /* 종목 = 시뮬레이터 SS_ASSETS 와 같은 순서 (팔기·평가 순서가 같아야 소수점까지 같음)
-     · SOXL·SOXX(EXT)는 2026-11-05 맨 뒤에 붙임 — 처음엔 실제 일봉만('SOXL SMA 200 백테스트' /soxl-sma200/), 같은 날 투자전략 시뮬레이터에도 추가(prices.csv 열 · 선택지)
+     · SOXL·SOXX(EXT)는 2026-11-05 맨 뒤에 붙임 — 처음엔 실제 일봉만('SOXL SMA 200 백테스트' — 같은 날 'SOXL SMA 160 백테스트' /soxl-sma160/ 로 이름 바꿈), 같은 날 투자전략 시뮬레이터에도 추가(prices.csv 열 · 선택지)
      · 앞 7개만 쓰는 설정(TQQQ 화면)은 예전과 소수점까지 같은 값 (쓰지 않는 종목은 늘 보유 0 이라 팔기·평가·양도세·분배금 순서에 끼지 않음 — tests/sma200_test.cjs 가 확인) */
   var EXT = ['soxl', 'soxx'];
   var ASSETS = ['tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq'].concat(EXT);
@@ -19551,7 +19551,7 @@ window.BTUI = (function () {
 /* [/BTUI] */
 
 /* ════════════════════════════════════════════════════════════
-   [SMA200] SMA 200 백테스트 — 관리자 전용 화면 (/sma200/ · #s2-root · TQQQ) + 같은 코드로 'SOXL SMA 200 백테스트'(/soxl-sma200/ · #sx-root · SOXL — 맨 아래 S2PAGE 설정 SXCFG) · 계산은 [SMA200-ENG] SMB
+   [SMA200] SMA 200 백테스트 — 관리자 전용 화면 (/sma200/ · #s2-root · TQQQ) + 같은 코드로 'SOXL SMA 160 백테스트'(/soxl-sma160/ · #sx-root · SOXL — 맨 아래 S2PAGE 설정 SXCFG) · 계산은 [SMA200-ENG] SMB
    · 화면 코드는 S2PAGE(C) 하나 — C = 화면마다 다른 것(칸 id 앞글자 · 저장 키 · 종목 · 기본값 · 자료 칸 · 글자)만. 고칠 때는 S2PAGE 를 고치면 두 화면이 같이 바뀜
      (TQQQ 화면 설정 S2CFG 는 2026-11-05 공통화 전과 화면·숫자·저장값이 한 글자도 같음 — 바꾸기 전/후 화면 전체를 비교해 확인)
    · 모양: 72루틴 자동매매 프로그램(routine72-auto) '백테스트' 탭과 같은 양식 — 조건 카드(기간·원금·조건·수수료·세금 · [계산]) → 결과 카드(요약 칸 · 그래프 · 시작일별 분포 · 연도별/보유 구간별/일자별 표 · CSV)
@@ -19584,8 +19584,10 @@ function S2PAGE(C) {
   function base(mode) {
     var p = {}, k; for (k in SMB.PRESET) p[k] = SMB.PRESET[k];
     p.out = DEF_OUT; p.cr = DEF_CR; p.din = DEF_DAYS; p.dout = DEF_DAYS; p.xb = DEF_XB;
-    for (k in C.def) p[k] = C.def[k];   /* 화면 기본값 (SOXL: 신호 SOXX · 사는 종목 SOXL · 버블 기준 SOXL — 나머지는 TQQQ 화면과 같음) */
-    return { v: SET_V, per: 'all', from: '', to: '', cap: CAP_DEF, mode: (mode === 'pre' || mode === 'sim') && C.modes.indexOf(mode) >= 0 ? mode : 'real', lag: 0, fee: 0.25, tax: 'fifo', itax: 'on', p: p };
+    for (k in C.def) p[k] = C.def[k];   /* 화면 기본값 (SOXL: 'SOXL SMA 160' 손잡이 전부 — SXCFG.def) */
+    var s0 = { v: SET_V, per: 'all', from: '', to: '', cap: CAP_DEF, mode: (mode === 'pre' || mode === 'sim') && C.modes.indexOf(mode) >= 0 ? mode : 'real', lag: 0, fee: 0.25, tax: 'fifo', itax: 'on', p: p };
+    if (C.pv) s0.pv = C.pv;   /* 화면 기본값 판(SOXL 화면만 — TQQQ 화면 저장값은 예전과 한 글자도 같음) */
+    return s0;
   }
   var PB = base('real').p;   /* 이 화면 기본 손잡이 — 빈 값·고를 수 없는 종목은 이것으로 */
   function load() {
@@ -19594,7 +19596,8 @@ function S2PAGE(C) {
       ['per', 'from', 'to', 'mode', 'tax', 'itax'].forEach(function (k) { if (typeof j[k] === 'string') s[k] = j[k]; });
       if (j.lag === 1) s.lag = 1;
       if (typeof j.cap === 'number' && j.cap >= 100) s.cap = j.cap; if (typeof j.fee === 'number' && j.fee >= 0 && j.fee <= 5) s.fee = j.fee; if (j.p && typeof j.p === 'object') s.p = C.mig ? SMB.clean(j.p) : SMB.clean(j.p, PB);
-      if (C.mig) {   /* TQQQ 화면만 — 예전 저장값 옮기기 (SOXL 화면은 처음부터 지금 기본값) */
+      if (C.pv && j.pv !== C.pv) s.p = SMB.clean({}, PB);   /* 기본값 판이 바뀐 화면(SOXL: 판 2 = 'SOXL SMA 160' 2026-11-05) — 예전 판에서 저장한 손잡이는 버리고 새 기본값으로 · 기간·원금·자료 칸·체결·수수료·세금은 그대로 */
+      if (C.mig) {   /* TQQQ 화면만 — 예전 저장값 옮기기 */
       if (!(j.v >= 2) && s.p.out === SMB.PRESET.out && s.p.cr === SMB.PRESET.cr) { s.p.out = DEF_OUT; s.p.cr = DEF_CR; }   /* 예전 기본값(현금 · 4%) 그대로였던 저장값 → 새 기본값 (직접 바꾼 값은 그대로) */
       if (!(j.v >= 3) && s.p.din === SMB.PRESET.din && s.p.dout === SMB.PRESET.dout) { s.p.din = DEF_DAYS; s.p.dout = DEF_DAYS; }   /* 예전 기본값(15 · 15) 그대로였던 저장값 → 5 · 5 (직접 바꾼 값은 그대로) */
       if (!(j.v >= 4) && s.p.xb === SMB.PRESET.xb) s.p.xb = DEF_XB;   /* 예전 기본값(팔 때 0%) 그대로였던 저장값 → 0.8% (직접 바꾼 값은 그대로) */
@@ -19660,7 +19663,7 @@ function S2PAGE(C) {
     }).join('');
   }
   var MODES = [['real', '실전 — 상장 뒤 실제 일봉 · 1주 단위 · 분배금 원천징수 15% · 매도 SEC'], ['pre', '상장 전 포함 — 상장 전은 재현 가격 + 상장 뒤 실제 일봉 (계산은 실전과 같음)'],
-               ['sim', '투자전략 시뮬레이터 검증용 — 시뮬레이터 자료 · 소수 주 · 수수료 금액 안']].filter(function (m) { return C.modes.indexOf(m[0]) >= 0; });   /* SOXL 화면: 시뮬레이터 자료에 SOXL 이 없어 실전 · 상장 전 포함만 */
+               ['sim', '투자전략 시뮬레이터 검증용 — 시뮬레이터 자료 · 소수 주 · 수수료 금액 안']].filter(function (m) { return C.modes.indexOf(m[0]) >= 0; });   /* 화면마다 C.modes (지금은 두 화면 모두 3가지) */
   /* 묶음 제목 줄 요약 — 지금 칸의 값으로 (바꾸면 바로) */
   function lab(k, v) { var o = SMB.OPTS[k].filter(function (x) { return x[0] === String(v); })[0]; return o ? o[1] : String(v); }
   function sumOf(id, p, x) {
@@ -20091,7 +20094,7 @@ function S2PAGE(C) {
       tile('최대 낙폭(MDD)', '평균 ' + pc(M.mean), '중앙값 ' + pc(M.med) + ' · 최악 ' + pc(M.min) + '(' + M.lo.d + ' 시작)', 'r7d-mdd') +
       tile('시장 안에 있던 날', '평균 ' + pc(IN.mean, 0), '나머지는 현금(또는 대기 종목)') +
       tile(m.ul + ' 그냥 보유 (세후)', '평균 ' + pc(BN && BN.mean), '세전 평균 ' + pc(B && B.mean) + ' · MDD 평균 ' + pc(BM && BM.mean)) +
-      (Wn ? tile('SMA 200 이 더 높았던 시작일', Math.round(Ww / Wn * 100) + '%', n0(Ww) + ' / ' + n0(Wn) + '곳 · 둘 다 끝날 전부 팔고 ' + (m.tax ? '세금까지 낸' : '수수료 뺀') + ' 기준') : '') + '</div>';
+      (Wn ? tile(C.nm + ' 이 더 높았던 시작일', Math.round(Ww / Wn * 100) + '%', n0(Ww) + ' / ' + n0(Wn) + '곳 · 둘 다 끝날 전부 팔고 ' + (m.tax ? '세금까지 낸' : '수수료 뺀') + ' 기준') : '') + '</div>';
     h += '<div class="r7d-ch">' + (u.tab === 'cagr' ? histH(R72D.hist(R.map(function (r) { return r[key]; }), 5), 'up', Sm, '가로 = 연평균 수익률(CAGR) 5%p 구간' + (u.liq ? '(끝날 전부 판 금액)' : ''))
       : u.tab === 'mdd' ? histH(R72D.hist(R.map(function (r) { return r.mdd; }), 5), 'dn', M, '가로 = 최대 낙폭(MDD) 5%p 구간 — 왼쪽일수록 깊음')
       : u.tab === 'line' ? lineH(R, key) : yearH(R72D.years(R, key))) + '</div>';
@@ -20099,7 +20102,7 @@ function S2PAGE(C) {
   }
   function cap() {
     return '<p class="r7d-cap">시작일 = 돈을 넣는 날 · 연평균 = (끝 금액 ÷ 원금)^(365.25 ÷ 일수) − 1 · 최대 낙폭 = 날마다 평가금(현금 + 보유 × 종가)의 최고점 대비 · \'전부 팔고\' = 끝날 종가에 다 팔아 수수료' + (DIST.m.tax ? '와 그해·밀린 양도세까지 낸 금액' : '를 뺀 금액') + ' · ' + esc(DIST.m.set) + '</p>' +
-      '<p class="r7d-cap r7d-w">⚠ 200일 · RSI 90/80 · 버블 40% 같은 설정은 과거 자료를 보고 정한 값이라 앞으로는 이보다 낮을 수 있어요 · 이웃한 시작일은 같은 흐름을 나눠 써서 서로 독립된 시험이 아니에요(실제로 다른 경우는 시작 연도 수 정도)</p>';
+      '<p class="r7d-cap r7d-w">⚠ ' + C.warn + ' · 이웃한 시작일은 같은 흐름을 나눠 써서 서로 독립된 시험이 아니에요(실제로 다른 경우는 시작 연도 수 정도)</p>';
   }
 
   /* ── 이벤트 ── */
@@ -20135,7 +20138,7 @@ function S2PAGE(C) {
   window[C.debug] = { S: function () { return S; }, last: function () { return LAST; }, run: run, dist: function () { return DIST; }, opts: function (D) { return engOpts(D); } };
 }
 /* 화면마다 다른 것 — TQQQ 화면(S2CFG)은 공통화 전과 같은 값 · 종목 칸 선택지는 시뮬레이터 편집 창의 원래 7종목 그대로
-   (2026-11-05 시뮬레이터에 SOXL·SOXX 가 들어왔지만 TQQQ 화면 선택지는 바꾸지 않음 — SOXL 은 'SOXL SMA 200 백테스트' 화면에서) */
+   (2026-11-05 시뮬레이터에 SOXL·SOXX 가 들어왔지만 TQQQ 화면 선택지는 바꾸지 않음 — SOXL 은 'SOXL SMA 160 백테스트' 화면에서) */
 if (typeof SMB !== 'undefined') {
   var T7 = ['tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq'], only7 = function (k) { return SMB.OPTS[k].map(function (o) { return o[0]; }).filter(function (v) { return v === 'cash' || T7.indexOf(v) >= 0; }); };
   var S2CFG = { id: 's2', page: 'page-sma200', render: 's2Render', debug: 'S2debug', csv: 'sma200-backtest', mig: true,
@@ -20143,17 +20146,25 @@ if (typeof SMB !== 'undefined') {
     tk: { sig: only7('sig'), ul: only7('ul'), out: only7('out'), bga: only7('bga') },
     title: 'SMA 200 백테스트 <span class="s2-sub">투자전략 시뮬레이터 \'SMA 200\'과 같은 규칙 · 수수료·양도세 포함</span>',
     defTitle: '상장 뒤 실제 일봉 · 라이브러리 SMA 200 조건(팔 때 평균보다 0.8% 아래 · 팔았을 때 SPY · 이자 0% · 나눠 사기 5거래일) · 수수료 0.25% · 양도세 선입선출 · 이자세 15.4%',
-    listed: 'TQQQ 상장 2010-02 이후', splitEx: '2010년 TQQQ 약 $0.2' };
-  /* SOXL 화면 (사용자 요청 2026-11-05 — 'SMA 200'과 같은 양식으로 TQQQ 대신 SOXL)
-     · 기본값 = TQQQ 화면 기본값에서 종목만 바꿈: 신호 QQQ → SOXX(SOXL 이 3배로 따르는 반도체 지수의 1배 ETF) · 사는 종목 TQQQ → SOXL · 버블 기준 TQQQ → SOXL
-       (이동평균 200일 · 살 때 0% · 팔 때 0.8% · RSI 9일 90/7일 80 · 결제 대기 1 · 시장 밖 SPY · 이자 0% · 나눠 사기 5·5 · 버블 40%·200일 · 수수료 0.25% · 선입선출 · 이자세 — 그대로)
-     · 자료 칸: 실전 · 상장 전 포함 · 투자전략 시뮬레이터 검증용(2026-11-05 시뮬레이터 자료에 SOXL·SOXX 열이 생겨 TQQQ 화면과 같은 3가지) · 고를 수 있는 종목 = SOXL·SOXX·QQQ·SPY */
-  var SXCFG = { id: 'sx', page: 'page-soxl200', render: 'sxRender', debug: 'SXdebug', csv: 'soxl-sma200-backtest', mig: false,
-    modes: ['real', 'pre', 'sim'], sim: ['soxl', 'soxx', 'qqq', 'spy'], real: ['soxl', 'soxx', 'qqq', 'spy'], need: ['soxx', 'soxl'], def: { sig: 'soxx', ul: 'soxl', bga: 'soxl' },
-    tk: { sig: ['soxx', 'soxl', 'qqq', 'spy'], ul: ['soxl', 'soxx'], out: ['cash', 'spy', 'qqq', 'soxx'], bga: ['soxl', 'soxx', 'qqq', 'spy'] },
-    title: 'SOXL SMA 200 백테스트 <span class="s2-sub">\'SMA 200 백테스트\'와 같은 규칙 · SOXX 200일 평균 → SOXL · 수수료·양도세 포함</span>',
-    defTitle: '상장 뒤 실제 일봉 · SOXX 200일 평균 → SOXL(팔 때 평균보다 0.8% 아래 · 팔았을 때 SPY · 이자 0% · 나눠 사기 5거래일 · 버블 보험 SOXL 200일 +40%) · 수수료 0.25% · 양도세 선입선출 · 이자세 15.4%',
-    listed: 'SOXL 상장 2010-03 이후', splitEx: '2010년 SOXL 약 $0.4~0.9' };
+    listed: 'TQQQ 상장 2010-02 이후', splitEx: '2010년 TQQQ 약 $0.2',
+    nm: 'SMA 200', warn: '200일 · RSI 90/80 · 버블 40% 같은 설정은 과거 자료를 보고 정한 값이라 앞으로는 이보다 낮을 수 있어요' };
+  /* SOXL 화면 'SOXL SMA 160 백테스트' (사용자 요청 2026-11-05 — 'SMA 200'과 같은 양식으로 TQQQ 대신 SOXL · 처음 이름 'SOXL SMA 200'(SOXX 200일 · TQQQ 화면 값 그대로)
+     → 같은 날 사용자 결정: 기본값 = SOXL 설정 탐색 후보 C · 이름 'SOXL SMA 160' · 주소 /soxl-sma160/(예전 /soxl-sma200/ 은 404 에서 옮겨 줌 — routes.json moved))
+     · 기본값 = 투자전략 시뮬레이터 라이브러리 'SOXL SMA 160'(src/stratsim/30-library.js #45)과 같은 손잡이 — 신호 SOXL 자기 종가 160일 평균 · 살 때 평균보다 +5% · 팔 때 −0.8% · 확인 살 5일/팔 5일 · 결제 대기 1
+       · 과열 매도 RSI(14) 75 이상 · 재진입 RSI(7) 60 미만 · 시장 밖 SPY · 이자 0% · 나눠 사기 SOXL 10거래일 / SPY 한 번에 · 버블 보험 SOXL 250일 평균 +75% (수수료 0.25% · 선입선출 · 이자세는 TQQQ 화면과 같음)
+       (탐색: 실전 세후 1995-08~2026-11 재현+실제 연 33.5% · MDD −65.5% · 실제 일봉만 2011-06~ 40.4% / −59.6% — 프로젝트 문서 'SOXL-SMA-최적설정-탐색'
+        · QQQ → TQQQ 처럼 1배 SOXX 로 신호를 보는 쪽은 처음 보는 폭락장 시험에서 크게 약해(변동성 끌림이 TQQQ 의 약 2배) 뺌)
+     · pv 2 = 이 기본값 판 — 예전 판(pv 없음 = 'SOXL SMA 200' 시절) 저장 손잡이는 한 번 새 기본값으로(기간·원금·자료 칸·수수료·세금은 그대로)
+     · 자료 칸: 실전 · 상장 전 포함 · 투자전략 시뮬레이터 검증용(시뮬레이터 자료에 SOXL·SOXX 열 — 1994-05-04~ 재현 포함) · 고를 수 있는 종목 = SOXL·SOXX·QQQ·SPY
+     · nm = 분포 상자 '… 이 더 높았던 시작일' 이름 · warn = 분포 상자 경고 문구 */
+  var SXCFG = { id: 'sx', page: 'page-soxl160', render: 'sxRender', debug: 'SXdebug', csv: 'soxl-sma160-backtest', mig: false, pv: 2,
+    modes: ['real', 'pre', 'sim'], sim: ['soxl', 'soxx', 'qqq', 'spy'], real: ['soxl', 'soxx', 'qqq', 'spy'], need: ['soxl', 'spy'],
+    def: { sig: 'soxl', win: '160', ul: 'soxl', eb: '5', xb: '0.8', cb: '5', cs: '5', settle: '1', ohw: '14', oh: '75', coolw: '7', cool: '60', out: 'spy', cr: '0', din: '10', dout: '0', bga: 'soxl', bgw: '250', bg: '75' },
+    tk: { sig: ['soxl', 'soxx', 'qqq', 'spy'], ul: ['soxl', 'soxx'], out: ['cash', 'spy', 'qqq', 'soxx'], bga: ['soxl', 'soxx', 'qqq', 'spy'] },
+    title: 'SOXL SMA 160 백테스트 <span class="s2-sub">투자전략 시뮬레이터 \'SOXL SMA 160\'과 같은 규칙 · SOXL 160일 평균 → SOXL · 수수료·양도세 포함</span>',
+    defTitle: '상장 뒤 실제 일봉 · SOXL 160일 평균 → SOXL(살 때 평균보다 5% 위 · 팔 때 0.8% 아래 · 확인 5거래일 · 과열 RSI(14) 75 · 재진입 RSI(7) 60 · 팔았을 때 SPY · 이자 0% · SOXL 은 10거래일에 나눠 사기 · 버블 보험 SOXL 250일 +75%) · 수수료 0.25% · 양도세 선입선출 · 이자세 15.4%',
+    listed: 'SOXL 상장 2010-03 이후', splitEx: '2010년 SOXL 약 $0.4~0.9',
+    nm: 'SOXL SMA 160', warn: '160일 · 살 때 +5% · RSI 75/60 · 버블 75% 같은 설정은 1995~2026년 자료(2010년까지는 재현 가격)를 뒤져 고른 값이라 앞으로는 이보다 낮을 수 있어요(같은 방식으로 한쪽 구간만 보고 고른 설정은 다른 쪽에서 연 13~23% 정도)' };
   S2PAGE(S2CFG); S2PAGE(SXCFG);
 }
 /* [/SMA200] */
