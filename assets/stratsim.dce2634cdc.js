@@ -8,17 +8,19 @@
    · 돈 가중 수익률(IRR) · 일별 최대 낙폭.  (빌드가 src/stratsim/*.js 를 한 IIFE 로 묶음)
    계산 규칙은 원본 Strategies Simulator(tqqq.networthcast.com)와 같게 맞춤 — 코드는 새로 씀 */
 
-// 종목 열 순서: 행 = [날짜, tqqq, qqq, spy, qld, sso, spxl, sqqq]
-const SS_ASSETS = ['tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq'];
-const SS_COL = { tqqq: 1, qqq: 2, spy: 3, qld: 4, sso: 5, spxl: 6, sqqq: 7 };
-const SS_KEY_OF = ['date', 'tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq'];
+// 종목 열 순서: 행 = [날짜, tqqq, qqq, spy, qld, sso, spxl, sqqq, soxl, soxx]
+//   SOXL(반도체 지수 3배)·SOXX(반도체 지수 1배)는 2026-11-05 맨 뒤에 추가 — 앞 7종목의 순서·계산은 그대로(쓰지 않는 종목은 보유 0)
+//   SOXL·SOXX 자료는 1994-05-04(필라델피아 반도체 지수 첫날)부터 · 그 전은 0(자료 없음)
+const SS_ASSETS = ['tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'];
+const SS_COL = { tqqq: 1, qqq: 2, spy: 3, qld: 4, sso: 5, spxl: 6, sqqq: 7, soxl: 8, soxx: 9 };
+const SS_KEY_OF = ['date', 'tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'];
 // 레버리지 종목의 기초(비레버리지) 짝 — 버블 보험 기본 측정 종목
-const SS_UNLEV = { tqqq: 'qqq', qld: 'qqq', sso: 'spy', spxl: 'spy', qqq: 'qqq', spy: 'spy', sqqq: 'qqq' };
+const SS_UNLEV = { tqqq: 'qqq', qld: 'qqq', sso: 'spy', spxl: 'spy', qqq: 'qqq', spy: 'spy', sqqq: 'qqq', soxl: 'soxx', soxx: 'soxx' };
 const SS_PERIOD_DAYS = { weekly: 5, monthly: 21, quarterly: 63, yearly: 252 };
 
 // 전체 자료 (initData 가 채움)
 const DS = {
-  days: null,      // [{date, tqqq, qqq, spy, qld, sso, spxl, sqqq}]
+  days: null,      // [{date, tqqq, qqq, spy, qld, sso, spxl, sqqq, soxl, soxx}]
   rows: null,      // 같은 날들을 행 모양으로
   idx: null,       // Map 날짜 → days 위치
   q: null, m: null, w: null, y: null,  // 기간 마지막 거래일 행
@@ -29,9 +31,9 @@ const DS = {
 
 const ssDash = (d8) => d8.slice(0, 4) + '-' + d8.slice(4, 6) + '-' + d8.slice(6, 8);
 
-// data/stratsim/prices.csv (날짜,qqq,tqqq,spy,qld,sso,spxl,sqqq) → days
-// tqqq 칸이 빈 날은 뺌 · 다른 종목 빈칸·읽을 수 없는 값은 0
-const SS_CSV_REST = ['spy', 'qld', 'sso', 'spxl', 'sqqq'];   // 4~8번째 칸
+// data/stratsim/prices.csv (날짜,qqq,tqqq,spy,qld,sso,spxl,sqqq,soxl,soxx) → days
+// tqqq 칸이 빈 날은 뺌 · 다른 종목 빈칸·읽을 수 없는 값은 0 (7열 예전 파일이면 soxl·soxx 는 0)
+const SS_CSV_REST = ['spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'];   // 4~10번째 칸
 function ssParsePrices(text) {
   const out = [];
   for (const ln of String(text).split(/\r?\n/)) {
@@ -56,7 +58,7 @@ function ssParseNfci(text) {
   return out;
 }
 
-const ssRowOf = (d) => SS_KEY_OF.map((k) => d[k]);   // [날짜, tqqq, qqq, spy, qld, sso, spxl, sqqq]
+const ssRowOf = (d) => SS_KEY_OF.map((k) => d[k]);   // [날짜, tqqq, qqq, spy, qld, sso, spxl, sqqq, soxl, soxx]
 
 // 같은 기간(키)의 마지막 거래일만 남김 — 날짜 순서 그대로
 function ssLastPer(days, keyOf) {
@@ -158,14 +160,18 @@ function ssSma(vals, w) {
   return out;
 }
 // 와일더 RSI (첫 값 = 1..w 차이 단순 평균, 그다음 지수 평활)
+//   · 앞쪽 0(자료 없음 — SOXL·SOXX 1994-05 전)은 건너뛰고 첫 가격부터 셈 (2026-11-05 · 0 이 이어지는 구간을 'RSI 100 과열'로 읽지 않게
+//     — 앞 7종목은 1971년부터 0 이 없어 예전과 같은 값 · SMA 200 백테스트 엔진 SMB.rsi 와 같은 식)
 function ssRsi(vals, w) {
   const out = new Array(vals.length).fill(null);
-  if (vals.length < w + 1) return out;
+  let s = 0;
+  while (s < vals.length && !(vals[s] > 0)) s++;
+  if (vals.length - s < w + 1) return out;
   let up = 0, dn = 0;
-  for (let i = 1; i <= w; i++) { const d = vals[i] - vals[i - 1]; if (d > 0) up += d; else dn -= d; }
+  for (let i = s + 1; i <= s + w; i++) { const d = vals[i] - vals[i - 1]; if (d > 0) up += d; else dn -= d; }
   up /= w; dn /= w;
-  out[w] = dn === 0 ? 100 : 100 - 100 / (1 + up / dn);
-  for (let i = w + 1; i < vals.length; i++) {
+  out[s + w] = dn === 0 ? 100 : 100 - 100 / (1 + up / dn);
+  for (let i = s + w + 1; i < vals.length; i++) {
     const d = vals[i] - vals[i - 1];
     up = (up * (w - 1) + (d > 0 ? d : 0)) / w;
     dn = (dn * (w - 1) + (d < 0 ? -d : 0)) / w;
@@ -457,8 +463,8 @@ const SS_TICK = (v) => (v === 'cash' ? '현금' : String(v).toUpperCase());
 const ssRange = (a, b, s) => { const o = []; for (let v = a; v <= b + 1e-9; v += s) o.push(+v.toFixed(4)); return o; };
 const ssOpts = (vals, lab) => vals.map((v) => [String(v), lab ? lab(v) : String(v)]);
 
-const SS_ASSET_OPTS9 = ['tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'qqq', 'spy'];
-const SS_PARK_OPTS = ['cash', 'qqq', 'spy', 'qld', 'tqqq', 'sso', 'spxl', 'sqqq'];
+const SS_ASSET_OPTS9 = ['tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'qqq', 'spy', 'soxl', 'soxx'];   // soxl·soxx 2026-11-05 맨 뒤에 추가(종목 칸 모두 같음 · 앞 순서 그대로)
+const SS_PARK_OPTS = ['cash', 'qqq', 'spy', 'qld', 'tqqq', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'];
 const SS_RATE_OPTS = ssOpts([...ssRange(0, 13, 0.5), 14, 15, 16, 18, 20], (v) => (+v).toFixed(1) + '%');
 const SS_COST_OPTS = ssOpts([0, 0.01, 0.02, 0.03, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 0.75, 1], (v) => v + '%');
 const SS_WIN_OPTS = ssOpts(ssRange(10, 300, 10));
@@ -488,7 +494,7 @@ const SS_P9 = [
 // SMA (이동평균 추세)
 const SS_PSMA = [
   { k: 'ul', def: 'tqqq', opts: SS_ASSET_OPTS9.map((v) => [v, SS_TICK(v)]) },
-  { k: 'sig', def: 'qqq', opts: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq'].map((v) => [v, SS_TICK(v)]) },
+  { k: 'sig', def: 'qqq', opts: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'].map((v) => [v, SS_TICK(v)]) },
   { k: 'win', def: '200', opts: SS_WIN_OPTS },
   { k: 'eb', def: '0', opts: SS_BUF_OPTS },
   { k: 'xb', def: '0', opts: SS_BUF_OPTS },
@@ -499,17 +505,17 @@ const SS_PSMA = [
   { k: 'oh', def: '90', opts: [...ssOpts(ssRange(10, 90, 5), (v) => v + ' 이상'), ['0', '끔 — 강제 매도 안 함']] },
   { k: 'coolw', def: '7', opts: ssOpts(ssRange(2, 30, 1)) },
   { k: 'cool', def: '80', opts: [...ssOpts(ssRange(10, 90, 5), (v) => v + ' 미만'), ['0', '수준 상관없이 (끔)']] },
-  { k: 'out', def: 'cash', opts: ['cash', 'qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq'].map((v) => [v, SS_TICK(v)]) },
+  { k: 'out', def: 'cash', opts: ['cash', 'qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'].map((v) => [v, SS_TICK(v)]) },
   { k: 'cr', def: '4', opts: SS_RATE_OPTS },
   { k: 'din', def: '15', opts: SS_DAYS_OPTS },
   { k: 'dout', def: '15', opts: SS_DAYS_OPTS },
   { k: 'cost', def: '0.02', opts: SS_COST_OPTS },
-  { k: 'bga', def: 'tqqq', opts: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq'].map((v) => [v, SS_TICK(v)]) },
+  { k: 'bga', def: 'tqqq', opts: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'].map((v) => [v, SS_TICK(v)]) },
   { k: 'bg', def: '40', opts: [...ssOpts(ssRange(5, 100, 5), (v) => '+' + v + '%'), ['0', '끔']] },
   { k: 'bgw', def: '200', opts: SS_WIN_OPTS },
 ];
 
-const SS_PBH = [{ k: 'ul', def: 'tqqq', opts: ['tqqq', 'qld', 'qqq', 'spy', 'sso', 'spxl', 'sqqq'].map((v) => [v, SS_TICK(v)]) }];
+const SS_PBH = [{ k: 'ul', def: 'tqqq', opts: ['tqqq', 'qld', 'qqq', 'spy', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'].map((v) => [v, SS_TICK(v)]) }];
 // 현금 복리: r = 금리 슬라이더 위치(0~1000, 기본 200 = 4%)
 const SS_PINV = [{ k: 'r', def: '200', opts: null }];
 
@@ -910,7 +916,7 @@ function ssRun9(o) {
   };
   const bh = {}, bhS = {};
   // TQQQ·QQQ 는 가격이 0인 기간도 적립을 셈(원본과 같게), 나머지는 그 기간 가격이 있어야
-  [['tqqq', false], ['qqq', false], ['spy', true], ['qld', true], ['sso', true], ['spxl', true], ['sqqq', true]].forEach(([a, need]) => {
+  [['tqqq', false], ['qqq', false], ['spy', true], ['qld', true], ['sso', true], ['spxl', true], ['sqqq', true], ['soxl', true], ['soxx', true]].forEach(([a, need]) => {
     const r = holdOnly(SS_COL[a], need);
     bh[a] = r.pts; bhS[a] = r.smp;
   });
@@ -977,7 +983,7 @@ function ssRunSma(o) {
   let pend = state, pendN = 0;
   let bg = bubbleState(r0[bgCol] || 0, bgSma ? bgSma[a] : null);
   let byBubble = bg === 'gtfo';
-  const sh = { tqqq: 0, qqq: 0, spy: 0, qld: 0, sso: 0, spxl: 0, sqqq: 0 };
+  const sh = { tqqq: 0, qqq: 0, spy: 0, qld: 0, sso: 0, spxl: 0, sqqq: 0, soxl: 0, soxx: 0 };
   let cash = initial, invested = initial, lastAmt = 0;
   const px = (row, k) => { const c = SS_COL[k]; return c != null ? (row[c] || 0) : 0; };
   let tgt = wantAsset(state, bg);
@@ -985,7 +991,7 @@ function ssRunSma(o) {
   let ease = 0, lastSell = a - 1e9, lastBuy = a - 1e9;
   const value = (row) => { let v = 0; for (const k of SS_ASSETS) if (sh[k] > 0) v += sh[k] * (px(row, k) || 0); return v + cash; };
   const biggest = (row) => { let best = 'cash', bv = cash; for (const k of SS_ASSETS) if (sh[k] > 0) { const v = sh[k] * (px(row, k) || 0); if (v > bv) { bv = v; best = k; } } return best; };
-  const shSum = () => sh.tqqq + sh.qqq + sh.spy + sh.qld + sh.sso + sh.spxl + sh.sqqq;
+  const shSum = () => sh.tqqq + sh.qqq + sh.spy + sh.qld + sh.sso + sh.spxl + sh.sqqq + sh.soxl + sh.soxx;
   const holding = () => { const h = {}; for (const k of SS_ASSETS) if (sh[k] > 0) h[k] = sh[k]; return h; };
   let held = biggest(r0);
   const points = [{ date: r0[0], value: value(r0), state }];
@@ -1101,6 +1107,7 @@ function ssCustomData() {
     dates: d.map((r) => r.date),
     tqqq: d.map((r) => r.tqqq), qqq: d.map((r) => r.qqq), spy: d.map((r) => r.spy),
     qld: d.map((r) => r.qld), sso: d.map((r) => r.sso), spxl: d.map((r) => r.spxl), sqqq: col('sqqq'),
+    soxl: col('soxl'), soxx: col('soxx'),   // 2026-11-05 — 1994-05 전은 0(자료 없음)
     nfci: DS.nfci ? DS.nfci.slice() : d.map(() => NaN),
   };
   return _ssCustomData;
@@ -4094,7 +4101,7 @@ const SS_CEVT = {  // 사용자 전략 거래 표시
   rebalance: { color: '#b06000', shape: 'square', label: '비중 조정' },
 };
 // 표시 테두리 = 거래한 종목
-const SS_ASSET_STROKE = { tqqq: '#0040ff', qqq: '#ff8c00', spy: '#a020f0', qld: '#00b3e6', sso: '#ff1493', spxl: '#6d4c2f', sqqq: '#000000', cash: '#5a6472' };
+const SS_ASSET_STROKE = { tqqq: '#0040ff', qqq: '#ff8c00', spy: '#a020f0', qld: '#00b3e6', sso: '#ff1493', spxl: '#6d4c2f', sqqq: '#000000', soxl: '#00a37a', soxx: '#8a6d00', cash: '#5a6472' };
 
 // 사용자 전략 기록의 action 글 → 표시 종류 (앞머리로 먼저, 없으면 글 안에 든 낱말로)
 const SS_KIND_BY_PREFIX = [
@@ -5925,7 +5932,7 @@ function ssCParamLabel(sp, v) { const m = ssCParamOpts(sp).find((o) => String(o.
 function ssCustomPanelHtml(cfg, m, cw) {
   const res = SB.res[cfg.id], err = res && res.error, schema = (res && res.schema) || [];
   let h = '<div class="ss-wip">⚠ 사용자 전략 기능은 아직 다듬는 중이라 결과가 바뀔 수 있습니다.</div>' + ssColorBar()
-    + '<div class="ss-note2">전략 코드가 읽을 수 있는 종목: <code>tqqq</code> <code>qld</code> <code>qqq</code> <code>spy</code> <code>sso</code> <code>spxl</code> <code>sqqq</code>(일별 종가) + <code>nfci</code>(금융 여건 지수). 아무 종목이나 규칙에 쓸 수 있습니다.</div>'
+    + '<div class="ss-note2">전략 코드가 읽을 수 있는 종목: <code>tqqq</code> <code>qld</code> <code>qqq</code> <code>spy</code> <code>sso</code> <code>spxl</code> <code>sqqq</code> <code>soxl</code> <code>soxx</code>(일별 종가 · SOXL·SOXX 는 1994-05-04 부터) + <code>nfci</code>(금융 여건 지수). 아무 종목이나 규칙에 쓸 수 있습니다.</div>'
     + '<button type="button" id="ss-cedit" class="ss-btn ss-ceditb">전략 고치기</button>';
   if (cfg.desc) h += '<div class="ss-desc">' + ssEsc(cfg.desc) + '</div>';
   if (err) h += '<div class="ss-err"><b>실행하지 못했습니다:</b> ' + ssEsc(err) + ' <span class="ss-mut">— \'전략 고치기\'로 코드를 고쳐 주세요.</span></div>';
@@ -6770,7 +6777,10 @@ const SS_PROMPT = `# 백테스트 전략 코드 부탁
   - data.sso  SSO  (S&P 500 2배)
   - data.spxl SPXL (S&P 500 3배)
   - data.sqqq SQQQ (나스닥100 −3배 인버스 — 나스닥이 내리면 오름)
+  - data.soxl SOXL (반도체 지수 3배)
+  - data.soxx SOXX (반도체 지수 — SOXL 이 3배로 따르는 지수의 1배 ETF)
   상장 전 기간은 지수로 재현한 값이라 TQQQ·SQQQ 도 1971년 2월 5일(자료 첫날)부터 있습니다.
+  SOXL·SOXX 는 반도체 지수가 1994년 5월 4일부터라 그 전 날은 0 입니다(그 기간에는 사고팔 수 없음 — 가격이 0 이면 건너뛰세요).
 - data.nfci : 미국 시카고 연은 금융 여건 지수(NFCI). 주간 발표값을 발표 지연(7일)을 두고 거래일마다 채운 것이라 미리 알 수 없는 값은 없습니다.
   가격이 아니라 지표입니다(0 보다 크면 평소보다 돈줄이 빡빡함, +0.5 넘으면 신용 불안). 자료 첫날 무렵 발표 전 날은 NaN 일 수 있으니 쓰기 전에 isFinite() 로 확인하세요.
 - 종목 id(위 소문자 이름)로 data[id] 처럼 꺼낼 수 있습니다 — 종목을 설정으로 고르게 할 때 이렇게 쓰세요.
@@ -6860,7 +6870,7 @@ log 는 날짜순 배열이고, 한 줄이 기록 표의 한 행, 키 하나가 
 추가 필터·손절·나눠 사기·최소 보유 기간, 매매 종목과 다른 '신호 종목'('A 를 보고 B 를 사고판다'고 했을 때만).
 
 꼭 만들어야 하는 칸:
-1) 매매 종목 — 내가 말한 종목이 기본값, 선택지는 비슷한 종목들(tqqq, qld, spxl, sso, qqq, spy · 헤지 전략이면 sqqq). 코드에서는 data[p.<id>] 로 꺼냅니다(data.tqqq 처럼 고정하지 않기).
+1) 매매 종목 — 내가 말한 종목이 기본값, 선택지는 비슷한 종목들(tqqq, qld, spxl, sso, qqq, spy · 반도체면 soxl, soxx · 헤지 전략이면 sqqq). 코드에서는 data[p.<id>] 로 꺼냅니다(data.tqqq 처럼 고정하지 않기).
 2) 빠져 있을 때 들고 있을 것 — 빠지는 상태가 있는 전략만. "cash" 를 꼭 넣으세요. 예: ["cash", "qqq", "spy", "sso", "qld"], 기본 "cash".
    "cash" 는 아무것도 사지 않은 현금 상태이고 data["cash"] 는 없으니 가격을 꺼내기 전에 막으세요.
 3) 설명에 나온 문턱·기간·비율 하나하나("55% 위", "250일 중앙값", "300일 평균") — 숫자를 코드에 박지 말고 칸으로.
