@@ -1727,7 +1727,7 @@ SX_INDEP_JS = S2_INDEP_JS.replace('S2debug', 'SXdebug').replace('#s2-kv', '#sx-k
 def soxl200_check(page, base, fail, local):
     """/soxl-sma200/ 관리자 'SOXL SMA 200 백테스트' (2026-11-05) — 'SMA 200 백테스트'와 같은 화면 코드(S2PAGE · SXCFG)
     · 처음 기본값 = TQQQ 화면 기본값에서 종목만: 신호 SOXX · 사는 종목 SOXL · 버블 기준 SOXL (나머지 = 라이브러리 SMA 200 + 팔 때 0.8% · SPY · 0% · 5·5거래일 · 0.25% · 선입선출 · 이자세)
-    · 종목 칸(SOXL·SOXX·QQQ·SPY) · 자료 칸 실전·상장 전 포함만(시뮬레이터 자료엔 SOXL 없음) · 첫 시작 가능일 2010-12-22 = 설명서
+    · 종목 칸(SOXL·SOXX·QQQ·SPY) · 자료 칸 실전·상장 전 포함·시뮬레이터 검증용(2026-11-05 시뮬레이터에 SOXL 추가 — 로컬: Node 시뮬레이터 엔진과 대조) · 첫 시작 가능일 2010-12-22 = 설명서
     · 화면 9칸 = 따로 돌린 엔진 · 그래프·표·CSV · 조건 바꿔 다시 계산 · 하루 늦게 · 상장 전 포함(배포: 재현으로 1996년 전 시작) · 기본값 단추 · 분포 · 넘침
     · 저장 키 sx-set 따로 — TQQQ 화면 저장값(s2-set)을 건드리지 않음
     (엔진 SOXL 자료 독립 검산·실전=시뮬 날짜·TQQQ 결과 그대로는 tests/sma200_test.cjs ⑥)"""
@@ -1757,8 +1757,8 @@ def soxl200_check(page, base, fail, local):
             fail('soxl-sma200', '종목 칸 선택지 이상 (기대: 신호 SOXX·SOXL·QQQ·SPY · 사는 종목 SOXL·SOXX · 시장 밖 현금·SPY·QQQ·SOXX · 버블 SOXL·SOXX·QQQ·SPY): %s' % d['tk'])
         u = page.evaluate("""() => ({ secs: [...document.querySelectorAll('#sx-set details.s2-sec')].map(x => x.dataset.sec + (x.open ? '+' : '')).join(),
             btn: [...document.querySelectorAll('#sx-set .s2-btn')].map(x => x.innerText).join('|'), modes: [...document.querySelectorAll('#sx-mode option')].map(o => o.value).join() })""")
-        if u != {'secs': 'sig,rsi,out,ease,bub,cost', 'btn': '계산|기본값 (실전)', 'modes': 'real,pre'}:
-            fail('soxl-sma200', '설정 묶음·단추·자료 칸 이상 (기대: 접힌 묶음 6개 · 계산|기본값 (실전) · real,pre): %s' % u)
+        if u != {'secs': 'sig,rsi,out,ease,bub,cost', 'btn': '계산|기본값 (실전)', 'modes': 'real,pre,sim'}:
+            fail('soxl-sma200', '설정 묶음·단추·자료 칸 이상 (기대: 접힌 묶음 6개 · 계산|기본값 (실전) · real,pre,sim): %s' % u)
         g = page.evaluate("() => { const e = document.getElementById('g-soxl200'); if (!e) return null; const r = e.getBoundingClientRect(), x = document.getElementById('sx-root').getBoundingClientRect(); return { t: e.textContent.replace(/\\s+/g, ' '), below: r.top >= x.bottom - 1, vis: r.height > 200 }; }")   # 접힌 질문 답까지
         need = ['SOXL SMA 200 백테스트 규칙 설명서', '$100,000', '2010년 12월 22일', 'SOXX 200일 이동평균', '9일 RSI 90 이상', '7일 RSI 80 미만', 'SPY · 현금 이자 연 0%', 'SOXL을 살 때 5거래일 · SPY로 옮길 때 5거래일',
                 '1/5, 1/4, 1/3, 1/2, 1/1', 'SOXL 200일 이동평균보다 40% 이상', '0.25%', '5월 1일', '250만 원', '팔 때 완충 0.8%', '0.8% 넘게', 'ICE Semiconductor Index']
@@ -1820,6 +1820,22 @@ def soxl200_check(page, base, fail, local):
         if q['mode'] != 'pre' or q['fee'] != 0.25 or q['tax'] != 'fifo' or q['itax'] != 'on' or q['lag'] != 0 or not q['same'] or (not local and (q['noPre'] or q['from'] >= '1996-01-01' or q['lst'] != '2010-03-11')):
             fail('soxl-sma200', "자료 칸 '상장 전 포함' 이상 (기대: 기본값과 같은 조건 · 상장 전 재현으로 1996년 전 시작 · SOXL 상장 2010-03-11): %s" % q)
         page.click('#sx-def'); wait_new()
+        # 검증용 자료(투자전략 시뮬레이터 자료 · 2026-11-05 SOXL·SOXX 열) + 수수료 0.02% · 세금 없음 = 투자전략 시뮬레이터 SMA(같은 손잡이)
+        page.select_option('#sx-mode', 'sim'); wait_new()
+        page.fill('#sx-fee', '0.02'); page.select_option('#sx-tax', 'none'); page.select_option('#sx-itax', 'off'); page.click('#sx-run'); wait_new()
+        q = page.evaluate("""() => { const L = SXdebug.last(), S = SXdebug.S(); return { from: L.D.d[L.from], to: L.D.d[L.to], fin: L.R.final, mdd: L.st.mdd, n: L.R.eq.length, p: S.p, ul: L.R.K.ul,
+            ui: [S.mode, S.fee, S.tax, S.itax] }; }""")
+        if q['ui'] != ['sim', 0.02, 'none', 'off'] or q['ul'] != 'soxl' or q['from'] != '1995-02-15':   # 시뮬레이터 자료는 상장 전 재현 포함(SOXL·SOXX 1994-05-04 ~) → 지표가 모두 나온 1995-02-15 부터
+            fail('soxl-sma200', "검증용 자료 설정 이상 (기대: 시뮬 방식 · 0.02%% · 세금 미포함 · SOXL · 첫날 1995-02-15): %s" % {k: q[k] for k in ('ui', 'ul', 'from')})
+        if local and shutil.which('node'):
+            pr = subprocess.run(['node', '-e', S2_SIM_JS, os.path.join(ROOT, 'scripts', 'stratsim_fit.cjs'), q['from'], q['to'], '100000', json.dumps(q['p'])], capture_output=True, text=True, timeout=120)
+            try:
+                sm = json.loads(pr.stdout.strip().splitlines()[-1])
+                if sm['first'] != q['from'] or sm['last'] != q['to'] or sm['n'] != q['n'] or abs(sm['fin'] - q['fin']) > 1e-9 * sm['fin'] or abs(sm['mdd'] - q['mdd']) > 1e-12:
+                    fail('soxl-sma200', "검증용 자료 결과가 투자전략 시뮬레이터와 다름: 화면 %s · 시뮬레이터 %s" % ({k: q[k] for k in ('from', 'to', 'fin', 'mdd')}, sm))
+            except Exception as e:
+                fail('soxl-sma200', '시뮬레이터 엔진 대조 실패: %s %s' % (e, (pr.stderr or pr.stdout)[-200:]))
+        page.click('#sx-def'); wait_new()
         if abs(page.evaluate("() => SXdebug.last().R.final") - fin0) > 1e-9 or page.evaluate("() => SXdebug.S().mode") != 'real':
             fail('soxl-sma200', "'기본값 (실전)' 단추 뒤 결과가 처음과 다름")
         page.wait_for_function("() => document.querySelectorAll('#sx-dbox .r7d-k').length >= 6", timeout=60000)
@@ -1834,7 +1850,7 @@ def soxl200_check(page, base, fail, local):
         if ls[0] != '{"v":4,"mode":"real","p":{"win":"150"}}' or not ls[1] or ls[1].get('v') != 4 or ls[1]['p'].get('ul') != 'soxl':
             fail('soxl-sma200', '저장값이 TQQQ 화면과 섞임 (기대: s2-set 그대로 · sx-set 따로 · 판 4): %s' % ls)
         # 저장값: 이 화면에 없는 종목(TQQQ)·없는 자료 칸(sim)이 들어 있으면 기본값으로
-        page.evaluate("() => localStorage.setItem('sx-set', JSON.stringify({ v: 4, mode: 'sim', p: { ul: 'tqqq', sig: 'qqq', bga: 'tqqq', out: 'sqqq', win: '180' } }))")
+        page.evaluate("() => localStorage.setItem('sx-set', JSON.stringify({ v: 4, mode: 'xx', p: { ul: 'tqqq', sig: 'qqq', bga: 'tqqq', out: 'sqqq', win: '180' } }))")
         page.goto(base + 'soxl-sma200/', wait_until='load'); wait_new()
         q = page.evaluate("() => { const S = SXdebug.S(); return [S.mode, S.p.ul, S.p.sig, S.p.bga, S.p.out, S.p.win]; }")
         if q != ['real', 'soxl', 'qqq', 'soxl', 'spy', '180']:
