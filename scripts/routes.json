@@ -348,7 +348,16 @@
       "group": "invest",
       "title": "SMA 200 백테스트 — QQQ 200일선 TQQQ 추세 매매 · 수수료·양도세 포함",
       "short": "SMA 200 백테스트",
-      "desc": "QQQ가 200일 이동평균 위면 TQQQ, 아래면 현금. RSI·버블 보험·나눠 사기 조건과 수수료·해외주식 양도세까지 넣은 백테스트."
+      "desc": "QQQ가 200일 이동평균 위면 TQQQ, 아래면 SPY. RSI·버블 보험·나눠 사기 조건과 수수료·해외주식 양도세까지 넣은 백테스트."
+    },
+    {
+      "path": "soxl-sma200",
+      "admin": true,
+      "tab": "soxl200",
+      "group": "invest",
+      "title": "SOXL SMA 200 백테스트 — SOXX 200일선 SOXL 추세 매매 · 수수료·양도세 포함",
+      "short": "SOXL SMA 200 백테스트",
+      "desc": "SOXX가 200일 이동평균 위면 SOXL, 아래면 SPY. RSI·버블 보험·나눠 사기 조건과 수수료·해외주식 양도세까지 넣은 백테스트."
     },
     {
       "path": "vr",

@@ -21,6 +21,8 @@
      9sig/SMA 과최적화 탐색기(탭·행 수 · '열기' 링크 숫자 일치) · TQQQ 장중 흐름
   9. 관리자 'SMA 200 백테스트'(/sma200/) — 엔진(tests/sma200_test.cjs: 시뮬레이터와 끝 금액 차이 0 · 실전·양도세 독립 검산) ·
      화면(기본값 = 라이브러리 SMA 200 · 접는 설정 묶음 · 그래프 휠 확대 · 화면 숫자 = 엔진 · 표·CSV · '상장 전 포함' · 검증용 자료 = 투자전략 시뮬레이터) · 잠김(관리자 아니면 빈 화면)
+     + 관리자 'SOXL SMA 200 백테스트'(/soxl-sma200/ · 같은 화면 코드) — 기본값(신호 SOXX · 사는 종목 SOXL · 버블 SOXL · 나머지는 TQQQ 화면과 같음) · 종목 칸 · 자료 칸(실전·상장 전 포함) ·
+       화면 숫자 = 엔진 · 표·CSV · 하루 늦게 · 상장 전 포함(1995년 시작) · 설명서 · 저장 키가 TQQQ 화면과 따로(sx-set)
  10. 관리자 '72루틴 백테스트'(/72-backtest/) — 설정 = 프로그램 cfg72 · 화면 숫자 = 따로 돌린 MHV(프로그램과 같은 방식) · 표·CSV · 분포 · 상장 전 포함 · 체결 가정
 
 사용법
@@ -1097,7 +1099,8 @@ def admin_lock_check(page, base, fail, routes):
                      vis: pg ? [...pg.children].filter(c => c !== lk && getComputedStyle(c).display !== 'none').length : -1, ok: pg && pg.classList.contains('adm-ok'),
                      as: !!(window.ASPEED && ASPEED.state().ready), t7: (document.getElementById('t7-root') || { innerHTML: '' }).innerHTML.length,
                      s2: (document.getElementById('s2-root') || { innerHTML: '' }).innerHTML.length + (window.S2debug && S2debug.last() ? 1 : 0)
-                         + (document.getElementById('tb-root') || { innerHTML: '' }).innerHTML.length + (window.TBdebug && TBdebug.last() ? 1 : 0),
+                         + (document.getElementById('tb-root') || { innerHTML: '' }).innerHTML.length + (window.TBdebug && TBdebug.last() ? 1 : 0)
+                         + (document.getElementById('sx-root') || { innerHTML: '' }).innerHTML.length + (window.SXdebug && SXdebug.last() ? 1 : 0),
                      robots: (document.querySelector('meta[name=robots]') || {}).content || '' }; }""", 'page-' + r['tab'])
         if not x['pg'] or not x['lock'] or x['vis'] or x['ok'] or '관리자 전용' not in x['txt']:
             fail(r['path'], '관리자 전용 화면이 잠기지 않음: %s' % x)
@@ -1716,6 +1719,129 @@ def sma200_check(page, base, fail, local):
     except Exception as e:
         fail('sma200', 'SMA 200 백테스트 검사 실패: %s' % str(e)[:200])
 
+
+
+SX_INDEP_JS = S2_INDEP_JS.replace('S2debug', 'SXdebug').replace('#s2-kv', '#sx-kv').replace("sqqq: 'SQQQ' }", "sqqq: 'SQQQ', soxl: 'SOXL', soxx: 'SOXX' }")
+
+
+def soxl200_check(page, base, fail, local):
+    """/soxl-sma200/ 관리자 'SOXL SMA 200 백테스트' (2026-11-05) — 'SMA 200 백테스트'와 같은 화면 코드(S2PAGE · SXCFG)
+    · 처음 기본값 = TQQQ 화면 기본값에서 종목만: 신호 SOXX · 사는 종목 SOXL · 버블 기준 SOXL (나머지 = 라이브러리 SMA 200 + 팔 때 0.8% · SPY · 0% · 5·5거래일 · 0.25% · 선입선출 · 이자세)
+    · 종목 칸(SOXL·SOXX·QQQ·SPY) · 자료 칸 실전·상장 전 포함만(시뮬레이터 자료엔 SOXL 없음) · 첫 시작 가능일 2010-12-22 = 설명서
+    · 화면 9칸 = 따로 돌린 엔진 · 그래프·표·CSV · 조건 바꿔 다시 계산 · 하루 늦게 · 상장 전 포함(배포: 재현으로 1996년 전 시작) · 기본값 단추 · 분포 · 넘침
+    · 저장 키 sx-set 따로 — TQQQ 화면 저장값(s2-set)을 건드리지 않음
+    (엔진 SOXL 자료 독립 검산·실전=시뮬 날짜·TQQQ 결과 그대로는 tests/sma200_test.cjs ⑥)"""
+    page.set_viewport_size({'width': 1280, 'height': 900})
+    page.goto(base + 'robots.txt')
+    page.evaluate("() => { ['sx-set', 'sx-scale', 'sx-open'].forEach(k => localStorage.removeItem(k)); localStorage.setItem('s2-set', '{\"v\":4,\"mode\":\"real\",\"p\":{\"win\":\"150\"}}'); }")
+    page.goto(base + 'soxl-sma200/', wait_until='load')
+    ready = "() => window.SXdebug && SXdebug.last() && SXdebug.last() !== window.__sxp && document.querySelector('#sx-kv')"
+    def wait_new(ms=60000):
+        page.wait_for_function(ready, timeout=ms); page.evaluate("() => { window.__sxp = SXdebug.last(); }"); page.wait_for_timeout(100)
+    try:
+        wait_new()
+    except Exception:
+        fail('soxl-sma200', 'SOXL SMA 200 백테스트 결과가 나오지 않음 (60초)'); return
+    try:
+        d = page.evaluate("""() => { const S = SXdebug.S(), ui = {}, L = SXdebug.last(); document.querySelectorAll('#sx-root select[data-k]').forEach(e => ui[e.dataset.k] = e.value);
+            const pre = Object.assign({}, SMB.PRESET, { out: 'spy', cr: '0', din: '5', dout: '5', xb: '0.8', sig: 'soxx', ul: 'soxl', bga: 'soxl' }); delete pre.cost;
+            const op = k => [...document.querySelectorAll('#sx-k-' + k + ' option')].map(o => o.value + (o.disabled ? '!' : '')).join();
+            return { ok: JSON.stringify(Object.keys(ui).sort().map(k => [k, ui[k]])) === JSON.stringify(Object.keys(pre).sort().map(k => [k, pre[k]])),
+                     v: [document.getElementById('sx-cap').value, document.getElementById('sx-mode').value, document.getElementById('sx-fee').value, document.getElementById('sx-tax').value, document.getElementById('sx-itax').value,
+                         [...document.querySelectorAll('#sx-per button.on')].map(b => b.dataset.p).join()],
+                     tk: [op('sig'), op('ul'), op('out'), op('bga')], fv: L.D.d[L.fv], from: L.D.d[L.from], K: [L.R.K.sig, L.R.K.ul, L.R.K.bga, L.R.K.out],
+                     title: document.querySelector('#sx-set h3').innerText, s2: !!document.getElementById('s2-root') }; }""")
+        if not d['ok'] or d['v'] != ['100000', 'real', '0.25', 'fifo', 'on', 'all'] or d['K'] != ['soxx', 'soxl', 'soxl', 'spy'] or d['fv'] != '2010-12-22' or d['from'] != '2010-12-22' or not d['title'].startswith('SOXL SMA 200 백테스트') or d['s2']:
+            fail('soxl-sma200', '처음 기본값 이상 (기대: 신호 SOXX · 사는 종목 SOXL · 버블 SOXL · 나머지는 TQQQ 화면 기본값 · 첫날 2010-12-22): %s' % d)
+        if d['tk'] != ['soxx,soxl,qqq,spy', 'soxl,soxx', 'cash,spy,qqq,soxx', 'soxl,soxx,qqq,spy']:
+            fail('soxl-sma200', '종목 칸 선택지 이상 (기대: 신호 SOXX·SOXL·QQQ·SPY · 사는 종목 SOXL·SOXX · 시장 밖 현금·SPY·QQQ·SOXX · 버블 SOXL·SOXX·QQQ·SPY): %s' % d['tk'])
+        u = page.evaluate("""() => ({ secs: [...document.querySelectorAll('#sx-set details.s2-sec')].map(x => x.dataset.sec + (x.open ? '+' : '')).join(),
+            btn: [...document.querySelectorAll('#sx-set .s2-btn')].map(x => x.innerText).join('|'), modes: [...document.querySelectorAll('#sx-mode option')].map(o => o.value).join() })""")
+        if u != {'secs': 'sig,rsi,out,ease,bub,cost', 'btn': '계산|기본값 (실전)', 'modes': 'real,pre'}:
+            fail('soxl-sma200', '설정 묶음·단추·자료 칸 이상 (기대: 접힌 묶음 6개 · 계산|기본값 (실전) · real,pre): %s' % u)
+        g = page.evaluate("() => { const e = document.getElementById('g-soxl200'); if (!e) return null; const r = e.getBoundingClientRect(), x = document.getElementById('sx-root').getBoundingClientRect(); return { t: e.textContent.replace(/\\s+/g, ' '), below: r.top >= x.bottom - 1, vis: r.height > 200 }; }")   # 접힌 질문 답까지
+        need = ['SOXL SMA 200 백테스트 규칙 설명서', '$100,000', '2010년 12월 22일', 'SOXX 200일 이동평균', '9일 RSI 90 이상', '7일 RSI 80 미만', 'SPY · 현금 이자 연 0%', 'SOXL을 살 때 5거래일 · SPY로 옮길 때 5거래일',
+                '1/5, 1/4, 1/3, 1/2, 1/1', 'SOXL 200일 이동평균보다 40% 이상', '0.25%', '5월 1일', '250만 원', '팔 때 완충 0.8%', '0.8% 넘게', 'ICE Semiconductor Index']
+        if not g or not g['below'] or not g['vis'] or [w for w in need if w not in g['t']] or 'TQQQ를 살 때' in g['t']:
+            fail('soxl-sma200', '규칙 설명서가 없거나 화면 아래가 아니거나 기본 설정 값이 빠짐: %s' % (g and {'below': g['below'], 'vis': g['vis'], 'miss': [w for w in need if w not in g['t']]}))
+        page.click('#sx-set [data-secall="1"]'); page.wait_for_timeout(100)
+        page.wait_for_function("() => window.Chart && Chart.getChart('sx-c')", timeout=30000)
+        z = page.evaluate("() => { const c = Chart.getChart('sx-c'); return !!(window.ChartZoom && c.options.plugins.zoom && c.options.plugins.zoom.zoom.wheel.enabled && c.options.plugins.zoom.pan.enabled); }")
+        if not z: fail('soxl-sma200', '그래프 휠 확대(chartjs-plugin-zoom)가 켜지지 않음')
+        r = page.evaluate(SX_INDEP_JS, ['real', 0.25, 'fifo', True, 0])
+        if r['diff'] or not r['same'] or not r['cnt']:
+            fail('soxl-sma200', '실전 기본 결과가 따로 돌린 엔진과 다름: %s' % {k: r[k] for k in ('diff', 'same', 'cnt', 'from', 'to')})
+        fin0 = r['fin']
+        c = page.evaluate("""() => { const ch = Chart.getChart('sx-c'), R = SXdebug.last().R, ds = ch && ch.data.datasets.map(x => x.label); return ch ? [ch.data.labels.length === R.eq.length, ch.data.datasets[4].data.filter(v => v != null).length === R.rows.filter(r => r.b.length).length,
+            ch.data.datasets[5].data.filter(v => v != null).length === R.nSell, ds[0] === 'SOXX 종가' && ds[3] === 'SOXL 그냥 보유'] : null; }""")
+        if not c or not all(c): fail('soxl-sma200', '그래프 점 수·매수·매도 표시·이름이 엔진과 다름: %s' % c)
+        t = page.evaluate("""() => { const L = SXdebug.last(), R = L.R, D = L.D, usd = x => (x < 0 ? '−$' : '$') + Math.abs(x).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const out = {}; let tr = [...document.querySelectorAll('#sx-tb tbody tr')];
+            out.year = tr.length === new Set(R.rows.map(r => D.d[r.i].slice(0, 4))).size && tr[tr.length - 1].children[1].innerText === usd(R.final);
+            document.querySelector('#sx-tab button[data-v=per]').click(); tr = [...document.querySelectorAll('#sx-tb tbody tr')]; out.per = tr.length === R.periods.length;
+            let pl = 0; R.periods.forEach(p => { pl += (p.open ? p.net + p.val : p.net) - p.spend; }); out.perSum = Math.abs(R.final - R.cap - (pl + R.divs + R.intr - R.taxPaid)) < 1e-6 * R.final;
+            out.names = tr.every(x => ['SOXL', 'SPY'].indexOf(x.children[1].innerText) >= 0);
+            document.querySelector('#sx-tab button[data-v=day]').click(); tr = [...document.querySelectorAll('#sx-day tbody tr')]; out.day1 = tr.length === Math.min(50, R.rows.length) && tr[0].children[0].innerText === D.d[R.rows[0].i];
+            out.head = [...document.querySelectorAll('#sx-day thead th')].map(x => x.innerText)[3] === 'SOXX 종가';
+            const nx = document.querySelector('#sx-tb .s2-pager .dv-pg[data-pg="2"]'); if (nx) { nx.click(); out.day2 = document.querySelector('#sx-day tbody tr').children[0].innerText === D.d[R.rows[50].i]; }
+            const lp = Math.ceil(R.rows.length / 50), lb = document.querySelector('#sx-tb .s2-pager .dv-pg[data-pg="' + lp + '"]'); if (lb) lb.click();
+            tr = [...document.querySelectorAll('#sx-day tbody tr')]; out.dayEnd = tr[tr.length - 1].children[0].innerText === D.d[L.to] && tr[tr.length - 1].children[12].innerText === usd(R.final);
+            out.bad = [...document.querySelectorAll('#sx-root td, #sx-kv b')].map(e => e.innerText).filter(x => /undefined|NaN|Infinity/.test(x)).slice(0, 3);
+            document.querySelector('#sx-tab button[data-v=year]').click(); return out; }""")
+        if not all(t[k] for k in ('year', 'per', 'perSum', 'names', 'day1', 'head', 'dayEnd')) or t.get('day2') is False or t['bad']:
+            fail('soxl-sma200', '표(연도별·보유 구간별·일자별) 이상: %s' % t)
+        with page.expect_download(timeout=15000) as dl:
+            page.click('#sx-csv')
+        raw = open(dl.value.path(), 'rb').read().decode('utf-8')
+        lines = raw.lstrip('﻿').split('\r\n')
+        cv = page.evaluate("() => { const L = SXdebug.last(); return [L.R.rows.length, L.R.final.toFixed(2), L.D.d[L.from], L.D.d[L.to]]; }")
+        if not raw.startswith('﻿') or len(lines) != cv[0] + 1 or not lines[-1].endswith(',' + cv[1]) or re.search(r'undefined|NaN', raw) or \
+                dl.value.suggested_filename != 'soxl-sma200-backtest-%s_%s.csv' % (cv[2], cv[3]) or 'SOXX 종가' not in lines[0]:
+            fail('soxl-sma200', 'CSV 이상: %d줄(기대 %d) · 이름 %s · 끝 %s' % (len(lines), cv[0] + 1, dl.value.suggested_filename, lines[-1][-30:]))
+        page.select_option('#sx-k-win', '150'); page.select_option('#sx-k-out', 'qqq'); page.select_option('#sx-k-cs', '2')
+        page.select_option('#sx-tax', 'avg'); page.select_option('#sx-itax', 'off'); page.fill('#sx-fee', '')
+        page.click('#sx-run'); wait_new()
+        r = page.evaluate(SX_INDEP_JS, ['real', 0.25, 'avg', False, 0])
+        q = page.evaluate("() => [document.getElementById('sx-fee').value, SXdebug.S().p.win, SXdebug.S().p.out, SXdebug.last().R.K.out, SXdebug.last().R.K.ul]")
+        if r['diff'] or not r['same'] or q != ['0.25', '150', 'qqq', 'qqq', 'soxl']:
+            fail('soxl-sma200', '조건을 바꾼 결과가 엔진과 다름: %s · %s' % ({k: r[k] for k in ('diff', 'same')}, q))
+        fv0 = page.evaluate("() => SXdebug.last().fv")
+        page.select_option('#sx-lag', '1'); wait_new()
+        r = page.evaluate(SX_INDEP_JS, ['real', 0.25, 'avg', False, 1])
+        q = page.evaluate("() => [SXdebug.S().lag, SXdebug.last().o.lag, SXdebug.last().fv]")
+        if r['diff'] or not r['same'] or q[0] != 1 or q[1] != 1 or q[2] != fv0 + 1:
+            fail('soxl-sma200', "'하루 늦게' 결과가 엔진(lag 1)과 다르거나 시작 가능일이 하루 뒤가 아님: %s · %s" % ({k: r[k] for k in ('diff', 'same')}, q))
+        page.select_option('#sx-lag', '0'); wait_new()
+        page.click('#sx-def'); wait_new()
+        page.select_option('#sx-mode', 'pre'); wait_new(180000)
+        q = page.evaluate("""() => { const L = SXdebug.last(), S = SXdebug.S(); return { mode: S.mode, fee: S.fee, tax: S.tax, itax: S.itax, lag: S.lag,
+            same: JSON.stringify(S.p) === JSON.stringify(Object.assign({}, SMB.PRESET, { out: 'spy', cr: '0', din: '5', dout: '5', xb: '0.8', sig: 'soxx', ul: 'soxl', bga: 'soxl' })), from: L.D.d[L.from], noPre: L.D.noPre,
+            lst: L.D.lst && L.D.lst.soxl != null ? L.D.d[L.D.lst.soxl] : null }; }""")
+        if q['mode'] != 'pre' or q['fee'] != 0.25 or q['tax'] != 'fifo' or q['itax'] != 'on' or q['lag'] != 0 or not q['same'] or (not local and (q['noPre'] or q['from'] >= '1996-01-01' or q['lst'] != '2010-03-11')):
+            fail('soxl-sma200', "자료 칸 '상장 전 포함' 이상 (기대: 기본값과 같은 조건 · 상장 전 재현으로 1996년 전 시작 · SOXL 상장 2010-03-11): %s" % q)
+        page.click('#sx-def'); wait_new()
+        if abs(page.evaluate("() => SXdebug.last().R.final") - fin0) > 1e-9 or page.evaluate("() => SXdebug.S().mode") != 'real':
+            fail('soxl-sma200', "'기본값 (실전)' 단추 뒤 결과가 처음과 다름")
+        page.wait_for_function("() => document.querySelectorAll('#sx-dbox .r7d-k').length >= 6", timeout=60000)
+        bx = page.evaluate("() => { const b = document.getElementById('sx-dbox'); return /undefined|NaN/.test(b.innerText) ? b.innerText.slice(0, 200) : (b.innerText.indexOf('SOXL 그냥 보유') < 0 ? 'SOXL 그냥 보유 칸 없음' : ''); }")
+        if bx: fail('soxl-sma200', '시작일별 분포 상자에 이상한 값: %s' % bx)
+        for w in (360, 768):
+            page.set_viewport_size({'width': w, 'height': 900}); page.wait_for_timeout(250)
+            ov = page.evaluate("() => document.documentElement.scrollWidth - document.documentElement.clientWidth")
+            if ov > 0: fail('soxl-sma200', '%dpx 에서 가로 넘침 %dpx' % (w, ov))
+        page.set_viewport_size({'width': 1280, 'height': 900})
+        ls = page.evaluate("() => [localStorage.getItem('s2-set'), JSON.parse(localStorage.getItem('sx-set') || 'null')]")
+        if ls[0] != '{"v":4,"mode":"real","p":{"win":"150"}}' or not ls[1] or ls[1].get('v') != 4 or ls[1]['p'].get('ul') != 'soxl':
+            fail('soxl-sma200', '저장값이 TQQQ 화면과 섞임 (기대: s2-set 그대로 · sx-set 따로 · 판 4): %s' % ls)
+        # 저장값: 이 화면에 없는 종목(TQQQ)·없는 자료 칸(sim)이 들어 있으면 기본값으로
+        page.evaluate("() => localStorage.setItem('sx-set', JSON.stringify({ v: 4, mode: 'sim', p: { ul: 'tqqq', sig: 'qqq', bga: 'tqqq', out: 'sqqq', win: '180' } }))")
+        page.goto(base + 'soxl-sma200/', wait_until='load'); wait_new()
+        q = page.evaluate("() => { const S = SXdebug.S(); return [S.mode, S.p.ul, S.p.sig, S.p.bga, S.p.out, S.p.win]; }")
+        if q != ['real', 'soxl', 'qqq', 'soxl', 'spy', '180']:
+            fail('soxl-sma200', '저장값 바로잡기 이상 (기대: real · soxl · qqq · soxl · spy · 180): %s' % q)
+        page.evaluate("() => { ['sx-set', 'sx-scale', 'sx-open', 's2-set'].forEach(k => localStorage.removeItem(k)); }")
+    except Exception as e:
+        fail('soxl-sma200', 'SOXL SMA 200 백테스트 검사 실패: %s' % str(e)[:200])
 
 T72BT_INDEP_JS = """() => { const L = TBdebug.last(), S = TBdebug.S(), D = L.D, cap = S.cap;
     /* 프로그램 cfg72 그대로 (routine72-auto src/ui/public/app.js) + 화면에서 고른 1회 매수금·새 사이클 */
@@ -3933,11 +4059,12 @@ def main():
             a = page.evaluate("() => { const s = document.querySelector('.auto-sum'); return s ? { vis: !!s.offsetParent, rows: s.querySelectorAll('tbody tr').length, li: s.querySelectorAll('.in-auto li').length } : null; }")
             if not a or not a['vis'] or a['rows'] < 4 or a['li'] < 2:
                 fail(r['path'], '자료 화면 자동 요약(.auto-sum)이 안 보이거나 비어 있음: %s' % a)
-        print('[2-3] 관리자 전용 화면 잠금 · 자산 속도 시뮬레이터 · SMA 200 백테스트 · 72루틴 백테스트', flush=True)
+        print('[2-3] 관리자 전용 화면 잠금 · 자산 속도 시뮬레이터 · SMA 200 백테스트 · SOXL SMA 200 백테스트 · 72루틴 백테스트', flush=True)
         admin_lock_check(page, base, fail, routes)
         apage = admin_page(ctx, attach)
         aspeed_check(apage, base, fail, local)
         sma200_check(apage, base, fail, local)
+        soxl200_check(apage, base, fail, local)
         t72bt_check(apage, base, fail, local)
         print('[2-2] 커버드콜 코스피 비교 — 실제 종가(분배금 미반영)', flush=True)
         kcmp_check(page, base, fail, local)
