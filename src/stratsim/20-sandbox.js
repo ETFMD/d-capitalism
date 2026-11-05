@@ -16,6 +16,7 @@ function ssCustomData() {
     dates: d.map((r) => r.date),
     tqqq: d.map((r) => r.tqqq), qqq: d.map((r) => r.qqq), spy: d.map((r) => r.spy),
     qld: d.map((r) => r.qld), sso: d.map((r) => r.sso), spxl: d.map((r) => r.spxl), sqqq: col('sqqq'),
+    soxl: col('soxl'), soxx: col('soxx'),   // 2026-11-05 — 1994-05 전은 0(자료 없음)
     nfci: DS.nfci ? DS.nfci.slice() : d.map(() => NaN),
   };
   return _ssCustomData;

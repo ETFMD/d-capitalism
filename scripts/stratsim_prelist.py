@@ -13,7 +13,8 @@
       - S&P 500 배당 재투자: ^GSPC 종가 + 실러 월 배당(연율 ÷ 365 × 날수) — etf_bt_fit.py spx_prefix 와 같은 식 (1970-12 ~ 1979-12 표)
       - 나스닥 100: 1985-10-01 전 = 나스닥 종합(^IXIC · 1971-02-05 첫날)
   · 시작 = 1971-02-05 (나스닥 종합지수 첫날 — 그 전 나스닥 값은 검증할 실제 자료가 없는 가상값이라 쓰지 않음 · 시뮬레이터 전체가 이 날부터)
-  · 결과: 날짜(야후 ^GSPC 거래일 · 1971-02-05 ~) × 7종목 '상장 첫날 = 1' 총수익 수준 · 상장 뒤 날은 빈칸
+  · 결과: 날짜(야후 ^GSPC 거래일 · 1971-02-05 ~) × 9종목 '상장 첫날 = 1' 총수익 수준 · 상장 뒤 날은 빈칸
+      (SOXL·SOXX 는 재료인 필라델피아 반도체 지수가 1994-05-04 부터라 그 전은 빈칸 — LATE · 2026-11-05 추가)
     → scripts/update_stratsim.py 가 '야후 상장 첫날 수정 종가 × 이 값'으로 prices.csv 상장 전 줄을 씀(상장 첫날 하루 변화도 식 그대로 ·
       이 파일 첫날 전 줄은 지움)
   · 재현 식이 바뀌는 매주(update-etf-bt.yml) 다시 계산 — 지금 파일과 어느 값이든 0.5% 넘게 다르거나 날짜·상장 첫날이 바뀐 경우에만 씀
@@ -27,9 +28,13 @@ import numpy as np
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 EPOCH = datetime.date(1970, 1, 1)
-COLS = ['qqq', 'tqqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq']           # prices.csv 열 순서
-IPO = {'qqq': '1999-03-10', 'tqqq': '2010-02-11', 'spy': '1993-01-29', 'qld': '2006-06-21', 'sso': '2006-06-21', 'spxl': '2008-11-05', 'sqqq': '2010-02-11'}   # update_stratsim.py 와 같음
+COLS = ['qqq', 'tqqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx']   # prices.csv 열 순서 (soxl·soxx 2026-11-05 추가 — 맨 뒤)
+IPO = {'qqq': '1999-03-10', 'tqqq': '2010-02-11', 'spy': '1993-01-29', 'qld': '2006-06-21', 'sso': '2006-06-21', 'spxl': '2008-11-05', 'sqqq': '2010-02-11',
+       'soxl': '2010-03-11', 'soxx': '2001-07-13'}   # update_stratsim.py 와 같음
 START = (datetime.date(1971, 2, 5) - EPOCH).days                      # prices.csv 첫날 = 나스닥 종합지수(^IXIC) 첫날 — update_stratsim.py DATA_START 와 같이
+# 재료 지수가 늦게 시작하는 열 — 재현이 이 날(또는 그 전)부터 닿아야 함 · 그 전 날은 빈칸(prices.csv 도 빈칸 = 자료 없음)
+#   SOXX ← 필라델피아 반도체 지수(^SOX · 야후 1994-05-04 부터) · SOXL ← SOXX × 3 (화면 '상장 전 포함'과 같은 식)
+LATE = {'soxl': '1994-05-04', 'soxx': '1994-05-04'}                    # update_stratsim.py LATE 와 같음
 CHAIN_EC = 0.05                                                       # 화면 BT_CHAIN_EC · etf_bt_fit.py CHAIN_EC
 MAX_DEPTH = 3                                                         # 화면 btGet/getF 의 depth 상한
 TOL = 0.005                                                           # 지금 파일과 이보다 크게 다를 때만 씀
@@ -285,7 +290,10 @@ class Builder:
             if lev is None:
                 raise Fail('%s 재현 실패' % c.upper())
             d, a, iS = lev
-            if d[0] != START:
+            if c in LATE:                                             # 늦게 시작하는 열: 그 날까지 닿으면 됨 (그 전은 빈칸)
+                if d[0] > dnum(LATE[c]):
+                    raise Fail('%s 재현이 %s 부터 — %s 까지 닿지 않음 (재료 자료 확인)' % (c.upper(), ymd(d[0]), LATE[c]))
+            elif d[0] != START:
                 raise Fail('%s 재현이 %s 부터 — %s 까지 닿지 않음 (재료 자료 확인)' % (c.upper(), ymd(d[0]), ymd(START)))
             if not (np.all(np.isfinite(a)) and np.all(a > 0)):
                 raise Fail('%s 재현 값 이상' % c.upper())

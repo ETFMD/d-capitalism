@@ -3067,6 +3067,13 @@ const Q = M.DS.q; S.e = Q.findIndex((r) => r[0] === '2010-03-31'); S.x = Q.findI
 M.ssRender(); const m = M.R.metrics;
 console.log(JSON.stringify({ n: M.R.labels.length, bh: [m.bh.cagr, m.bh.maxDD], cfg: [[m['cfg:g0'].cagr, m['cfg:g0'].maxDD], [m['cfg:g1'].cagr, m['cfg:g1'].maxDD]] }));"""
 
+SS_NODE_SOXL_JS = r"""const F = require(process.argv[1]), M = F.M, S = M.S, SC = JSON.parse(process.argv[2]);
+S.saved = SC.map((c, k) => ({ id: 'g' + k, type: c.t, name: c.n, params: M.ssCleanParams(c.t, Object.assign(M.ssDefaults(c.t), c.p)), color: '#ffffff', hidden: false }));
+const Q = M.DS.q; S.e = Q.findIndex((r) => r[0] === '2010-03-31'); S.x = Q.findIndex((r) => r[0] === '2025-12-31'); S.iPos = 333; S.mPos = M.ssMonthlyToPos(500); S.raise = '0'; S.ed = ''; S.xd = ''; S.editing = null; S.panel = null; S.infl = false; S.log = false; S.tx = null;
+M.ssRender(); const m = M.R.metrics, P = (M.SS_PDEF || {});
+console.log(JSON.stringify({ n: M.R.labels.length, cfg: SC.map((c, k) => [m['cfg:g' + k].cagr, m['cfg:g' + k].maxDD]),
+  opts: ['ul', 'sig', 'out', 'bga'].map(k => (P['sma.' + k] ? P['sma.' + k].opts.map(o => o[0]).slice(-2).join() : '')) }));"""
+
 SS_GOLD_JS = """() => { const m = SSM.R.metrics; return { ready: SSM.ready(), n: SSM.R.labels.length, l0: SSM.R.labels[0], l1: SSM.R.labels[SSM.R.labels.length - 1],
   bh: [m.bh.cagr, m.bh.maxDD], inv: [m.invested.cagr], cfg: SSM.S.saved.map(c => { const x = m['cfg:' + c.id] || {}; return [c.type, x.cagr, x.maxDD, !!x.pending, x.error || null]; }) }; }"""
 
@@ -3112,6 +3119,28 @@ def stratsim_check(br, base, fail, ignorable):
                 and len(g['cfg']) == 2 and abs(g['cfg'][0][1] - want['cfg'][0][0]) < 1e-6 and abs(g['cfg'][1][1] - want['cfg'][1][0]) < 1e-3
             if not ok:
                 fail('strategy-simulator', '고정 구간 숫자가 Node 엔진과 다름: 화면 %s · Node %s' % (json.dumps(g, ensure_ascii=False)[:240], json.dumps(want)[:200]))
+        # 1-0) SOXL·SOXX (2026-11-05 추가): SMA(사는 종목 SOXL · 신호 SOXX · 버블 SOXL)·9sig(SOXL) 숫자 = 같은 가격 자료로 돌린 Node 엔진 · 자료 열·선택지 끝 = soxl·soxx
+        try:
+            SC = [{'t': 'sma', 'n': 'SOXL SMA', 'p': {'ul': 'soxl', 'sig': 'soxx', 'bga': 'soxl'}, 'c': '#f59e0b'}, {'t': '9sig', 'n': '9sig SOXL', 'p': {'ul': 'soxl'}, 'c': '#e879f9'}]
+            pg.goto(base + 'strategy-simulator/#ss=' + tok(dict(st, sc=SC)), wait_until='load'); pg.wait_for_timeout(3500)
+            gs = pg.evaluate("""() => { const m = SSM.R.metrics, d = SSM.DS.days, f = k => d.findIndex(r => r[k] > 0);
+                return { ready: SSM.ready(), n: SSM.R.labels.length, cfg: SSM.S.saved.map(c => { const x = m['cfg:' + c.id] || {}; return [c.params.ul, x.cagr, x.maxDD, x.error || null]; }),
+                         first: [d[f('soxl')] && d[f('soxl')].date, d[f('soxx')] && d[f('soxx')].date], last: [d[d.length - 1].soxl > 0, d[d.length - 1].soxx > 0] }; }""")
+            txs = pg.evaluate("() => fetch('data/stratsim/prices.csv', { cache: 'no-store' }).then(r => r.text())")
+            tf = os.path.join(tempfile.gettempdir(), 'ss_soxl_prices_%d.csv' % os.getpid())
+            with open(tf, 'w', encoding='utf-8') as f:
+                f.write(txs)
+            pr = subprocess.run(['node', '-e', SS_NODE_SOXL_JS, os.path.join(ROOT, 'scripts', 'stratsim_fit.cjs'), json.dumps(SC)], capture_output=True, text=True, timeout=180,
+                                env=dict(os.environ, STRATSIM_PRICES=tf))
+            os.remove(tf)
+            ws = json.loads(pr.stdout.strip().splitlines()[-1])
+            okS = gs['ready'] and gs['n'] == ws['n'] == 65 and all(c[0] == 'soxl' and c[3] is None and abs(c[1] - w[0]) < 1e-6 and abs(c[2] - w[1]) < 1e-6 for c, w in zip(gs['cfg'], ws['cfg'])) \
+                and len(gs['cfg']) == 2 and gs['first'] == ['1994-05-04', '1994-05-04'] and gs['last'] == [True, True] and ws['opts'] == ['soxl,soxx'] * 4
+            if not okS:
+                fail('strategy-simulator', 'SOXL·SOXX 전략 숫자·자료·선택지 이상: 화면 %s · Node %s' % (json.dumps(gs, ensure_ascii=False)[:300], json.dumps(ws)[:200]))
+        except Exception as e:
+            fail('strategy-simulator', 'SOXL·SOXX 검사 실패: %s' % str(e)[:200])
+        pg.goto(base + 'strategy-simulator/#ss=' + tok(st), wait_until='load'); pg.wait_for_timeout(3500)
         # 1-1) 정확한 날짜 달력: 연도·월 고르기 목록(사이트 공통 [CSEL] — <body> 끝에 뜸)을 눌러도 달력이 닫히지 않고 그 달로 바뀜 → 날짜 고르기 (2026-10-24 고침)
         for side, yv, mv in (('e', '2016', '8'), ('x', '2022', '5')):
             pg.click('#ss-pick-' + side); pg.wait_for_timeout(300)

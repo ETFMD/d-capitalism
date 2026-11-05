@@ -4,7 +4,7 @@
 
 const FR = document.getElementById('ssf-app');
 const KIND = FR ? FR.dataset.kind : null;
-const SSF_ASSET_TIER = { tqqq: 3, spxl: 3, qld: 2, sso: 2, qqq: 1, spy: 1, sqqq: 3, cash: 0 };
+const SSF_ASSET_TIER = { tqqq: 3, spxl: 3, qld: 2, sso: 2, qqq: 1, spy: 1, sqqq: 3, soxl: 3, soxx: 1, cash: 0 };
 const SSF_RULE_KO = { crash: '폭락 버티기', spike: '급등 되돌림', throttle: '매수 한도', deploy: '적립금 바로 투자', rebal: '리밸런스 시점', target: '목표 기준',
   confirm: '확인 일수', settle: '결제 대기', 'rsi-sell': 'RSI 과열 매도', 'rsi-buy': 'RSI 식으면 매수', 'dca-in': '나눠 사기', 'dca-out': '나눠 옮기기', bodyguard: '버블 보험' };
 const SSF_PER_KO = { weekly: '매주', monthly: '매달', quarterly: '매 분기', yearly: '매년' };

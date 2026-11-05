@@ -6,8 +6,8 @@ const SS_TICK = (v) => (v === 'cash' ? '현금' : String(v).toUpperCase());
 const ssRange = (a, b, s) => { const o = []; for (let v = a; v <= b + 1e-9; v += s) o.push(+v.toFixed(4)); return o; };
 const ssOpts = (vals, lab) => vals.map((v) => [String(v), lab ? lab(v) : String(v)]);
 
-const SS_ASSET_OPTS9 = ['tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'qqq', 'spy'];
-const SS_PARK_OPTS = ['cash', 'qqq', 'spy', 'qld', 'tqqq', 'sso', 'spxl', 'sqqq'];
+const SS_ASSET_OPTS9 = ['tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'qqq', 'spy', 'soxl', 'soxx'];   // soxl·soxx 2026-11-05 맨 뒤에 추가(종목 칸 모두 같음 · 앞 순서 그대로)
+const SS_PARK_OPTS = ['cash', 'qqq', 'spy', 'qld', 'tqqq', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'];
 const SS_RATE_OPTS = ssOpts([...ssRange(0, 13, 0.5), 14, 15, 16, 18, 20], (v) => (+v).toFixed(1) + '%');
 const SS_COST_OPTS = ssOpts([0, 0.01, 0.02, 0.03, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 0.75, 1], (v) => v + '%');
 const SS_WIN_OPTS = ssOpts(ssRange(10, 300, 10));
@@ -37,7 +37,7 @@ const SS_P9 = [
 // SMA (이동평균 추세)
 const SS_PSMA = [
   { k: 'ul', def: 'tqqq', opts: SS_ASSET_OPTS9.map((v) => [v, SS_TICK(v)]) },
-  { k: 'sig', def: 'qqq', opts: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq'].map((v) => [v, SS_TICK(v)]) },
+  { k: 'sig', def: 'qqq', opts: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'].map((v) => [v, SS_TICK(v)]) },
   { k: 'win', def: '200', opts: SS_WIN_OPTS },
   { k: 'eb', def: '0', opts: SS_BUF_OPTS },
   { k: 'xb', def: '0', opts: SS_BUF_OPTS },
@@ -48,17 +48,17 @@ const SS_PSMA = [
   { k: 'oh', def: '90', opts: [...ssOpts(ssRange(10, 90, 5), (v) => v + ' 이상'), ['0', '끔 — 강제 매도 안 함']] },
   { k: 'coolw', def: '7', opts: ssOpts(ssRange(2, 30, 1)) },
   { k: 'cool', def: '80', opts: [...ssOpts(ssRange(10, 90, 5), (v) => v + ' 미만'), ['0', '수준 상관없이 (끔)']] },
-  { k: 'out', def: 'cash', opts: ['cash', 'qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq'].map((v) => [v, SS_TICK(v)]) },
+  { k: 'out', def: 'cash', opts: ['cash', 'qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'].map((v) => [v, SS_TICK(v)]) },
   { k: 'cr', def: '4', opts: SS_RATE_OPTS },
   { k: 'din', def: '15', opts: SS_DAYS_OPTS },
   { k: 'dout', def: '15', opts: SS_DAYS_OPTS },
   { k: 'cost', def: '0.02', opts: SS_COST_OPTS },
-  { k: 'bga', def: 'tqqq', opts: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq'].map((v) => [v, SS_TICK(v)]) },
+  { k: 'bga', def: 'tqqq', opts: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'].map((v) => [v, SS_TICK(v)]) },
   { k: 'bg', def: '40', opts: [...ssOpts(ssRange(5, 100, 5), (v) => '+' + v + '%'), ['0', '끔']] },
   { k: 'bgw', def: '200', opts: SS_WIN_OPTS },
 ];
 
-const SS_PBH = [{ k: 'ul', def: 'tqqq', opts: ['tqqq', 'qld', 'qqq', 'spy', 'sso', 'spxl', 'sqqq'].map((v) => [v, SS_TICK(v)]) }];
+const SS_PBH = [{ k: 'ul', def: 'tqqq', opts: ['tqqq', 'qld', 'qqq', 'spy', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'].map((v) => [v, SS_TICK(v)]) }];
 // 현금 복리: r = 금리 슬라이더 위치(0~1000, 기본 200 = 4%)
 const SS_PINV = [{ k: 'r', def: '200', opts: null }];
 

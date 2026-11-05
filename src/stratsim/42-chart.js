@@ -18,7 +18,7 @@ const SS_CEVT = {  // 사용자 전략 거래 표시
   rebalance: { color: '#b06000', shape: 'square', label: '비중 조정' },
 };
 // 표시 테두리 = 거래한 종목
-const SS_ASSET_STROKE = { tqqq: '#0040ff', qqq: '#ff8c00', spy: '#a020f0', qld: '#00b3e6', sso: '#ff1493', spxl: '#6d4c2f', sqqq: '#000000', cash: '#5a6472' };
+const SS_ASSET_STROKE = { tqqq: '#0040ff', qqq: '#ff8c00', spy: '#a020f0', qld: '#00b3e6', sso: '#ff1493', spxl: '#6d4c2f', sqqq: '#000000', soxl: '#00a37a', soxx: '#8a6d00', cash: '#5a6472' };
 
 // 사용자 전략 기록의 action 글 → 표시 종류 (앞머리로 먼저, 없으면 글 안에 든 낱말로)
 const SS_KIND_BY_PREFIX = [

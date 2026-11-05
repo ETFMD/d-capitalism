@@ -13331,7 +13331,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
       <div class="g-grid">
         <article class="g-card"><h3>기본 설정 한눈에</h3><ul class="g-list">
 <li><b>원금 · 기간</b>: $100,000 · 전체 기간(모든 지표가 처음 갖춰지는 2010년 12월 22일부터 최근 거래일까지 — SOXL 상장 2010년 3월 11일 뒤 200거래일)</li>
-<li><b>자료 · 계산</b>: 실전 — 상장 뒤 실제 일봉, 1주 단위로만 사고팔아요 (투자전략 시뮬레이터 자료에는 SOXL·SOXX가 없어 '검증용' 자료 칸은 없어요)</li>
+<li><b>자료 · 계산</b>: 실전 — 상장 뒤 실제 일봉, 1주 단위로만 사고팔아요 ('자료 · 계산' 칸에서 상장 전 포함 · 투자전략 시뮬레이터 검증용도 고를 수 있어요)</li>
 <li><b>신호 → 체결</b>: 같은 날 종가 — 그날 종가로 판단해 그 종가에 사고팔아요</li>
 <li><b>신호</b>: SOXX 종가 vs SOXX 200일 이동평균(단순 평균) · 사는 종목 SOXL · 살 때 완충 0% · 팔 때 완충 0.8%(평균보다 0.8% 넘게 아래로 마감해야 팖) · 신호 확인 0일(바로) · 거래 뒤 1거래일 대기</li>
 <li><b>RSI</b>: 과열 매도 = SOXX 9일 RSI 90 이상 · 재진입 = SOXX 7일 RSI 80 미만일 때만</li>
@@ -33443,12 +33443,12 @@ window.dcAdmin = (function () {
 ════════════════════════════════════════════════════════════ */
 var SMB = (function () {
   'use strict';
-  var SIM = ['tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq'];          /* 시뮬레이터 SS_ASSETS 와 같은 순서 (팔기·평가 순서가 같아야 소수점까지 같음) */
-  /* 시뮬레이터에 없는 종목 — 실제 일봉(data/etfcagr.json)으로만 씀 ('SOXL SMA 200 백테스트' /soxl-sma200/ · 2026-11-05)
-     · 시뮬레이터 자료·선택지(OPTS)·앞 7개 종목 순서는 그대로 두고 뒤에만 붙임 → 앞 7개만 쓰는 설정(TQQQ 화면)은 예전과 소수점까지 같은 값
-       (쓰지 않는 종목은 늘 보유 0 이라 팔기·평가·양도세·분배금 순서에 끼지 않음 — tests/sma200_test.cjs 가 확인) */
+  /* 종목 = 시뮬레이터 SS_ASSETS 와 같은 순서 (팔기·평가 순서가 같아야 소수점까지 같음)
+     · SOXL·SOXX(EXT)는 2026-11-05 맨 뒤에 붙임 — 처음엔 실제 일봉만('SOXL SMA 200 백테스트' /soxl-sma200/), 같은 날 투자전략 시뮬레이터에도 추가(prices.csv 열 · 선택지)
+     · 앞 7개만 쓰는 설정(TQQQ 화면)은 예전과 소수점까지 같은 값 (쓰지 않는 종목은 늘 보유 0 이라 팔기·평가·양도세·분배금 순서에 끼지 않음 — tests/sma200_test.cjs 가 확인) */
   var EXT = ['soxl', 'soxx'];
-  var ASSETS = SIM.concat(EXT);
+  var ASSETS = ['tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq'].concat(EXT);
+  var SIM = ASSETS.slice();          /* 시뮬레이터 자료(prices.csv)에 있는 종목 = 전부 */
   var UNLEV = { tqqq: 'qqq', qld: 'qqq', sso: 'spy', spxl: 'spy', qqq: 'qqq', spy: 'spy', sqqq: 'qqq', soxl: 'soxx', soxx: 'soxx' };
   var DED = 2500000, RATE = 0.22, Y = 365.25;
   /* 투자전략 시뮬레이터 라이브러리 #43 'SMA 200' 프리셋 (src/stratsim/30-library.js) */
@@ -33462,24 +33462,23 @@ var SMB = (function () {
   var WIN = opts(rng(10, 300, 10));
   var CONF = [['0', '0 (바로)'], ['2', '2'], ['3', '3'], ['5', '5'], ['10', '10']];
   var OPTS = {
-    sig: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq'].map(function (v) { return [v, tk(v)]; }),
+    sig: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'].map(function (v) { return [v, tk(v)]; }),
     win: WIN,
-    ul: ['tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'qqq', 'spy'].map(function (v) { return [v, tk(v)]; }),
+    ul: ['tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'qqq', 'spy', 'soxl', 'soxx'].map(function (v) { return [v, tk(v)]; }),
     eb: BUF, xb: BUF, cb: CONF, cs: CONF,
     settle: [['0', '0 (바로)'], ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']],
     ohw: opts(rng(2, 30, 1)), oh: opts(rng(10, 90, 5), function (v) { return v + ' 이상'; }).concat([['0', '끔 — 강제 매도 안 함']]),
     coolw: opts(rng(2, 30, 1)), cool: opts(rng(10, 90, 5), function (v) { return v + ' 미만'; }).concat([['0', '수준 상관없이 (끔)']]),
-    out: ['cash', 'qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq'].map(function (v) { return [v, tk(v)]; }),
+    out: ['cash', 'qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'].map(function (v) { return [v, tk(v)]; }),
     cr: opts(rng(0, 13, 0.5).concat([14, 15, 16, 18, 20]), function (v) { return (+v).toFixed(1) + '%'; }),
     din: DAYS, dout: DAYS,
     cost: opts([0, 0.01, 0.02, 0.03, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 0.75, 1], function (v) { return v + '%'; }),
-    bga: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq'].map(function (v) { return [v, tk(v)]; }),
+    bga: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'].map(function (v) { return [v, tk(v)]; }),
     bg: opts(rng(5, 100, 5), function (v) { return '+' + v + '%'; }).concat([['0', '끔']]),
     bgw: WIN
   };
-  /* 받을 수 있는 값 = 시뮬레이터 선택지(OPTS) + 종목 칸(신호·사는 종목·시장 밖·버블 기준)에 EXT 종목 — 화면마다 보일 종목은 화면이 고름 */
-  var XOPTS = {}, TK = { sig: 1, ul: 1, out: 1, bga: 1 };
-  Object.keys(OPTS).forEach(function (k) { XOPTS[k] = TK[k] ? OPTS[k].concat(EXT.map(function (v) { return [v, tk(v)]; })) : OPTS[k]; });
+  /* 받을 수 있는 값 = 시뮬레이터 선택지(OPTS — 2026-11-05 부터 SOXL·SOXX 포함) — 화면마다 보일 종목은 화면이 고름(C.tk) · XOPTS 는 예전 이름(같은 것) */
+  var XOPTS = OPTS;
   /* 받을 수 없는 값은 프리셋 값으로 (시뮬레이터 ssCleanParams 와 같은 규칙) · base = 빈 칸을 채울 프리셋(없으면 라이브러리 'SMA 200' — SOXL 화면은 자기 기본값) */
   function clean(raw, base) {
     var out = {}, k, B = base || PRESET; for (k in PRESET) out[k] = B[k] != null ? String(B[k]) : PRESET[k];
@@ -33769,9 +33768,9 @@ var SMB = (function () {
   }
 
   /* ── 자료 만들기 ── */
-  /* 시뮬레이터 자료 data/stratsim/prices.csv (날짜,qqq,tqqq,spy,qld,sso,spxl,sqqq) — 시뮬레이터 ssParsePrices 와 같은 규칙(tqqq 칸이 빈 날은 뺌 · 다른 빈칸은 0) */
+  /* 시뮬레이터 자료 data/stratsim/prices.csv (날짜,qqq,tqqq,spy,qld,sso,spxl,sqqq,soxl,soxx) — 시뮬레이터 ssParsePrices 와 같은 규칙(tqqq 칸이 빈 날은 뺌 · 다른 빈칸은 0 · 7열 예전 파일이면 soxl·soxx 0) */
   function fromCsv(text) {
-    var d = [], px = { tqqq: [], qqq: [], spy: [], qld: [], sso: [], spxl: [], sqqq: [] }, REST = ['spy', 'qld', 'sso', 'spxl', 'sqqq'];
+    var d = [], px = { tqqq: [], qqq: [], spy: [], qld: [], sso: [], spxl: [], sqqq: [], soxl: [], soxx: [] }, REST = ['spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'];
     String(text).split(/\r?\n/).forEach(function (ln) {
       var c0 = ln.charCodeAt(0); if (!(c0 >= 48 && c0 <= 57)) return;
       var c = ln.split(','); if (c[2] == null || c[2] === '') return;
@@ -34456,20 +34455,22 @@ function S2PAGE(C) {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window[C.render]); else setTimeout(window[C.render], 0);
   window[C.debug] = { S: function () { return S; }, last: function () { return LAST; }, run: run, dist: function () { return DIST; }, opts: function (D) { return engOpts(D); } };
 }
-/* 화면마다 다른 것 — TQQQ 화면(S2CFG)은 공통화 전과 같은 값 · 종목 칸 선택지는 시뮬레이터 편집 창 그대로 */
+/* 화면마다 다른 것 — TQQQ 화면(S2CFG)은 공통화 전과 같은 값 · 종목 칸 선택지는 시뮬레이터 편집 창의 원래 7종목 그대로
+   (2026-11-05 시뮬레이터에 SOXL·SOXX 가 들어왔지만 TQQQ 화면 선택지는 바꾸지 않음 — SOXL 은 'SOXL SMA 200 백테스트' 화면에서) */
 if (typeof SMB !== 'undefined') {
+  var T7 = ['tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq'], only7 = function (k) { return SMB.OPTS[k].map(function (o) { return o[0]; }).filter(function (v) { return v === 'cash' || T7.indexOf(v) >= 0; }); };
   var S2CFG = { id: 's2', page: 'page-sma200', render: 's2Render', debug: 'S2debug', csv: 'sma200-backtest', mig: true,
-    modes: ['real', 'pre', 'sim'], sim: SMB.SIM, real: ['tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl'], need: ['qqq', 'tqqq'], def: {},
-    tk: { sig: SMB.OPTS.sig.map(function (o) { return o[0]; }), ul: SMB.OPTS.ul.map(function (o) { return o[0]; }), out: SMB.OPTS.out.map(function (o) { return o[0]; }), bga: SMB.OPTS.bga.map(function (o) { return o[0]; }) },
+    modes: ['real', 'pre', 'sim'], sim: T7, real: ['tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl'], need: ['qqq', 'tqqq'], def: {},
+    tk: { sig: only7('sig'), ul: only7('ul'), out: only7('out'), bga: only7('bga') },
     title: 'SMA 200 백테스트 <span class="s2-sub">투자전략 시뮬레이터 \'SMA 200\'과 같은 규칙 · 수수료·양도세 포함</span>',
     defTitle: '상장 뒤 실제 일봉 · 라이브러리 SMA 200 조건(팔 때 평균보다 0.8% 아래 · 팔았을 때 SPY · 이자 0% · 나눠 사기 5거래일) · 수수료 0.25% · 양도세 선입선출 · 이자세 15.4%',
     listed: 'TQQQ 상장 2010-02 이후', splitEx: '2010년 TQQQ 약 $0.2' };
   /* SOXL 화면 (사용자 요청 2026-11-05 — 'SMA 200'과 같은 양식으로 TQQQ 대신 SOXL)
      · 기본값 = TQQQ 화면 기본값에서 종목만 바꿈: 신호 QQQ → SOXX(SOXL 이 3배로 따르는 반도체 지수의 1배 ETF) · 사는 종목 TQQQ → SOXL · 버블 기준 TQQQ → SOXL
        (이동평균 200일 · 살 때 0% · 팔 때 0.8% · RSI 9일 90/7일 80 · 결제 대기 1 · 시장 밖 SPY · 이자 0% · 나눠 사기 5·5 · 버블 40%·200일 · 수수료 0.25% · 선입선출 · 이자세 — 그대로)
-     · 자료 칸: 실전 · 상장 전 포함만 (투자전략 시뮬레이터 자료에 SOXL·SOXX 가 없음) · 고를 수 있는 종목 = 실제 일봉이 있는 SOXL·SOXX·QQQ·SPY */
+     · 자료 칸: 실전 · 상장 전 포함 · 투자전략 시뮬레이터 검증용(2026-11-05 시뮬레이터 자료에 SOXL·SOXX 열이 생겨 TQQQ 화면과 같은 3가지) · 고를 수 있는 종목 = SOXL·SOXX·QQQ·SPY */
   var SXCFG = { id: 'sx', page: 'page-soxl200', render: 'sxRender', debug: 'SXdebug', csv: 'soxl-sma200-backtest', mig: false,
-    modes: ['real', 'pre'], sim: [], real: ['soxl', 'soxx', 'qqq', 'spy'], need: ['soxx', 'soxl'], def: { sig: 'soxx', ul: 'soxl', bga: 'soxl' },
+    modes: ['real', 'pre', 'sim'], sim: ['soxl', 'soxx', 'qqq', 'spy'], real: ['soxl', 'soxx', 'qqq', 'spy'], need: ['soxx', 'soxl'], def: { sig: 'soxx', ul: 'soxl', bga: 'soxl' },
     tk: { sig: ['soxx', 'soxl', 'qqq', 'spy'], ul: ['soxl', 'soxx'], out: ['cash', 'spy', 'qqq', 'soxx'], bga: ['soxl', 'soxx', 'qqq', 'spy'] },
     title: 'SOXL SMA 200 백테스트 <span class="s2-sub">\'SMA 200 백테스트\'와 같은 규칙 · SOXX 200일 평균 → SOXL · 수수료·양도세 포함</span>',
     defTitle: '상장 뒤 실제 일봉 · SOXX 200일 평균 → SOXL(팔 때 평균보다 0.8% 아래 · 팔았을 때 SPY · 이자 0% · 나눠 사기 5거래일 · 버블 보험 SOXL 200일 +40%) · 수수료 0.25% · 양도세 선입선출 · 이자세 15.4%',

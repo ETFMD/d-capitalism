@@ -318,7 +318,7 @@ function ssRun9(o) {
   };
   const bh = {}, bhS = {};
   // TQQQ·QQQ 는 가격이 0인 기간도 적립을 셈(원본과 같게), 나머지는 그 기간 가격이 있어야
-  [['tqqq', false], ['qqq', false], ['spy', true], ['qld', true], ['sso', true], ['spxl', true], ['sqqq', true]].forEach(([a, need]) => {
+  [['tqqq', false], ['qqq', false], ['spy', true], ['qld', true], ['sso', true], ['spxl', true], ['sqqq', true], ['soxl', true], ['soxx', true]].forEach(([a, need]) => {
     const r = holdOnly(SS_COL[a], need);
     bh[a] = r.pts; bhS[a] = r.smp;
   });
@@ -385,7 +385,7 @@ function ssRunSma(o) {
   let pend = state, pendN = 0;
   let bg = bubbleState(r0[bgCol] || 0, bgSma ? bgSma[a] : null);
   let byBubble = bg === 'gtfo';
-  const sh = { tqqq: 0, qqq: 0, spy: 0, qld: 0, sso: 0, spxl: 0, sqqq: 0 };
+  const sh = { tqqq: 0, qqq: 0, spy: 0, qld: 0, sso: 0, spxl: 0, sqqq: 0, soxl: 0, soxx: 0 };
   let cash = initial, invested = initial, lastAmt = 0;
   const px = (row, k) => { const c = SS_COL[k]; return c != null ? (row[c] || 0) : 0; };
   let tgt = wantAsset(state, bg);
@@ -393,7 +393,7 @@ function ssRunSma(o) {
   let ease = 0, lastSell = a - 1e9, lastBuy = a - 1e9;
   const value = (row) => { let v = 0; for (const k of SS_ASSETS) if (sh[k] > 0) v += sh[k] * (px(row, k) || 0); return v + cash; };
   const biggest = (row) => { let best = 'cash', bv = cash; for (const k of SS_ASSETS) if (sh[k] > 0) { const v = sh[k] * (px(row, k) || 0); if (v > bv) { bv = v; best = k; } } return best; };
-  const shSum = () => sh.tqqq + sh.qqq + sh.spy + sh.qld + sh.sso + sh.spxl + sh.sqqq;
+  const shSum = () => sh.tqqq + sh.qqq + sh.spy + sh.qld + sh.sso + sh.spxl + sh.sqqq + sh.soxl + sh.soxx;
   const holding = () => { const h = {}; for (const k of SS_ASSETS) if (sh[k] > 0) h[k] = sh[k]; return h; };
   let held = biggest(r0);
   const points = [{ date: r0[0], value: value(r0), state }];

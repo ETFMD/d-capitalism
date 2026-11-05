@@ -442,7 +442,7 @@ function ssCParamLabel(sp, v) { const m = ssCParamOpts(sp).find((o) => String(o.
 function ssCustomPanelHtml(cfg, m, cw) {
   const res = SB.res[cfg.id], err = res && res.error, schema = (res && res.schema) || [];
   let h = '<div class="ss-wip">⚠ 사용자 전략 기능은 아직 다듬는 중이라 결과가 바뀔 수 있습니다.</div>' + ssColorBar()
-    + '<div class="ss-note2">전략 코드가 읽을 수 있는 종목: <code>tqqq</code> <code>qld</code> <code>qqq</code> <code>spy</code> <code>sso</code> <code>spxl</code> <code>sqqq</code>(일별 종가) + <code>nfci</code>(금융 여건 지수). 아무 종목이나 규칙에 쓸 수 있습니다.</div>'
+    + '<div class="ss-note2">전략 코드가 읽을 수 있는 종목: <code>tqqq</code> <code>qld</code> <code>qqq</code> <code>spy</code> <code>sso</code> <code>spxl</code> <code>sqqq</code> <code>soxl</code> <code>soxx</code>(일별 종가 · SOXL·SOXX 는 1994-05-04 부터) + <code>nfci</code>(금융 여건 지수). 아무 종목이나 규칙에 쓸 수 있습니다.</div>'
     + '<button type="button" id="ss-cedit" class="ss-btn ss-ceditb">전략 고치기</button>';
   if (cfg.desc) h += '<div class="ss-desc">' + ssEsc(cfg.desc) + '</div>';
   if (err) h += '<div class="ss-err"><b>실행하지 못했습니다:</b> ' + ssEsc(err) + ' <span class="ss-mut">— \'전략 고치기\'로 코드를 고쳐 주세요.</span></div>';

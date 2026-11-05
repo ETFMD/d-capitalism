@@ -30,7 +30,12 @@ const pick = a => a[Math.floor(rnd() * a.length)];
   /* ── ① 시뮬레이터와 같게 ── */
   const Dsim = SMB.fromCsv(fs.readFileSync(path.join(ROOT, 'data', 'stratsim', 'prices.csv'), 'utf8'));
   check('시뮬레이터 자료 달력 = 시뮬레이터', Dsim.d.length === DS.days.length && Dsim.d.every((x, i) => x === DS.days[i].date));
-  check('시뮬레이터 자료 종목 = SMB.SIM (SOXL·SOXX 는 실제 일봉만)', JSON.stringify(Object.keys(Dsim.px).sort()) === JSON.stringify(SMB.SIM.slice().sort()) && JSON.stringify(SMB.ASSETS) === JSON.stringify(SMB.SIM.concat(SMB.EXT)), [Object.keys(Dsim.px), SMB.ASSETS]);
+  check('시뮬레이터 자료 종목 = SMB.SIM = 시뮬레이터 SS_ASSETS (SOXL·SOXX 2026-11-05 맨 뒤 추가)', JSON.stringify(Object.keys(Dsim.px).sort()) === JSON.stringify(SMB.SIM.slice().sort()) && JSON.stringify(SMB.ASSETS) === JSON.stringify(SMB.SIM) &&
+    JSON.stringify(SMB.ASSETS) === JSON.stringify(M.SS_ASSETS) && JSON.stringify(SMB.EXT) === '["soxl","soxx"]' && SMB.ASSETS.slice(-2).join() === 'soxl,soxx', [Object.keys(Dsim.px), SMB.ASSETS, M.SS_ASSETS]);
+  {   /* SOXL·SOXX 열: 1994-05-04(필라델피아 반도체 지수 첫날)부터 값 · 그 전은 0 · 빈 날 없음 */
+    const f = k => Dsim.px[k].findIndex(v => v > 0);
+    check('시뮬레이터 자료 SOXL·SOXX: 1994-05-04 부터 · 그 뒤 빈 날 없음', ['soxl', 'soxx'].every(k => Dsim.d[f(k)] === '1994-05-04' && Dsim.px[k].slice(f(k)).every(v => v > 0)), ['soxl', 'soxx'].map(k => Dsim.d[f(k)]));
+  }
   for (const k of SMB.SIM) check('시뮬레이터 자료 가격 ' + k, Dsim.px[k].every((v, i) => v === DS.days[i][k] || (Number.isNaN(v) && Number.isNaN(DS.days[i][k]))));
   const NP = FULL ? 3000 : 700;
   let wF = 0, wE = 0, wD = 0, n1 = 0;
@@ -161,7 +166,7 @@ const pick = a => a[Math.floor(rnd() * a.length)];
   };
   const runs = recheck(D, fx, FULL ? 1200 : 250, t => {
     const p = {}; for (const k in SMB.OPTS) p[k] = rnd() < 0.6 ? SMB.PRESET[k] : pick(SMB.OPTS[k])[0];
-    for (const k of ['sig', 'ul', 'out', 'bga']) if (p[k] === 'sqqq') p[k] = SMB.PRESET[k];
+    for (const k of ['sig', 'ul', 'out', 'bga']) if (p[k] === 'sqqq' || p[k] === 'soxl' || p[k] === 'soxx') p[k] = SMB.PRESET[k];   /* TQQQ 쪽 실제 일봉 자료(D)에 없는 종목 */
     if (t % 4 === 0) Object.assign(p, SMB.PRESET);
     return p;
   }, '');
@@ -241,7 +246,7 @@ const pick = a => a[Math.floor(rnd() * a.length)];
     };
     simDates(D, fx, FULL ? 800 : 200, SMB.PRESET, t => {
       const p = {}; for (const k in SMB.OPTS) p[k] = rnd() < 0.5 ? SMB.PRESET[k] : pick(SMB.OPTS[k])[0];
-      for (const k of ['sig', 'ul', 'out', 'bga']) if (p[k] === 'sqqq') p[k] = SMB.PRESET[k];
+      for (const k of ['sig', 'ul', 'out', 'bga']) if (p[k] === 'sqqq' || p[k] === 'soxl' || p[k] === 'soxx') p[k] = SMB.PRESET[k];   /* TQQQ 쪽 실제 일봉 자료(D)에 없는 종목 */
       if (t % 3 === 0) p.settle = pick(['2', '3', '4', '5']);
       return p;
     }, '');
@@ -278,12 +283,12 @@ const pick = a => a[Math.floor(rnd() * a.length)];
        · 화면 설정(SXCFG)을 원본에서 그대로 꺼내 씀 → 종목·기본값을 바꾸면 여기서도 그대로 검사
        · 자료(SOXL·SOXX·SPY·QQQ 실제 일봉) · 기본값 첫 시작 가능일 · SOXL·SOXX 를 더해도 TQQQ 쪽 결과 그대로 · 실전·세금 독립 검산(②) · 실전 = 시뮬 방식 날짜(⑤) */
   const ia = src.indexOf('var SXCFG = '), SX = ia < 0 ? null : new Function('return ' + src.slice(ia + 12, src.indexOf('};', ia) + 1))();
-  check('SXCFG 를 원본에서 꺼냄 (종목 · 기본값)', !!SX && SX.id === 'sx' && SX.def.ul === 'soxl' && SX.def.sig === 'soxx' && SX.def.bga === 'soxl' && JSON.stringify(SX.modes) === '["real","pre"]', SX);
+  check('SXCFG 를 원본에서 꺼냄 (종목 · 기본값)', !!SX && SX.id === 'sx' && SX.def.ul === 'soxl' && SX.def.sig === 'soxx' && SX.def.bga === 'soxl' && JSON.stringify(SX.modes) === '["real","pre","sim"]', SX);
   if (SX) {
     const PX = Object.assign({}, SMB.PRESET, { out: 'spy', cr: '0', din: '5', dout: '5', xb: '0.8' }, SX.def), TKX = SX.tk;
     check('SOXL 화면 종목은 모두 엔진이 받는 값 · 실제 일봉 있음', ['sig', 'ul', 'out', 'bga'].every(k => TKX[k].every(v => SMB.XOPTS[k].some(o => o[0] === v) && (v === 'cash' || SX.real.indexOf(v) >= 0 && J.series[v.toUpperCase()]))), TKX);
-    check('clean: SOXL·SOXX 받음 · 빈 칸은 base · 시뮬레이터 선택지(OPTS)엔 없음', SMB.clean({ ul: 'soxl', sig: 'soxx' }).ul === 'soxl' && SMB.clean({}, PX).bga === 'soxl' && SMB.clean({ ul: 'xx' }, PX).ul === 'soxl' &&
-      SMB.clean({ ul: 'xx' }).ul === 'tqqq' && !SMB.OPTS.ul.some(o => o[0] === 'soxl'));
+    check('clean: SOXL·SOXX 받음 · 빈 칸은 base · 시뮬레이터 선택지(OPTS)에도 있음(2026-11-05)', SMB.clean({ ul: 'soxl', sig: 'soxx' }).ul === 'soxl' && SMB.clean({}, PX).bga === 'soxl' && SMB.clean({ ul: 'xx' }, PX).ul === 'soxl' &&
+      SMB.clean({ ul: 'xx' }).ul === 'tqqq' && SMB.OPTS.ul.some(o => o[0] === 'soxl') && SMB.XOPTS === SMB.OPTS);
     const XS = {}; for (const k of SX.real) XS[k] = MBT.fromCagr(J.series[k.toUpperCase()]);
     const DX = SMB.fromSeries(XS), NX = DX.d.length, fxX = MBT.fxFor(DX.d, Fx);
     check('SOXL 자료: 상장 뒤 빠진 날 0 · 달력 밖 날 0', DX.gaps.length === 0 && DX.extra.length === 0, [DX.gaps.slice(0, 5), DX.extra.slice(0, 5)]);
