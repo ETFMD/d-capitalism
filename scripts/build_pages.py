@@ -762,10 +762,19 @@ def main():
     if re.sub(r'<lastmod>[^<]*</lastmod>', '', old) != re.sub(r'<lastmod>[^<]*</lastmod>', '', sitemap):
         write_if_changed('sitemap.xml', sitemap)          # 주소 목록이 바뀔 때만 (날짜만 바뀌는 커밋 방지)
     write_if_changed('robots.txt', f'User-agent: *\nAllow: /\nDisallow: /src/\nDisallow: /auth/\nDisallow: /saved/\n\nSitemap: {SITE}sitemap.xml\n')
+    # 주소를 바꾼 도구: 예전 주소(routes.json "moved")로 들어오면 지금 주소로 · 나머지는 홈으로
+    moved = {k: v for k, v in CFG.get('moved', {}).items() if not k.startswith('_')}
+    for k, v in moved.items():
+        if not re.fullmatch(r'[a-z0-9-]+', k) or k in paths:
+            sys.exit(f'routes.json moved: 예전 주소 {k} 가 형식이 틀리거나 아직 쓰는 주소')
+        if v not in paths:
+            sys.exit(f'routes.json moved: {k} → {v} 인데 {v} 가 routes 에 없음')
+    go = (f'var M = {json.dumps(moved, ensure_ascii=False)}, p = location.pathname.replace(/^\\/+|\\/+$/g, \'\'); '
+          f'location.replace({json.dumps(SITE)} + (M[p] ? M[p] + \'/\' + location.search + location.hash : \'\'));') if moved else f'location.replace({json.dumps(SITE)});'
     write_if_changed('404.html', f'''<!DOCTYPE html>
 <html lang="ko"><head><meta charset="UTF-8"><meta name="robots" content="noindex">
 <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>페이지를 찾을 수 없습니다 | {esc(BRAND)}</title>
-<script>location.replace({json.dumps(SITE)});</script></head>
+<script>{go}</script></head>
 <body style="font-family:sans-serif;background:#111;color:#ddd;text-align:center;padding:60px 16px;">
 <p>페이지를 찾을 수 없습니다. <a href="{esc(SITE)}" style="color:#3182f6;">{esc(BRAND)} 홈으로 이동</a></p></body></html>
 ''')

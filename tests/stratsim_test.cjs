@@ -80,6 +80,21 @@ for (const kind of ['9sig', 'sma']) {
     document: { getElementById() { return null; }, addEventListener() {}, querySelector() { return null; }, querySelectorAll() { return []; } }, window: { addEventListener() {} } };
   vm.createContext(lctx);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'stratsim', '30-library.js'), 'utf8') + ';globalThis.__L = { lib: SS_LIBRARY };', lctx);
+  // ⓪ 프리셋 전략(앱 기본 SMA 200 · SOXL SMA 160 · 9sig · 과최적화 후보 …)의 손잡이가 모두 시뮬레이터 선택지 안 — 밖이면 '써 보기'에서 말없이 기본값으로 바뀜 · 번호 겹침 없음
+  {
+    const all = lctx.__L.lib, pre = all.filter((e) => e.preset);
+    for (const e of pre) {
+      const c = M.ssCleanParams(e.preset.type, e.preset.params), bad = Object.keys(e.preset.params).filter((k) => c[k] !== String(e.preset.params[k]));
+      n++;
+      if (bad.length) fail('라이브러리 #' + e.n + ' ' + e.name + ': 선택지 밖 손잡이 ' + bad.map((k) => k + '=' + e.preset.params[k] + '→' + c[k]).join(', '));
+    }
+    const ns = all.map((e) => e.n);
+    n++;
+    if (new Set(ns).size !== ns.length) fail('라이브러리 번호가 겹침: ' + ns.filter((v, i) => ns.indexOf(v) !== i).join());
+    const sx = all.filter((e) => e.name === 'SOXL SMA 160');
+    n++;
+    if (sx.length !== 1 || !sx[0].preset || sx[0].preset.params.ul !== 'soxl' || sx[0].preset.params.sig !== 'soxl' || sx[0].preset.params.win !== '160') fail("라이브러리 'SOXL SMA 160' 프리셋 없음·이상: " + JSON.stringify(sx));
+  }
   const LIB = lctx.__L.lib.filter((e) => e.code);
   const DSd = M.DS.days, ND = DSd.length;
   const data = { dates: DSd.map((d) => d.date), nfci: Array.from(M.DS.nfci) };

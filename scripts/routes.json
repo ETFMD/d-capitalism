@@ -2,6 +2,10 @@
   "_comment": "도구(탭)별 고유 주소·제목·설명. scripts/build_pages.py 가 이 파일로 각 주소의 index.html·sitemap.xml 을 만듭니다. site 는 CNAME 파일(자체 도메인)이 있으면 그 도메인이 우선합니다.",
   "site": "https://d-capitalism.com/",
   "brand": "디코딩 자본주의",
+  "moved": {
+    "_comment": "예전 주소 → 지금 주소 (주소를 바꾼 도구 — 예전 주소로 들어오면 404.html 이 지금 주소로 옮겨 줌 · 지금 주소는 routes 에 있어야 함 · scripts/build_pages.py)",
+    "soxl-sma200": "soxl-sma160"
+  },
   "home": {
     "tab": "home",
     "group": "home",
@@ -351,13 +355,13 @@
       "desc": "QQQ가 200일 이동평균 위면 TQQQ, 아래면 SPY. RSI·버블 보험·나눠 사기 조건과 수수료·해외주식 양도세까지 넣은 백테스트."
     },
     {
-      "path": "soxl-sma200",
+      "path": "soxl-sma160",
       "admin": true,
-      "tab": "soxl200",
+      "tab": "soxl160",
       "group": "invest",
-      "title": "SOXL SMA 200 백테스트 — SOXX 200일선 SOXL 추세 매매 · 수수료·양도세 포함",
-      "short": "SOXL SMA 200 백테스트",
-      "desc": "SOXX가 200일 이동평균 위면 SOXL, 아래면 SPY. RSI·버블 보험·나눠 사기 조건과 수수료·해외주식 양도세까지 넣은 백테스트."
+      "title": "SOXL SMA 160 백테스트 — SOXL 160일선 추세 매매 · 수수료·양도세 포함",
+      "short": "SOXL SMA 160 백테스트",
+      "desc": "SOXL이 160일 평균보다 5% 위면 SOXL, 0.8% 아래면 SPY. RSI·버블 보험·나눠 사기와 수수료·양도세까지 넣은 백테스트."
     },
     {
       "path": "vr",

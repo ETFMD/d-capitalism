@@ -6,7 +6,7 @@
         + 규칙: 실전은 소수 주 없음 · 현금 음수 없음 · 보유하기로 한 날은 1주 값보다 적은 현금만 남음
    · ③ 자료: 실제 일봉 달력(빠진 날 0 · 달력 밖 날 0) · 프리셋 첫 시작 가능일 = 쓰는 지표가 모두 나온 첫날(따로 계산)
    · ④ 도우미: clean(선택지 밖 → 프리셋) · stats(연평균·낙폭 식) · bh(그냥 보유 세전·세후 따로 계산) · plan(매월 첫 거래일 · 끝 20거래일 전) · one = run + stats + bh
-   · ⑥ SOXL 화면(/soxl-sma200/ · 원본 SXCFG): 자료 · 기본값 첫 시작 가능일 · SOXL·SOXX 를 더해도 TQQQ 쪽 결과 그대로 · ②·⑤ 를 SOXL 자료로 한 번 더
+   · ⑥ SOXL 화면(/soxl-sma160/ 'SOXL SMA 160' · 원본 SXCFG): 자료 · 기본값(= 시뮬레이터 라이브러리 'SOXL SMA 160' 손잡이) · 첫 시작 가능일 · SOXL·SOXX 를 더해도 TQQQ 쪽 결과 그대로 · ②·⑤ 를 SOXL 자료로 한 번 더
    실패가 있으면 'FAIL …' 줄과 종료 코드 1 */
 'use strict';
 const fs = require('fs'), path = require('path');
@@ -279,11 +279,24 @@ const pick = a => a[Math.floor(rnd() * a.length)];
     const f0 = SMB.firstValid(D, SMB.PRESET), f1 = SMB.firstValid(D, SMB.PRESET, 1);
     check('하루 늦게: 첫 시작 가능일 = 하루 뒤', f1 === f0 + 1, [D.d[f0], D.d[f1]]);
   }
-  /* ── ⑥ SOXL 자료 — 관리자 'SOXL SMA 200 백테스트'(/soxl-sma200/ · src/index.html SXCFG) ──
+  /* ── ⑥ SOXL 자료 — 관리자 'SOXL SMA 160 백테스트'(/soxl-sma160/ · src/index.html SXCFG · 2026-11-05 이름 SOXL SMA 200 → 160 · 기본값 = 탐색 후보 C) ──
        · 화면 설정(SXCFG)을 원본에서 그대로 꺼내 씀 → 종목·기본값을 바꾸면 여기서도 그대로 검사
        · 자료(SOXL·SOXX·SPY·QQQ 실제 일봉) · 기본값 첫 시작 가능일 · SOXL·SOXX 를 더해도 TQQQ 쪽 결과 그대로 · 실전·세금 독립 검산(②) · 실전 = 시뮬 방식 날짜(⑤) */
   const ia = src.indexOf('var SXCFG = '), SX = ia < 0 ? null : new Function('return ' + src.slice(ia + 12, src.indexOf('};', ia) + 1))();
-  check('SXCFG 를 원본에서 꺼냄 (종목 · 기본값)', !!SX && SX.id === 'sx' && SX.def.ul === 'soxl' && SX.def.sig === 'soxx' && SX.def.bga === 'soxl' && JSON.stringify(SX.modes) === '["real","pre","sim"]', SX);
+  /* 'SOXL SMA 160' 손잡이 (사용자 결정 2026-11-05 — 탐색 후보 C) — 여기 따로 적어 원본(SXCFG.def · 라이브러리 #45)과 대조 */
+  const C160 = { sig: 'soxl', win: '160', ul: 'soxl', eb: '5', xb: '0.8', cb: '5', cs: '5', settle: '1', ohw: '14', oh: '75', coolw: '7', cool: '60', out: 'spy', cr: '0', din: '10', dout: '0', bga: 'soxl', bgw: '250', bg: '75' };
+  const sortJ = o => JSON.stringify(Object.keys(o).sort().map(k => [k, o[k]]));
+  check('SXCFG 를 원본에서 꺼냄 (종목 · 기본값 = SOXL SMA 160 · 저장 판 2 · 이름)', !!SX && SX.id === 'sx' && sortJ(SX.def) === sortJ(C160) && SX.pv === 2 && SX.nm === 'SOXL SMA 160' && SX.page === 'page-soxl160' &&
+    SX.csv === 'soxl-sma160-backtest' && JSON.stringify(SX.modes) === '["real","pre","sim"]' && /^SOXL SMA 160 백테스트 /.test(SX.title), SX);
+  {   /* 투자전략 시뮬레이터 라이브러리 'SOXL SMA 160' 프리셋 = 이 화면 기본값 (손잡이 전부 · 비용만 시뮬레이터 0.02%) · 시뮬레이터 선택지 안의 값 */
+    const vm = require('vm'), lc = { console, Math, Date, JSON, Number, String, Array, Object, Boolean, RegExp, Error, Map, Set, parseFloat, parseInt, isFinite, Infinity, NaN,
+      document: { getElementById() { return null; }, addEventListener() {}, querySelector() { return null; }, querySelectorAll() { return []; } }, window: { addEventListener() {} } };
+    vm.createContext(lc); vm.runInContext(fs.readFileSync(path.join(ROOT, 'src', 'stratsim', '30-library.js'), 'utf8') + ';globalThis.__L = SS_LIBRARY;', lc);
+    const L = lc.__L.filter(e => e.name === 'SOXL SMA 160'), pr = L[0] && L[0].preset, pp = pr ? Object.assign({}, pr.params) : {};
+    const cost = pp.cost; delete pp.cost;
+    check("라이브러리 'SOXL SMA 160' 프리셋 = SOXL 화면 기본값 (손잡이 전부 · 비용 0.02% · 번호 하나뿐 · 선택지 안)", L.length === 1 && pr.type === 'sma' && cost === '0.02' && sortJ(pp) === sortJ(C160) &&
+      lc.__L.filter(e => e.n === L[0].n).length === 1 && sortJ(SMB.clean(pr.params)) === sortJ(Object.assign({}, SMB.PRESET, pr.params)), [L.length, pr]);
+  }
   if (SX) {
     const PX = Object.assign({}, SMB.PRESET, { out: 'spy', cr: '0', din: '5', dout: '5', xb: '0.8' }, SX.def), TKX = SX.tk;
     check('SOXL 화면 종목은 모두 엔진이 받는 값 · 실제 일봉 있음', ['sig', 'ul', 'out', 'bga'].every(k => TKX[k].every(v => SMB.XOPTS[k].some(o => o[0] === v) && (v === 'cash' || SX.real.indexOf(v) >= 0 && J.series[v.toUpperCase()]))), TKX);
@@ -294,11 +307,13 @@ const pick = a => a[Math.floor(rnd() * a.length)];
     check('SOXL 자료: 상장 뒤 빠진 날 0 · 달력 밖 날 0', DX.gaps.length === 0 && DX.extra.length === 0, [DX.gaps.slice(0, 5), DX.extra.slice(0, 5)]);
     check('SOXL 자료: 끝 = 모든 종목의 가장 이른 끝 · TQQQ 쪽 종목 0', DX.d[NX - 1] === Object.values(DX.ends).sort()[0] && ['tqqq', 'qld', 'sso', 'spxl', 'sqqq'].every(k => DX.px[k].every(v => v === 0)), DX.ends);
     {
-      const fv = SMB.firstValid(DX, PX), s200 = SMB.sma(DX.px.soxx, 200), b200 = SMB.sma(DX.px.soxl, 200), r9 = SMB.rsi(DX.px.soxx, 9), r7 = SMB.rsi(DX.px.soxx, 7);
-      let e = -1; for (let i = 0; i < NX; i++) if (s200[i] != null && b200[i] != null && r9[i] != null && r7[i] != null && DX.px.soxl[i] > 0 && DX.px.soxx[i] > 0 && DX.px.spy[i] > 0) { e = i; break; }
-      check('SOXL 기본값 첫 시작 가능일 = 지표가 모두 나온 첫날 (2010-12-22 — 설명서 글과 같음)', fv === e && DX.d[fv] === '2010-12-22' && SMB.knobs(PX).bga === 'soxl' && SMB.knobs(PX).sig === 'soxx', [DX.d[fv], DX.d[e]]);
-      /* 설명서 글(#g-soxl200)의 첫날 = 엔진 첫날 */
-      check('SOXL 설명서 첫날 = 2010년 12월 22일', src.indexOf('모든 지표가 처음 갖춰지는 2010년 12월 22일부터') > 0);
+      const fv = SMB.firstValid(DX, PX), s160 = SMB.sma(DX.px.soxl, 160), b250 = SMB.sma(DX.px.soxl, 250), r14 = SMB.rsi(DX.px.soxl, 14), r7 = SMB.rsi(DX.px.soxl, 7);
+      let e = -1; for (let i = 0; i < NX; i++) if (s160[i] != null && b250[i] != null && r14[i] != null && r7[i] != null && DX.px.soxl[i] > 0 && DX.px.spy[i] > 0) { e = i; break; }
+      const lst = DX.px.soxl.findIndex(v => v > 0);
+      check('SOXL 기본값 첫 시작 가능일 = 지표가 모두 나온 첫날 (2011-03-07 = SOXL 상장 2010-03-11 부터 250번째 거래일 — 설명서 글과 같음)', fv === e && DX.d[fv] === '2011-03-07' && DX.d[lst] === '2010-03-11' && fv - lst === 249 &&
+        SMB.knobs(PX).bga === 'soxl' && SMB.knobs(PX).sig === 'soxl' && SMB.knobs(PX).bgw === 250, [DX.d[fv], DX.d[e], fv - lst]);
+      /* 설명서 글(#g-soxl160)의 첫날 = 엔진 첫날 */
+      check('SOXL 설명서 첫날 = 2011년 3월 7일', src.indexOf('모든 지표가 처음 갖춰지는 2011년 3월 7일부터') > 0 && src.indexOf('SOXL 상장 2010년 3월 11일부터 250번째 거래일') > 0);
     }
     {   /* 자료에 SOXL·SOXX 칸이 있어도(늘 0) TQQQ 쪽 결과 그대로 — 칸을 지운 자료와 끝 금액·날마다 평가금·정리 값·세금이 같음 */
       const strip = Q => { const px = Object.assign({}, Q.px), dv = Q.dv ? Object.assign({}, Q.dv) : null; for (const k of SMB.EXT) { delete px[k]; if (dv) delete dv[k]; } return { d: Q.d, px, dv }; };
@@ -310,8 +325,8 @@ const pick = a => a[Math.floor(rnd() * a.length)];
         if (R1.final === R2.final && R1.liq === R2.liq && R1.taxPaid === R2.taxPaid && R1.eq.every((v, i) => v === R2.eq[i]) && R1.nSell === R2.nSell) same++;
       }
       check('SOXL·SOXX 칸이 있어도 TQQQ 쪽 결과 그대로 (' + tried + '가지)', same === tried, [same, tried]);
-      /* SOXL 설정도 자료에 다른 종목이 더 있어도 같은 날 같은 값 (TQQQ 쪽 실제 일봉을 함께 넣은 큰 자료와 비교 — 달력이 같은 2010-12-22 ~) */
-      const XA = Object.assign({}, X, XS), DA = SMB.fromSeries(XA), a1 = DX.d.indexOf('2010-12-22'), a2 = DA.d.indexOf('2010-12-22');
+      /* SOXL 설정도 자료에 다른 종목이 더 있어도 같은 날 같은 값 (TQQQ 쪽 실제 일봉을 함께 넣은 큰 자료와 비교 — 달력이 같은 기본값 첫날 ~) */
+      const XA = Object.assign({}, X, XS), DA = SMB.fromSeries(XA), a1 = SMB.firstValid(DX, PX), a2 = DA.d.indexOf(DX.d[a1]);
       const fxA2 = MBT.fxFor(DA.d, Fx), oX = { capital: 1e5, mode: 'real', fee: 0.0025, sec: 0.0000206, divTax: 0.15, intTax: 0.154, rows: false };
       const RX = SMB.run(DX, PX, Object.assign({ from: a1, to: NX - 1, tax: { fx: i => fxX[i], method: 'fifo' } }, oX)), RA = SMB.run(DA, PX, Object.assign({ from: a2, to: DA.d.length - 1, tax: { fx: i => fxA2[i], method: 'fifo' } }, oX));
       check('SOXL 설정: 자료에 다른 종목을 더해도 같은 값', DX.d.slice(a1).join() === DA.d.slice(a2).join() && RX.final === RA.final && RX.eq.every((v, i) => v === RA.eq[i]) && RX.liq === RA.liq, [RX.final, RA.final]);
