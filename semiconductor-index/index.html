@@ -285,7 +285,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script>(function(){try{var m=localStorage.getItem("site-theme")||"dark";var l=m==="light"||(m==="auto"&&window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches);document.documentElement.setAttribute("data-theme",l?"light":"dark");}catch(e){}})();</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link rel="stylesheet" href="assets/app.b13882dc17.css">
+<link rel="stylesheet" href="assets/app.db7508f668.css">
 </head>
 <body>
 <div class="wrap">
@@ -614,7 +614,7 @@
       <div class="header-left">
         <span class="badge">SEMICONDUCTOR INDEX</span>
         <h1>SOX와 NYSE <span>반도체 지수 분석</span></h1>
-        <p class="subtitle">SOXQ(필라델피아 반도체 지수 SOX)와 SOXX(NYSE 반도체 지수)가 담은 30개 반도체 기업의 분기·연간 실적과 밸류에이션, 2013년부터 매일 계산한 지수 PER 추이를 한곳에서 봅니다 — 미국장 마감 뒤 매일 자동 갱신</p>
+        <p class="subtitle">SOXQ(필라델피아 반도체 지수 SOX)와 SOXX(NYSE 반도체 지수)가 담은 30개 반도체 기업의 분기·연간 실적과 밸류에이션, 2013년부터 매일 계산한 지수 PER 추이를 한곳에서 봅니다 — 미국 정규장 중에는 실시간 가격으로, 장이 끝나면 종가로 바로 다시 계산</p>
       </div>
     </div>
 
@@ -727,7 +727,7 @@
           <p data-etf="soxq" hidden>KLA·코히런트는 영업이익 항목을 따로 공시하지 않은 기간이 있어 매출 − 매출원가 − 연구개발비 − 판관비로, 큐니티는 여기에 무형자산 상각비를 더 빼서 계산했습니다(구조조정 비용 등은 빠져 실제와 다를 수 있음). 코히런트는 2022년 사명 변경 이전 II-VI(투식스) 시절 공시를 포함합니다. 큐니티는 2025년 11월 듀폰에서 분사해 분사 전 분리 재무(2024년부터)만 있고 시가총액·PER은 상장 이후부터입니다.</p>
           <p>SEC 보고서 표지의 발행주식 수가 1,000배·100만 배로 잘못 들어간 몇 분기(AMD 2012년 6월, 퀄컴 2011년 3·9월, 온세미 2012년 6·9월·2013년 3월)는 앞뒤 분기와 비교해 단위를 바로잡았습니다(시가총액·PER·PBR·배당수익률). 자본이 0에 가까웠던 기간의 ROE·부채비율(예: AMD 2016~2017년)은 계산상 수천~수만 %로 크게 튀니 차트에서 감안해 보세요.</p>
           <p>TSMC의 20-F 순이익은 국제회계기준 수치로, 대만 현지 발표치와 다를 수 있습니다. 투자 결정 전에는 각 회사의 원 공시를 확인하세요.</p>
-          <p><b>자동 갱신.</b> 주가·시가총액·PER·PBR·배당수익률·비중·환율은 미국장 마감 뒤 매일 새 종가로 다시 계산합니다(PER = 최신 주가 ÷ 기준일 EPS). EPS(후행·혼합·선행)와 분기·연간 재무는 화면 위 '자료 기준'에 적힌 EPS 기준일 자료이며, 그 뒤 실적을 발표한 종목은 표와 위 안내에 '실적 발표 · 미반영'으로 표시합니다. 해외 기업의 원화 PBR·배당수익률은 현지 주가 변동으로, 회계 PER은 현지 통화 시가총액 ÷ 순이익으로 다시 계산합니다.</p>
+          <p><b>실시간·자동 갱신.</b> 미국 정규장 중에는 페이지를 연 동안 1분마다 구성 종목의 지금 가격(야후 정규장 가격 · 프리·애프터장 제외)으로 주가·시가총액·PER·PBR·배당수익률·비중·원화 환산을 다시 계산하고, 장이 끝나면 그날 종가로 계산합니다. 확정 자료(차트·기간 표의 바탕)는 미국장 마감 뒤 매일 새 종가로 다시 씁니다. PER = 최신 주가 ÷ 기준일 EPS — EPS(후행·혼합·선행)와 분기·연간 재무는 화면 위에 적힌 EPS 기준일 자료이며, 그 뒤 실적을 발표한 종목은 표와 위 안내에 '실적 발표 · 미반영'으로 표시합니다. 실시간 값의 해외 기업 현지 통화 PBR·배당수익률·회계 PER은 미국 상장 주가의 변화율로 근사합니다.</p>
         </div>
       </details>
     </div>
@@ -779,7 +779,7 @@
           <p data-etf="soxq" hidden><b>빠진 종목.</b> 자일링스·알테라·리니어·브로드컴(옛 법인)·샌디스크·맥심·ARM(옛 상장)·코보·울프스피드(옛 주식)·아젠타 등 상장폐지·인수되거나 주가 이력이 끊긴 회사는 뺐습니다. 이 때문에 2013~2015년은 보유액의 63~77%만으로 계산했고, 빠진 종목의 PER이 나머지와 같다고 가정한 셈입니다. SOXQ 상장 후는 93~100%이며, 가장 오래 빠진 종목은 코보(비중 약 1~2%)입니다.</p>
           <p><b>반올림 오차.</b> Zacks는 액면분할을 반영한 EPS를 소수 둘째 자리로 반올림해 줍니다. 엔비디아(40:1), 브로드컴·램리서치·KLA(10:1)는 초기 EPS가 매우 작아져 오차가 커집니다. 네 종목의 0.10달러 미만 EPS를 모두 ±0.005달러씩 한 방향으로 바꿔 본 결과 2013~2014년 PER이 최대 약 6%, 2016년 약 2%, 2018년 이후 1% 미만 달라졌습니다.</p>
           <p><b>계단 움직임.</b> 마이크론·엔비디아 같은 큰 종목이 실적을 발표하면 4개 분기 창이 한 칸 이동해 PER이 하루에 5~15% 바뀔 수 있습니다. 2025~2026년 마이크론 이익이 급증하면서 이런 날이 많습니다.</p>
-          <p><b>자동 갱신.</b> 미국장 마감 뒤 매일 새 종가로 그날 PER을 이어 계산합니다. 보유 종목은 마지막 보유 내역(SOXX 2026년 9월 30일 · SOXQ 2026년 10월 2일)을 그대로 쓰고, EPS는 기준일 자료로 고정합니다 — 그래서 기준일 뒤 날짜의 PER은 가격 변화만 반영하며, 그 뒤 실적 발표나 지수 정기 변경(3·6·9·12월 셋째 금요일)은 아직 반영되지 않습니다. 해당 날짜는 차트 설명창에 따로 표시합니다.</p>
+          <p><b>실시간·자동 갱신.</b> 미국 정규장 중에는 바구니 종목의 지금 가격으로 오늘 PER을 1분마다 다시 계산해 차트 끝 점(실시간)과 요약 카드에 보여 주고(지금 PER = 마지막 PER × Σ 종목 비중 × 가격 변화율), 장 마감 뒤에는 새 종가로 그날 PER을 이어 계산해 저장합니다. 보유 종목은 마지막 보유 내역(SOXX 2026년 9월 30일 · SOXQ 2026년 10월 2일)을 그대로 쓰고, EPS는 기준일 자료로 고정합니다 — 그래서 기준일 뒤 날짜의 PER은 가격 변화만 반영하며, 그 뒤 실적 발표나 지수 정기 변경(3·6·9·12월 셋째 금요일)은 아직 반영되지 않습니다. 해당 날짜는 차트 설명창에 따로 표시합니다.</p>
           <p><b>자료.</b> 보유 종목: SEC EDGAR(iShares Trust N-Q, NPORT-P), Zacks. EPS: Zacks 실적 발표 이력·컨센서스, Nasdaq 분기 컨센서스. 주가: Yahoo Finance 일별 종가. 참고 차트: History of Market(historyofmarket.com) 섹터 선행 PER.</p>
           <p>투자 판단 전에는 원 자료를 함께 확인하세요.</p>
         </div>
@@ -789,7 +789,7 @@
     <!-- [AUTOSUM:semis] 자동 요약 — 빌드 때 data/semis/summary.json·*_fin.json 으로 채움(scripts/data_facts.py · 자동 갱신) · 원본에는 빈 표시만 -->
     <!--AUTOSUM:semis-->
     <!-- [AUTOSUM] 반도체 지수 요약 — 지금 PER과 구성 종목 — 빌드 때 data/*.json 으로 채움 (scripts/data_facts.py · 자동 갱신) -->
-    <section class="guide idx-note auto-sum" id="asum-semis" aria-labelledby="asum-semis-h"><h2 id="asum-semis-h">반도체 지수 요약 — 지금 PER과 구성 종목</h2><div class="g-card in-data"><h3>SOXX·SOXQ 지수 PER과 구성 종목 <small>2026년 11월 8일 00:28 갱신 · 자동 갱신</small></h3><div class="table-scroll"><table class="g-tbl asum-tbl"><thead><tr><th>지표</th><th class="n">SOXX<br><small>NYSE 반도체 지수</small></th><th class="n">SOXQ<br><small>필라델피아 반도체 지수(SOX)</small></th></tr></thead><tbody><tr><td>후행 PER<br><small>최근 4개 분기 실적</small></td><td class="n">25.9배<br><small>하위 77%</small></td><td class="n">25.6배<br><small>하위 75%</small></td></tr><tr><td>혼합 PER<br><small>최근 2 + 다음 2개 분기</small></td><td class="n">19.0배<br><small>하위 57%</small></td><td class="n">18.8배<br><small>하위 56%</small></td></tr><tr><td>선행 PER<br><small>다음 4개 분기 예상</small></td><td class="n">15.7배<br><small>하위 41%</small></td><td class="n">15.5배<br><small>하위 38%</small></td></tr><tr><td>선행 PER 역대 범위<br><small>2013년 8월~</small></td><td class="n">11.2~33.0배</td><td class="n">11.2~34.5배</td></tr><tr><td>30종목 시가총액</td><td class="n">12.62조 달러<br><small>17,207조 원</small></td><td class="n">11.97조 달러<br><small>16,323조 원</small></td></tr></tbody></table></div><ul class="g-list in-auto"><li>2026년 11월 6일 종가 기준 SOXX(NYSE 반도체 지수) 선행 PER은 15.7배, SOXQ(필라델피아 반도체 지수) 선행 PER은 15.5배입니다. 2013년 8월 이후 거래일 가운데 지금보다 선행 PER이 낮았던 날은 SOXX 41%, SOXQ 38%입니다.</li><li>SOXX 비중 상위 5종목: AMD 9.5%, 엔비디아 8.4%, 브로드컴 7.9%, 마이크론 테크놀로지 7.1%, 인텔 6.2% (5종목 합 39.1%).</li><li>SOXQ 비중 상위 5종목: 엔비디아 12.5%, 브로드컴 9.8%, 마이크론 테크놀로지 7.1%, 텍사스 인스트루먼트 5.2%, 아날로그 디바이스 4.9% (5종목 합 39.5%).</li><li>두 ETF가 서로 다르게 담은 종목 — SOXX에만: SK하이닉스, ASE 테크놀로지, 세레브라스 시스템즈, UMC, ST마이크로일렉트로닉스 · SOXQ에만: 코히런트, 큐니티 일렉트로닉스, 글로벌파운드리스, 래티스 세미컨덕터, 사이타임 (나머지 25종목은 함께 담음).</li><li>SOXX 구성 종목 중 선행 PER이 가장 낮은 곳은 SK하이닉스(3.3배), 마이크론 테크놀로지(3.9배), UMC(11.9배), 가장 높은 곳은 ARM 홀딩스(68.7배), 인텔(39.9배), AMD(35.1배)입니다.</li><li>SOXQ 구성 종목 중 선행 PER이 가장 낮은 곳은 마이크론 테크놀로지(3.9배), NXP 세미컨덕터(13.9배), 마이크로칩 테크놀로지(13.9배), 가장 높은 곳은 ARM 홀딩스(68.7배), 인텔(39.9배), AMD(35.1배)입니다.</li></ul><p class="in-src">자료: SEC 공시(10-K·10-Q·20-F·N-PORT), Zacks·Nasdaq EPS·컨센서스, Yahoo Finance 종가·환율 (data/semis). '하위 N%'는 2013년 8월 이후 거래일 가운데 지금보다 PER이 낮았던 날의 비율입니다. EPS·분기 실적은 2026.11.7 기준이며, 위 표·차트는 페이지를 열 때 최신 자료로 다시 그려집니다.</p></div></section>
+    <section class="guide idx-note auto-sum" id="asum-semis" aria-labelledby="asum-semis-h"><h2 id="asum-semis-h">반도체 지수 요약 — 지금 PER과 구성 종목</h2><div class="g-card in-data"><h3>SOXX·SOXQ 지수 PER과 구성 종목 <small>2026년 11월 8일 02:08 갱신 · 자동 갱신</small></h3><div class="table-scroll"><table class="g-tbl asum-tbl"><thead><tr><th>지표</th><th class="n">SOXX<br><small>NYSE 반도체 지수</small></th><th class="n">SOXQ<br><small>필라델피아 반도체 지수(SOX)</small></th></tr></thead><tbody><tr><td>후행 PER<br><small>최근 4개 분기 실적</small></td><td class="n">25.9배<br><small>하위 77%</small></td><td class="n">25.6배<br><small>하위 75%</small></td></tr><tr><td>혼합 PER<br><small>최근 2 + 다음 2개 분기</small></td><td class="n">19.0배<br><small>하위 57%</small></td><td class="n">18.8배<br><small>하위 56%</small></td></tr><tr><td>선행 PER<br><small>다음 4개 분기 예상</small></td><td class="n">15.7배<br><small>하위 41%</small></td><td class="n">15.5배<br><small>하위 38%</small></td></tr><tr><td>선행 PER 역대 범위<br><small>2013년 8월~</small></td><td class="n">11.2~33.0배</td><td class="n">11.2~34.5배</td></tr><tr><td>30종목 시가총액</td><td class="n">12.62조 달러<br><small>17,207조 원</small></td><td class="n">11.97조 달러<br><small>16,323조 원</small></td></tr></tbody></table></div><ul class="g-list in-auto"><li>2026년 11월 6일 종가 기준 SOXX(NYSE 반도체 지수) 선행 PER은 15.7배, SOXQ(필라델피아 반도체 지수) 선행 PER은 15.5배입니다. 2013년 8월 이후 거래일 가운데 지금보다 선행 PER이 낮았던 날은 SOXX 41%, SOXQ 38%입니다.</li><li>SOXX 비중 상위 5종목: AMD 9.5%, 엔비디아 8.4%, 브로드컴 7.9%, 마이크론 테크놀로지 7.1%, 인텔 6.2% (5종목 합 39.1%).</li><li>SOXQ 비중 상위 5종목: 엔비디아 12.5%, 브로드컴 9.8%, 마이크론 테크놀로지 7.1%, 텍사스 인스트루먼트 5.2%, 아날로그 디바이스 4.9% (5종목 합 39.5%).</li><li>두 ETF가 서로 다르게 담은 종목 — SOXX에만: SK하이닉스, ASE 테크놀로지, 세레브라스 시스템즈, UMC, ST마이크로일렉트로닉스 · SOXQ에만: 코히런트, 큐니티 일렉트로닉스, 글로벌파운드리스, 래티스 세미컨덕터, 사이타임 (나머지 25종목은 함께 담음).</li><li>SOXX 구성 종목 중 선행 PER이 가장 낮은 곳은 SK하이닉스(3.3배), 마이크론 테크놀로지(3.9배), UMC(11.9배), 가장 높은 곳은 ARM 홀딩스(68.7배), 인텔(39.9배), AMD(35.1배)입니다.</li><li>SOXQ 구성 종목 중 선행 PER이 가장 낮은 곳은 마이크론 테크놀로지(3.9배), NXP 세미컨덕터(13.9배), 마이크로칩 테크놀로지(13.9배), 가장 높은 곳은 ARM 홀딩스(68.7배), 인텔(39.9배), AMD(35.1배)입니다.</li></ul><p class="in-src">자료: SEC 공시(10-K·10-Q·20-F·N-PORT), Zacks·Nasdaq EPS·컨센서스, Yahoo Finance 종가·환율 (data/semis). '하위 N%'는 2013년 8월 이후 거래일 가운데 지금보다 PER이 낮았던 날의 비율입니다. EPS·분기 실적은 2026.11.7 기준이며, 위 표·차트는 페이지를 열 때 최신 자료로 다시 그려집니다.</p></div></section>
 <!--/AUTOSUM-->
     <!-- [GUIDE:semis] 보는 법 · 자주 묻는 질문 -->
     <section class="guide" aria-labelledby="g-semis-h">
@@ -810,7 +810,8 @@
 <li><b>재무</b>: 미국 기업은 SEC에 낸 10-K·10-Q(XBRL) 원 공시, 해외 기업은 20-F 공시와 Yahoo Finance 재무 자료.</li>
 <li><b>EPS</b>: 회사 발표 조정 EPS와 애널리스트 컨센서스(Zacks·Nasdaq 집계).</li>
 <li><b>보유 종목</b>: SEC에 제출된 ETF 보유 내역(N-Q·N-PORT)과 최근 보유 내역(Zacks).</li>
-<li><b>갱신</b>: 평일 아침(한국 시간 6:25·8:45)과 토요일 10:30에 미국장 종가와 환율로 주가·시가총액·PER·비중·일별 PER을 다시 계산합니다. EPS·분기 실적은 화면 위 '자료 기준'에 적힌 날짜 기준이며, 그 뒤 실적을 발표한 종목은 '미반영'으로 표시합니다.</li></ul></article>
+<li><b>실시간</b>: 미국 정규장 중(한국 시간 밤 11:30~새벽 6시, 서머타임 밤 10:30~새벽 5시)에는 페이지를 연 동안 1분마다 구성 종목의 지금 가격으로 지수 PER·시가총액·비중·종목별 PER을 다시 계산합니다(위 카드와 PER 차트 끝 점에 '실시간' 표시). 장이 끝나면 그날 종가로 계산합니다.</li>
+<li><b>확정 자료</b>: 평일 아침(한국 시간 6:25·8:45)과 토요일 10:30에 미국장 종가와 환율로 주가·시가총액·PER·비중·일별 PER을 다시 저장합니다. EPS·분기 실적은 화면 위 '자료 기준'에 적힌 날짜 기준이며, 그 뒤 실적을 발표한 종목은 '미반영'으로 표시합니다.</li></ul></article>
         <article class="g-card"><h3>함께 보면 좋은 도구</h3><ul class="g-list">
 <li><a href="sox/">필라델피아 반도체 성장률</a> — SOX 지수의 기간별 연평균 성장률(CAGR)과 누적 수익률.</li>
 <li><a href="djsemi/">다우존스 반도체 성장률</a> — 또 다른 미국 반도체 지수의 성장률.</li>
@@ -824,7 +825,7 @@
 <details class="g-faq"><summary>과거 날짜의 선행 PER은 그때의 예상치인가요?</summary><div class="g-ans"><p>아닙니다. 과거 시점의 애널리스트 예상치는 공개 자료가 없어, 그 날짜 뒤에 실제로 발표된 이익으로 계산했습니다. 즉 '그때 앞으로 1년 이익을 정확히 알았다면 몇 배였는가'입니다. 아직 발표되지 않은 분기는 현재 예상치를 쓰며, 차트 설명창의 '선행 EPS 중 현재 예상치' 비율로 표시합니다.</p></div></details>
 <details class="g-faq"><summary>PER이 하루에 크게 바뀌는 날이 있어요.</summary><div class="g-ans"><p>큰 종목(마이크론·엔비디아 등)이 실적을 발표하면 4개 분기 창이 한 칸 이동해 EPS 합이 크게 바뀌고, 지수 정기 변경 다음 날에는 담는 종목과 주식 수가 바뀌어 PER이 계단처럼 움직일 수 있습니다. 주가가 크게 움직인 날이 아닌데 PER이 바뀌었다면 대부분 이 때문입니다.</p></div></details>
 <details class="g-faq"><summary>'지금보다 낮았던 날 %'는 어떻게 읽나요?</summary><div class="g-ans"><p>2013년 8월부터의 모든 거래일 가운데 PER이 지금보다 낮았던 날의 비율입니다. 80%면 지금보다 비쌌던 날이 20%뿐이라는 뜻(역사적으로 높은 편), 20%면 지금보다 쌌던 날이 20%뿐이라는 뜻(낮은 편)입니다. 다만 업종의 성장성과 금리가 시기마다 달라 과거 평균으로 돌아간다는 보장은 없습니다.</p></div></details>
-<details class="g-faq"><summary>'실적 발표 · 미반영'은 무엇인가요?</summary><div class="g-ans"><p>주가는 매일 새로 반영하지만 EPS와 분기 재무는 화면 위 '자료 기준'의 날짜에 고정되어 있습니다. 그 뒤 실적을 발표한 종목은 새 EPS가 아직 반영되지 않았다는 뜻으로 표시합니다. 발표된 실적은 <a href="earnings-calendar/">실적발표 캘린더</a>에서 확인할 수 있습니다.</p></div></details>
+<details class="g-faq"><summary>'실적 발표 · 미반영'은 무엇인가요?</summary><div class="g-ans"><p>주가는 실시간(미국 정규장 중)과 매일 종가로 반영하지만 EPS와 분기 재무는 화면 위 '자료 기준'의 날짜에 고정되어 있습니다. 그 뒤 실적을 발표한 종목은 새 EPS가 아직 반영되지 않았다는 뜻으로 표시합니다. 발표된 실적은 <a href="earnings-calendar/">실적발표 캘린더</a>에서 확인할 수 있습니다.</p></div></details>
 <details class="g-faq"><summary>PER이 낮으면 지금 사도 되나요?</summary><div class="g-ans"><p>PER은 가격 수준을 보는 한 가지 잣대일 뿐입니다. 반도체는 이익이 정점일 때 PER이 가장 낮아 보이고, 그 뒤 이익이 줄면서 주가가 떨어지는 일이 반복되었습니다. 이 화면은 판단을 돕는 자료이며 투자 권유가 아닙니다 — 투자 판단 전에는 원 공시와 여러 자료를 함께 확인하세요.</p></div></details>
       </div>
     </section>
@@ -856,7 +857,7 @@
 
 </div>
 
-<script src="assets/app.9e408fafd9.js"></script>
+<script src="assets/app.c7327aea5a.js"></script>
   <!-- ── 카카오톡 바로가기 (오른쪽 아래 공유 버튼 위, 같은 원형 버튼) — 오픈채팅 커뮤니티 · 후원 및 문의 1:1 채팅 ── -->
   <div class="kk-fabs">
     <button type="button" class="kk-fab" id="kk-fab" aria-label="카카오 오픈채팅" aria-expanded="false" aria-controls="kk-pop"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 4.5c-6.08 0-11 3.86-11 8.62 0 3.03 2 5.7 5.03 7.23l-1.08 3.95c-.1.36.31.65.62.44l4.7-3.12c.56.07 1.14.11 1.73.11 6.08 0 11-3.86 11-8.61S20.08 4.5 14 4.5z" fill="#191919"/><circle cx="9.6" cy="13.1" r="1.45" fill="#FEE500"/><circle cx="14" cy="13.1" r="1.45" fill="#FEE500"/><circle cx="18.4" cy="13.1" r="1.45" fill="#FEE500"/></svg></button>

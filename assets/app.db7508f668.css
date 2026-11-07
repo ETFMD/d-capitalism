@@ -1725,6 +1725,11 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .sm-note b { color:var(--text2); font-family:var(--mono); }
   .sm-tag { display:inline-block; font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:6px; margin-right:4px; background:rgba(49,130,246,.13); color:#3182f6; vertical-align:1px; }
   .sm-ix-s { display:none; }
+  .sm-lv { display:inline-flex; align-items:center; gap:5px; font-weight:700; color:var(--text2); margin-right:6px; }
+  .sm-lv i { width:7px; height:7px; border-radius:50%; background:var(--text3); flex:none; }
+  .sm-lv.on { color:#f04452; } .sm-lv.on i { background:#f04452; animation:smPulse 1.6s ease-in-out infinite; }
+  @keyframes smPulse { 0%,100% { opacity:1; } 50% { opacity:.25; } }
+  .sm-lvb { font-style:normal; font-family:var(--font); font-size:10px !important; font-weight:700; padding:1px 6px !important; border-radius:6px; margin-left:6px; background:rgba(240,68,82,.12); color:#f04452 !important; vertical-align:2px; }
   .sm-tools { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:12px 0 10px; }
   .sm-search { font:inherit; font-size:13px; padding:7px 12px; border-radius:9px; border:1px solid var(--card-border); background:var(--bg2); color:var(--text); width:220px; max-width:100%; }
   .sm-search:focus { outline:none; border-color:var(--accent); }
