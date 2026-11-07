@@ -791,7 +791,57 @@ def autosum_rates():
                 '아래 차트·일정·결정 기록은 페이지를 열 때 최신 자료로 다시 그려집니다.')
 
 
-AUTOSUM = {'mcap': autosum_mcap, 'fx': autosum_fx, 'apt': autosum_apt, 'earn': autosum_earn, 'rates': autosum_rates}
+def _kunit(v):
+    """금액 → 조·억 (화면 [SEMIS] kunit 과 같은 규칙)"""
+    a = abs(v)
+    if a >= 1e12:
+        t = f'{a / 1e12:,.0f}' if a >= 1e14 else f'{a / 1e12:,.2f}'.rstrip('0').rstrip('.')
+        return ('-' if v < 0 else '') + t + '조'
+    return ('-' if v < 0 else '') + f'{round(a / 1e8):,}억'
+
+
+def autosum_semis():
+    """[SEMIS] SOX와 NYSE 반도체 지수 분석 — 지수 PER(후행·혼합·선행·역대 위치) · 시가총액 · 비중 상위 · 두 ETF 종목 차이 · 최저 선행 PER · 미반영"""
+    sm = _load('semis/summary.json')
+    fin = {}
+    for e in ('soxx', 'soxq'):
+        f = _load(f'semis/{e}_fin.json')
+        cc = f['c']['c']
+        fin[e] = [dict(zip(cc, r)) for r in f['c']['r']]
+        if len(fin[e]) < 25:
+            raise ValueError(f'semis {e} 기업 {len(fin[e])}곳')
+    fx = (sm.get('fx') or {}).get('rate')
+    X, Q = sm['soxx'], sm['soxq']
+    rows = [[f'{lab} PER<br><small>{sub}</small>'] + [(f'{x[k]:.1f}배<br><small>하위 {x[k + "_p"]:.0f}%</small>', 'n') for x in (X, Q)]
+            for k, lab, sub in (('pe_ttm', '후행', '최근 4개 분기 실적'), ('pe_mix', '혼합', '최근 2 + 다음 2개 분기'), ('pe_ntm', '선행', '다음 4개 분기 예상'))]
+    rows.append(['선행 PER 역대 범위<br><small>2013년 8월~</small>'] + [(f'{x["pe_ntm_lo"]:.1f}~{x["pe_ntm_hi"]:.1f}배', 'n') for x in (X, Q)])
+    rows.append(['30종목 시가총액'] + [(f'{_kunit(x["mcap"])} 달러' + (f'<br><small>{_kunit(x["mcap"] * fx)} 원</small>' if fx else ''), 'n') for x in (X, Q)])
+    d = sm['soxx']['date']
+    li = [f'{ymd_ko(datetime.date.fromisoformat(d))} 종가 기준 SOXX(NYSE 반도체 지수) 선행 PER은 {sm["soxx"]["pe_ntm"]:.1f}배, SOXQ(필라델피아 반도체 지수) 선행 PER은 {sm["soxq"]["pe_ntm"]:.1f}배입니다. '
+          f'2013년 8월 이후 거래일 가운데 지금보다 선행 PER이 낮았던 날은 SOXX {sm["soxx"]["pe_ntm_p"]:.0f}%, SOXQ {sm["soxq"]["pe_ntm_p"]:.0f}%입니다.']
+    for e in ('soxx', 'soxq'):
+        top = sorted((c for c in fin[e] if c.get('weight') is not None), key=lambda c: -c['weight'])[:5]
+        li.append(f'{e.upper()} 비중 상위 5종목: ' + ', '.join(f'{esc(c["ko"])} {c["weight"]:.1f}%' for c in top) + f' (5종목 합 {sum(c["weight"] for c in top):.1f}%).')
+    sx, sq = {c['sym']: c for c in fin['soxx']}, {c['sym']: c for c in fin['soxq']}
+    ox, oq = [sx[k] for k in sx if k not in sq], [sq[k] for k in sq if k not in sx]
+    if ox or oq:
+        li.append(f'두 ETF가 서로 다르게 담은 종목 — SOXX에만: {", ".join(esc(c["ko"]) for c in ox) or "없음"} · SOXQ에만: {", ".join(esc(c["ko"]) for c in oq) or "없음"} (나머지 {len(set(sx) & set(sq))}종목은 함께 담음).')
+    for e in ('soxx', 'soxq'):
+        pe = sorted((c for c in fin[e] if c.get('pe_ntm') and c['pe_ntm'] > 0), key=lambda c: c['pe_ntm'])
+        if pe:
+            li.append(f'{e.upper()} 구성 종목 중 선행 PER이 가장 낮은 곳은 ' + ', '.join(f'{esc(c["ko"])}({c["pe_ntm"]:.1f}배)' for c in pe[:3])
+                      + ', 가장 높은 곳은 ' + ', '.join(f'{esc(c["ko"])}({c["pe_ntm"]:.1f}배)' for c in pe[::-1][:3]) + '입니다.')
+    st = sorted({tuple(x) for e in ('soxx', 'soxq') for x in (sm[e].get('stale') or [])}, key=lambda t: (t[1], t[0]))
+    if st:
+        li.append(f'EPS 기준일({ymd_dot(sm["eps_asof"])}) 뒤 실적을 발표해 아직 반영되지 않은 종목: ' + ', '.join(f'{esc(s_)}({_md(dd)})' for s_, dd in st) + '.')
+    inner = _tbl(['지표', ('SOXX<br><small>NYSE 반도체 지수</small>', 'n'), ('SOXQ<br><small>필라델피아 반도체 지수(SOX)</small>', 'n')], rows) + _ul(li)
+    return _sec('semis', '반도체 지수 요약 — 지금 PER과 구성 종목', f'SOXX·SOXQ 지수 PER과 구성 종목 <small>{_when(sm["updated"])} 갱신 · 자동 갱신</small>', inner,
+                f'자료: SEC 공시(10-K·10-Q·20-F·N-PORT), Zacks·Nasdaq EPS·컨센서스, Yahoo Finance 종가·환율 (data/semis). '
+                f'\'하위 N%\'는 2013년 8월 이후 거래일 가운데 지금보다 PER이 낮았던 날의 비율입니다. EPS·분기 실적은 {ymd_dot(sm["eps_asof"])} 기준이며, '
+                '위 표·차트는 페이지를 열 때 최신 자료로 다시 그려집니다.')
+
+
+AUTOSUM = {'mcap': autosum_mcap, 'fx': autosum_fx, 'apt': autosum_apt, 'earn': autosum_earn, 'rates': autosum_rates, 'semis': autosum_semis}
 
 
 def autosum(key, src_text=None):

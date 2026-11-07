@@ -1,0 +1,49 @@
+name: 반도체 지수 분석 갱신
+
+# [SEMIS] 'SOX와 NYSE 반도체 지수 분석' (data/semis/*.json) — scripts/update_semis.py
+#  · 미국장 마감 뒤 종가(야후 · 막히면 사이트 Worker)로 SOXX·SOXQ 일별 PER 을 이어 계산하고 구성 종목 30곳의 가격·시가총액·PER·비중·환율을 다시 씀
+#  · 기준일(파이프라인 값)까지 다시 계산해 저장값과 같은지 먼저 확인 — 다르면 쓰지 않고 실패(메일 알림)
+#  · EPS·분기 실적은 base.json 기준(eps_asof) 고정 — 그 뒤 실적을 발표한 종목은 화면에 '미반영'으로 표시(data/earnings.json 발표일)
+#  · 평일 06:25·08:45 KST(미국 마감 뒤 · 늦은 종가 보강) · 토요일 10:30 KST(금요일 종가 최종) · 내용이 바뀐 경우에만 커밋
+on:
+  schedule:
+    - cron: '25 21 * * 1-5'
+    - cron: '45 23 * * 1-5'
+    - cron: '30 1 * * 6'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['scripts/update_semis.py', 'data/semis/base.json', '.github/workflows/update-semis.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: semis
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}   # 앞 실행을 기다린 실행도 시작 시점 main 최신본에서
+      - name: 종가·환율로 갱신
+        run: python3 scripts/update_semis.py
+      - name: 자료 검사
+        run: python3 tests/semis_test.py
+      - name: 변경된 경우에만 커밋
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898099+github-actions[bot]@users.noreply.github.com'
+          git add data/semis/
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git commit -m "chore: 반도체 지수 분석 갱신"
+          for i in 1 2 3; do
+            git pull --rebase --autostash && git push && exit 0
+            git rebase --abort 2>/dev/null || true
+            sleep 5
+          done
+          exit 1

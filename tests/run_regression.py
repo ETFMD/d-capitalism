@@ -1124,7 +1124,7 @@ def admin_lock_check(page, base, fail, routes):
 
 ADS_TAG = 'pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8051182229751523'
 STATIC_PAGES = ('about/', 'terms/', 'privacy/', 'disclaimer/')
-AUTOSUM_OF = {'mcap': 'mcap', 'fx': 'fx', 'aptrank': 'apt', 'earn': 'earn', 'rates': 'rates'}   # 탭 → [AUTOSUM:키] (자료 화면 자동 요약 · scripts/data_facts.py)
+AUTOSUM_OF = {'mcap': 'mcap', 'fx': 'fx', 'aptrank': 'apt', 'earn': 'earn', 'rates': 'rates', 'semis': 'semis'}   # 탭 → [AUTOSUM:키] (자료 화면 자동 요약 · scripts/data_facts.py)
 HUB_GUIDE = ('me', 'pay', 'realty', 'capital')                              # 단계 해설 [HUB-GUIDE] 을 넣은 허브(영역)
 
 
@@ -3453,6 +3453,122 @@ RATES_JS = """async () => {
 }"""
 
 
+SEMIS_JS = """async () => {
+  const W = ms => new Promise(r => setTimeout(r, ms)), R = [], ok = (n, c, i) => R.push({ name: n, ok: !!c, info: i }), $ = q => document.querySelector(q), $$ = q => [...document.querySelectorAll(q)];
+  const D = window.SMdebug; if (!D) { ok('SMdebug 없음', false); return R; }
+  const S = D.S;
+  for (let i = 0; i < 150 && !(S.sum && S.F.soxx && Object.keys(S.ch).length >= 10); i++) await W(100);
+  if (!S.sum || !S.F.soxx) { ok('자료를 불러오지 못함', false, $('#sm-meta').textContent); return R; }
+  const num1 = v => v.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  /* 위 카드 4개 = summary.json */
+  const tb = $$('#sm-tabs .sm-tab');
+  ok('보기 카드 4개 · 처음 = SOXX 구성 종목 실적', tb.length === 4 && tb[0].classList.contains('on') && S.v === 'soxx-fin', S.v);
+  ok('카드 숫자 = summary (시가총액·선행 PER)', tb[0].querySelector('[data-tv]').textContent.startsWith(D.kunit(S.sum.soxx.mcap)) && tb[2].querySelector('[data-tv]').textContent.includes(num1(S.sum.soxx.pe_ntm)) && tb[3].querySelector('[data-tv]').textContent.includes(num1(S.sum.soxq.pe_ntm)), tb.map(t => t.querySelector('[data-tv]').textContent));
+  ok('자료 기준 줄(종가·EPS 기준일·환율)', /미국장 종가/.test($('#sm-meta').textContent) && /EPS/.test($('#sm-meta').textContent) && /원/.test($('#sm-meta').textContent), $('#sm-meta').textContent);
+  /* 구성 종목 표 */
+  const F = S.F.soxx, rows = () => $$('#sm-ov-b tr[data-sym]');
+  ok('표 30줄 = 자료 · 비중 큰 순', rows().length === F.comp.length && F.comp.length === 30 && rows()[0].dataset.sym === F.comp.slice().sort((a, b) => (b.weight || 0) - (a.weight || 0))[0].sym, rows().length);
+  const wsum = F.comp.reduce((a, c) => a + (c.weight || 0), 0);
+  ok('비중 합 ≈ 100%', Math.abs(wsum - 100) < 0.2, wsum);
+  const r0 = rows()[0], c0 = F.comp.find(c => c.sym === r0.dataset.sym);
+  ok('첫 줄 값 = 자료(후행·선행 PER·비중)', r0.cells[4].textContent === D.fmt('pe_ttm', c0.pe_ttm) && r0.cells[6].textContent.startsWith(D.fmt('pe_ntm', c0.pe_ntm)) && r0.cells[2].textContent === D.fmt('weight', c0.weight), [r0.cells[2].textContent, r0.cells[4].textContent, r0.cells[6].textContent]);
+  const tot = F.comp.reduce((a, c) => a + (c.mcap_usd || 0), 0), low = F.comp.filter(c => c.pe_ntm > 0).sort((a, b) => a.pe_ntm - b.pe_ntm)[0];
+  ok('설명: 시가총액 합계 · 최저 선행 PER 종목', $('#sm-lead').textContent.includes(D.kunit(tot) + ' 달러') && $('#sm-lead').textContent.includes(low.ko) && !!$('#sm-ov-b td.sm-low'), $('#sm-lead').textContent.slice(0, 160));
+  $('#sm-ov thead button[data-k="pe_ntm"]').click(); await W(60);
+  let v = rows().map(r => F.comp.find(c => c.sym === r.dataset.sym).pe_ntm), nn = v.filter(x => x != null);
+  ok('정렬: 선행 PER 큰 순 · 빈 값은 끝', nn.every((x, i) => !i || nn[i - 1] >= x) && v.slice(nn.length).every(x => x == null) && $('#sm-ov thead button[data-k="pe_ntm"]').parentNode.getAttribute('aria-sort') === 'descending', v.slice(0, 5));
+  $('#sm-ov thead button[data-k="pe_ntm"]').click(); await W(60);
+  v = rows().map(r => F.comp.find(c => c.sym === r.dataset.sym).pe_ntm); nn = v.filter(x => x != null);
+  ok('다시 누르면 작은 순', nn.every((x, i) => !i || nn[i - 1] <= x), v.slice(0, 5));
+  $('#sm-ov thead button[data-k="weight"]').click(); await W(60);
+  const q = $('#sm-q'); q.value = 'nvd'; q.dispatchEvent(new Event('input', { bubbles: true })); await W(60);
+  ok('찾기 nvd → 엔비디아 한 줄', rows().length === 1 && rows()[0].dataset.sym === 'NVDA', rows().map(r => r.dataset.sym));
+  q.value = ''; q.dispatchEvent(new Event('input', { bubbles: true })); await W(60);
+  const seg = $$('#sm-segs .sm-chip')[2], sg = seg && seg.dataset.seg;
+  seg.click(); await W(60);
+  ok('분야 단추 → 그 분야만', rows().length === F.comp.filter(c => c.seg === sg).length && rows().length > 0 && rows().every(r => F.comp.find(c => c.sym === r.dataset.sym).seg === sg), [sg, rows().length]);
+  $('#sm-segs [data-seg=""]').click(); await W(60);
+  /* 기업 상세 */
+  rows().find(r => r.dataset.sym === 'MU').click(); await W(300);
+  const qmu = F.q.MU, amu = F.a.MU;
+  ok('행 누르면 상세 = 마이크론 · 선택칸 · 주소 #co=MU', /마이크론/.test($('#sm-dname').textContent) && $('#sm-co').value === 'MU' && /co=MU/.test(location.hash) && rows().find(r => r.dataset.sym === 'MU').classList.contains('sel'), [$('#sm-dname').textContent, location.hash]);
+  ok('타일 12개 · 차트 14칸(자료 없는 칸은 안내)', $$('#sm-tiles .sm-tile').length === 12 && $$('#sm-mcs .sm-mbox').length === 14 && $$('#sm-mcs .sm-mbox').every(b => b.querySelector('canvas') || /공시 자료가 없습니다/.test(b.textContent)), $$('#sm-mcs canvas').length);
+  ok('분기 표 줄 = 자료 · 첫 줄 = 최근 분기 매출', $$('#sm-pd-b tr').length === qmu.length && $('#sm-pd-b tr').cells[2].textContent.startsWith(D.kunit(qmu[qmu.length - 1].rev)), [$$('#sm-pd-b tr').length, qmu.length]);
+  const chRev = S.ch.m_rev;
+  ok('매출 차트 = 분기 자료(막대·적자 빨강 규칙)', chRev && chRev.config.type === 'bar' && chRev.data.labels.length === qmu.length && chRev.data.datasets[0].data[qmu.length - 1] === qmu[qmu.length - 1].rev, chRev && chRev.data.labels.length);
+  $('#sm-per [data-p="a"]').click(); await W(300);
+  ok('연간 → 표·차트·머리글 · 주소 p=a', $$('#sm-pd-b tr').length === amu.length && $('#sm-pd-h0').textContent === '회계연도' && S.ch.m_rev.data.labels.length === amu.length && /p=a/.test(location.hash), [$$('#sm-pd-b tr').length, amu.length]);
+  $('#sm-per [data-p="q"]').click(); await W(200);
+  const amd = (F.q.AMD || []).find(r => r.end === '2012-06-30');
+  ok('시가총액 단위 오류 바로잡힘(AMD 2012-06)', !amd || (amd.mcap > 1e9 && amd.mcap < 1e11), amd && amd.mcap);
+  const sel = $('#sm-co'); sel.value = 'NVDA'; sel.dispatchEvent(new Event('change', { bubbles: true })); await W(250);
+  ok('선택칸으로 기업 바꾸기', /엔비디아/.test($('#sm-dname').textContent) && /co=NVDA/.test(location.hash), location.hash);
+  /* SOXQ 구성 종목 */
+  $('#sm-tabs [data-v="soxq-fin"]').click();
+  for (let i = 0; i < 100 && !S.F.soxq; i++) await W(100);
+  await W(300);
+  ok('SOXQ 구성 종목: 30줄 · 머리글 SOXQ 비중 · 주소', S.F.soxq && rows().length === 30 && $('#sm-wh').textContent === 'SOXQ 비중' && /v=soxq-fin/.test(location.hash) && !$('[data-etf="soxq"]').hidden && $('[data-etf="soxx"]').hidden, location.hash);
+  ok('SOXQ 상세는 SOXQ 첫 종목(따로 기억)', $('#sm-co').value === S.F.soxq.comp[0].sym, $('#sm-co').value);
+  /* PER 추이 */
+  $('#sm-tabs [data-v="soxx-pe"]').click();
+  for (let i = 0; i < 100 && !(S.P.soxx && S.ch.pe && S.ch.ref); i++) await W(100);
+  await W(200);
+  const P = S.P.soxx, last = P.date.length - 1, sm = S.sum.soxx;
+  ok('PER: 마지막 날·값 = summary', P.date[last] === sm.date && ['pe_ttm', 'pe_mix', 'pe_ntm'].every(k => P.k[k][last] === sm[k]), [P.date[last], sm.date]);
+  ok('요약 카드 3개 · 역대 위치·최저·최고 = summary', $$('#sm-stats .sm-stat').length === 3 && ['pe_ttm', 'pe_mix', 'pe_ntm'].every(k => Math.abs(P.st[k].pct - sm[k + '_p']) < 0.051 && P.st[k].min === sm[k + '_lo'] && P.st[k].max === sm[k + '_hi']), ['pe_ttm', 'pe_mix', 'pe_ntm'].map(k => [P.st[k].pct, sm[k + '_p'], P.st[k].min, sm[k + '_lo']]));
+  ok('첫날 2013-08-15 · 차트 3선 · 전체 기간', P.date[0] === '2013-08-15' && S.ch.pe.data.datasets.length === 3 && S.ch.pe.scales.x.min === P.x[0] && S.ch.pe.scales.x.max === P.x[last], [S.ch.pe.scales.x.min, P.x[0]]);
+  ok('바닥 표시 5개(SOXX 는 상장선 없음) · 마우스 올리기 전부터 그려짐', S.ch.pe.$sm.marks.length === 5 && S.ch.pe.$sm.drawn >= 1 && S.ch.ref.$sm.drawn >= 1, [S.ch.pe.$sm.marks.map(m => m[1]), S.ch.pe.$sm.drawn]);
+  $('#sm-rng [data-r="5"]').click(); await W(150);
+  const st5 = (+P.date[last].slice(0, 4) - 5) + P.date[last].slice(4), i5 = P.date.findIndex(d => d >= st5);
+  ok('5년 → 그날부터 · 가격·비중 차트도 · 주소 r=5', S.ch.pe.scales.x.min === P.x[i5] && S.ch.px.scales.x.min === P.x[i5] && S.ch.cov.scales.x.min === P.x[i5] && /r=5/.test(location.hash), [S.ch.pe.scales.x.min, P.x[i5]]);
+  $('#sm-lines [data-line="pe_ttm"]').click(); $('#sm-lines [data-line="pe_mix"]').click(); await W(120);
+  ok('선 끄기 → 1선', S.ch.pe.data.datasets.length === 1);
+  $('#sm-lines [data-line="pe_ntm"]').click(); await W(80);
+  ok('마지막 선은 끌 수 없음', S.ch.pe.data.datasets.length === 1 && S.on.pe_ntm);
+  $('#sm-lines [data-line="pe_ttm"]').click(); $('#sm-lines [data-line="pe_mix"]').click(); $('#sm-rng [data-r="all"]').click(); await W(150);
+  const cv = $('#sm-pe-c'); cv.scrollIntoView({ block: 'center' }); await W(100);
+  const ca = S.ch.pe.chartArea, rc = cv.getBoundingClientRect();
+  cv.dispatchEvent(new PointerEvent('pointermove', { clientX: rc.left + (ca.left + ca.right) / 2, clientY: rc.top + (ca.top + ca.bottom) / 2, bubbles: true, pointerType: 'mouse' })); await W(60);
+  const tip = $('#sm-pe-box .sm-tip');
+  ok('차트 설명창: 날짜·SOXX 가격·3선·계산 비중', tip.style.display === 'block' && /년 .*월 .*일 · SOXX .*달러/.test(tip.textContent) && (tip.textContent.match(/배/g) || []).length >= 3 && /계산 비중/.test(tip.textContent), tip.textContent.slice(0, 160));
+  cv.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true, pointerType: 'mouse' })); await W(40);
+  ok('설명창 닫힘', tip.style.display === 'none');
+  ok('참고 차트 = 로그 눈금 · 2002년부터', S.ch.ref.options.scales.y.type === 'logarithmic' && S.ch.ref.scales.x.min === Date.parse('2002-01-11') / 864e5, S.ch.ref.scales.x.min);
+  /* EPS 기준일 뒤(가격만 반영) 표시 — 가짜로 하루 더한 자료로 */
+  const raw = await (await fetch('data/semis/soxx_pe.json', { cache: 'no-cache' })).json();
+  const lr = raw.r[raw.r.length - 1].slice(), nd = new Date(Date.parse(lr[0]) + 3 * 864e5).toISOString().slice(0, 10);
+  lr[0] = nd; lr[2] = +(lr[2] * 1.01).toFixed(2); raw.r.push(lr); raw.asof = nd;
+  const keep = S.P.soxx; S.P.soxx = D.pePrep(raw); D.go(true); await W(200);
+  const fzN = $('#sm-pe-fz').textContent, n0 = raw.r.filter(r => r[0] > raw.frozen).length;
+  ok('기준일 뒤 거래일 안내 · 차트 음영', new RegExp(n0 + '거래일').test(fzN) && S.ch.pe.$sm.fz === Date.parse(raw.frozen) / 864e5, fzN.slice(-80));
+  const rc2 = cv.getBoundingClientRect(), ca2 = S.ch.pe.chartArea, xr = S.ch.pe.scales.x.getPixelForValue(S.ch.pe.scales.x.max);
+  cv.dispatchEvent(new PointerEvent('pointermove', { clientX: rc2.left + xr, clientY: rc2.top + (ca2.top + ca2.bottom) / 2, bubbles: true, pointerType: 'mouse' })); await W(60);
+  ok('기준일 뒤 날짜 설명창: EPS 고정 안내', /기준 고정/.test(tip.textContent), tip.textContent.slice(-60));
+  S.P.soxx = keep; D.go(true); await W(150);
+  /* SOXQ PER */
+  $('#sm-tabs [data-v="soxq-pe"]').click();
+  for (let i = 0; i < 100 && !(S.P.soxq && S.ch.pe && S.v === 'soxq-pe' && S.ch.pe.$sm.marks.length === 6); i++) await W(100);
+  const PQ = S.P.soxq, li = PQ.date.indexOf('2021-06-11');
+  ok('SOXQ: 상장선 · 상장 전 가격 없음 · 상장일부터 가격', S.ch.pe.$sm.marks.some(m => m[1] === 'SOXQ 상장') && PQ.k.soxq[0] == null && li > 0 && PQ.k.soxq[li] != null && PQ.k.soxq[li - 1] == null, [li, PQ.k.soxq[li]]);
+  ok('SOXQ 마지막 값 = summary', ['pe_ttm', 'pe_mix', 'pe_ntm'].every(k => PQ.k[k][PQ.date.length - 1] === S.sum.soxq[k]));
+  /* 공유 상태 · 주소 */
+  const X = window.dcStateX['semiconductor-index'];
+  X.set({ v: 'soxq-fin', co: { soxx: '', soxq: 'AMD' }, p: 'a', sk: 'roe', sd: 1, seg: '', rng: '3', on: [1, 0, 1] });
+  for (let i = 0; i < 50 && !(S.v === 'soxq-fin' && $$('#sm-ov-b tr[data-sym]').length); i++) await W(100);
+  await W(200);
+  const g = X.get();
+  ok('공유 상태 되살리기(보기·기업·연간·정렬)', S.v === 'soxq-fin' && $('#sm-co').value === 'AMD' && $('#sm-pd-h0').textContent === '회계연도' && g.sk === 'roe' && g.sd === 1 && g.rng === '3' && g.on.join() === '1,0,1' && $('#sm-ov thead button[data-k="roe"]').parentNode.getAttribute('aria-sort') === 'ascending', g);
+  X.set(X.def); await W(300);
+  ok('기본값으로 되돌리기 · 주소 # 비움', S.v === 'soxx-fin' && S.p === 'q' && S.sk === 'weight' && !/(v|co|p|r)=/.test(location.hash), [S.v, location.hash]);
+  /* 다크·라이트 바꿔도 차트 다시 그림 */
+  const th0 = document.documentElement.getAttribute('data-theme');
+  document.documentElement.setAttribute('data-theme', th0 === 'light' ? 'dark' : 'light'); await W(250);
+  ok('테마 바꾸면 차트 다시 그림', Object.keys(S.ch).filter(k => k.startsWith('m_')).length >= 10);
+  document.documentElement.setAttribute('data-theme', th0); await W(200);
+  return R;
+}"""
+
+
 NEWS_JS = """async () => {
   const W = ms => new Promise(r => setTimeout(r, ms)), R = [], ok = (n, c, i) => R.push({ name: n, ok: !!c, info: i }), $ = q => document.querySelector(q), $$ = q => [...document.querySelectorAll(q)];
   for (let i = 0; i < 100 && !(window.DNdebug && DNdebug.S.lastOk && DNdebug.S.items.size); i++) await W(100);
@@ -3594,6 +3710,32 @@ def rates_check(page, base, fail, errs, ignorable):
         fail('rates', '휴대폰(360)에서 가로 넘침 %s' % r)
     for t in [t for t, u in errs if not ignorable(t, u)][:3]:
         fail('rates', '콘솔 오류: ' + t[:200])
+    page.set_viewport_size({'width': 1440, 'height': 900})
+
+
+def semis_check(page, base, fail, errs, ignorable):
+    """[SEMIS] SOX와 NYSE 반도체 지수 분석 (/semiconductor-index/) — 화면 흐름 SEMIS_JS · 주소 #v= 로 바로 열기 · 휴대폰 넘침 · 콘솔 오류"""
+    errs.clear()
+    page.set_viewport_size({'width': 1440, 'height': 900})
+    page.goto(base + 'semiconductor-index/', wait_until='load'); page.wait_for_timeout(800)
+    for t in page.evaluate(SEMIS_JS):
+        if not t['ok']:
+            fail('semis', '%s%s' % (t['name'], (' — ' + str(t.get('info'))[:300]) if t.get('info') else ''))
+    page.goto(base + 'semiconductor-index/#v=soxq-pe&r=3', wait_until='load')
+    r = page.evaluate("""async () => { const W = ms => new Promise(r => setTimeout(r, ms)); for (let i = 0; i < 100 && !(window.SMdebug && SMdebug.S.ch.pe); i++) await W(100);
+      const S = SMdebug.S; return [S.v, S.rng, !document.getElementById('sm-pe').hidden, document.querySelector('#sm-tabs .sm-tab.on').dataset.v]; }""")
+    if r != ['soxq-pe', '3', True, 'soxq-pe']:
+        fail('semis', '주소 #v=soxq-pe&r=3 로 열면 그 보기·기간이어야 함: %s' % r)
+    for w in (360, 768):
+        page.set_viewport_size({'width': w, 'height': 800}); page.wait_for_timeout(300)
+        for v in ('soxx-fin', 'soxq-pe'):
+            o = page.evaluate("""async (v) => { const W = ms => new Promise(r => setTimeout(r, ms)); const b = document.querySelector('#sm-tabs [data-v="' + v + '"]'); b.click();
+              for (let i = 0; i < 60 && !(v.endsWith('fin') ? SMdebug.S.ch.m_rev : SMdebug.S.ch.pe); i++) await W(100); await W(200);
+              return [document.documentElement.scrollWidth, innerWidth]; }""", v)
+            if o[0] > o[1] + 1:
+                fail('semis', '휴대폰·태블릿(%d) %s 화면 가로 넘침 %s' % (w, v, o))
+    for t in [t for t, u in errs if not ignorable(t, u)][:3]:
+        fail('semis', '콘솔 오류: ' + t[:200])
     page.set_viewport_size({'width': 1440, 'height': 900})
 
 
@@ -3879,6 +4021,13 @@ def main():
         print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'rates_test: 출력 없음', flush=True)
         if _r.returncode != 0:
             fail('rates', '전세계 금리 자료 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:400])
+
+    # [SEMIS] 반도체 지수 분석: data/semis/*.json 형식·기준일까지 = 파이프라인 게시본·기준일 뒤 PER = 가격 변화·기업 표·시가총액 단위 — 네트워크 없이
+    if not a.etf_audit:
+        _r = subprocess.run([sys.executable, os.path.join(ROOT, 'tests', 'semis_test.py')], capture_output=True, text=True, timeout=120)
+        print(_r.stdout.strip().splitlines()[0] if _r.stdout.strip() else 'semis_test: 출력 없음', flush=True)
+        if _r.returncode != 0:
+            fail('semis', '반도체 지수 자료 검사 실패: ' + (' | '.join(l.strip() for l in _r.stdout.splitlines()[1:6]) or _r.stderr.strip())[:400])
 
     # 외부 광고·방문 분석 서버(일시 오류가 잦고 사이트 기능과 무관) — 실패해도 사이트 오류로 보지 않음
     THIRD = ('clarity.ms', 'bing.com', 'naver.com', 'naver.net', 'pstatic.net', 'googlesyndication', 'doubleclick',
@@ -4907,6 +5056,10 @@ def main():
         if 'world-rates/' in paths:
             print('[5b] 전세계 금리', flush=True)
             rates_check(page, base, fail, errs, ignorable)
+        # [SEMIS] SOX와 NYSE 반도체 지수 분석 — 카드 = summary · 구성 종목 표(정렬·찾기·분야)·기업 상세(타일·14차트·기간 표·분기/연간)·PER 추이(요약 = summary·기간·선 끄기·설명창·기준일 뒤 표시)·SOXQ 상장선·공유 상태·주소 #·휴대폰 넘침
+        if 'semiconductor-index/' in paths:
+            print('[5b-2] 반도체 지수 분석', flush=True)
+            semis_check(page, base, fail, errs, ignorable)
         # [NEWS] 디코딩 뉴스 — 실제 Worker 코드를 가짜 서버(가짜 RSS·AI)로 띄워 목록·필터·새 뉴스·더 보기 (실사이트는 먼저 진짜 Worker 읽기만)
         if 'news/' in paths:
             print('[5c] 디코딩 뉴스', flush=True)
