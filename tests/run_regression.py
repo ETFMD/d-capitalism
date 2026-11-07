@@ -3459,12 +3459,13 @@ SEMIS_JS = """async () => {
   const S = D.S;
   for (let i = 0; i < 150 && !(S.sum && S.F.soxx && Object.keys(S.ch).length >= 10); i++) await W(100);
   if (!S.sum || !S.F.soxx) { ok('자료를 불러오지 못함', false, $('#sm-meta').textContent); return R; }
+  D.liveOff(); await W(300);   /* 실시간 시세는 끄고(저장 자료 = 기대값) 아래에서 가짜 시세로 따로 확인 */
   const num1 = v => v.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   /* 위 카드 4개 = summary.json */
   const tb = $$('#sm-tabs .sm-tab');
   ok('보기 카드 4개 · 처음 = SOXX 구성 종목 실적', tb.length === 4 && tb[0].classList.contains('on') && S.v === 'soxx-fin', S.v);
   ok('카드 숫자 = summary (시가총액·선행 PER)', tb[0].querySelector('[data-tv]').textContent.startsWith(D.kunit(S.sum.soxx.mcap)) && tb[2].querySelector('[data-tv]').textContent.includes(num1(S.sum.soxx.pe_ntm)) && tb[3].querySelector('[data-tv]').textContent.includes(num1(S.sum.soxq.pe_ntm)), tb.map(t => t.querySelector('[data-tv]').textContent));
-  ok('자료 기준 줄(종가·EPS 기준일·환율)', /미국장 종가/.test($('#sm-meta').textContent) && /EPS/.test($('#sm-meta').textContent) && /원/.test($('#sm-meta').textContent), $('#sm-meta').textContent);
+  ok('자료 기준 줄(종가·EPS 기준일·환율)', /확정 종가/.test($('#sm-meta').textContent) && /EPS/.test($('#sm-meta').textContent) && /원/.test($('#sm-meta').textContent), $('#sm-meta').textContent);
   /* 구성 종목 표 */
   const F = S.F.soxx, rows = () => $$('#sm-ov-b tr[data-sym]');
   ok('표 30줄 = 자료 · 비중 큰 순', rows().length === F.comp.length && F.comp.length === 30 && rows()[0].dataset.sym === F.comp.slice().sort((a, b) => (b.weight || 0) - (a.weight || 0))[0].sym, rows().length);
@@ -3551,6 +3552,37 @@ SEMIS_JS = """async () => {
   const PQ = S.P.soxq, li = PQ.date.indexOf('2021-06-11');
   ok('SOXQ: 상장선 · 상장 전 가격 없음 · 상장일부터 가격', S.ch.pe.$sm.marks.some(m => m[1] === 'SOXQ 상장') && PQ.k.soxq[0] == null && li > 0 && PQ.k.soxq[li] != null && PQ.k.soxq[li - 1] == null, [li, PQ.k.soxq[li]]);
   ok('SOXQ 마지막 값 = summary', ['pe_ttm', 'pe_mix', 'pe_ntm'].every(k => PQ.k[k][PQ.date.length - 1] === S.sum.soxq[k]));
+  /* 실시간 반영 — 가짜 시세(모든 종목 +10% · 다음 거래일)로 지수 PER·기업 표·카드·차트 끝 점 */
+  const r_ = D.lvRatio;
+  ok('실시간 비율: 다음 거래일 = 지금 ÷ 마지막 종가 · 같은 날 = 1 · 액면분할 날 = 전일 종가 기준 · 이상값 버림', r_({ rp: 110, pc: 100, d: '2026-11-09' }, 100, '2026-11-06') === 1.1 && r_({ rp: 110, pc: 100, d: '2026-11-06' }, 100, '2026-11-06') === 1
+    && Math.abs(r_({ rp: 11, pc: 10, d: '2026-11-09' }, 100, '2026-11-06') - 1.1) < 1e-12 && r_({ rp: 300, pc: 100, d: '2026-11-09' }, 100, '2026-11-06') === null && r_(null, 100, '2026-11-06') === null && r_({ rp: 0, d: '2026-11-09' }, 100, '2026-11-06') === null, '');
+  const LS = S.sum.soxq.live, nx = new Date(Date.parse(LS.d) + 3 * 864e5).toISOString().slice(0, 10), t0 = Math.floor(Date.now() / 1000) - 60, fq = {}, pxOf = {};
+  ['soxx', 'soxq'].forEach(e => { S.sum[e].live.syms.forEach(c => { pxOf[c[0]] = c[2]; }); S.sum[e].live.pos.forEach(p => { pxOf[p[0]] = p[2]; }); });
+  pxOf.SOXX = S.sum.soxx.px; pxOf.SOXQ = S.sum.soxq.px;
+  ok('실시간 종목 목록 = 두 ETF 종목 + SOXX·SOXQ·환율 · Worker 한도 45 안', D.lvSyms().length === Object.keys(pxOf).length + 1 && D.lvSyms().length <= 45 && D.lvSyms().includes('KRW=X'), D.lvSyms().length);
+  Object.keys(pxOf).forEach(k => { fq[k] = { rp: +(pxOf[k] * 1.1).toFixed(4), rt: t0, d: nx, pc: pxOf[k] }; }); fq['KRW=X'] = { rp: 1500, rt: t0, d: nx, pc: 1490 };
+  D.applyQuotes(fq); await W(300);
+  const LQ = S.L.soxq, PQ2 = S.P.soxq, n2 = PQ2.date.length;
+  ok('실시간: SOXQ PER = 마지막 PER × 1.1 · 카드·설명·요약 카드에 실시간 표시', LQ && LQ.on && Math.abs(LQ.R - 1.1) < 1e-6 && ['pe_ttm', 'pe_mix', 'pe_ntm'].every(k => LQ[k] === Math.round(S.sum.soxq[k] * 1.1 * 100) / 100)
+    && /실시간/.test($('#sm-meta').textContent) && /실시간/.test($('#sm-tabs [data-v="soxq-pe"]').textContent) && $('#sm-pe-lead').textContent.includes(LQ.pe_ntm.toFixed(1)) && $$('#sm-stats .sm-lvb').length === 3, [LQ, $('#sm-meta').textContent.slice(0, 80)]);
+  const dl = S.ch.pe.data.datasets[0].data;
+  ok('실시간: 차트 끝에 점 하나 더(다음 거래일 · 값 = 실시간) · 가격 차트도', dl.length === n2 + 1 && dl[n2].x === Date.parse(nx) / 864e5 && dl[n2].y === LQ.pe_ttm && S.ch.px.data.datasets[0].data[n2].y === LQ.px && Math.abs(LQ.px - S.sum.soxq.px * 1.1) < 1e-3, dl.slice(-2));
+  ok('실시간: 역대 위치 = 저장된 날 중 실시간 값보다 낮은 비율', Math.abs(LQ.pe_ntm_p - PQ2.k.pe_ntm.filter(v => v != null && v < LQ.pe_ntm).length / PQ2.k.pe_ntm.filter(v => v != null).length * 100) < 1e-9, LQ.pe_ntm_p);
+  const cvq = $('#sm-pe-c'); cvq.scrollIntoView({ block: 'center' }); await W(80);
+  const rq = cvq.getBoundingClientRect(), aq = S.ch.pe.chartArea;
+  cvq.dispatchEvent(new PointerEvent('pointermove', { clientX: rq.left + aq.right - 2, clientY: rq.top + (aq.top + aq.bottom) / 2, bubbles: true, pointerType: 'mouse' })); await W(60);
+  ok('실시간 점 설명창(오른쪽 끝)', /실시간/.test($('#sm-pe-box .sm-tip').textContent) && $('#sm-pe-box .sm-tip').textContent.includes(LQ.pe_ttm.toFixed(1)), $('#sm-pe-box .sm-tip').textContent.slice(0, 120));
+  cvq.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true, pointerType: 'mouse' }));
+  $('#sm-tabs [data-v="soxq-fin"]').click(); await W(400);
+  const FQ = S.F.soxq, w0 = FQ.comp0.map(c => c.weight || 0), w1 = FQ.comp.map(c => c.weight || 0), fr0 = rows()[0], fc0 = FQ.comp.find(c => c.sym === fr0.dataset.sym), fb0 = FQ.comp0.find(c => c.sym === fr0.dataset.sym);
+  ok('실시간: 기업 표 30종목 = 가격·PER·시가총액 × 1.1 · 비중은 그대로(모두 같은 비율) · 합계', FQ.lon === 30 && Math.abs(FQ.tot / FQ.comp0.reduce((a, c) => a + (c.mcap_usd || 0), 0) - 1.1) < 1e-5 && w0.every((w, i) => Math.abs(w - w1[i]) < 1e-4)
+    && fr0.cells[4].textContent === D.fmt('pe_ttm', fb0.pe_ttm * 1.1) && Math.abs(fc0.px - fb0.px * 1.1) < 1e-3 && /실시간/.test($('#sm-lead').textContent) && /1,500\\.00/.test($('#sm-fx').textContent), [FQ.lon, fr0.cells[4].textContent]);
+  ok('실시간: 상세 주가 = 실시간 표시', /실시간/.test($('#sm-dmeta').textContent), $('#sm-dmeta').textContent.slice(-60));
+  const sq = {}; Object.keys(fq).forEach(k => { sq[k] = Object.assign({}, fq[k], { d: LS.d }); });
+  D.applyQuotes(sq); await W(300);
+  ok('같은 거래일 시세(이미 확정 종가에 있음) → 바꾸지 않음', !S.L.soxq.on && S.L.soxq.pe_ntm === S.sum.soxq.pe_ntm && S.F.soxq.lon === 0 && !/실시간/.test($('#sm-tabs [data-v="soxq-pe"]').textContent), S.L.soxq);
+  D.liveOff(); await W(300);
+  ok('실시간 끄기 → 저장 자료 그대로', !S.L.soxq && rows()[0].cells[4].textContent === D.fmt('pe_ttm', S.F.soxq.comp0.find(c => c.sym === rows()[0].dataset.sym).pe_ttm), rows()[0].cells[4].textContent);
   /* 공유 상태 · 주소 */
   const X = window.dcStateX['semiconductor-index'];
   X.set({ v: 'soxq-fin', co: { soxx: '', soxq: 'AMD' }, p: 'a', sk: 'roe', sd: 1, seg: '', rng: '3', on: [1, 0, 1] });
@@ -3718,6 +3750,11 @@ def semis_check(page, base, fail, errs, ignorable):
     errs.clear()
     page.set_viewport_size({'width': 1440, 'height': 900})
     page.goto(base + 'semiconductor-index/', wait_until='load'); page.wait_for_timeout(800)
+    if not base.startswith('http://localhost') and not base.startswith('http://127.'):   # 실사이트: 진짜 Worker /qs 로 실시간 시세를 받는지 (로컬은 Worker 를 막음)
+        q = page.evaluate("""async () => { const W = ms => new Promise(r => setTimeout(r, ms)); for (let i = 0; i < 200 && !(window.SMdebug && SMdebug.LV.q); i++) await W(100);
+          const q = window.SMdebug && SMdebug.LV.q; if (!q) return null; const v = Object.values(q); return [v.length, v.filter(x => x && x.rp > 0 && x.d).length, SMdebug.LV.err]; }""")
+        if not q or q[1] < q[0] - 3 or q[0] < 30:
+            fail('semis', '실시간 시세(Worker /qs)를 받지 못함: %s' % q)
     for t in page.evaluate(SEMIS_JS):
         if not t['ok']:
             fail('semis', '%s%s' % (t['name'], (' — ' + str(t.get('info'))[:300]) if t.get('info') else ''))

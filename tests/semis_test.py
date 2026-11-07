@@ -97,6 +97,14 @@ def main():
             if c.get('pxd'):
                 ok(c['pxd'] <= fin['asof'], f'{e} {c["sym"]} 가격 날짜 {c["pxd"]} > {fin["asof"]}')
         ok(abs(sum(c['mcap_usd'] for c in comp) - (s.get('mcap') or 0)) <= 2, f'{e} 시가총액 합 ≠ summary')
+        # 실시간 반영 자료(화면 computeLive): 마지막 날 PER 바구니 비중 합 1 · 종목 = 기준 바구니 · 기업 표 종목·시가총액·종가 = fin
+        lv = s.get('live') or {}
+        pos = lv.get('pos') or []
+        bt = {x['t'] for x in base['etf'][e.upper()]['pe']['pos']}
+        ok(lv.get('d') == last['date'], f'{e} live 날짜 {lv.get("d")} ≠ {last["date"]}')
+        ok(len(pos) >= 20 and abs(sum(p[1] for p in pos) - 1) < 1e-4 and all(p[0] in bt and p[1] > 0 and num(p[2]) and p[2] > 0 for p in pos), f'{e} live 바구니 ({len(pos)}종목 · 비중 합 {sum(p[1] for p in pos):.6f})')
+        sy = {x[0]: x for x in lv.get('syms') or []}
+        ok(set(sy) == {c['sym'] for c in comp} and all(sy[c['sym']][1] == c['mcap_usd'] and sy[c['sym']][2] == c['px'] for c in comp), f'{e} live 기업 표 = fin 과 다름')
         syms = {c['sym'] for c in comp}
         for kk in ('q', 'a'):
             qc = fin[kk]['c']
@@ -120,6 +128,8 @@ def main():
                         ok(x / m < 300, f'{e} {kk} {sym} {d} 시가총액이 앞뒤의 {x / m:.0f}배 (단위 오류?)')
         ok(fin['fx'].get('pair') == 'USD/KRW' and num(fin['fx'].get('rate')) and 900 < fin['fx']['rate'] < 2500, f'{e} 환율 {fin["fx"]}')
         ok(isinstance(fin.get('stale'), list), f'{e} stale')
+    U = {x[0] for e in ('soxx', 'soxq') for x in (summ[e].get('live') or {}).get('syms', []) + (summ[e].get('live') or {}).get('pos', [])}
+    ok(0 < len(U) and len(U) + 3 <= 45, f'실시간 종목 수 {len(U)}+3 — Worker /qs 한도(45) 넘음')   # 화면 lvSyms = 두 ETF 합 + SOXX·SOXQ·KRW=X
     ref = load('sox_fwd_ref.json')
     ok(len(ref['r']) > 1000 and ref['r'][0][0] == '2002-01-11', 'sox_fwd_ref 줄')
     print(f'semis_test: 검사 {N}개 · 실패 {len(FAIL)}개')

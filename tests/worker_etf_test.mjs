@@ -60,7 +60,7 @@ ok(['KOSPI', 'KPI200', '069500', '0167A0'].every(x => W.etfSource('k', x)) && !W
 // ── 실시간 시세 /q (야후 1분봉 마지막 체결가 · 프리·정규·애프터 · 15초 메모리 보관) ──
 const qa = src.indexOf('const Q_TTL'), qb = src.indexOf('export default');
 if (qa < 0 || qb < 0 || qb < qa) { console.log('FAIL Worker 에서 /q(liveQuote) 구간을 찾지 못함'); process.exit(1); }
-const Q = new Function('CNN_UA', src.slice(qa, qb) + '\nreturn { yQuote, liveQuote, QC };')('test');
+const Q = new Function('CNN_UA', src.slice(qa, qb) + '\nreturn { yQuote, liveQuote, QC, yReg, liveQuotes, QSC };')('test');
 const S = 1791878400, TP = { pre: { start: S, end: S + 19800 }, regular: { start: S + 19800, end: S + 43200 }, post: { start: S + 43200, end: S + 57600 } };   // 2026-10-13 04:00 EDT 부터
 const yj = (bars, meta = {}) => JSON.stringify({ chart: { result: [{ meta: Object.assign({ symbol: 'SOXL', gmtoffset: -14400, regularMarketPrice: 128.4, regularMarketTime: S - 14400, chartPreviousClose: 127.1, currentTradingPeriod: TP }, meta),
   timestamp: bars.map((x) => x[0]), indicators: { quote: [{ close: bars.map((x) => x[1]) }] } }] } });
@@ -93,5 +93,27 @@ qr = await qreq('SOXL'); ok(qr.status === 200 && qr.j.stale === 1 && qr.j.p === 
 qr = await qreq('TQQQ'); ok(qr.status === 502, '/q 원본 오류 · 보관본 없음 → 502', qr);
 qmode = '404'; qr = await qreq('ZZZZ'); ok(qr.status === 404, '/q 없는 기호 → 404', qr);
 Date.now = realNow;
+// ── 여러 종목 정규장 가격 /qs (반도체 지수 분석 실시간 · 일봉 1일치 meta · 60초 보관 · 8개씩) ──
+const ym = (meta) => JSON.stringify({ chart: { result: [{ meta: Object.assign({ symbol: 'NVDA', gmtoffset: -18000, regularMarketPrice: 190.123456, regularMarketTime: 1794330000, chartPreviousClose: 186.64 }, meta) }] } });
+let g = Q.yReg(ym({}));
+ok(g && g.rp === 190.1235 && g.rt === 1794330000 && g.pc === 186.64 && g.d === new Date((1794330000 - 18000) * 1000).toISOString().slice(0, 10), '/qs 야후 meta → 정규장 가격·시각·거래소 날짜·전일 종가', g);
+ok(Q.yReg(ym({ regularMarketTime: 1794366000 })).d === '2026-11-10' && Q.yReg(ym({ regularMarketTime: 1794376800 })).d === '2026-11-11', '/qs 거래소 날짜 = 현지 시각 기준(UTC 날짜 아님)', '');
+ok(Q.yReg('{x') === null && Q.yReg(ym({ regularMarketPrice: null })) === null && Q.yReg(ym({ regularMarketTime: 0 })) === null, '/qs 깨진 응답·가격·시각 없음 → null', '');
+let scalls = [], smode = 'ok';
+globalThis.fetch = async (u) => { scalls.push(u); if (smode === 'down') return { ok: false, status: 503, text: async () => '' };
+  const sym = decodeURIComponent(u.split('/chart/')[1].split('?')[0]); return { ok: true, status: 200, text: async () => (sym === 'BAD' ? '{}' : ym({ symbol: sym, regularMarketPrice: 100 + scalls.length })) }; };
+const sreq = async (s, c = cors) => { const r = await Q.liveQuotes(new URL('https://x/qs?s=' + s), c, json); return { status: r.status, j: JSON.parse(await r.text()) }; };
+let sr = await sreq('NVDA,AMD', { ok: false, headers: {} }); ok(sr.status === 403 && !scalls.length, '/qs 다른 사이트 → 403', sr);
+sr = await sreq('NVDA,a%20b'); ok(sr.status === 400 && !scalls.length, '/qs 이상한 기호 → 400', sr);
+sr = await sreq(Array.from({ length: 46 }, (_, i) => 'T' + i).join(',')); ok(sr.status === 400 && !scalls.length, '/qs 46개 넘음 → 400', sr.status);
+sr = await sreq(''); ok(sr.status === 400, '/qs 빈 목록 → 400', sr.status);
+const L = ['nvda', 'AMD', 'NVDA', 'KRW=X', '^SOX', 'BAD'].concat(Array.from({ length: 10 }, (_, i) => 'Z' + i));
+sr = await sreq(L.map(encodeURIComponent).join(','));
+ok(sr.status === 200 && Object.keys(sr.j.q).length === 15 && sr.j.q.NVDA.rp > 100 && sr.j.q['KRW=X'].rp > 100 && sr.j.q['^SOX'] && sr.j.q.BAD === null && scalls.length === 15
+  && scalls.every((u) => /\?interval=1d&range=1d$/.test(u)) && scalls.some((u) => u.indexOf('/chart/%5ESOX?') > 0), '/qs 여러 종목 · 대문자·중복 제거 · 못 받은 종목 null · 일봉 1일치 주소', [Object.keys(sr.j.q).length, scalls.length]);
+const n0 = scalls.length; sr = await sreq('NVDA,AMD'); ok(sr.status === 200 && scalls.length === n0 && sr.j.q.NVDA.rp > 100 && sr.j.q.AMD.rp > 100, '/qs 60초 안 → 메모리 보관본(원본 안 부름)', scalls.length - n0);
+const realNow2 = Date.now; Date.now = () => realNow2() + 61000; smode = 'down';
+sr = await sreq('NVDA,QQQ'); ok(sr.status === 200 && sr.j.q.NVDA && sr.j.q.NVDA.stale === 1 && sr.j.q.QQQ === null, '/qs 60초 지나 원본 오류 → 직전 값(stale) · 처음 종목은 null', sr.j);
+Date.now = realNow2;
 console.log('Worker ETF 실제 가격 경로: ok ' + oks + ' · fail ' + fails);
 process.exit(fails ? 1 : 0);

@@ -169,9 +169,10 @@ def pe_rows(etf, B):
             raise RuntimeError(f'{etf} 바구니 {x["t"]}: 보유일 가격 없음')
         pos.append((x['t'], x['v'] / p0, p0 / x['p0'], c, P['eps'].get(x['t'])))   # n = 보유액 ÷ 오늘 받은 보유일 가격 · EPS 배율 = 분할 보정
     days = sorted(d for d in ref if d >= P['from'])
-    out = []
+    out, parts = [], {}
     for d in days:
         cov = allv = Et = Em = En = estw = 0.0
+        pp = []
         for t, n, f, c, e in pos:
             p = c.get(d)
             if p is None:
@@ -184,6 +185,7 @@ def pe_rows(etf, B):
             ttm, mix, ntm, est = r
             ttm, mix, ntm = ttm * f, mix * f, ntm * f
             cov += v; Et += n * ttm; Em += n * mix; En += n * ntm
+            pp.append((t, v, p))
             estw += n * ntm * est / 4 if ntm else 0
         if cov == 0:
             continue
@@ -200,7 +202,8 @@ def pe_rows(etf, B):
             row['sox'] = round(ref[d], 2)
             row['basis'] = 'SOXQ'
         out.append(row)
-    return out
+        parts[d] = (cov, pp)
+    return out, parts
 
 
 def companies(etf, B, D, fin):
@@ -291,7 +294,7 @@ def main():
         pe = load(e + '_pe.json')
         cols = pe['c']
         old = [dict(zip(cols, r)) for r in pe['r']]
-        new = pe_rows(etf, B)
+        new, parts = pe_rows(etf, B)
         if not new:
             raise RuntimeError(etf + ' 일별 PER 을 하나도 못 만듦')
         # 기준일까지(파이프라인 값)와 다시 계산한 값이 같아야 함 — 가격 칸은 그 뒤 분할이 있으면 배율만큼 다름
@@ -361,6 +364,13 @@ def main():
             sm[k + '_lo'] = min(v) if v else None
             sm[k + '_hi'] = max(v) if v else None
         sm['mcap'] = R(sum(c.get('mcap_usd') or 0 for c in comp), 0)
+        # 화면 실시간 반영용 ([SEMIS] computeLive · Worker /qs) — 마지막 날 지수 PER 바구니(계산에 넣은 종목)의 보유액 비중·그날 종가 · 기업 표 종목
+        #   화면: 실시간 PER = 마지막 PER × Σ 비중 × (지금 가격 ÷ 그날 종가)  (EPS 고정이라 PER 은 바구니 가격에 비례)
+        if last['date'] not in parts:
+            raise RuntimeError(f'{etf} 마지막 날 {last["date"]} 바구니가 없음')
+        cv, pp = parts[last['date']]
+        sm['live'] = {'d': last['date'], 'pos': [[t, round(v / cv, 6), round(p, 4)] for t, v, p in sorted(pp, key=lambda x: -x[1])],
+                      'syms': [[c['sym'], c.get('mcap_usd'), c.get('px'), c.get('pxd') or D] for c in comp]}   # 기업 표: 티커·시가총액(달러)·종가·그 날짜
         sm['stale'] = nf['stale']
         summ[e] = sm
     if REPLAY:
