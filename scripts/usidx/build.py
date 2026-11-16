@@ -44,7 +44,7 @@ def ko_names():
 def adj_pe(px, ns):
     """나스닥 조정 EPS 기준 PER (후행 = 최근 4개 분기 실제 · 혼합 = 최근 2개 + 다음 2개 예상 · 선행 = 다음 4개 예상) + EPS 기준 날짜"""
     if not ns or not px:
-        return None, None, None, None
+        return None, None, None, None, (None, None, None)
     sur = ns.get('sur') or []
     last = sur[-1][0] if sur else None
     fq = [r for r in (ns.get('fq') or []) if r[1] is not None and (not last or r[0] > last)]
@@ -52,7 +52,7 @@ def adj_pe(px, ns):
     m = (sum(r[2] for r in sur[-2:]) + sum(r[1] for r in fq[:2])) if len(sur) >= 2 and len(fq) >= 2 else None
     f = sum(r[1] for r in fq[:4]) if len(fq) >= 4 else None
     pe = lambda e: R(px / e, 1) if e and e > 0 else None
-    return pe(t), pe(m), pe(f), (sur[-1][1] if sur else None)
+    return pe(t), pe(m), pe(f), (sur[-1][1] if sur else None), (t, m, f)
 
 
 def make_co(c, cmc, p, sym, cur, ns, today, last):
@@ -191,6 +191,7 @@ def run(today=None, write=True):
                                                'icr', 'dy', 'sr', 'last_q', 'since_q', 'since_a', 'nq', 'na', 'eps_d', 'pend')})
             row['px'] = R(pr, 2)
             row['pxd'] = pd_
+            row['_ae'], row['_px'] = ci.get('_ae'), (p.c[-1] if p else None)      # 바구니 조정 PER 용(파일에는 안 씀)
             comp.append(row)
         comp.sort(key=lambda x: -(x['weight'] or 0))
         uniq = {id(c) for c in comp_u(comp)}
@@ -251,19 +252,23 @@ def share_hint(snaps, S):
 
 
 def basket_adj(comp):
-    """지금 바구니의 조정 EPS 기준 PER — 비중 ÷ PER 합의 역수(= 시가총액 합 ÷ 이익 합과 같은 가중 조화평균) · 적자(음수 PER 없음)는 이익 0 으로"""
+    """지금 바구니의 조정 EPS 기준 PER = 비중 합 ÷ Σ 비중 × (EPS ÷ 주가) — 시가총액 합 ÷ 이익 합과 같은 지수 PER(팩트셋 등과 같은 방식)
+    · 적자 종목은 마이너스 이익 그대로 넣음 · 나스닥 자료가 없는 종목(버크셔 B 등)은 분자·분모 모두에서 뺌(계산 비중 _cov 에 표시)
+    · (2026-11-16 전에는 자료 없는 종목을 '이익 0'으로 넣어 PER 이 계산 비중만큼 높게 나왔음)"""
     out = {}
-    for k in ('pe_ttm', 'pe_mix', 'pe_ntm'):
-        w = s = 0.0
+    for j, k in enumerate(('pe_ttm', 'pe_mix', 'pe_ntm')):
+        wa = wc = s = 0.0
         for c in comp:
             if c.get('weight') is None:
                 continue
-            w += c['weight']
-            if c.get(k):
-                s += c['weight'] / c[k]
-        cov = sum(c['weight'] for c in comp if c.get(k)) / w * 100 if w else 0
-        out[k] = R(w / s, 2) if s > 0 else None
-        out[k + '_cov'] = R(cov, 1)
+            wa += c['weight']
+            e, p = (c.get('_ae') or (None, None, None))[j], c.get('_px')
+            if e is None or not p:
+                continue
+            wc += c['weight']
+            s += c['weight'] * e / p
+        out[k] = R(wc / s, 2) if s > 0 else None
+        out[k + '_cov'] = R(wc / wa * 100, 1) if wa else 0
     return out
 
 
@@ -313,7 +318,7 @@ def company(t, c, cmc, p, co, ns, S, hint=None, today=None):
         ciks = ciks[:1]
     out = {'cur': 'USD'}
     pr = p.c[-1] if p else None
-    out['pe_ttm'], out['pe_mix'], out['pe_ntm'], out['eps_d'] = adj_pe(pr, ns)
+    out['pe_ttm'], out['pe_mix'], out['pe_ntm'], out['eps_d'], out['_ae'] = adj_pe(pr, ns)
     if not ciks or not p:
         out['mcap_usd'] = (S.get(t) or (None, None, None))[2]
         return out
