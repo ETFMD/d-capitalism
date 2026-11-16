@@ -456,28 +456,38 @@ async function liveQuote(url, cors, json) {
   }
 }
 
-/* GET /qs?s=A,B,C → 여러 종목 정규장 가격 한 번에 (반도체 지수 분석 [SEMIS] 실시간 반영 · 최대 45개 · 사이트에서만)
-   · 종목마다 야후 일봉 1일치(가벼운 응답)의 meta: 정규장 가격 rp · 그 시각 rt · 거래소 현지 날짜 d · 전 거래일 종가 pc (프리·애프터 가격은 쓰지 않음 = '종가 기준')
-   · 종목별 60초 메모리 보관 · 원본 오류면 직전 값(stale) · 못 받은 종목은 null — 응답은 늘 200(일부만 받아도) · 원본에는 8개씩 나눠 요청 */
-const QS_TTL = 60000, QS_MAX = 45, QSC = new Map();
-function yReg(v) {
-  let j; try { j = JSON.parse(v); } catch (e) { return null; }
-  const m = j && j.chart && j.chart.result && j.chart.result[0] && j.chart.result[0].meta;
+/* GET /qs?s=A,B,C → 여러 종목 정규장 가격 한 번에 (반도체 지수 [SEMIS] · 나스닥 100·S&P 500 지수 [USIDX] 실시간 반영 · 최대 600개 · 사이트에서만)
+   · 종목마다 야후 meta: 정규장 가격 rp · 그 시각 rt · 거래소 현지 날짜 d · 전 거래일 종가 pc (프리·애프터 가격은 쓰지 않음 = '종가 기준')
+   · 종목별 60초 메모리 보관 · 원본 오류면 직전 값(stale) · 못 받은 종목은 null — 응답은 늘 200(일부만 받아도)
+   · 받을 종목이 16개 이하면 종목마다 일봉 1일치(8개씩), 더 많으면 야후 spark 로 20개씩 묶어(동시 6묶음 · 600개 = 30번) — Cloudflare 요청 한도(50) 안
+     spark 에서 빠진 종목은 8개까지 일봉으로 한 번 더 */
+const QS_TTL = 60000, QS_MAX = 600, QS_ONE = 16, QS_SPARK = 20, QSC = new Map();
+function yRegMeta(m) {
   if (!m || !(m.regularMarketPrice > 0) || !(m.regularMarketTime > 0)) return null;
   const r4 = (x) => (x > 0 ? Math.round(x * 1e4) / 1e4 : null), pc = m.chartPreviousClose != null ? m.chartPreviousClose : m.previousClose;
   return { rp: r4(m.regularMarketPrice), rt: m.regularMarketTime, d: new Date((m.regularMarketTime + (+m.gmtoffset || 0)) * 1000).toISOString().slice(0, 10), pc: r4(pc) };
+}
+function yReg(v) {
+  let j; try { j = JSON.parse(v); } catch (e) { return null; }
+  return yRegMeta(j && j.chart && j.chart.result && j.chart.result[0] && j.chart.result[0].meta);
+}
+function ySpark(v) {   /* spark 응답 → {기호: 값} */
+  let j; try { j = JSON.parse(v); } catch (e) { return {}; }
+  const out = {};
+  ((j && j.spark && j.spark.result) || []).forEach((r) => { const m = r && r.response && r.response[0] && r.response[0].meta; const q = yRegMeta(m); if (q && r.symbol) out[String(r.symbol).toUpperCase()] = q; });
+  return out;
 }
 async function liveQuotes(url, cors, json) {
   if (!cors.ok) return json({ error: 'origin' }, 403);
   const list = [...new Set((url.searchParams.get('s') || '').toUpperCase().split(',').map((x) => x.trim()).filter(Boolean))];
   if (!list.length || list.length > QS_MAX || !list.every((s) => /^\^?[A-Z0-9][A-Z0-9.=-]{0,15}$/.test(s))) return json({ error: 'bad symbols' }, 400);
-  const now = Date.now(), out = {};
+  const now = Date.now(), out = {}, H = { headers: { 'User-Agent': CNN_UA, Accept: 'application/json, text/plain, */*', 'Accept-Language': 'en-US,en;q=0.9', Referer: 'https://finance.yahoo.com/' } };
+  const need = [];
+  list.forEach((s) => { const c = QSC.get(s); if (c && now - c.at < QS_TTL) out[s] = c.v; else need.push(s); });
   const one = async (s) => {
     const c = QSC.get(s);
-    if (c && now - c.at < QS_TTL) { out[s] = c.v; return; }
     try {
-      const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?interval=1d&range=1d`,
-        { headers: { 'User-Agent': CNN_UA, Accept: 'application/json, text/plain, */*', 'Accept-Language': 'en-US,en;q=0.9', Referer: 'https://finance.yahoo.com/' } });
+      const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?interval=1d&range=1d`, H);
       if (!r.ok) throw new Error('upstream ' + r.status);
       const v = yReg(await r.text());
       if (!v) throw new Error('empty');
@@ -487,8 +497,27 @@ async function liveQuotes(url, cors, json) {
       out[s] = c ? { ...c.v, stale: 1 } : null;
     }
   };
-  for (let i = 0; i < list.length; i += 8) await Promise.all(list.slice(i, i + 8).map(one));
-  if (QSC.size > 400) QSC.clear();
+  if (need.length <= QS_ONE) {
+    for (let i = 0; i < need.length; i += 8) await Promise.all(need.slice(i, i + 8).map(one));
+  } else {
+    const chunks = [];
+    for (let i = 0; i < need.length; i += QS_SPARK) chunks.push(need.slice(i, i + QS_SPARK));
+    const got = {};
+    const spark = async (ch) => {
+      try {
+        const r = await fetch('https://query1.finance.yahoo.com/v7/finance/spark?symbols=' + ch.map(encodeURIComponent).join(',') + '&range=1d&interval=1d', H);
+        if (!r.ok) throw new Error('upstream ' + r.status);
+        Object.assign(got, ySpark(await r.text()));
+      } catch (e) { /* 묶음 실패 → 아래에서 직전 값 */ }
+    };
+    for (let i = 0; i < chunks.length; i += 6) await Promise.all(chunks.slice(i, i + 6).map(spark));
+    const miss = [];
+    need.forEach((s) => { if (got[s]) { QSC.set(s, { at: now, v: got[s] }); out[s] = got[s]; } else miss.push(s); });
+    const retry = miss.slice(0, 8);
+    await Promise.all(retry.map(one));
+    miss.slice(8).forEach((s) => { const c = QSC.get(s); out[s] = c ? { ...c.v, stale: 1 } : null; });
+  }
+  if (QSC.size > 3000) QSC.clear();
   return json({ at: Math.floor(now / 1000), q: out });
 }
 
@@ -518,7 +547,7 @@ export default {
       }
       if (url.pathname === '/etf' && req.method === 'GET') return await etfChart(env, url, cors, json);
       if (url.pathname === '/q' && req.method === 'GET') return await liveQuote(url, cors, json);   /* 실시간 시세 (프리·정규·애프터) */
-      if (url.pathname === '/qs' && req.method === 'GET') return await liveQuotes(url, cors, json);   /* 여러 종목 정규장 가격 (반도체 지수 분석 실시간) */
+      if (url.pathname === '/qs' && req.method === 'GET') return await liveQuotes(url, cors, json);   /* 여러 종목 정규장 가격 (반도체·나스닥 100·S&P 500 지수 분석 실시간) */
       /* GET /relay?u=… → 해외 서버(GitHub Actions)를 막는 운용사 사이트의 공개 분배금 자료만 대신 받아 옴 (허용 주소만 · GET 만) */
       if (url.pathname === '/relay' && req.method === 'GET') {
         let target;

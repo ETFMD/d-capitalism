@@ -841,7 +841,50 @@ def autosum_semis():
                 '위 표·차트는 페이지를 열 때 최신 자료로 다시 그려집니다.')
 
 
-AUTOSUM = {'mcap': autosum_mcap, 'fx': autosum_fx, 'apt': autosum_apt, 'earn': autosum_earn, 'rates': autosum_rates, 'semis': autosum_semis}
+def autosum_usidx():
+    """[USIDX] NASDAQ 100과 S&P500 지수 분석 — 지수 PER(회계 기준 후행·혼합·선행·역대 위치 · 조정 EPS 기준) · 시가총액 · 비중 상위 · 업종 · 선행 PER 낮은·높은 종목"""
+    sm = _load('usidx/summary.json')
+    fin = {}
+    for e, n0 in (('ndx', 95), ('spx', 480)):
+        f = _load(f'usidx/{e}_fin.json')
+        cc = f['c']['c']
+        fin[e] = [dict(zip(cc, r)) for r in f['c']['r']]
+        if len(fin[e]) < n0:
+            raise ValueError(f'usidx {e} 기업 {len(fin[e])}곳')
+    fx = (sm.get('fx') or {}).get('rate')
+    N, S = sm['ndx'], sm['spx']
+    rows = [[f'{lab} PER<br><small>{sub}</small>'] + [(f'{x[k]:.1f}배<br><small>하위 {x[k + "_p"]:.0f}%</small>', 'n') for x in (N, S)]
+            for k, lab, sub in (('pe_ttm', '후행', '최근 4개 분기 · 회계 기준'), ('pe_mix', '혼합', '최근 2 + 다음 2개 분기'), ('pe_ntm', '선행', '다음 4개 분기'))]
+    rows.append(['선행 PER (조정 EPS)<br><small>애널리스트 집계 · 지금 바구니</small>'] + [(f'{x["adj"]["pe_ntm"]:.1f}배' if (x.get('adj') or {}).get('pe_ntm') else '—', 'n') for x in (N, S)])
+    rows.append(['선행 PER 역대 범위<br><small>2012년~ · 회계 기준</small>'] + [(f'{x["pe_ntm_lo"]:.1f}~{x["pe_ntm_hi"]:.1f}배', 'n') for x in (N, S)])
+    rows.append(['구성 종목 시가총액'] + [(f'{_kunit(x["mcap"])} 달러' + (f'<br><small>{_kunit(x["mcap"] * fx)} 원</small>' if fx else ''), 'n') for x in (N, S)])
+    nm = lambda c: esc(c.get('ko') or c.get('name') or c['sym'])
+    d = N['date']
+    li = [f'{ymd_ko(datetime.date.fromisoformat(d))} 종가 기준 나스닥 100(QQQ) 선행 PER은 {N["pe_ntm"]:.1f}배, S&amp;P 500(SPY)은 {S["pe_ntm"]:.1f}배입니다(회계 EPS 기준). '
+          f'2012년 이후 거래일 가운데 지금보다 선행 PER이 낮았던 날은 나스닥 100 {N["pe_ntm_p"]:.0f}%, S&amp;P 500 {S["pe_ntm_p"]:.0f}%입니다.']
+    for e, lab in (('ndx', 'QQQ(나스닥 100)'), ('spx', 'SPY(S&amp;P 500)')):
+        top = sorted((c for c in fin[e] if c.get('weight') is not None), key=lambda c: -c['weight'])[:5]
+        sec = {}
+        for c in fin[e]:
+            sec[c['seg']] = sec.get(c['seg'], 0) + (c.get('weight') or 0)
+        ss = sorted(sec.items(), key=lambda x: -x[1])[:3]
+        li.append(f'{lab} 비중 상위 5종목: ' + ', '.join(f'{nm(c)} {c["weight"]:.1f}%' for c in top) + f' (5종목 합 {sum(c["weight"] for c in top):.1f}%) · 업종 상위: '
+                  + ', '.join(f'{esc(k)} {v:.0f}%' for k, v in ss) + '.')
+    for e, lab in (('ndx', '나스닥 100'), ('spx', 'S&amp;P 500')):
+        pe = sorted((c for c in fin[e] if c.get('pe_ntm') and c['pe_ntm'] > 0 and (c.get('weight') or 0) >= (0.3 if e == 'ndx' else 0.1)), key=lambda c: c['pe_ntm'])
+        if pe:
+            li.append(f'{lab} 주요 종목 중 선행 PER이 가장 낮은 곳은 ' + ', '.join(f'{nm(c)}({c["pe_ntm"]:.1f}배)' for c in pe[:3])
+                      + ', 가장 높은 곳은 ' + ', '.join(f'{nm(c)}({c["pe_ntm"]:.1f}배)' for c in pe[::-1][:3]) + '입니다.')
+    both = {c['sym'] for c in fin['ndx']} & {c['sym'] for c in fin['spx']}
+    li.append(f'나스닥 100 종목 {len(fin["ndx"])}개 중 {len(both)}개는 S&amp;P 500에도 들어 있습니다.')
+    inner = _tbl(['지표', ('나스닥 100<br><small>QQQ</small>', 'n'), ('S&amp;P 500<br><small>SPY</small>', 'n')], rows) + _ul(li)
+    return _sec('usidx', '나스닥 100·S&P 500 요약 — 지금 PER과 구성 종목', f'두 지수의 PER과 구성 종목 <small>{_when(sm["updated"])} 갱신 · 자동 갱신</small>', inner,
+                '자료: SEC 공시(ETF 보유 내역·기업 10-K·10-Q XBRL·8-K), 스테이트 스트리트 SPY 보유 내역, 나스닥 조정 EPS·컨센서스, Yahoo Finance 종가·환율 (data/usidx). '
+                '\'하위 N%\'는 2012년 이후 거래일 가운데 지금보다 PER이 낮았던 날의 비율이며, 지수 PER은 회계(GAAP) EPS 기준입니다. '
+                '위 표·차트는 페이지를 열 때 최신 자료로 다시 그려집니다.')
+
+
+AUTOSUM = {'mcap': autosum_mcap, 'fx': autosum_fx, 'apt': autosum_apt, 'earn': autosum_earn, 'rates': autosum_rates, 'semis': autosum_semis, 'usidx': autosum_usidx}
 
 
 def autosum(key, src_text=None):

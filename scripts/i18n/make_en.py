@@ -204,6 +204,7 @@ TEXT.update({'72루틴': '72 Routine (Korean)'})   # 72루틴 메뉴 이름 (도
 TEXT.update({'투자전략 시뮬레이터': 'Strategy simulator (Korean)'})
 TEXT.update({'전세계 금리': 'World interest rates (Korean)'})   # [RATES] 메뉴 이름 (도구 화면은 한국어만)   # [STRATSIM] 메뉴 이름 (도구 화면은 한국어만)
 TEXT.update({'SOX와 NYSE 반도체 지수 분석': 'SOX & NYSE semiconductor index analysis (Korean)'})   # [SEMIS] 메뉴 이름 (도구 화면은 한국어만)
+TEXT.update({'NASDAQ 100과 S&amp;P500 지수 분석': 'NASDAQ 100 & S&amp;P 500 index analysis (Korean)', 'NASDAQ 100과 S&P500 지수 분석': 'NASDAQ 100 & S&P 500 index analysis (Korean)'})   # [USIDX] 메뉴 이름 (도구 화면은 한국어만)
 TEXT.update({'디코딩 뉴스': 'Decoding news (Korean)'})   # [NEWS] 메뉴 이름 (도구 화면은 한국어만)
 TEXT.update({'투자전략 자료실': 'Strategy research', 'TQQQ 장중 흐름': 'TQQQ intraday paths (Korean)', '9sig 과최적화 탐색기': '9sig overfit explorer (Korean)', 'SMA 과최적화 탐색기': 'SMA overfit explorer (Korean)'})   # [STRATSIM] 자료실 메뉴 (무한매수법(영어판 있음)·VR·투자전략 시뮬레이터도 이 안 · 항목마다 (Korean) 표시)
 TEXT.update({'무한매수법 계산기 — V1.0~V4.0 주문표·기록': 'Infinite Buying calculator — V1.0–V4.0 order sheet and tracker'})   # 무한매수법 정적 제목(h1 · [SSR-H1])

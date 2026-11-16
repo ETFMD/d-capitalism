@@ -1,0 +1,67 @@
+name: 나스닥 100·S&P 500 지수 분석 갱신
+
+# [USIDX] 'NASDAQ 100과 S&P500 지수 분석' (data/usidx/*.json) — scripts/update_usidx.py
+#  · SEC 공시(QQQ·SPY 보유 내역 · 기업 XBRL 재무 · 8-K 실적 발표일), SPY 운용사 일별 보유 내역, 나스닥 100 구성 종목·조정 EPS·컨센서스, 야후 종가로
+#    일별 지수 PER(2012년~) · 구성 종목 표 · 기업 상세 · 요약을 다시 계산
+#  · 원자료(약 250MB: SEC 결제 불이행 자료·companyfacts 요약·주가)는 Actions 캐시에 두고 새 공시·새 가격만 받음 — 캐시가 없으면 처음부터(약 1~2시간)
+#  · 평일 07:05 KST(미국장 마감 뒤) · 토요일 10:30 KST(금요일 종가·늦은 공시) · 내용이 바뀐 경우에만 커밋
+on:
+  schedule:
+    - cron: '5 22 * * 1-5'
+    - cron: '30 1 * * 6'
+  workflow_dispatch:
+    inputs:
+      full:
+        description: '종목 식별·재무를 처음부터 다시 (캐시는 그대로 쓰되 모든 단계 강제)'
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths: ['scripts/update_usidx.py', 'scripts/usidx/**', '.github/workflows/update-usidx.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: usidx
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      USIDX_RAW: /home/runner/.cache/usidx
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}   # 앞 실행을 기다린 실행도 시작 시점 main 최신본에서
+      - name: 원자료 캐시 불러오기
+        uses: actions/cache/restore@v4
+        with:
+          path: /home/runner/.cache/usidx
+          key: usidx-raw-${{ github.run_id }}
+          restore-keys: usidx-raw-
+      - name: 공시·보유 내역·가격으로 갱신
+        run: python3 scripts/update_usidx.py ${{ inputs.full && '--full' || '' }}
+      - name: 원자료 캐시 저장 (실패해도 받은 만큼은 다음 실행에 씀)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: /home/runner/.cache/usidx
+          key: usidx-raw-${{ github.run_id }}
+      - name: 자료 검사
+        run: python3 tests/usidx_test.py
+      - name: 변경된 경우에만 커밋
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898099+github-actions[bot]@users.noreply.github.com'
+          git add data/usidx/
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git commit -m "chore: 나스닥 100·S&P 500 지수 분석 갱신"
+          for i in 1 2 3; do
+            git pull --rebase --autostash && git push && exit 0
+            git rebase --abort 2>/dev/null || true
+            sleep 5
+          done
+          exit 1

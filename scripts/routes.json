@@ -306,6 +306,14 @@
       "desc": "SOXX·SOXQ 30개 반도체 기업의 분기·연간 실적·PER과 2013년부터 매일 계산한 SOX·NYSE 반도체 지수 PER 추이를 봅니다."
     },
     {
+      "path": "nasdaq100-sp500-index",
+      "tab": "usidx",
+      "group": "invest",
+      "title": "NASDAQ 100과 S&P500 지수 분석 — QQQ·SPY 구성 종목 실적과 지수 PER 추이",
+      "short": "NASDAQ 100과 S&P500 지수 분석",
+      "desc": "나스닥 100·S&P 500 구성 종목의 분기·연간 실적·PER과 2012년부터 매일 계산한 두 지수의 PER 추이를 봅니다."
+    },
+    {
       "path": "news",
       "tab": "news",
       "group": "learn",
