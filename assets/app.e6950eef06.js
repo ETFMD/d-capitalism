@@ -36,7 +36,7 @@ var SITE_EN = (document.documentElement.getAttribute('lang') || '').indexOf('en'
   }
   /* 파일별 갱신 주기(신선도)와 다운로드 제한 시간 — 큰 파일을 불필요하게 두 번 받지 않도록 */
   var FRESH_MS = { 'apt_rank.json': 4 * 3600e3, 'salary_rank.json': 7 * 86400e3, 'asset_rank.json': 7 * 86400e3, 'mcap.json': 26 * 3600e3, 'etfcagr.json': 7 * 3600e3, 'history.json': 22 * 3600e3, 'dxy.json': 7 * 3600e3, 'home.json': 7 * 3600e3, 'whatif.json': 20 * 3600e3, 'muhan_bt.json': 26 * 3600e3, 'apt_area.json': 26 * 3600e3, 'realty.json': 7 * 86400e3, 'etf_list.json': 7 * 86400e3, 'usdkrw.json': 7 * 86400e3, 'earnings.json': 150 * 60e3, 'earnings_kr.json': 150 * 60e3, 'earnings_us.json': 150 * 60e3, 'rates.json': 12 * 3600e3 };   /* 기본 40분 · rates.json: 하루 6번 갱신(바뀐 게 없으면 그대로라 최대 반나절) */
-  var BIG = { 'apt_rank.json': 1, 'dxy.json': 1, 'etfcagr.json': 1, 'history.json': 1, 'compare.json': 1, 'muhan.json': 1, 'whatif.json': 1, 'etf_list.json': 1, 'usdkrw.json': 1, 'earnings_kr.json': 1, 'earnings_us.json': 1, 'rates.json': 1, 'semis/soxx_fin.json': 1, 'semis/soxq_fin.json': 1, 'semis/soxx_pe.json': 1, 'semis/soxq_pe.json': 1 };
+  var BIG = { 'apt_rank.json': 1, 'dxy.json': 1, 'etfcagr.json': 1, 'history.json': 1, 'compare.json': 1, 'muhan.json': 1, 'whatif.json': 1, 'etf_list.json': 1, 'usdkrw.json': 1, 'earnings_kr.json': 1, 'earnings_us.json': 1, 'rates.json': 1, 'semis/soxx_fin.json': 1, 'semis/soxq_fin.json': 1, 'semis/soxx_pe.json': 1, 'semis/soxq_pe.json': 1, 'usidx/ndx_fin.json': 1, 'usidx/spx_fin.json': 1, 'usidx/ndx_pe.json': 1, 'usidx/spx_pe.json': 1 };
   function getJSON(url, ms) {
     return timeout(nativeFetch(url, { cache: 'no-cache' }), ms || 6000)
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
@@ -52,7 +52,7 @@ var SITE_EN = (document.documentElement.getAttribute('lang') || '').indexOf('en'
     var v = '?v=' + Math.floor(Date.now() / TTL);
     var ms = BIG[file] ? 25000 : 6000;
     var p = getJSON('data/' + file + v, ms).catch(function () { return null; }).then(function (a) {
-      var fresh = a && a.updated && (Date.now() - Date.parse(a.updated)) < (FRESH_MS[file] || (/^etf(dist|bt)\//.test(file) ? 7 * 86400e3 : /^semis\//.test(file) ? 26 * 3600e3 : 40 * 60 * 1000));   /* ETF 분배 이력 묶음: 매일 밤 갱신 · 백테스트 식·금리: 매주 갱신 · 반도체 지수 분석(semis/): 내용이 바뀐 날만 updated 가 바뀌므로 26시간 */
+      var fresh = a && a.updated && (Date.now() - Date.parse(a.updated)) < (FRESH_MS[file] || (/^etf(dist|bt)\//.test(file) ? 7 * 86400e3 : /^(semis|usidx)\//.test(file) ? 26 * 3600e3 : 40 * 60 * 1000));   /* ETF 분배 이력 묶음: 매일 밤 갱신 · 백테스트 식·금리: 매주 갱신 · 반도체·나스닥 100/S&P 500 지수 분석(semis/·usidx/): 내용이 바뀐 날만 updated 가 바뀌므로 26시간 */
       var raw = rawURL(file);
       if (fresh || !raw) return a;
       return getJSON(raw + v, ms).catch(function () { return null; }).then(function (b) {
@@ -7424,6 +7424,676 @@ var TAX = (function () {
     liveOff: function (off) { LV.off = off !== false; clearTimeout(LV.timer); LV.timer = 0; if (LV.off) { LV.q = null; computeLive(); if (active()) go(true); } else lvFetch(); } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.smRender); else window.smRender();
 })();
+/* ════════════════════════════════════════
+   [USIDX] NASDAQ 100과 S&P500 지수 분석 — data/usidx/*.json (scripts/update_usidx.py · Actions '나스닥 100·S&P 500 지수 분석 갱신' 평일·토요일)
+   · 보기 4개 = 위 카드: 나스닥 100·S&P 500 구성 종목 실적(fin) · PER 추이(pe) — 주소 #v=spx-pe (구성 종목: &co=티커 &p=a · PER: &r=5)
+   · 처음엔 summary.json 만 받아 카드를 채우고, 고른 보기의 파일만 받음(fin 40~200KB · pe 약 250KB) · 기업 상세는 고를 때 co/<티커>.json(약 10KB)
+   · 일별 지수 PER 은 회계(GAAP) EPS 기준 · 기업 표의 후행·혼합·선행 PER 은 나스닥 조정 EPS 기준 — summary.adj = 지금 바구니의 조정 EPS 기준 지수 PER
+   · 실시간: Worker GET /qs (두 바구니 약 520종목 · 야후 spark 묶음) — 1분마다(장 마감 뒤 10분)
+   · 공유 링크·내 저장함: window.dcStateX['nasdaq100-sp500-index']
+════════════════════════════════════════ */
+(function () {
+  var VIEWS = ['ndx-fin', 'spx-fin', 'ndx-pe', 'spx-pe'];
+  var ETFN = { ndx: 'QQQ', spx: 'SPY' }, IXN = { ndx: '나스닥 100', spx: 'S&P 500' }, START = '2012년 1월';
+  var KEYS = ['pe_ttm', 'pe_mix', 'pe_ntm'], NAME = { pe_ttm: '후행', pe_mix: '혼합', pe_ntm: '선행' };
+  var LBL = { pe_ttm: '후행 PER (최근 4개 분기)', pe_mix: '혼합 PER (최근 2개 + 다음 2개 분기)', pe_ntm: '선행 PER (다음 4개 분기)' };
+  var LCOL = { pe_ttm: '#3182f6', pe_mix: '#fe9800', pe_ntm: '#14b8a6' }, COVC = '#a855f7', BAR = '#3182f6', NEG = '#f04452';
+  var BOTTOMS = [['2016-02-11', '2016 바닥'], ['2018-12-24', '2018 바닥'], ['2020-03-23', '코로나'], ['2022-10-12', '2022 바닥'], ['2025-04-08', '2025 관세']];
+  var COLS = ['sym', 'ko', 'weight', 'mcap_usd', 'pe_ttm', 'pe_mix', 'pe_ntm', 'pe_gaap', 'pbr', 'roe', 'rev_g', 'opm', 'debt', 'icr', 'dy', 'sr'];
+  var PCOLS = ['label', 'end', 'rev', 'rev_g', 'oi', 'opm', 'ni', 'ocf', 'icr', 'debt', 'roe', 'per', 'pbr', 'dy', 'sr', 'mcap'];
+  var MONEY = { rev: 1, oi: 1, ni: 1, ocf: 1, mcap: 1 };
+  var UNIT = { rev_g: '%', opm: '%', roe: '%', debt: '%', dy: '%', sr: '%', icr: '배', per: '배', pbr: '배' };
+  var CUR_KO = { USD: '달러', EUR: '유로', CNY: '위안', GBP: '파운드', JPY: '엔', CAD: '캐나다달러', TWD: '대만달러', KRW: '원', CHF: '스위스프랑' };
+  var MC = [['rev', '매출', '분기 또는 회계연도 합계'], ['rev_g', '매출액 증가율', '1년 전 같은 기간 대비, %'], ['oi', '영업이익', '분기 또는 회계연도 합계'], ['opm', '영업이익률', '영업이익 ÷ 매출, %'],
+            ['ni', '당기순이익', '지배주주 귀속, 회계 기준'], ['ocf', '영업활동현금흐름', '분기 또는 회계연도 합계'], ['mcap', '시가총액', '기간 말 종가 × 발행주식 수, 재무 통화'],
+            ['per', '후행 PER (회계 기준)', '분기 말 종가 ÷ 최근 4개 분기 회계 EPS, 적자 기간 제외'], ['pbr', 'PBR', '시가총액 ÷ 자본총계'], ['roe', 'ROE', '순이익 ÷ 평균 자본, %'],
+            ['debt', '부채비율', '부채총계 ÷ 자본총계, %'], ['icr', '이자보상배율', '영업이익 ÷ 이자비용, 배'], ['dy', '배당수익률', '배당금 지급액 ÷ 시가총액, %'], ['sr', '주주환원율', '(배당 + 자사주 매입) ÷ 순이익, %']];
+  var TILES = [['mcap_usd', '시가총액(달러)'], ['pe_ttm', '후행 PER'], ['pe_mix', '혼합 PER'], ['pe_ntm', '선행 PER'], ['pe_gaap', '회계 PER'], ['pbr', 'PBR'], ['roe', 'ROE'], ['debt', '부채비율'], ['icr', '이자보상배율'], ['dy', '배당수익률'], ['sr', '주주환원율'], ['weight', '비중']];
+  var DEF = { v: 'ndx-fin', co: { ndx: '', spx: '' }, p: 'q', sk: 'weight', sd: -1, seg: '', rng: 'all', on: [1, 1, 1] };
+  var S = { v: DEF.v, co: { ndx: '', spx: '' }, p: 'q', sk: 'weight', sd: -1, seg: '', q: '', rng: 'all', on: { pe_ttm: true, pe_mix: true, pe_ntm: true },
+            sum: null, F: {}, P: {}, D: {}, err: {}, ch: {}, pend: {}, loading: null, timer: null, hashed: false, hs: '', L: {} };
+  var LV = { ep: null, q: null, at: 0, err: 0, timer: 0, busy: false, off: false, dirty: 0 };   /* 실시간 시세 (Worker GET /qs) */
+
+  function $(id) { return document.getElementById(id); }
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function etf() { return S.v.split('-')[0]; }
+  function kind() { return S.v.split('-')[1]; }
+  function ETF() { return ETFN[etf()]; }
+  function IX() { return IXN[etf()]; }
+  function active() { var p = $('page-usidx'); return !!(p && p.classList.contains('active')); }
+  function dn(s) { return Math.round(Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) / 864e5); }
+  function kdate(s) { return s ? s.slice(0, 4) + '년 ' + (+s.slice(5, 7)) + '월 ' + (+s.slice(8, 10)) + '일' : '—'; }
+  function dot(s) { return s ? s.slice(0, 4) + '.' + (+s.slice(5, 7)) + '.' + (+s.slice(8, 10)) : '—'; }
+  function md(s) { return s ? (+s.slice(5, 7)) + '.' + (+s.slice(8, 10)) : '—'; }
+  function num(v, d) { return v == null || !isFinite(v) ? '—' : Number(v).toLocaleString('ko-KR', { minimumFractionDigits: d, maximumFractionDigits: d }); }
+  function kunit(v) {   /* 금액 → 조·억·만 */
+    if (v == null || !isFinite(v)) return '—';
+    var a = Math.abs(v), s = v < 0 ? '-' : '';
+    if (a >= 1e12) return s + (a / 1e12).toLocaleString('ko-KR', { maximumFractionDigits: a >= 1e14 ? 0 : 2 }) + '조';
+    if (a >= 1e8) return s + Math.round(a / 1e8).toLocaleString('ko-KR') + '억';
+    if (a >= 1e4) return s + Math.round(a / 1e4).toLocaleString('ko-KR') + '만';
+    return s + Math.round(a).toLocaleString('ko-KR');
+  }
+  function pe1(v) { return num(v, 1) + '배'; }
+  function pc1(v) { return num(v, 1) + '%'; }
+  var FMT = { weight: function (v) { return num(v, 2) + '%'; }, mcap_usd: function (v) { return kunit(v) + ' 달러'; }, mcap: kunit, rev: kunit, oi: kunit, ni: kunit, ocf: kunit,
+              pe_ttm: pe1, pe_mix: pe1, pe_ntm: pe1, pe_gaap: pe1, per: pe1, pbr: function (v) { return num(v, 2) + '배'; }, roe: pc1, rev_g: pc1, opm: pc1,
+              debt: pc1, icr: pe1, dy: function (v) { return num(v, 2) + '%'; }, sr: pc1 };
+  function fmt(k, v) { return v == null ? '—' : FMT[k] ? FMT[k](v) : String(v); }
+  function nm(c) { return c.ko || c.name || c.sym; }
+  function lowOk(c) { return c.pe_ntm != null && c.pe_ntm > 0 && c.pe_ttm != null && c.pe_ttm > 0; }   /* '가장 낮은 선행 PER': 최근 4개 분기도 흑자인 종목만(적자에서 막 돌아서는 종목·평가이익 회사 제외) */
+  function lvFx() { var k = LV.q && LV.q['KRW=X']; return k && k.rp > 500 && k.rp < 5000 ? k.rp : null; }   /* 실시간 원·달러 */
+  function rate() { return lvFx() || (S.sum && S.sum.fx && S.sum.fx.rate) || null; }
+  function won(usd) { var r = rate(); return usd == null || !isFinite(usd) || !r ? '' : kunit(usd * r) + ' 원'; }
+  function lv(p) { return p == null ? 'sm-lv1' : p < 100 / 3 ? 'sm-lv0' : p < 200 / 3 ? 'sm-lv1' : 'sm-lv2'; }   /* 역대 위치: 낮음 파랑 · 가운데 회색 · 높음 빨강 */
+  function css(n, d) { var v = getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return v || d; }
+  function theme() {
+    var dark = document.documentElement.getAttribute('data-theme') !== 'light';
+    return { tick: css('--text3', '#888'), grid: 'rgba(128,128,128,0.14)', zero: 'rgba(128,128,128,0.5)', axis: dark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)',
+             solid: css('--text2', '#999'), bg: css('--bg2', '#17171c'), tipBg: css('--bg3', '#202027'), tipBd: dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
+             tipT: css('--text2', '#9e9ea4'), tipB: css('--text', '#e4e4e5'), px: dark ? '#b8b8c0' : '#4e5968', font: css('--font', 'sans-serif') };
+  }
+  function kill(pre) { Object.keys(S.ch).forEach(function (k) { if (!pre || k.indexOf(pre) === 0) { var c = S.ch[k]; if (c.canvas) c.canvas.__ch = null; try { c.destroy(); } catch (e) {} delete S.ch[k]; } }); }
+
+  /* ── 위 카드 4개 · 자료 기준 · 공시 대기 안내 ── */
+  function tabs() {
+    var s = S.sum;
+    document.querySelectorAll('#ux-tabs .sm-tab').forEach(function (b) {
+      var v = b.getAttribute('data-v'), on = v === S.v, e = v.split('-')[0], x = s && s[e];
+      b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false');
+      if (!x) return;
+      var tv = b.querySelector('[data-tv]'), ts = b.querySelector('[data-ts]'), L = S.L[e], lon = !!(L && L.on), rt = rate();
+      if (v.split('-')[1] === 'fin') {
+        var mc = lon && L.mcap ? L.mcap : x.mcap;
+        tv.innerHTML = kunit(mc) + '<small> 달러</small>' + (lon ? '<em class="sm-lvb">실시간</em>' : '');
+        ts.textContent = (x.syms || '') + '종목 시가총액' + (rt && mc ? ' · ' + kunit(mc * rt) + ' 원' : '');
+      } else {
+        var pn = lon ? L.pe_ntm : x.pe_ntm, pp = lon ? L.pe_ntm_p : x.pe_ntm_p;
+        tv.innerHTML = '<small>선행 </small>' + num(pn, 1) + '<small>배</small>' + (pp != null ? '<em class="' + lv(pp) + '" title="' + START + ' 이후 지금보다 선행 PER이 낮았던 날의 비율">하위 ' + num(pp, 0) + '%</em>' : '') + (lon ? '<em class="sm-lvb">실시간</em>' : '');
+        ts.textContent = '후행 ' + num(lon ? L.pe_ttm : x.pe_ttm, 1) + '배 · 혼합 ' + num(lon ? L.pe_mix : x.pe_mix, 1) + '배 · 회계 기준 · ' + (lon ? (lvOpen(L.rt) ? '실시간 ' : '종가 ') + nyT(L.rt, 1) : dot(x.date));
+      }
+    });
+  }
+  function meta() {
+    var s = S.sum; if (!s) return;
+    var x = s[etf()], u = new Date(s.updated), L = S.L[etf()], lt = '';
+    if (L && L.on) lt = '<span class="sm-lv on"><i></i>' + (lvOpen(L.rt) ? '실시간' : '종가 반영') + '</span>' + (lvOpen(L.rt) ? '미국 정규장 가격으로 1분마다 다시 계산 · ' : '그날 정규장 종가로 다시 계산 · ') +
+      '<b>뉴욕 ' + nyT(L.rt) + '</b>(한국 ' + krT(L.rt) + ')' + (L.miss ? ' · ' + L.miss + '종목은 시세를 못 받아 지난 종가' : '') + ' · ';
+    else if (L) lt = '<span class="sm-lv"><i></i>실시간</span>새 거래일 시세 없음 — 마지막 종가 그대로(미국 정규장이 열리면 바로 반영) · ';
+    else if (LV.err && !LV.off) lt = '실시간 시세를 받지 못해 마지막 종가로 보여 줍니다 · ';
+    $('ux-meta').innerHTML = lt + '확정 종가 <b>' + dot(x.date) + '</b> · ' + ETF() + ' 보유 내역 <b>' + dot(x.hold) + '</b> · 재무·EPS 매일 갱신 · 환율 1달러 <b>' + num(rate(), 2) + '원</b>' + (lvFx() ? '(실시간)' : '') +
+      (isFinite(u) ? ' · 자료 ' + u.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' }) + ' 갱신' : '');
+  }
+  function staleBox() {
+    var s = S.sum, b = $('ux-stale'), st = s && s[etf()] && s[etf()].pend || [];
+    if (!st.length) { b.hidden = true; b.innerHTML = ''; return; }
+    var F = S.F[etf()], name = function (sym) { var c = F && F.comp.filter(function (x) { return x.sym === sym; })[0]; return c ? esc(nm(c)) + ' ' : ''; };
+    b.innerHTML = '<b>실적 발표 · 분기 보고서 대기</b> — 실적을 발표했지만 SEC 분기 보고서(10-Q·10-K)가 아직 올라오지 않은 종목: ' + st.slice(0, 40).map(function (x) { return name(x[0]) + esc(x[0]) + '(' + md(x[1]) + ')'; }).join(', ') +
+      (st.length > 40 ? ' 외 ' + (st.length - 40) + '종목' : '') + '. 지수 PER에는 발표된 조정 EPS를 회계 기준으로 바꿔 먼저 넣었고, 기업 상세의 분기 표는 보고서가 올라오면 채워집니다.';
+    b.hidden = false;
+  }
+
+  /* ── 구성 종목 실적 ── */
+  function finPrep(d) {
+    var c = d.c.c, comp = d.c.r.map(function (r) { var o = {}; for (var i = 0; i < c.length; i++) o[c[i]] = r[i]; return o; }), cnt = {}, low = null, tot = 0, st = {};
+    comp.forEach(function (x) { cnt[x.seg] = (cnt[x.seg] || 0) + 1; if (!x.dup) tot += x.mcap_usd || 0; if (lowOk(x) && (!low || x.pe_ntm < low.pe_ntm)) low = x; if (x.pend) st[x.sym] = x.pend; });
+    var segs = Object.keys(cnt).sort(function (a, b) { return cnt[b] - cnt[a] || a.localeCompare(b, 'ko'); });
+    return { d: d, comp0: comp, comp: comp, segs: segs, cnt: cnt, st: st, low: low, tot: tot, lon: 0, lrt: 0 };
+  }
+  function curCo() {
+    var F = S.F[etf()]; if (!F) return null;
+    var want = S.co[etf()], c = want ? F.comp.filter(function (x) { return x.sym === want; })[0] : null;
+    return c || F.comp[0];
+  }
+  function finView() {
+    var e = etf(), F = S.F[e], n = F.comp.length;
+    $('ux-ov-t').textContent = IX() + ' ' + n + '종목 현재 지표';
+    $('ux-wh').textContent = ETF() + ' 비중';
+    finLead();
+    if (S.seg && F.segs.indexOf(S.seg) < 0) S.seg = '';
+    $('ux-segs').innerHTML = '<button type="button" class="sm-chip' + (!S.seg ? ' on' : '') + '" data-seg="">전체<small>' + n + '</small></button>' +
+      F.segs.map(function (g) { return '<button type="button" class="sm-chip' + (S.seg === g ? ' on' : '') + '" data-seg="' + esc(g) + '">' + esc(g) + '<small>' + F.cnt[g] + '</small></button>'; }).join('');
+    if ($('ux-q').value !== S.q) $('ux-q').value = S.q;
+    ovRows(); detail();
+  }
+  function finLead() {
+    var e = etf(), F = S.F[e], n = F.comp.length, d = F.d;
+    $('ux-lead').innerHTML = (e === 'ndx' ? 'QQQ(인베스코 QQQ 트러스트, 나스닥 100 추종)가' : 'SPY(SPDR S&amp;P 500 ETF 트러스트, S&amp;P 500 추종)가') + ' 담고 있는 ' + n + '개 종목의 분기·연간 실적과 밸류에이션입니다. ' +
+      n + '개 종목 시가총액 합계는 <b>' + kunit(F.tot) + ' 달러</b>(<b>' + (won(F.tot) || '—') + '</b>)이고, 다음 4개 분기 예상 기준 선행 PER이 가장 낮은 종목은 <b>' + (F.low ? esc(nm(F.low)) : '—') + '</b>(<b>' + (F.low ? pe1(F.low.pe_ntm) : '—') + '</b>)입니다. 가격 기준은 ' +
+      (F.lon ? '<b>' + (lvOpen(F.lrt) ? '실시간' : '그날 종가') + '</b>(뉴욕 ' + nyT(F.lrt) + ' · ' + F.lon + '종목 · 나머지는 마지막 종가)입니다.' : '각 종목의 마지막 종가입니다.') +
+      ' 비중은 ' + (e === 'spx' ? '운용사가 공개한 ' + kdate(d.hold) + ' 보유 내역' : 'SEC에 낸 ' + kdate(d.nport) + ' 보유 내역(N-PORT)의 주식 수 × 최신 종가 기준 추정') + '입니다.';
+    var fx = S.sum && S.sum.fx || {}, kx = lvFx();
+    $('ux-fx').innerHTML = '달러 금액의 원화 환산은 1달러 = <b>' + num(kx || fx.rate, 2) + '</b>원 (' + (kx ? '실시간' : esc(fx.at_kst || '') + ' 한국 시간') + ', Yahoo Finance KRW=X)을 일괄 적용했습니다.' +
+      (F.lon ? ' 실시간 값은 주가의 변화율로 다시 계산합니다(EPS·재무는 그대로).' : '');
+  }
+  function ovRows() {
+    var F = S.F[etf()]; if (!F) return;
+    var q = S.q.trim().toLowerCase(), k = S.sk, dir = S.sd, cur = curCo();
+    var list = F.comp.filter(function (c) { return (!S.seg || c.seg === S.seg) && (!q || c.sym.toLowerCase().indexOf(q) >= 0 || String(c.ko || '').toLowerCase().indexOf(q) >= 0 || String(c.name || '').toLowerCase().indexOf(q) >= 0); })
+      .sort(function (a, b) {
+        var x = k === 'ko' ? nm(a) : a[k], y = k === 'ko' ? nm(b) : b[k];
+        if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
+        return (typeof x === 'string' ? x.localeCompare(y, 'ko') : x - y) * dir;
+      });
+    $('ux-ov-b').innerHTML = list.map(function (r) {
+      return '<tr data-sym="' + esc(r.sym) + '"' + (cur && r.sym === cur.sym ? ' class="sel"' : '') + '>' + COLS.map(function (c) {
+        if (c === 'sym') return '<td>' + esc(r.sym) + '</td>';
+        if (c === 'ko') return '<td class="nm" title="' + esc(nm(r) + (r.ko && r.name ? ' · ' + r.name : '') + ' · ' + r.seg) + '">' + esc(nm(r)) + (F.st[r.sym] ? '<span class="sm-flag" title="' + dot(F.st[r.sym]) + ' 실적 발표 — SEC 분기 보고서 대기">발표</span>' : '') + '<small>' + esc(r.seg) + '</small></td>';
+        var v = r[c], t = fmt(c, v), cl = '';
+        if (c === 'mcap_usd') t += '<small>' + won(v) + '</small>';
+        if (c === 'pe_gaap' && v == null && r.ni_ttm != null && r.ni_ttm < 0) { t = '적자'; cl = 'sm-neg'; }
+        else if (typeof v === 'number' && v < 0) cl = 'sm-neg';
+        else if (c === 'pe_ntm' && F.low && r.sym === F.low.sym) cl = 'sm-low';
+        return '<td' + (cl ? ' class="' + cl + '"' : '') + '>' + t + '</td>';
+      }).join('') + '</tr>';
+    }).join('') || '<tr><td colspan="16" class="sm-empty">찾는 종목이 없습니다</td></tr>';
+    document.querySelectorAll('#ux-ov thead th').forEach(function (th) {
+      var b = th.querySelector('button'), kk = b && b.getAttribute('data-k');
+      if (kk === S.sk) th.setAttribute('aria-sort', S.sd > 0 ? 'ascending' : 'descending'); else th.removeAttribute('aria-sort');
+    });
+    document.querySelectorAll('#ux-segs .sm-chip').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-seg') === S.seg); });
+  }
+  function detPrep(d) {   /* co/<티커>.json → {q:[…], a:[…]} (줄을 객체로) */
+    function objs(blk) { var c = blk.c; return blk.r.map(function (r) { var o = {}; for (var i = 0; i < c.length; i++) o[c[i]] = r[i]; return o; }); }
+    return { cur: d.cur || 'USD', q: objs(d.q), a: objs(d.a) };
+  }
+  function needCo(sym) {
+    if (S.D[sym] || S.pend['co:' + sym] || !window.mdLoad) return;
+    S.pend['co:' + sym] = 1;
+    window.mdLoad('usidx/co/' + sym + '.json').catch(function () { return null; }).then(function (d) {
+      delete S.pend['co:' + sym];
+      S.D[sym] = d && d.q && d.a ? detPrep(d) : { cur: 'USD', q: [], a: [], none: 1 };
+      var c = curCo(); if (c && c.sym === sym && kind() === 'fin' && active()) detail();
+    });
+  }
+  function detail(noCharts) {
+    var F = S.F[etf()], c = curCo(); if (!F || !c) return;
+    var sel = $('ux-co');
+    if (sel.__e !== etf() || sel.options.length !== F.comp.length) {
+      sel.innerHTML = F.comp.slice().sort(function (a, b) { return (b.weight || 0) - (a.weight || 0); }).map(function (r) { return '<option value="' + esc(r.sym) + '">' + esc(nm(r) + ' (' + r.sym + ')') + '</option>'; }).join('');
+      sel.__e = etf();
+    }
+    sel.value = c.sym;
+    var st = F.st[c.sym], Dd = S.D[c.sym], cur = (Dd && Dd.cur) || c.cur || 'USD';
+    $('ux-dname').innerHTML = esc(nm(c)) + '<small>' + esc(c.sym) + '</small>';
+    $('ux-dmeta').innerHTML = (c.ko && c.name ? esc(c.name) + ' · ' : '') + '재무 금액 단위: ' + esc(CUR_KO[cur] || cur) + ' · 분기 자료 시작 ' + esc(c.since_q || '—') + ' · 연간 자료 시작 ' + esc(c.since_a || '—') + ' · 최근 분기 ' + esc(c.last_q || '—') +
+      ' · ' + esc(c.seg) + ' · 주가 ' + num(c.px, 2) + '달러(' + (c._lv ? (lvOpen(c._lv) ? '실시간' : '종가') + ' · 뉴욕 ' + nyT(c._lv) : dot(c.pxd) + ' 종가') + ')' +
+      (c.eps_d ? ' · 조정 EPS 최근 발표 ' + dot(c.eps_d) : '') +
+      (st ? '<br><span class="sm-flag">발표</span> ' + dot(st) + ' 실적을 발표했지만 SEC 분기 보고서가 아직 없어 아래 분기 표에는 그 전 분기까지 있습니다.' : '');
+    $('ux-tiles').innerHTML = TILES.map(function (t) {
+      var k = t[0], v = c[k], s = fmt(k, v), sub = '';
+      if (k === 'mcap_usd') sub = won(v);
+      if (v == null && (k === 'pe_gaap' || k === 'pe_ttm') && c.ni_ttm != null && c.ni_ttm < 0) s = '적자';
+      return '<div class="sm-tile"><span>' + (k === 'weight' ? ETF() + ' 비중' : t[1]) + '</span><b' + (typeof v === 'number' && v < 0 || s === '적자' ? ' class="sm-neg"' : '') + '>' + s + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</div>';
+    }).join('');
+    document.querySelectorAll('#ux-per .chart-tab').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-p') === S.p); });
+    document.querySelectorAll('#ux-ov-b tr[data-sym]').forEach(function (tr) { tr.classList.toggle('sel', tr.getAttribute('data-sym') === c.sym); });
+    if (!Dd) { needCo(c.sym); kill('m_'); var box = $('ux-mcs'); box.innerHTML = '<div class="sm-none">' + esc(nm(c)) + ' 실적을 불러오는 중…</div>'; box.__b = 0; $('ux-pd-b').innerHTML = '<tr><td colspan="16" class="sm-empty">불러오는 중…</td></tr>'; $('ux-pd-s').textContent = ''; return; }
+    if (!noCharts) { minis(); pd(); }
+  }
+  function axn(v) { var a = Math.abs(v); return a >= 1e4 ? num(v / 1e3, 0) + 'k' : a >= 1000 ? num(v / 1e3, 1) + 'k' : String(Math.round(v * 100) / 100); }
+  function minis() {
+    var F = S.F[etf()], c = curCo(), box = $('ux-mcs'); if (!F || !c || typeof Chart === 'undefined') return;
+    var Dd = S.D[c.sym]; if (!Dd) return;
+    if (!box.__b) { box.innerHTML = MC.map(function (m) { return '<div class="sm-mc"><h4>' + m[1] + '</h4><p>' + m[2] + '</p><div class="sm-mbox" data-m="' + m[0] + '"></div></div>'; }).join(''); box.__b = 1; }
+    kill('m_');
+    var rows = S.p === 'q' ? Dd.q : Dd.a, th = theme(), ck = CUR_KO[Dd.cur] || Dd.cur;
+    var yrs = [], ly = null; rows.forEach(function (r, i) { var y = r.end.slice(0, 4); if (y !== ly) { yrs.push(i); ly = y; } });
+    MC.forEach(function (m) {
+      var k = m[0], el = box.querySelector('[data-m="' + k + '"]'), bar = !!MONEY[k];
+      var vals = rows.map(function (r) { var v = r[k]; return v == null || !isFinite(v) ? null : v; }), npt = vals.filter(function (v) { return v != null; }).length;
+      if (!npt) { el.innerHTML = '<div class="sm-none">이 기업은 이 지표의 공시 자료가 없습니다.</div>'; return; }
+      el.innerHTML = '<canvas role="img" aria-label="' + esc(nm(c) + ' ' + m[1]) + ' 차트"></canvas>';
+      var dset = bar ? { data: vals, backgroundColor: vals.map(function (v) { return v != null && v < 0 ? NEG : BAR; }), borderRadius: 2, maxBarThickness: 22, categoryPercentage: rows.length > 40 ? 0.85 : 0.75, barPercentage: 1 }
+                     : { data: vals, borderColor: BAR, backgroundColor: BAR, borderWidth: 2, pointRadius: npt <= 30 ? 2.5 : 0, pointHoverRadius: 4, spanGaps: false, tension: 0 };
+      S.ch['m_' + k] = new Chart(el.firstChild.getContext('2d'), {
+        type: bar ? 'bar' : 'line', data: { labels: rows.map(function (r) { return r.end; }), datasets: [dset] },
+        options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
+          layout: { padding: { right: 4, top: 4 } },
+          plugins: { legend: { display: false },
+            tooltip: { backgroundColor: th.tipBg, borderColor: th.tipBd, borderWidth: 1, titleColor: th.tipT, bodyColor: th.tipB, padding: 9, displayColors: false, titleFont: { size: 11 }, bodyFont: { size: 12, weight: '600' },
+              callbacks: { title: function (it) { var r = rows[it[0].dataIndex]; return r ? r.label + ' (' + r.end + ')' : ''; },
+                           label: function (it) { var v = it.raw; if (v == null) return '자료 없음'; var t = fmt(k, v); if (bar) t += ' ' + ck + (Dd.cur === 'USD' && won(v) ? ' (' + won(v) + ')' : ''); return t; } } } },
+          scales: {
+            x: { grid: { display: false }, border: { color: th.grid }, ticks: { color: th.tick, autoSkip: false, maxRotation: 0, font: { size: 10.5 },
+                 callback: function (v, i) {   /* 해마다 첫 기간만 · 너비에 맞춰 건너뜀 */
+                   var j = yrs.indexOf(i); if (j < 0) return '';
+                   var st = Math.max(1, Math.ceil(yrs.length / Math.max(2, Math.floor(((this.width || 260) - 10) / 46))));
+                   return j % st ? '' : rows[i].end.slice(0, 4);
+                 } } },
+            y: { beginAtZero: true, grid: { color: function (ctx) { return ctx.tick && ctx.tick.value === 0 ? th.zero : th.grid; } }, border: { display: false },
+                 ticks: { color: th.tick, font: { size: 10.5 }, maxTicksLimit: 5, callback: function (v) { return bar ? kunit(v) : axn(v) + (UNIT[k] || ''); } } }
+          } } });
+    });
+  }
+  function pd() {
+    var F = S.F[etf()], c = curCo(); if (!F || !c) return;
+    var Dd = S.D[c.sym]; if (!Dd) return;
+    var rows = (S.p === 'q' ? Dd.q : Dd.a).slice().reverse(), ck = CUR_KO[Dd.cur] || Dd.cur;
+    $('ux-pd-h0').textContent = S.p === 'q' ? '기간' : '회계연도'; $('ux-pd-h1').textContent = S.p === 'q' ? '기간 말' : '연도 말';
+    $('ux-pd-s').textContent = (S.p === 'q' ? '분기 ' : '연간 ') + rows.length + '개 · 금액 단위 ' + ck;
+    $('ux-pd-b').innerHTML = rows.map(function (r) {
+      return '<tr>' + PCOLS.map(function (k) {
+        if (k === 'label') return '<td class="t">' + esc(r.label) + '</td>';
+        if (k === 'end') return '<td>' + esc(r.end) + '</td>';
+        var v = r[k], t = fmt(k, v);
+        if (k === 'oi' && r.oi_est && v != null) t += '<span class="sm-flag" title="영업이익 항목이 따로 공시되지 않아 매출 − 매출원가 − 연구개발비 − 판관비로 계산">계산</span>';
+        if (MONEY[k] && v != null && Dd.cur === 'USD') t += '<small>' + won(v) + '</small>';
+        return '<td' + (typeof v === 'number' && v < 0 ? ' class="sm-neg"' : '') + '>' + t + '</td>';
+      }).join('') + '</tr>';
+    }).join('') || '<tr><td colspan="16" class="sm-empty">이 기업은 SEC에 ' + (S.p === 'q' ? '분기' : '연간') + ' 재무(XBRL)를 공시하지 않았거나 아직 자료가 없습니다</td></tr>';
+  }
+
+  /* ── PER 추이 ── */
+  function pePrep(d) {
+    var ix = {}, n = d.r.length, pk = d.c[1];
+    d.c.forEach(function (k, i) { ix[k] = i; });
+    var P = { date: new Array(n), x: new Array(n), k: {}, pk: pk, asof: d.asof, st: {} };
+    var ks = KEYS.concat(['cov', 'est', 'hold', pk]);
+    ks.forEach(function (k) { P.k[k] = new Array(n); });
+    for (var i = 0; i < n; i++) { var r = d.r[i]; P.date[i] = r[0]; P.x[i] = dn(r[0]); for (var j = 0; j < ks.length; j++) P.k[ks[j]][i] = ix[ks[j]] != null ? r[ix[ks[j]]] : null; }
+    KEYS.forEach(function (k) {   /* 전체 기간 요약: 최저·최고(처음 나온 날) · 중앙값 · 지금보다 낮았던 날 비율 */
+      var a = P.k[k], vals = [], lo = -1, hi = -1, now = a[n - 1];
+      for (var i = 0; i < n; i++) { var v = a[i]; if (v == null) continue; vals.push(v); if (lo < 0 || v < a[lo]) lo = i; if (hi < 0 || v > a[hi]) hi = i; }
+      if (!vals.length) return;
+      var so = vals.slice().sort(function (x, y) { return x - y; }), m = so.length >> 1, below = 0;
+      vals.forEach(function (v) { if (v < now) below++; });
+      P.st[k] = { now: now, min: a[lo], mind: P.date[lo], max: a[hi], maxd: P.date[hi], med: so.length % 2 ? so[m] : (so[m - 1] + so[m]) / 2, pct: below / vals.length * 100, days: vals.length };
+    });
+    return P;
+  }
+  function i0of(P) {   /* 고른 기간의 첫 줄 (끝 날에서 N년 전 같은 날부터) */
+    if (S.rng === 'all') return 0;
+    var end = P.date[P.date.length - 1], st = (+end.slice(0, 4) - (+S.rng)) + end.slice(4), lo = 0, hi = P.date.length - 1;
+    while (lo < hi) { var m = (lo + hi) >> 1; if (P.date[m] < st) lo = m + 1; else hi = m; }
+    return lo;
+  }
+  function near(xs, v, i0, i1) { var lo = i0, hi = i1; while (lo < hi) { var m = (lo + hi) >> 1; if (xs[m] < v) lo = m + 1; else hi = m; } return lo > i0 && Math.abs(xs[lo - 1] - v) <= Math.abs(xs[lo] - v) ? lo - 1 : lo; }
+  function xticks(lo, hi, w) {
+    var span = hi - lo, maxN = Math.max(2, Math.floor((w || 600) / 64)), out = [], y0 = new Date(lo * 864e5).getUTCFullYear(), y1 = new Date(hi * 864e5).getUTCFullYear();
+    if (span > 900) {
+      var st = Math.max(1, Math.ceil((y1 - y0 + 1) / maxN));
+      for (var y = y0; y <= y1; y++) { if (st > 1 && y % st) continue; var d = Math.round(Date.UTC(y, 0, 1) / 864e5); if (d >= lo && d <= hi) out.push(d); }
+    } else {
+      var nm_ = Math.round(span / 30.4), ms = [1, 2, 3, 6, 12].filter(function (s) { return nm_ / s <= maxN; })[0] || 12;
+      for (var yy = y0; yy <= y1; yy++) for (var mo = 0; mo < 12; mo += ms) { var dd = Math.round(Date.UTC(yy, mo, 1) / 864e5); if (dd >= lo && dd <= hi) out.push(dd); }
+    }
+    return out;
+  }
+  function xlab(v, span) { var d = new Date(v * 864e5), y = d.getUTCFullYear(), m = d.getUTCMonth() + 1; return span > 900 || m === 1 ? String(y) : String(y).slice(2) + '.' + m; }
+  var PLUG = { id: 'uxPlug',
+    afterDatasetsDraw: function (ch) {   /* 바닥 세로선 + 마우스 자리 세로선·점 */
+      var o = ch.$ux; if (!o) return;
+      o.drawn = (o.drawn || 0) + 1;   /* 회귀 검사: 처음부터 그려졌는지 */
+      var a = ch.chartArea, xs = ch.scales.x, ys = ch.scales.y, c = ch.ctx, th = o.th;
+      c.save(); c.font = '10px ' + th.font; c.lineWidth = 1;
+      (o.marks || []).forEach(function (m) {
+        if (m[0] < xs.min || m[0] > xs.max) return;
+        var px = Math.round(xs.getPixelForValue(m[0])) + 0.5;
+        c.strokeStyle = m[2] ? th.solid : th.axis; c.setLineDash(m[2] ? [] : [3, 3]);
+        c.beginPath(); c.moveTo(px, a.top); c.lineTo(px, a.bottom); c.stroke(); c.setLineDash([]);
+        c.fillStyle = th.tick; c.textBaseline = 'top'; c.fillText(m[1], px + 3, a.top + 2);
+      });
+      if (o.hx != null && o.hx >= xs.min && o.hx <= xs.max) {
+        var hx = Math.round(xs.getPixelForValue(o.hx)) + 0.5;
+        c.strokeStyle = th.axis; c.beginPath(); c.moveTo(hx, a.top); c.lineTo(hx, a.bottom); c.stroke();
+        (o.dots || []).forEach(function (d) { if (d[0] == null || !isFinite(d[0])) return; var py = ys.getPixelForValue(d[0]); c.beginPath(); c.arc(hx, py, 3.5, 0, 2 * Math.PI); c.fillStyle = d[1]; c.fill(); c.lineWidth = 1.5; c.strokeStyle = th.bg; c.stroke(); });
+      }
+      c.restore();
+    } };
+  function lineChart(key, cid, o) {   /* o: { xs, i0, i1, sets:[{arr, col, w}], y:{min,max,fmt,n}, marks, tip(i), dots(i), live } */
+    var cv = $(cid); if (!cv || typeof Chart === 'undefined') return;
+    kill(key);
+    var th = theme(), x0 = o.xs[o.i0], x1 = o.xs[o.i1], span = x1 - x0;
+    var dsets = o.sets.map(function (s) {
+      var data = []; for (var i = o.i0; i <= o.i1; i++) data.push({ x: o.xs[i], y: s.arr[i] == null ? null : s.arr[i] });
+      var d = { data: data, borderColor: s.col, backgroundColor: s.col, borderWidth: s.w || 1.6, pointRadius: 0, pointHoverRadius: 0, spanGaps: false, fill: false };
+      if (o.live) {   /* 실시간 점: 맨 끝 점을 동그라미로 · 마지막 확정 종가에서 이어지는 선은 점선 */
+        var li = data.length - 1;
+        d.pointRadius = function (c) { return c.dataIndex === li ? 3.5 : 0; };
+        d.pointBorderColor = th.bg; d.pointBorderWidth = 1.5;
+        d.segment = { borderDash: function (c) { return c.p1DataIndex === li ? [4, 3] : undefined; } };
+      }
+      return d;
+    });
+    var y = { min: o.y.min, max: o.y.max, beginAtZero: true, grid: { color: th.grid }, border: { display: false }, ticks: { color: th.tick, font: { size: 11 }, maxTicksLimit: o.y.n || 6, callback: o.y.fmt } };
+    var ch = new Chart(cv.getContext('2d'), { type: 'line', data: { datasets: dsets }, plugins: [PLUG],
+      options: { responsive: true, maintainAspectRatio: false, animation: false, parsing: false, normalized: true, events: [],
+        plugins: { legend: { display: false }, tooltip: { enabled: false } }, layout: { padding: { right: 8, top: 4 } },
+        scales: { x: { type: 'linear', min: x0, max: x1, grid: { display: false }, border: { color: th.grid },
+                       afterBuildTicks: function (ax) { ax.ticks = xticks(x0, x1, ax.width).map(function (v) { return { value: v }; }); },
+                       ticks: { color: th.tick, maxRotation: 0, autoSkip: false, font: { size: 11 }, callback: function (v) { return xlab(v, span); } } }, y: y } } });
+    ch.$ux = { th: th, marks: o.marks || [], hx: null, dots: [] }; ch.$o = o;
+    ch.draw();   /* 만들 때 이미 한 번 그려졌으므로(animation 끔) 바닥 선을 넣어 다시 그림 */
+    cv.__ch = ch;
+    if (!cv.__w) {
+      cv.__w = 1;
+      var mv = function (e) { hover(cv, e); };
+      cv.addEventListener('pointermove', mv); cv.addEventListener('pointerdown', mv);
+      cv.addEventListener('pointerleave', function (e) { if (e.pointerType !== 'touch') unhover(cv); });
+    }
+    S.ch[key] = ch;
+  }
+  function unhover(cv) {
+    var ch = cv.__ch, t = cv.parentNode.querySelector('.sm-tip'); if (t) t.style.display = 'none'; if (ch && ch.$ux && ch.$ux.hx != null) { ch.$ux.hx = null; ch.draw(); }
+    if (LV.dirty && kind() === 'pe' && S.P[etf()] && active()) peCharts();   /* 설명창을 보는 동안 미뤄 둔 실시간 차트 갱신 */
+  }
+  function hover(cv, e) {
+    var ch = cv.__ch, a = ch && ch.chartArea, tip = cv.parentNode.querySelector('.sm-tip'); if (!a || !tip || !ch.$o) return;
+    var rc = cv.getBoundingClientRect(), px = e.clientX - rc.left, py = e.clientY - rc.top, o = ch.$o;
+    if (px < a.left || px > a.right || py < a.top - 6 || py > a.bottom + 6) { unhover(cv); return; }
+    var i = px >= a.right - 6 ? o.i1 : near(o.xs, ch.scales.x.getValueForPixel(px), o.i0, o.i1);   /* 오른쪽 끝 = 마지막 점(실시간 점) */
+    ch.$ux.hx = o.xs[i]; ch.$ux.dots = o.dots(i); ch.draw();
+    tip.innerHTML = o.tip(i); tip.style.display = 'block';
+    var bw = cv.parentNode.clientWidth, tw = tip.offsetWidth, cx = ch.scales.x.getPixelForValue(o.xs[i]), left = cx + 14 + tw > bw ? cx - tw - 14 : cx + 14;
+    tip.style.left = Math.max(0, Math.min(bw - tw, left)) + 'px';
+    tip.style.top = (e.pointerType === 'touch' ? 0 : Math.max(0, Math.min(py - 40, cv.parentNode.clientHeight - tip.offsetHeight))) + 'px';
+  }
+  function peView() {
+    var e = etf();
+    $('ux-pe-t').textContent = IX() + ' PER 추이';
+    peLead();
+    peStats();
+    $('ux-px-t').textContent = ETF() + ' 종가';
+    $('ux-px-s').textContent = '달러(액면분할이 있으면 지금 기준으로 맞춘 가격). 배당은 포함하지 않습니다.';
+    $('ux-cov-s').textContent = ETF() + ' 보유액 중 주가·이익 자료가 있어 계산에 넣은 종목의 비중, %. 빠진 종목은 분기 실적이 없는 해외 기업·상장 4개 분기 미만 종목 등입니다.';
+    document.querySelectorAll('#ux-rng .chart-tab').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-r') === S.rng); });
+    document.querySelectorAll('#ux-lines .sm-lt').forEach(function (b) { b.setAttribute('aria-pressed', S.on[b.getAttribute('data-line')] ? 'true' : 'false'); });
+    peCharts();
+  }
+  function peLead() {
+    var e = etf(), P = S.P[e], last = P.date.length - 1, L = S.L[e], on = !!(L && L.on), x = S.sum && S.sum[e];
+    var vals = function (g) { return '후행 <b>' + pe1(g('pe_ttm')) + '</b>, 혼합 <b>' + pe1(g('pe_mix')) + '</b>, 선행 <b>' + pe1(g('pe_ntm')) + '</b>'; };
+    var fix = function (k) { return P.k[k][last]; };
+    $('ux-pe-lead').innerHTML = (e === 'ndx' ? 'QQQ(나스닥 100)가' : 'SPY(S&amp;P 500)가') + ' 실제로 담고 있던 종목과 매일 종가로 계산한 회계(GAAP) EPS 기준 후행·혼합·선행 PER입니다. ' +
+      (on ? '<span class="sm-lv on"><i></i>' + (lvOpen(L.rt) ? '실시간' : '종가 반영') + '</span><b>뉴욕 ' + nyT(L.rt) + '</b> ' + (lvOpen(L.rt) ? '정규장 가격' : '정규장 종가') + ' 기준으로 ' + vals(function (k) { return L[k]; }) +
+            '입니다(장 마감 뒤 확정). 마지막 확정 종가(' + kdate(P.date[last]) + ')로는 ' + vals(fix).replace(/<\/?b>/g, '') + '였습니다.'
+         : '마지막 거래일 <b>' + kdate(P.date[last]) + '</b> 종가 기준으로 ' + vals(fix) + '입니다.');
+    var a = x && x.adj, R = on && L.R ? L.R : 1;
+    $('ux-pe-adj').innerHTML = a ? '<span class="sm-tag">조정 EPS 기준</span>애널리스트가 집계한 회사 발표 조정 EPS(나스닥)로 지금 바구니를 계산하면 후행 <b>' + pe1(a.pe_ttm && a.pe_ttm * R) + '</b>, 혼합 <b>' + pe1(a.pe_mix && a.pe_mix * R) + '</b>, 선행 <b>' + pe1(a.pe_ntm && a.pe_ntm * R) + '</b>입니다' +
+      (on ? '(실시간)' : '') + ' — 흔히 인용하는 지수 PER에 가까운 값이며, 과거 자료가 없어 차트에는 그리지 않습니다(조정 EPS가 있는 종목 비중 ' + num(a.pe_ntm_cov, 0) + '%).' : '';
+    $('ux-pe-desc').textContent = '점선 세로선은 지난 주식시장 바닥입니다.' + (on ? ' 맨 끝 점은 실시간 값(장 마감 뒤 확정)입니다.' : '') + ' 차트 위에 마우스를 올리거나 손가락으로 누르면 그날 값이 나옵니다.';
+  }
+  function peStats() {
+    var e = etf(), P = S.P[e], st = P.st, L = S.L[e], on = !!(L && L.on);
+    $('ux-stats').innerHTML = KEYS.map(function (k) {
+      var s = st[k]; if (!s) return '';
+      var now = on && L[k] != null ? L[k] : s.now, pct = on && L[k + '_p'] != null ? L[k + '_p'] : s.pct;
+      var sp = (s.max - s.min) || 1, pos = Math.max(0, Math.min(100, (now - s.min) / sp * 100)), mp = Math.max(0, Math.min(100, (s.med - s.min) / sp * 100));
+      return '<div class="card sm-stat"><div class="sm-stat-h"><i style="background:' + LCOL[k] + '"></i>' + LBL[k] + (on ? '<em class="sm-lvb">실시간</em>' : '') + '</div>' +
+        '<div class="sm-stat-v">' + num(now, 1) + '<small>배</small><em class="' + lv(pct) + '">하위 ' + num(pct, 0) + '%</em></div>' +
+        '<div class="sm-bar" role="img" aria-label="역대 최저 ' + num(s.min, 1) + '배에서 최고 ' + num(s.max, 1) + '배 사이 지금 위치"><u style="left:' + mp.toFixed(1) + '%" title="중앙값 ' + num(s.med, 1) + '배"></u><i style="left:' + pos.toFixed(1) + '%;background:' + LCOL[k] + '"></i></div>' +
+        '<div class="sm-bar-l"><span>최저 ' + num(s.min, 1) + '</span><span>중앙 ' + num(s.med, 1) + '</span><span>최고 ' + num(s.max, 1) + '</span></div>' +
+        '<dl><dt>역대 최저</dt><dd>' + pe1(s.min) + ' <span>· ' + kdate(s.mind) + '</span></dd><dt>역대 최고</dt><dd>' + pe1(s.max) + ' <span>· ' + kdate(s.maxd) + '</span></dd>' +
+        '<dt>중앙값</dt><dd>' + pe1(s.med) + '</dd><dt>현재 위치</dt><dd><span>지금보다 낮았던 날</span> ' + num(pct, 0) + '% <span>(전체 ' + num(s.days, 0) + '거래일 중)</span></dd>' +
+        (on ? '<dt>확정 종가</dt><dd>' + pe1(s.now) + ' <span>· ' + kdate(P.date[P.date.length - 1]) + '</span></dd>' : '') + '</dl></div>';
+    }).join('');
+  }
+  function peCharts() {
+    var e = etf(), P = S.P[e]; if (!P) return;
+    LV.dirty = 0;
+    var n = P.date.length, L = S.L[e], lx = L && L.on && L.d > P.date[n - 1] ? dn(L.d) : null;   /* 실시간 점: 확정 종가 다음 거래일 */
+    var X = lx ? P.x.concat([lx]) : P.x, ext = function (a, v) { return lx ? a.concat([v]) : a; };
+    var A = {}; KEYS.forEach(function (k) { A[k] = ext(P.k[k], L && L[k]); });
+    var PX = ext(P.k[P.pk], L && L.px), CV = ext(P.k.cov, P.k.cov[n - 1]);
+    var i0 = i0of(P), i1 = X.length - 1, th = theme();
+    var on = KEYS.filter(function (k) { return S.on[k]; }), mx = 0;
+    for (var i = i0; i <= i1; i++) on.forEach(function (k) { var v = A[k][i]; if (v != null && v > mx) mx = v; });
+    var marks = BOTTOMS.map(function (b) { return [dn(b[0]), b[1], 0]; });
+    var isL = function (i) { return lx && i === X.length - 1; };
+    var head = function (i) {
+      if (isL(i)) return '<b>' + (lvOpen(L.rt) ? '실시간' : '종가') + ' · 뉴욕 ' + nyT(L.rt) + ' · ' + ETF() + ' ' + num(L.px, 2) + '달러</b>';
+      var px = P.k[P.pk][i]; return '<b>' + kdate(P.date[i]) + (px != null ? ' · ' + ETF() + ' ' + num(px, 2) + '달러' : '') + '</b>';
+    };
+    lineChart('pe', 'ux-pe-c', { xs: X, i0: i0, i1: i1, marks: marks, live: !!lx,
+      sets: on.map(function (k) { return { arr: A[k], col: LCOL[k] }; }),
+      y: { min: 0, max: mx ? undefined : 1, fmt: function (v) { return v + '배'; } },
+      dots: function (i) { return on.map(function (k) { return [A[k][i], LCOL[k]]; }); },
+      tip: function (i) {
+        var h = head(i), j = isL(i) ? n - 1 : i;
+        KEYS.forEach(function (k) { if (S.on[k]) h += '<div><span><i style="background:' + LCOL[k] + '"></i>' + NAME[k] + '</span><em>' + pe1(A[k][i]) + '</em></div>'; });
+        h += '<p>계산 비중 ' + num(P.k.cov[j], 1) + '% · 보유 기준 ' + esc(P.k.hold[j]) + '</p>';
+        if (P.k.est[j] > 0) h += '<p>선행 EPS 중 예상치(아직 발표 전) ' + num(P.k.est[j], 0) + '%</p>';
+        if (isL(i)) h += '<p class="w">실시간 — 지금 가격 ÷ 마지막 EPS · 장 마감 뒤 확정' + (L.miss ? ' · ' + L.miss + '종목은 지난 종가' : '') + '</p>';
+        return h;
+      } });
+    lineChart('px', 'ux-px-c', { xs: X, i0: i0, i1: i1, live: !!lx, sets: [{ arr: PX, col: th.px, w: 1.4 }],
+      y: { min: 0, fmt: function (v) { return '$' + v; }, n: 5 },
+      dots: function (i) { return [[PX[i], th.px]]; },
+      tip: function (i) { var v = PX[i]; return '<b>' + (isL(i) ? (lvOpen(L.rt) ? '실시간' : '종가') + ' · 뉴욕 ' + nyT(L.rt) : kdate(P.date[i])) + '</b><div><span>' + ETF() + '</span><em>' + (v != null ? num(v, 2) + '달러' : '—') + '</em></div>'; } });
+    lineChart('cov', 'ux-cov-c', { xs: X, i0: i0, i1: i1, sets: [{ arr: CV, col: COVC, w: 1.4 }],
+      y: { min: 0, max: 100, fmt: function (v) { return v + '%'; }, n: 3 },
+      dots: function (i) { return [[CV[i], COVC]]; },
+      tip: function (i) { var j = isL(i) ? n - 1 : i; return '<b>' + (isL(i) ? '실시간 · 뉴욕 ' + nyT(L.rt) : kdate(P.date[i])) + '</b><div><span>계산 비중</span><em>' + num(CV[i], 1) + '%</em></div><p>보유 기준 ' + esc(P.k.hold[j]) + '</p>'; } });
+  }
+
+  /* ── 실시간 반영 (Worker GET /qs — 야후 정규장 가격 · 열려 있는 동안 1분마다 · 장 마감 뒤 10분마다)
+     · 종목마다 비율 r = 지금 정규장 가격 ÷ 자료의 마지막 종가 (그 거래일 종가가 이미 자료에 있으면 1 · 그날 액면분할이면 전일 종가 기준 · 50%~2배 밖이면 버림)
+     · 지수 PER = 마지막 PER × Σ 바구니 비중 × r (summary live.pos — EPS 고정이라 PER 은 바구니 가격에 비례) · 기업 표 = 가격·시가총액·PER·PBR × r, 배당수익률 ÷ r, 비중 재계산
+     · 프리·애프터 가격은 쓰지 않음('종가 기준') · 실패하면 마지막 종가 그대로 ── */
+  function tzT(t, tz, short) {   /* 초 → 'M.D HH:MM' (그 시간대) · short = 'HH:MM' */
+    var o = {}; try { new Intl.DateTimeFormat('en-US', { timeZone: tz, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(t * 1000)).forEach(function (x) { o[x.type] = x.value; }); } catch (e) { return ''; }
+    return (short ? '' : o.month + '.' + o.day + ' ') + o.hour + ':' + o.minute;
+  }
+  function nyT(t, short) { return tzT(t, 'America/New_York', short); }
+  function krT(t) { return tzT(t, 'Asia/Seoul'); }
+  function lvOpen(t) { return !!t && Date.now() / 1000 - t < 20 * 60; }   /* 마지막 체결이 20분 안 = 정규장 진행 중 */
+  function lvRatio(q, pRef, dRef) {
+    if (!q || !(q.rp > 0) || !(pRef > 0) || !q.d) return null;
+    if (!(q.d > dRef)) return 1;   /* 그 거래일 종가는 이미 자료에 있음 */
+    var r = q.rp / pRef;
+    if (Math.abs(r - 1) >= 0.4 && q.pc > 0 && Math.abs(q.rp / q.pc - 1) < 0.4) r = q.rp / q.pc;   /* 그날 액면분할 등으로 가격 기준이 바뀜 → 전일 종가(같은 기준) 대비 */
+    return r > 0.5 && r < 2 ? r : null;
+  }
+  function pctOf(P, k, v) { var a = P.k[k], c = 0, b = 0; for (var i = 0; i < a.length; i++) if (a[i] != null) { c++; if (a[i] < v) b++; } return c ? b / c * 100 : null; }
+  function liveFin(F) {
+    var tw = 0, sw = 0, tot = 0, low = null, on = 0, rt = 0;
+    var comp = F.comp0.map(function (c0) {
+      var q = LV.q && LV.q[c0.sym], r = LV.q ? lvRatio(q, c0.px, c0.pxd) : 1, c = {};
+      for (var k in c0) c[k] = c0[k];
+      if (r != null && r !== 1) {
+        c.px = q.rp; c._lv = q.rt; on++; if (q.rt > rt) rt = q.rt;
+        ['mcap_usd', 'pe_ttm', 'pe_mix', 'pe_ntm', 'pe_gaap', 'pbr'].forEach(function (x) { if (c[x] != null) c[x] = c[x] * r; });
+        if (c.dy != null) c.dy = c.dy / r;
+      }
+      c._r = r == null ? 1 : r;
+      if (c0.weight != null) { tw += c0.weight; sw += c0.weight * c._r; }
+      return c;
+    });
+    comp.forEach(function (c) { if (c.weight != null && sw > 0) c.weight = c.weight * c._r * tw / sw; if (!c.dup) tot += c.mcap_usd || 0; if (lowOk(c) && (!low || c.pe_ntm < low.pe_ntm)) low = c; });
+    F.comp = comp; F.tot = tot; F.low = low; F.lon = on; F.lrt = rt;
+  }
+  function computeLive() {
+    S.L = {};
+    ['ndx', 'spx'].forEach(function (e) {
+      var F = S.F[e]; if (F) liveFin(F);
+      var x = S.sum && S.sum[e], lv_ = x && x.live; if (!LV.q || !lv_) return;
+      var num_ = 0, den = 0, miss = 0, nn = 0, rt = 0, d = '';
+      lv_.pos.forEach(function (p) {
+        var q = LV.q[p[0]], r = lvRatio(q, p[2], lv_.d);
+        if (r == null) { miss++; r = 1; } else if (q.d > lv_.d) { nn++; if (q.rt > rt) rt = q.rt; if (q.d > d) d = q.d; }
+        num_ += p[1] * r; den += p[1];
+      });
+      var R = den > 0 ? num_ / den : 1, mc = 0, mn = 0;
+      (lv_.syms || []).forEach(function (c) { var r = lvRatio(LV.q[c[0]], c[2], c[3] || lv_.d); mc += (c[1] || 0) * (r == null ? 1 : r); mn++; });
+      var eq = LV.q[ETFN[e]], er = lvRatio(eq, x.px, lv_.d);
+      var L = { on: nn > 0, R: R, miss: miss, nn: nn, n: lv_.pos.length, rt: rt, d: d, mcap: mn ? mc : null, px: er != null && er !== 1 ? eq.rp : x.px };
+      KEYS.forEach(function (k) { L[k] = x[k] != null ? Math.round(x[k] * R * 100) / 100 : null; });
+      var P = S.P[e]; KEYS.forEach(function (k) { L[k + '_p'] = P && L.on && L[k] != null ? pctOf(P, k, L[k]) : null; });
+      S.L[e] = L;
+    });
+  }
+  function lvSyms() {
+    var o = {};
+    ['ndx', 'spx'].forEach(function (e) { var lv_ = S.sum && S.sum[e] && S.sum[e].live; if (!lv_) return; lv_.pos.forEach(function (p) { o[p[0]] = 1; }); (lv_.syms || []).forEach(function (c) { o[c[0]] = 1; }); });
+    var a = Object.keys(o).filter(function (s) { return /^\^?[A-Z0-9][A-Z0-9.=-]{0,15}$/.test(s); }).sort();
+    return a.length ? a.concat(['QQQ', 'SPY', 'KRW=X']) : a;
+  }
+  function lvEp() {
+    if (LV.ep !== null) return Promise.resolve(LV.ep);
+    return (window.mdLoad ? window.mdLoad('counter.json') : Promise.resolve(null)).then(function (c) { LV.ep = c && c.endpoint ? String(c.endpoint).replace(/\/$/, '') : ''; return LV.ep; }, function () { LV.ep = ''; return ''; });
+  }
+  function lvOpenAny() { var t = 0; if (LV.q) Object.keys(LV.q).forEach(function (k) { var q = LV.q[k]; if (q && k !== 'KRW=X' && q.rt > t) t = q.rt; }); return lvOpen(t); }
+  function lvKick() {
+    clearTimeout(LV.timer); LV.timer = 0;
+    if (LV.off || !active()) return;
+    var gap = LV.err ? Math.min(600e3, 30e3 * Math.pow(2, LV.err)) : lvOpenAny() ? 60e3 : 600e3;
+    LV.timer = setTimeout(lvFetch, gap);
+  }
+  function lvFetch() {
+    if (LV.off || LV.busy || !active()) return;
+    if (document.hidden) { lvKick(); return; }
+    var syms = lvSyms(); if (!syms.length) return;
+    LV.busy = true;
+    lvEp().then(function (ep) {
+      if (!ep) throw new Error('no endpoint');
+      return Promise.race([fetch(ep + '/qs?s=' + syms.map(encodeURIComponent).join(','), { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); }),
+        new Promise(function (_, j) { setTimeout(function () { j(new Error('timeout')); }, 20000); })]);
+    }).then(function (j) {
+      if (!j || !j.q) throw new Error('empty');
+      if (LV.off) return;
+      LV.q = j.q; LV.at = Date.now(); LV.err = 0; lvApply();
+    }).catch(function () { LV.err++; if (active()) meta(); })
+      .then(function () { LV.busy = false; lvKick(); });
+  }
+  function lvApply() {
+    computeLive();
+    if (!active()) return;
+    tabs(); meta();
+    if (kind() === 'fin') { if (S.F[etf()]) { finLead(); ovRows(); detail(true); } }
+    else if (S.P[etf()]) { peLead(); peStats(); var ch = S.ch.pe; if (ch && ch.$ux && ch.$ux.hx != null) LV.dirty = 1; else peCharts(); }
+  }
+
+  /* ── 보기 전환 · 자료 받기 ── */
+  function loadingMsg(k, msg) {
+    if (k === 'fin') {
+      $('ux-lead').textContent = msg; $('ux-fx').textContent = ''; $('ux-segs').innerHTML = '';
+      $('ux-ov-b').innerHTML = '<tr><td colspan="16" class="sm-empty">' + esc(msg) + '</td></tr>';
+      $('ux-dname').textContent = '—'; $('ux-dmeta').textContent = ''; $('ux-tiles').innerHTML = ''; $('ux-pd-b').innerHTML = ''; kill('m_'); $('ux-mcs').innerHTML = ''; $('ux-mcs').__b = 0;
+    } else {
+      $('ux-pe-lead').textContent = msg; $('ux-pe-adj').textContent = ''; $('ux-stats').innerHTML = ''; kill('pe'); kill('px'); kill('cov');
+      document.querySelectorAll('#ux-pe .sm-tip').forEach(function (t) { t.style.display = 'none'; });
+    }
+  }
+  function need() {
+    var e = etf(), k = kind(), f = 'usidx/' + e + '_' + k + '.json';
+    if (S.pend[f]) return;
+    if (!window.mdLoad) { loadingMsg(k, '자료를 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.'); return; }
+    S.pend[f] = 1;
+    window.mdLoad(f).catch(function () { return null; }).then(function (d) {
+      delete S.pend[f];
+      var ok = !!(d && (k === 'fin' ? d.c && Array.isArray(d.c.r) && d.c.r.length : Array.isArray(d.c) && Array.isArray(d.r) && d.r.length));
+      try { if (ok) { if (k === 'fin') S.F[e] = finPrep(d); else S.P[e] = pePrep(d); computeLive(); } } catch (err) { ok = false; }
+      if (!ok) { S.err[f] = 1; if (etf() === e && kind() === k) loadingMsg(k, '자료를 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.'); return; }
+      delete S.err[f];
+      if (etf() === e && kind() === k && active()) go(true);
+    });
+  }
+  function go(noHash) {
+    var e = etf(), k = kind();
+    tabs(); meta(); staleBox();
+    $('ux-fin').hidden = k !== 'fin'; $('ux-pe').hidden = k !== 'pe';
+    if (!noHash) writeHash();
+    if (k === 'fin') { kill('pe'); kill('px'); kill('cov'); if (S.F[e]) finView(); else { loadingMsg('fin', '구성 종목 자료를 불러오는 중…'); need(); } }
+    else { kill('m_'); if (S.P[e]) peView(); else { loadingMsg('pe', '일별 PER 자료를 불러오는 중…'); need(); } }
+  }
+  function readHash() {
+    var o = {};
+    String(location.hash || '').replace(/^#/, '').split('&').forEach(function (kv) { var i = kv.indexOf('='); if (i > 0) try { o[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); } catch (e) {} });
+    if (VIEWS.indexOf(o.v) >= 0) S.v = o.v;
+    if (o.co && /^[A-Za-z0-9.\-]{1,12}$/.test(o.co)) S.co[etf()] = o.co.toUpperCase();
+    if (o.p === 'a' || o.p === 'q') S.p = o.p;
+    if (/^(all|10|5|3|1)$/.test(o.r || '')) S.rng = o.r;
+    S.hs = location.hash || '';
+  }
+  function writeHash() {   /* 주소 # = 보기·기업·분기/연간·기간 (기본값이면 비움) */
+    if (!active()) return;
+    var p = [];
+    if (S.v !== DEF.v) p.push('v=' + S.v);
+    if (kind() === 'fin') { if (S.co[etf()]) p.push('co=' + encodeURIComponent(S.co[etf()])); if (S.p === 'a') p.push('p=a'); }
+    else if (S.rng !== 'all') p.push('r=' + S.rng);
+    var h = p.length ? '#' + p.join('&') : '';
+    if (!h && !/(^#|&)(v|co|p|r)=/.test(location.hash || '')) return;
+    try { if (location.hash !== h) history.replaceState(history.state, '', location.pathname + location.search + h); } catch (e) {}
+    S.hs = h;
+  }
+  function sumLoad() {
+    if (!window.mdLoad) return Promise.resolve();
+    return window.mdLoad('usidx/summary.json').catch(function () { return null; }).then(function (d) {
+      if (!d || !d.ndx || !d.spx) { if (!S.sum) $('ux-meta').textContent = '자료를 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.'; return; }
+      var first = !S.sum, ch = !first && S.sum.updated !== d.updated;
+      S.sum = d;
+      if (ch) { S.F = {}; S.P = {}; S.D = {}; }   /* 새 갱신 — 보던 보기 자료도 다시 받음 */
+      computeLive();
+      if (active()) { if (ch || first) go(true); else { tabs(); meta(); staleBox(); } if (!LV.q || Date.now() - LV.at > 55e3) lvFetch(); }   /* 처음: 요약(환율·조정 EPS)보다 표·차트가 먼저 그려졌을 수 있어 다시 그림 */
+    });
+  }
+  window.uxRender = function () {
+    if (!active()) { clearInterval(S.timer); S.timer = null; clearTimeout(LV.timer); LV.timer = 0; kill(); return; }
+    if (!S.hashed || (/(^#|&)(v|co|p|r)=/.test(location.hash || '') && location.hash !== S.hs)) { S.hashed = true; readHash(); }
+    go();
+    if (S.sum && (!LV.q || Date.now() - LV.at > 55e3)) lvFetch(); else if (!LV.timer) lvKick();
+    if (!S.loading) S.loading = sumLoad().then(function () { setTimeout(function () { S.loading = null; }, 5 * 60 * 1000); });
+    if (!S.timer) S.timer = setInterval(function () {   /* 열려 있는 동안 30분마다 새 자료 확인 */
+      if (!active()) { clearInterval(S.timer); S.timer = null; return; }
+      if (!document.hidden) { S.loading = null; sumLoad(); }
+    }, 30 * 60 * 1000);
+  };
+
+  document.addEventListener('click', function (ev) {
+    var t = ev.target; if (!t.closest || !t.closest('#page-usidx')) return;
+    var b;
+    if ((b = t.closest('#ux-tabs [data-v]'))) { var v = b.getAttribute('data-v'); if (v !== S.v) { S.v = v; go(); } return; }
+    if ((b = t.closest('#ux-ov thead button[data-k]'))) { var k = b.getAttribute('data-k'); if (S.sk === k) S.sd *= -1; else { S.sk = k; S.sd = k === 'sym' || k === 'ko' ? 1 : -1; } ovRows(); return; }
+    if ((b = t.closest('#ux-segs [data-seg]'))) { S.seg = b.getAttribute('data-seg'); ovRows(); return; }
+    if ((b = t.closest('#ux-ov-b tr[data-sym]'))) {
+      S.co[etf()] = b.getAttribute('data-sym'); detail(); writeHash();
+      var d = $('ux-detail'); if (d && d.scrollIntoView) d.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    if ((b = t.closest('#ux-per [data-p]'))) { var p = b.getAttribute('data-p'); if (p !== S.p) { S.p = p; document.querySelectorAll('#ux-per .chart-tab').forEach(function (x) { x.classList.toggle('active', x === b); }); minis(); pd(); writeHash(); } return; }
+    if ((b = t.closest('#ux-rng [data-r]'))) { S.rng = b.getAttribute('data-r'); document.querySelectorAll('#ux-rng .chart-tab').forEach(function (x) { x.classList.toggle('active', x === b); }); peCharts(); writeHash(); return; }
+    if ((b = t.closest('#ux-lines [data-line]'))) {
+      var ln = b.getAttribute('data-line'), cnt = KEYS.filter(function (x) { return S.on[x]; }).length;
+      if (S.on[ln] && cnt === 1) return;   /* 선은 하나 이상 남김 */
+      S.on[ln] = !S.on[ln]; b.setAttribute('aria-pressed', S.on[ln] ? 'true' : 'false'); peCharts(); return;
+    }
+  });
+  document.addEventListener('pointerdown', function (ev) {   /* 손가락으로 차트 밖을 누르면 설명창 닫기 */
+    var t = ev.target; if (!t.closest || !t.closest('#page-usidx') || t.closest('.sm-cbox')) return;
+    document.querySelectorAll('#page-usidx .sm-cbox canvas').forEach(function (cv) { if (cv.__ch) unhover(cv); });
+  });
+  document.addEventListener('input', function (ev) { if (ev.target && ev.target.id === 'ux-q') { S.q = ev.target.value; ovRows(); } });
+  document.addEventListener('change', function (ev) { if (ev.target && ev.target.id === 'ux-co') { S.co[etf()] = ev.target.value; detail(); writeHash(); } });
+  document.addEventListener('keydown', function (ev) {   /* 보기 카드: 왼쪽·오른쪽 화살표로 옮기기 */
+    var t = ev.target; if (!t || !t.closest || !t.closest('#ux-tabs') || (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft')) return;
+    var i = VIEWS.indexOf(S.v) + (ev.key === 'ArrowRight' ? 1 : -1); i = (i + VIEWS.length) % VIEWS.length;
+    S.v = VIEWS[i]; go(); var nb = document.querySelector('#ux-tabs [data-v="' + S.v + '"]'); if (nb) nb.focus(); ev.preventDefault();
+  });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && active() && !LV.off && Date.now() - LV.at > 55e3) lvFetch(); });
+  window.addEventListener('hashchange', function () { if (active() && /(^#|&)(v|co|p|r)=/.test(location.hash || '') && location.hash !== S.hs) { readHash(); go(true); } });
+  new MutationObserver(function () { if (!active()) return; if (kind() === 'fin') { if (S.F[etf()]) minis(); } else if (S.P[etf()]) peCharts(); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  /* 공유 링크·내 저장함 */
+  window.dcStateX = window.dcStateX || {};
+  window.dcStateX['nasdaq100-sp500-index'] = {
+    get: function () { return { v: S.v, co: { ndx: S.co.ndx, spx: S.co.spx }, p: S.p, sk: S.sk, sd: S.sd, seg: S.seg, rng: S.rng, on: KEYS.map(function (k) { return S.on[k] ? 1 : 0; }) }; },
+    set: function (v) {
+      if (!v) return;
+      if (VIEWS.indexOf(v.v) >= 0) S.v = v.v;
+      var co = v.co || {}; S.co = { ndx: /^[A-Z0-9.\-]{1,12}$/.test(co.ndx || '') ? co.ndx : '', spx: /^[A-Z0-9.\-]{1,12}$/.test(co.spx || '') ? co.spx : '' };
+      S.p = v.p === 'a' ? 'a' : 'q'; S.sk = COLS.indexOf(v.sk) >= 0 ? v.sk : DEF.sk; S.sd = v.sd === 1 ? 1 : -1; S.seg = typeof v.seg === 'string' ? v.seg : '';
+      S.rng = /^(all|10|5|3|1)$/.test(v.rng || '') ? v.rng : 'all';
+      var on = Array.isArray(v.on) ? v.on : DEF.on; KEYS.forEach(function (k, i) { S.on[k] = !!on[i]; }); if (!KEYS.some(function (k) { return S.on[k]; })) S.on.pe_ttm = true;
+      S.hashed = true; if (active()) go();
+    },
+    def: JSON.parse(JSON.stringify(DEF))
+  };
+  window.UXdebug = { S: S, LV: LV, finPrep: finPrep, pePrep: pePrep, detPrep: detPrep, i0of: i0of, near: near, xticks: xticks, kunit: kunit, fmt: fmt, curCo: curCo, go: go, lvRatio: lvRatio, computeLive: computeLive, lvSyms: lvSyms,
+    applyQuotes: function (q) { LV.q = q; LV.at = Date.now(); LV.err = 0; lvApply(); },   /* 회귀 검사: 가짜 시세로 실시간 계산 확인 */
+    liveOff: function (off) { LV.off = off !== false; clearTimeout(LV.timer); LV.timer = 0; if (LV.off) { LV.q = null; computeLive(); if (active()) go(true); } else lvFetch(); } };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window.uxRender); else window.uxRender();
+})();
 
 /* ════════════════════════════════════════
    [NEWS] 디코딩 뉴스 — Worker GET /news (worker/src/news.js · 1분 cron 이 RSS 를 모아 Workers AI 로 한국어 정리)
@@ -11166,6 +11836,7 @@ function switchSubTab(tab, grpId, btn) {
   if (window.erRender) window.erRender();   /* [EARN] 실적발표 캘린더: 열리면 그리고, 다른 탭이면 자동 갱신 중지 */
   if (window.wrRender) window.wrRender();   /* [RATES] 전세계 금리: 열리면 그리고, 다른 탭이면 자동 갱신 중지 */
   if (window.smRender) window.smRender();   /* [SEMIS] 반도체 지수 분석: 열리면 받아 그리고, 다른 탭이면 차트를 지우고 자동 갱신 중지 */
+  if (window.uxRender) window.uxRender();   /* [USIDX] 나스닥 100·S&P 500 지수 분석: 열리면 받아 그리고, 다른 탭이면 차트를 지우고 자동 갱신 중지 */
   if (window.dnRender) window.dnRender();   /* [NEWS] 디코딩 뉴스: 열리면 받고 30초마다 새 뉴스 · 다른 탭이면 멈춤 */
   if (tab === 'aptrank' && window.apRender) window.apRender();
   if (window.dvRender) window.dvRender();   /* ETF 분배 달력: 열리면 그리고, 다른 탭이면 자동 갱신 중지 */
