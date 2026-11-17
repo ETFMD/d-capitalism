@@ -1340,6 +1340,11 @@ def ssr_h1_check(br, page, base, fail):
 AS10 = "() => { localStorage.setItem('as.cfg2', JSON.stringify({ sel: ['^KS11', 'SPY', 'APT-seoul', 'APT-gangnam', 'GC=F', 'SI=F', 'BTC-USD', 'ETH-USD', 'M2', 'CPI'] })); }"
 
 
+def want_frames(fps, sec):
+    """자산 속도 영상 장 수 = 앞 0.6초 + 정한 초 + 끝 2.5초 (makeVideo 와 같은 식)"""
+    return int(round(fps * 0.6)) + max(2, int(round(sec * fps))) + int(round(fps * 2.5))
+
+
 def aspeed_check(page, base, fail, local):
     """/asset-speed/ — 처음 기본 = 코스피·S&P 500 + 바로 더하기 단추 · (10개 자산 저장값으로) 거치식 결과 = 그때 샀더라면(WIF.calc)과 같은 값 · 적립식 넣은 돈 · 정한 초 동안 재생 · 검색
     · 배포 사이트에서는 검색한 종목(Worker 일봉)을 실제로 더해 계산되는지까지"""
@@ -1559,6 +1564,39 @@ def aspeed2_check(page, base, fail, local):
     except Exception as e:
         fail('asset-speed', '배경음악 검사 실패: %s' % str(e)[:160])
     sns_ui_check(page, fail)
+    # (SNS 검사 뒤 — 아래 시험이 마지막 영상 기록(vlast)을 바꾸므로) 인코더가 도중에 실패할 때 (2026-11-17 PC 크롬 'Encoding error.'로 영상을 못 만들던 것) — 기본 인코더 → 소프트웨어 H.264 → 내장 인코더 · 소리 인코더 실패 → 다음 후보 → 소리 없이
+    #  · 만드는 동안 취소 단추가 그대로 있어(진행 문구만 바뀜) 누르면 바로 멈춤
+    VJS = """async (t) => { const r = await ASPEED.video(t.k, t.o); const v = ASPEED.state().vlast || {};
+        return { ok: !!r, how: v.how, audio: v.audio, frames: v.frames, size: r && r.blob ? r.blob.size : 0, tries: (v.tries || []).map(x => x.s + ':' + x.e), err: v.err || null,
+                 st: document.getElementById('as-vstat').innerText.replace(/\\s+/g, ' ') }; }"""
+    for name, k, o, want in (('기본 인코더 실패', 'h', {'failV': 1, 'bgm': False}, lambda x: x['how'] in ('webcodecs-sw', 'wasm')),
+                             ('기본·소프트웨어 인코더 모두 실패', 'v', {'failV': 2, 'bgm': False}, lambda x: x['how'] == 'wasm'),
+                             ('소리 인코더 모두 실패', 'h', {'failA': ['aac', 'opus']}, lambda x: x['audio'] == 'efail' and '소리 인코더 오류' in x['st'] and len(x['tries']) >= 1)):
+        dls = []
+        def on_dl(d, dls=dls): dls.append(d)
+        page.on('download', on_dl)
+        try:
+            x = page.evaluate(VJS, {'k': k, 'o': o})   # 만들기가 끝날 때까지 기다림 (실패하면 바로 돌아옴 — 내려받기를 5분씩 기다리지 않게)
+            page.wait_for_timeout(300)
+            data = open(dls[-1].path(), 'rb').read() if x['ok'] and dls else b''
+            note = not any(t.startswith('영상') for t in x['tries']) or '인코더 오류로' in x['st']   # 다른 방법으로 만들었으면 상태 줄에 알림
+            if not x['ok'] or x['err'] or x['frames'] != want_frames(30, 2) or data[4:8] != b'ftyp' or b'avc1' not in data or len(data) < 50000 or not want(x) or not note:
+                fail('asset-speed', '영상 %s → 다른 방법으로 만들지 못함: %s · %d바이트' % (name, {kk: x[kk] for kk in ('ok', 'how', 'audio', 'frames', 'tries', 'err')}, len(data)))
+        except Exception as e:
+            fail('asset-speed', '영상 %s 시험 실패: %s' % (name, str(e)[:160]))
+        page.remove_listener('download', on_dl)
+    try:
+        page.evaluate("() => { const s = document.getElementById('as-sec'); s.value = '20'; s.dispatchEvent(new Event('input', { bubbles: true })); }"); page.wait_for_timeout(600)
+        page.click('#as-vid-h')
+        page.wait_for_function("() => /만드는 중 [1-9]/.test(document.getElementById('as-vstat').innerText)", timeout=60000)
+        page.click('#as-vx', timeout=5000)
+        page.wait_for_function("() => !ASPEED.state().vbusy", timeout=30000)
+        x = page.evaluate("() => [document.getElementById('as-vstat').innerText, document.getElementById('as-vid-h').disabled, document.getElementById('as-vid-v').disabled]")
+        if '취소' not in x[0] or x[1] or x[2]:
+            fail('asset-speed', '영상 만들기 취소 이상: %s' % x)
+    except Exception as e:
+        fail('asset-speed', '영상 만들기 중 취소 단추를 누를 수 없음: %s' % str(e)[:160])
+    page.evaluate("() => { const s = document.getElementById('as-sec'); s.value = '2'; s.dispatchEvent(new Event('input', { bubbles: true })); }"); page.wait_for_timeout(600)
 
 
 S2_INDEP_JS = """([mode, fee, tax, itax, lag]) => { const L = S2debug.last(), D = L.D, cap = S2debug.S().cap;
