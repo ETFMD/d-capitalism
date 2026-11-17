@@ -24424,6 +24424,7 @@ var WIF = (function () {
    · 그리기: requestAnimationFrame 으로 진행률 t(0~1) → 달 위치 t×(N−1) (달 사이는 직선 보간해 부드럽게)
    · 전체보기: 그래프 카드를 화면 전체 창으로 옮김(Esc·닫기) · 영상: 같은 계산을 1920×1080(16:9)·1080×1920(9:16) 캔버스에 한 장씩 그려
        WebCodecs H.264 로 인코딩 → assets/vendor/mp4-muxer 로 MP4 (실시간이 아니라 프레임 단위 — 정한 초 그대로 30fps) · H.264 인코더가 없는 브라우저는 WebAssembly H.264(assets/vendor/h264-mp4-encoder)
+       · 인코더가 도중에 실패하면(PC 크롬 하드웨어 인코더 'Encoding error.' — 2026-11-17) 소프트웨어 H.264 → 내장 인코더 차례로 다시 · 배경음악은 먼저 AAC 192k → AAC 128k → Opus 를 실제로 해 보고 되는 것 (makeVideo)
 ════════════════════════════════════════ */
 (function () {
   var PG = document.getElementById('page-aspeed');
@@ -25387,18 +25388,24 @@ var WIF = (function () {
     });
     return MUX;
   }
-  function pickCodec(W, H, list) {
+  function pickCodec(W, H, list, hw) {   /* hw: 'prefer-software' = 하드웨어 인코더가 실패했을 때 소프트웨어(OpenH264)로 다시 */
     var cands = list || ['avc1.640028', 'avc1.4d0028', 'avc1.42e028', 'avc1.640032', 'avc1.4d0032', 'avc1.42e032'];
     var i = 0;
     function next() {
       if (i >= cands.length) return Promise.resolve(null);
       var c = cands[i++], cfg = { codec: c, width: W, height: H, bitrate: 10e6, framerate: FPS };
       if (/^avc1/.test(c)) cfg.avc = { format: 'avc' };
+      if (hw) cfg.hardwareAcceleration = hw;
       return VideoEncoder.isConfigSupported(cfg).then(function (r) { return r && r.supported ? cfg : next(); }, next);
     }
     return next();
   }
   function vstat(t, busy) { var el = $('as-vstat'); el.hidden = !t; el.innerHTML = t || ''; ['as-vid-h', 'as-vid-v'].forEach(function (id) { $(id).disabled = !!busy; }); }
+  function vprog(msg) {   /* 만드는 동안 진행 문구만 바꿈 — 취소 단추는 그대로 둠(예전엔 몇 ms 마다 단추를 새로 만들어 누르는 사이 바뀌면 취소가 안 먹었음) */
+    var sp = $('as-vmsg');
+    if (!sp) { vstat('<span id="as-vmsg"></span> <button type="button" class="as-vx" id="as-vx">취소</button>', true); sp = $('as-vmsg'); }
+    if (sp.textContent !== msg) sp.textContent = msg;
+  }
   function fname(kind, ext) { var d = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10).replace(/-/g, ''); return '자산속도_' + (kind === 'h' ? '16x9_1920x1080' : '9x16_1080x1920') + '_' + d + '.' + ext; }
   function save(blob, name) {
     var a = document.createElement('a'), url = URL.createObjectURL(blob); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
@@ -25482,29 +25489,61 @@ var WIF = (function () {
       return ac.startRendering();
     });
   }
-  function pickAudio() {   /* AAC(Chrome·Edge·Safari) → 없으면 Opus (예: 리눅스 Chromium·파이어폭스 — 유튜브는 됨) */
-    if (!window.AudioEncoder || !window.AudioData) return Promise.resolve(null);
-    var c = [['mp4a.40.2', 'aac'], ['opus', 'opus']], i = 0;
-    function next() {
-      if (i >= c.length) return Promise.resolve(null);
-      var x = c[i++], cfg = { codec: x[0], sampleRate: 48000, numberOfChannels: 2, bitrate: 192000 };
-      return AudioEncoder.isConfigSupported(cfg).then(function (r) { return r && r.supported ? { cfg: cfg, mux: x[1] } : next(); }, next);
-    }
-    return next();
+  function audioCands() {   /* 소리 인코더 후보(이 브라우저가 지원하는 것만 · 순서대로): AAC 192k → AAC 128k(16비트 입력) → Opus (예: 리눅스 Chromium·파이어폭스 — 유튜브는 됨)
+                               · AAC 가 인스타그램·모든 기기에서 재생됨 → 앞에 · 실제로 인코딩해 보고 실패하면 다음 후보(pickEncAudio) */
+    if (!window.AudioEncoder || !window.AudioData) return Promise.resolve([]);
+    var c = [['mp4a.40.2', 'aac', 192000, 'f32-planar'], ['mp4a.40.2', 'aac', 128000, 's16'], ['opus', 'opus', 192000, 'f32-planar']];
+    return Promise.all(c.map(function (x) {
+      var cfg = { codec: x[0], sampleRate: 48000, numberOfChannels: 2, bitrate: x[2] };
+      return AudioEncoder.isConfigSupported(cfg).then(function (r) { return r && r.supported ? { cfg: cfg, mux: x[1], fmt: x[3] } : null; }, function () { return null; });
+    })).then(function (l) { return l.filter(Boolean); });
   }
-  function encodeAudio(muxer, buf, ac) {   /* AudioBuffer → 인코더 → muxer (1024 샘플씩) */
+  function encodeAudio(buf, ac, fail) {   /* AudioBuffer → 인코더 → 묶음 [[chunk, meta]] (1024 샘플씩) — 영상보다 먼저 만들어 두고 영상을 담은 뒤 넣음 · fail = 회귀 검사용 일부러 실패 */
     return new Promise(function (res, rej) {
-      var err = null, enc = new AudioEncoder({ output: function (chunk, meta) { muxer.addAudioChunk(chunk, meta); }, error: function (e) { err = e; } });
-      enc.configure(ac.cfg);
-      var n = buf.length, L0 = buf.getChannelData(0), R0 = buf.getChannelData(1), F = 1024;
-      for (var i = 0; i < n; i += F) {
-        var m = Math.min(F, n - i), pl = new Float32Array(m * 2); pl.set(L0.subarray(i, i + m), 0); pl.set(R0.subarray(i, i + m), m);
-        var ad = new AudioData({ format: 'f32-planar', sampleRate: 48000, numberOfFrames: m, numberOfChannels: 2, timestamp: Math.round(i * 1e6 / 48000), data: pl });
-        enc.encode(ad); ad.close();
-      }
-      enc.flush().then(function () { enc.close(); err ? rej(err) : res(); }, rej);
+      var out = [], err = null, enc, done = false;
+      function end(e) { if (done) return; done = true; clearTimeout(to); try { if (enc && enc.state !== 'closed') enc.close(); } catch (x) {} e ? rej(e) : res(out); }
+      var to = setTimeout(function () { end(err || new Error('소리 인코더가 응답하지 않음')); }, 60000);
+      try {
+        enc = new AudioEncoder({ output: function (chunk, meta) { out.push([chunk, meta]); }, error: function (e) { err = err || e; } });
+        enc.configure(ac.cfg);
+        var n = buf.length, L0 = buf.getChannelData(0), R0 = buf.getChannelData(1), F = 1024;
+        for (var i = 0; i < n && !err; i += F) {
+          var m = Math.min(F, n - i), pl;
+          if (ac.fmt === 's16') {
+            pl = new Int16Array(m * 2);
+            for (var j = 0; j < m; j++) { pl[2 * j] = Math.max(-32768, Math.min(32767, Math.round(L0[i + j] * 32767))); pl[2 * j + 1] = Math.max(-32768, Math.min(32767, Math.round(R0[i + j] * 32767))); }
+          } else { pl = new Float32Array(m * 2); pl.set(L0.subarray(i, i + m), 0); pl.set(R0.subarray(i, i + m), m); }
+          var ad = new AudioData({ format: ac.fmt, sampleRate: 48000, numberOfFrames: m, numberOfChannels: 2, timestamp: Math.round(i * 1e6 / 48000), data: pl });
+          enc.encode(ad); ad.close();
+        }
+      } catch (e) { err = err || e; }
+      if (fail) err = err || new DOMException('Encoding error. (회귀 검사)', 'EncodingError');
+      if (err) return end(err);
+      enc.flush().then(function () { end(err || (out.length ? null : new Error('소리 묶음이 없음'))); }, function (e) { end(err || e); });
     });
   }
+  function trialMux(M, ac, chunks) {   /* 소리 묶음만 따로 담아 봄 — 담기에서 나는 오류(설명 정보 없음 등)도 영상 만들기 전에 걸러 다음 후보로 */
+    var mx = new M.Muxer({ target: new M.ArrayBufferTarget(), audio: { codec: ac.mux, numberOfChannels: 2, sampleRate: 48000 }, fastStart: 'in-memory', firstTimestampBehavior: 'offset' });
+    chunks.forEach(function (x) { mx.addAudioChunk(x[0], x[1]); });
+    mx.finalize();
+    if (!(mx.target.buffer && mx.target.buffer.byteLength > 1000)) throw new Error('소리만 담은 파일이 비었음');
+    return chunks;
+  }
+  function pickEncAudio(buf, test, tries, M) {   /* 후보를 차례로 실제 인코딩·담기 → 처음 성공한 것 {ac, chunks} · 후보 없음 {none} · 모두 실패 {efail} (실패는 tries 에 기록) */
+    return audioCands().then(function (L) {
+      if (test.acodecs) L = L.filter(function (a) { return test.acodecs.indexOf(a.mux) >= 0; });
+      if (!L.length) return { none: 1 };
+      var i = 0;
+      function next() {
+        if (i >= L.length) return { efail: 1 };
+        var ac = L[i++];
+        return encodeAudio(buf, ac, (test.failA || []).indexOf(ac.mux) >= 0).then(function (ch) { return { ac: ac, chunks: trialMux(M, ac, ch) }; }).then(null,
+          function (e) { tries.push({ s: '소리', c: ac.mux.toUpperCase() + ' ' + Math.round(ac.cfg.bitrate / 1000) + 'k', e: errMsg(e) }); return next(); });
+      }
+      return next();
+    });
+  }
+  function errMsg(e) { return String((e && (e.message || e.name)) || e || '알 수 없음').slice(0, 160); }
   /* 내장 H.264 인코더가 만든 MP4(libmp4v2) 에서 영상 표본을 꺼냄 → 소리와 함께 다시 담기 위해 (avcC · 표본 위치·크기·키프레임) */
   function demuxAvc(u8) {
     var dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
@@ -25533,28 +25572,35 @@ var WIF = (function () {
     var codec = 'avc1.' + [desc[1], desc[2], desc[3]].map(function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
     return { samples: samples, desc: desc, codec: codec, W: W, H: H };
   }
-  function makeVideo(kind, test) {   /* test(회귀 검사용): {force:'wasm'} 내장 인코더로 · {codecs:['vp09.00.40.08']} 인코더 목록 바꾸기 · {bgm:false} 소리 없이 · {track:'id'} 이 곡으로 */
+  function makeVideo(kind, test) {   /* test(회귀 검사용): {force:'wasm'} 내장 인코더로 · {codecs:['vp09.00.40.08']} 인코더 목록 바꾸기 · {bgm:false} 소리 없이 · {track:'id'} 이 곡으로
+                                       · {failV:n} 영상 인코더 앞 n번 일부러 실패(→ 소프트웨어 → 내장 인코더) · {failA:['aac','opus']} 그 소리 인코더 일부러 실패 · {acodecs:['opus']} 소리 후보 줄이기
+       · 만드는 순서(2026-11-17 — PC 크롬에서 'Encoding error.'로 영상을 못 만들던 것):
+         ① 배경음악을 먼저 인코딩해 둠 — AAC 192k → AAC 128k(16비트) → Opus 차례로 실제로 해 보고 처음 성공한 것 · 모두 실패하면 소리 없이(알림)
+         ② 영상: 기본 인코더(대개 그래픽카드 하드웨어) → 실패하면 소프트웨어 H.264(OpenH264 · prefer-software) → 그래도 실패하면 내장 WebAssembly 인코더
+         ③ 담기(mp4-muxer) → 내려받기 · 어느 단계에서 무엇이 실패했는지는 상태 줄·S.vlast.tries 에 남김 */
     var sim = S.sim;
     if (!sim || sim.err || S.vbusy) return Promise.resolve(null);
     if (S.playing) pause();
     S.vbusy = { cancel: false };
     test = test || {};
     var job = S.vbusy, L = LAY[kind], lead = Math.round(FPS * 0.6), hold = Math.round(FPS * 2.5), main = Math.max(2, Math.round(sim.o.sec * FPS)), total = lead + main + hold;
-    var withBgm = test.bgm != null ? !!test.bgm : $('as-bgm').checked, D = total / FPS;
+    var withBgm = test.bgm != null ? !!test.bgm : $('as-bgm').checked, D = total / FPS, tries = [], vno = 0;
     function tOf(i) { return i < lead ? 0 : Math.min(1, (i - lead) / (main - 1)); }
-    vstat('영상 준비 중… <button type="button" class="as-vx" id="as-vx">취소</button>', true);
+    function cancelled(e) { return e && e.message === 'cancel'; }
+    vstat('', true); vprog('영상 준비 중…');
     previewStop();
-    var audioP = withBgm ? bgmList().then(function () {   /* 곡 고르기(이 영상 길이 D 에 맞는 곡) → 처음부터 D초 (못 받으면 소리 없이 만들고 알림) */
+    var audioP = withBgm ? bgmList().then(function () {   /* 곡 고르기(이 영상 길이 D 에 맞는 곡) → 처음부터 D초 → 인코딩 (곡을 못 받으면 소리 없이 만들고 알림) */
       var t = BGM.next && bgmOk(BGM.next, D) ? BGM.next : (BGM.next = bgmPick(D)); bgmShow();
       if (test.track) t = BGM.list.filter(function (x) { return x.id === test.track; })[0] || t;
       if (!t) throw new Error('곡 없음');
       job.bgm = t;
-      return Promise.all([bgmRender(t, D), pickAudio()]);
-    }).then(function (r) { return r[1] ? { buf: r[0], ac: r[1] } : { none: 1 }; }, function () { job.bgm = null; return { fail: 1 }; }) : Promise.resolve(null);
+      return bgmRender(t, D);
+    }).then(function (buf) { return loadMuxer().then(function (M) { return pickEncAudio(buf, test, tries, M); }); }, function () { job.bgm = null; return { fail: 1 }; }) : Promise.resolve(null);
     var useWc = window.VideoEncoder && window.VideoFrame && test.force !== 'wasm';
-    var p = Promise.all([loadMuxer(), useWc ? pickCodec(L.W, L.H, test.codecs) : null, audioP]).then(function (r) {
-      var M = r[0], cfg = r[1], au = r[2] && r[2].buf ? r[2] : null;
-      job.audio = au ? au.ac.mux : r[2] && r[2].none ? 'none' : r[2] && r[2].fail ? 'fail' : null;
+    var p = Promise.all([loadMuxer(), audioP]).then(function (r) {
+      var M = r[0], au = r[1] && r[1].chunks ? r[1] : null;
+      if (job.cancel) throw new Error('cancel');
+      job.audio = au ? au.ac.mux : r[1] && r[1].none ? 'none' : r[1] && r[1].efail ? 'efail' : r[1] && r[1].fail ? 'fail' : null;
       if (!au) job.bgm = null;
       job.credit = job.bgm ? bgmCredit(job.bgm) : '';   /* 곡을 넣을 때만 영상 안에 출처 줄 */
       function newMuxer(vcodec) {
@@ -25562,51 +25608,87 @@ var WIF = (function () {
         if (au) o.audio = { codec: au.ac.mux, numberOfChannels: 2, sampleRate: 48000 };
         return new M.Muxer(o);
       }
-      function finish(muxer, how, codec) {
-        return (au ? encodeAudio(muxer, au.buf, au.ac) : Promise.resolve()).then(function () {
-          muxer.finalize();
-          var blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
-          save(blob, fname(kind, 'mp4'));
-          return { blob: blob, frames: total, codec: codec, w: L.W, h: L.H, how: how, audio: job.audio, bgm: job.bgm, credit: job.credit, D: D };
-        });
+      function finish(muxer, how, codec) {   /* 먼저 만들어 둔 소리 묶음을 넣고 마무리 → 내려받기 */
+        if (au) au.chunks.forEach(function (x) { muxer.addAudioChunk(x[0], x[1]); });
+        muxer.finalize();
+        var blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
+        save(blob, fname(kind, 'mp4'));
+        return { blob: blob, frames: total, codec: codec, w: L.W, h: L.H, how: how, audio: job.audio, bgm: job.bgm, credit: job.credit, D: D, tries: tries };
       }
-      if (!cfg) {   /* H.264 인코더가 없는 브라우저: 내장 인코더 → (소리가 있으면) 표본을 꺼내 소리와 함께 다시 담음 */
+      function wasm() {   /* 내장 인코더 → (소리가 있으면) 표본을 꺼내 소리와 함께 다시 담음 */
         return wasmEncode(kind, job, total, tOf).then(function (u8) {
-          if (!au) { var blob = new Blob([u8], { type: 'video/mp4' }); save(blob, fname(kind, 'mp4')); return { blob: blob, frames: total, codec: 'h264(wasm)', w: L.W, h: L.H, how: 'wasm', audio: job.audio, bgm: null, credit: '', D: D }; }
+          if (!au) { var blob = new Blob([u8], { type: 'video/mp4' }); save(blob, fname(kind, 'mp4')); return { blob: blob, frames: total, codec: 'h264(wasm)', w: L.W, h: L.H, how: 'wasm', audio: job.audio, bgm: null, credit: '', D: D, tries: tries }; }
           var dm = demuxAvc(u8), mx = newMuxer('avc'), meta = { decoderConfig: { codec: dm.codec, codedWidth: dm.W, codedHeight: dm.H, description: dm.desc } };
           dm.samples.forEach(function (sm, i) { mx.addVideoChunkRaw(sm.data, sm.key ? 'key' : 'delta', Math.round(i * 1e6 / FPS), Math.round(1e6 / FPS), i ? undefined : meta); });
           return finish(mx, 'wasm', 'h264(wasm)');
         });
       }
-      var vm = videoMaker(kind, job.credit), err = null, muxer = newMuxer(/^vp09/.test(cfg.codec) ? 'vp9' : 'avc');
-      var enc = new VideoEncoder({ output: function (chunk, meta) { muxer.addVideoChunk(chunk, meta); }, error: function (e) { err = e; } });
-      enc.configure(cfg);
-      var i = 0;
-      return new Promise(function (res, rej) {
-        function step() {
-          if (job.cancel) { try { enc.close(); } catch (e) {} vm.done(); return rej(new Error('cancel')); }
-          if (err) { vm.done(); return rej(err); }
-          var until = Math.min(total, i + 6);
-          for (; i < until; i++) {
-            vm.frame(tOf(i), i ? 1 / FPS : 0);
-            var fr = new VideoFrame(vm.cv, { timestamp: Math.round(i * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
-            enc.encode(fr, { keyFrame: i % (FPS * 2) === 0 }); fr.close();
+      function wc(cfg, how) {   /* WebCodecs 한 번 — 실패하면 reject (부른 쪽이 다음 방법으로) */
+        var n = vno++, vm = videoMaker(kind, job.credit), err = null, muxer = newMuxer(/^vp09/.test(cfg.codec) ? 'vp9' : 'avc'), enc;
+        return new Promise(function (res, rej) {
+          var closed = false;
+          function quit(e) { if (closed) return; closed = true; try { if (enc && enc.state !== 'closed') enc.close(); } catch (x) {} vm.done(); rej(e); }
+          try {
+            enc = new VideoEncoder({ output: function (chunk, meta) { try { muxer.addVideoChunk(chunk, meta); } catch (e) { err = err || e; } }, error: function (e) { err = err || e; } });
+            enc.configure(cfg);
+          } catch (e) { return quit(e); }
+          var i = 0;
+          function step() {
+            if (job.cancel) return quit(new Error('cancel'));
+            if (err) return quit(err);
+            try {
+              var until = Math.min(total, i + 6);
+              for (; i < until; i++) {
+                vm.frame(tOf(i), i ? 1 / FPS : 0);
+                var fr = new VideoFrame(vm.cv, { timestamp: Math.round(i * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
+                enc.encode(fr, { keyFrame: i % (FPS * 2) === 0 }); fr.close();
+              }
+            } catch (e) { return quit(err || e); }
+            if (test.failV > n && i >= Math.min(30, total)) err = err || new DOMException('Encoding error. (회귀 검사)', 'EncodingError');
+            vprog('영상 만드는 중 ' + Math.round(i / total * 100) + '%' + (n ? ' (다른 인코더로 다시 만드는 중)' : ''));
+            if (i < total) { setTimeout(step, enc.encodeQueueSize > 12 ? 15 : 0); return; }
+            enc.flush().then(function () {
+              if (err) return quit(err);
+              closed = true; try { enc.close(); } catch (x) {} vm.done();
+              try { res(finish(muxer, how, cfg.codec)); } catch (e) { rej(e); }
+            }, function (e) { quit(err || e); });
           }
-          vstat('영상 만드는 중 ' + Math.round(i / total * 100) + '% <button type="button" class="as-vx" id="as-vx">취소</button>', true);
-          if (i < total) { setTimeout(step, enc.encodeQueueSize > 12 ? 15 : 0); return; }
-          enc.flush().then(function () { enc.close(); vm.done(); return finish(muxer, 'webcodecs', cfg.codec); }).then(res, function (e) { vm.done(); rej(e); });
-        }
-        step();
+          step();
+        });
+      }
+      function fallback(what, cfg) { return function (e) { if (cancelled(e)) throw e; tries.push({ s: '영상', c: what + ' ' + cfg.codec, e: errMsg(e) }); }; }
+      if (!useWc) return wasm();
+      /* 이 브라우저(같은 사용자 에이전트)에서 기본 인코더가 실패하고 소프트웨어로 됐던 기록이 30일 안에 있으면 소프트웨어부터 (실패를 날마다 다시 겪지 않게) */
+      var memo = store('venc'), swFirst = !test.codecs && !test.failV && !!(memo && memo.sw && memo.ua === navigator.userAgent && Date.now() - memo.at < 30 * DAY);
+      function remember(sw) { if (test.codecs || test.failV) return; if (sw) store('venc', { sw: 1, ua: navigator.userAgent, at: Date.now() }); else if (memo) store('venc', null); }
+      var A = swFirst ? ['소프트웨어 인코더', 'prefer-software', 'webcodecs-sw'] : ['기본 인코더', null, 'webcodecs'],
+          B = swFirst ? ['기본 인코더', null, 'webcodecs'] : ['소프트웨어 인코더', 'prefer-software', 'webcodecs-sw'];
+      return pickCodec(L.W, L.H, test.codecs, A[1]).then(function (cfg) {
+        if (!cfg) return wasm();                                     /* H.264 인코더가 없는 브라우저 */
+        return wc(cfg, A[2]).catch(function (e) {
+          fallback(A[0], cfg)(e);
+          return pickCodec(L.W, L.H, test.codecs, B[1]).then(function (c2) {
+            if (!c2) return wasm();
+            return wc(c2, B[2]).then(function (r) { remember(B[1] === 'prefer-software'); return r; },
+              function (e2) { fallback(B[0], c2)(e2); return wasm(); });
+          });
+        });
       });
     });
     return p.then(function (r) {
-      var an = r.audio === 'aac' ? ' · 배경음악 AAC' : r.audio === 'opus' ? ' · 배경음악 Opus(이 브라우저는 AAC 인코더가 없음 — 인스타그램용은 Chrome·Edge·Safari 에서 만들어 주세요)' : r.audio === 'none' ? ' · 이 브라우저는 소리 인코더가 없어 배경음악 없이 만들었습니다' : r.audio === 'fail' ? ' · 배경음악 곡을 불러오지 못해 소리 없이 만들었습니다' : '';
+      var aacFail = tries.some(function (x) { return x.s === '소리' && /^AAC/.test(x.c); });
+      var an = r.audio === 'aac' ? ' · 배경음악 AAC' : r.audio === 'opus' ? (aacFail ? ' · 배경음악 Opus(AAC 인코더 오류 — 인스타그램용은 다른 브라우저에서 만들어 주세요)' : ' · 배경음악 Opus(이 브라우저는 AAC 인코더가 없음 — 인스타그램용은 Chrome·Edge·Safari 에서 만들어 주세요)')
+        : r.audio === 'none' ? ' · 이 브라우저는 소리 인코더가 없어 배경음악 없이 만들었습니다' : r.audio === 'efail' ? ' · 소리 인코더 오류로 배경음악 없이 만들었습니다' : r.audio === 'fail' ? ' · 배경음악 곡을 불러오지 못해 소리 없이 만들었습니다' : '';
       var bg = r.bgm ? '<br>♪ 이번 곡: <b>' + esc(r.bgm.t) + '</b> — ' + esc(r.bgm.a) + ' (' + esc(bgmLic(r.bgm)) + ')' + (r.bgm.lic !== 'CC0' ? ' · 올릴 때 설명란에도 출처를 적어 주세요' : '') + ' <button type="button" class="as-vx" id="as-bgm-copy">설명란용 출처 복사</button>' : '';
-      vstat('✓ ' + esc(fname(kind, 'mp4')) + ' 내려받음 (' + L.W + '×' + L.H + ' · ' + (total / FPS).toFixed(1) + '초' + an + ')' + bg, false); S.vbusy = null; S.vlast = r;
+      var vErr = tries.some(function (x) { return x.s === '영상'; });
+      var how = r.how === 'webcodecs-sw' ? (vErr ? '<br><small>기본(하드웨어) 인코더 오류로 소프트웨어 인코더로 만들었습니다</small>' : '<br><small>이 브라우저는 기본(하드웨어) 인코더가 실패했던 적이 있어 소프트웨어 인코더로 만들었습니다</small>') : r.how === 'wasm' && tries.some(function (x) { return x.s === '영상'; }) ? '<br><small>브라우저 인코더 오류로 내장 인코더로 만들었습니다</small>' : '';
+      vstat('✓ ' + esc(fname(kind, 'mp4')) + ' 내려받음 (' + L.W + '×' + L.H + ' · ' + (total / FPS).toFixed(1) + '초' + an + ')' + bg + how, false); S.vbusy = null; S.vlast = r;
       if (r.bgm) bgmUsed(r.bgm);   /* 다음 영상은 다른 곡 */
       if (kind === 'v') snsVideo(r);   /* SNS 자동 게시 칸에 이 영상·글 채우기 */
       return r; },
-      function (e) { vstat(e && e.message === 'cancel' ? '영상 만들기를 취소했습니다.' : '영상을 만들지 못했습니다' + (e && e.message ? ' (' + esc(e.message) + ')' : '') + '. 잠시 후 다시 해 주세요.', false); S.vbusy = null; S.vlast = { err: String(e && e.message || e) }; return null; });
+      function (e) {
+        var det = tries.map(function (x) { return x.s + ' ' + x.c + ': ' + x.e; }).concat(cancelled(e) ? [] : [errMsg(e)]).join(' → ');
+        vstat(cancelled(e) ? '영상 만들기를 취소했습니다.' : '영상을 만들지 못했습니다 (' + esc(det) + '). 잠시 후 다시 해 주세요.', false); S.vbusy = null; S.vlast = { err: errMsg(e), tries: tries }; return null; });
   }
   /* BGM 미리 듣기 — 다음 영상 곡을 영상에 들어갈 그대로(처음부터 영상 길이만큼 · 끝 1.2초 줄임) 재생 · 다시 누르면 멈춤 */
   var BGMP = null;
@@ -25977,7 +26059,7 @@ var WIF = (function () {
             if (job.cancel) { enc.delete(); vm.done(); return rej(new Error('cancel')); }
             var until = Math.min(total, i + 3);
             for (; i < until; i++) { vm.frame(tOf(i), i ? 1 / FPS : 0); enc.addFrameRgba(vm.ctx.getImageData(0, 0, L.W, L.H).data); }
-            vstat('영상 만드는 중 ' + Math.round(i / total * 100) + '% (이 브라우저는 내장 인코더로 만들어 조금 걸립니다) <button type="button" class="as-vx" id="as-vx">취소</button>', true);
+            vprog('영상 만드는 중 ' + Math.round(i / total * 100) + '% (내장 인코더로 만들어 조금 걸립니다)');
             if (i < total) { setTimeout(step, 0); return; }
             enc.finalize();
             var data = enc.FS.readFile(enc.outputFilename);
