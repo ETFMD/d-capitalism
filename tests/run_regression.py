@@ -3542,6 +3542,32 @@ SEMIS_JS = """async () => {
   ok('시가총액 단위 오류 바로잡힘(AMD 2012-06)', !amd || (amd.mcap > 1e9 && amd.mcap < 1e11), amd && amd.mcap);
   const sel = $('#sm-co'); sel.value = 'NVDA'; sel.dispatchEvent(new Event('change', { bubbles: true })); await W(250);
   ok('선택칸으로 기업 바꾸기', /엔비디아/.test($('#sm-dname').textContent) && /co=NVDA/.test(location.hash), location.hash);
+  /* 실적 반영 표시 — 가짜 상태(반영 대기 1 · 새 실적 1 · 오래된 반영 1)로 안내 상자·표 표시·상세 안내 */
+  {
+    const keepF = S.F.soxx, keepS = JSON.stringify(S.sum.soxx), sy = keepF.comp.map(c => c.sym).filter(x => x !== 'NVDA'), dd = S.sum.soxx.date;
+    const md0 = JSON.parse(JSON.stringify(keepF.d)), r1 = [sy[2], dd, dd.slice(0, 7), 1.23, 'press'], r0 = [sy[3], '2000-01-03', '1999-12', 0.5, 'sec'];
+    md0.stale = [[sy[1], dd]]; md0.rep = [r1, r0];
+    S.sum.soxx.stale = md0.stale; S.sum.soxx.rep = md0.rep; S.F.soxx = D.finPrep(md0); D.go(true); await W(200);
+    const bx = $('#sm-stale'), fl = sym => { const r = rows().find(x => x.dataset.sym === sym); return r ? [...r.querySelectorAll('.sm-flag')].map(f => f.textContent).join(',') : '?'; };
+    ok('실적 안내 상자: 반영 대기 · 새 실적(14일 안만)', !bx.hidden && /반영 대기/.test(bx.textContent) && bx.textContent.includes(sy[1]) && /새 실적 반영/.test(bx.textContent) && bx.textContent.includes(sy[2]) && bx.textContent.includes('EPS 1.23달러') && !bx.textContent.includes(sy[3] + '(') && !bx.classList.contains('ok'), bx.textContent.slice(0, 200));
+    ok('표 표시: 반영 대기 · 새 실적 · 오래된 반영은 표시 없음', fl(sy[1]) === '반영 대기' && fl(sy[2]) === '새 실적' && fl(sy[3]) === '', [fl(sy[1]), fl(sy[2]), fl(sy[3])]);
+    sel.value = sy[2]; sel.dispatchEvent(new Event('change', { bubbles: true })); await W(250);
+    ok('상세: 새 실적 · 회사 발표 자료 안내', /새 실적/.test($('#sm-dmeta').textContent) && /EPS 1\.23달러/.test($('#sm-dmeta').textContent) && /회사 실적 발표 자료/.test($('#sm-dmeta').textContent), $('#sm-dmeta').textContent.slice(-160));
+    sel.value = sy[1]; sel.dispatchEvent(new Event('change', { bubbles: true })); await W(250);
+    ok('상세: 반영 대기 안내', /반영 대기/.test($('#sm-dmeta').textContent) && /이전 EPS/.test($('#sm-dmeta').textContent), $('#sm-dmeta').textContent.slice(-120));
+    S.sum.soxx.stale = []; S.sum.soxx.rep = [r1]; D.go(true); await W(120);
+    ok('반영 대기 없이 새 실적만 → 초록 상자', !bx.hidden && bx.classList.contains('ok') && !/반영 대기/.test(bx.textContent), bx.className);
+    S.sum.soxx.rep = [r0]; D.go(true); await W(120);
+    ok('둘 다 없으면(14일 지난 반영만) 상자 숨김', bx.hidden, bx.textContent.slice(0, 80));
+    S.F.soxx = keepF; S.sum.soxx = JSON.parse(keepS); sel.value = 'NVDA'; sel.dispatchEvent(new Event('change', { bubbles: true })); await W(250);
+    const sup = Object.keys(keepF.q).map(k => (keepF.q[k] || []).filter(r => r.supp).map(r => [k, r.end])).flat();
+    if (sup.length) {   /* 실제 자료에 '발표' 줄이 있으면 분기 표에 '발표' 표시 */
+      const [ks, ke] = sup[0]; sel.value = ks; sel.dispatchEvent(new Event('change', { bubbles: true })); await W(250);
+      const tr = $$('#sm-pd-b tr').find(r => r.cells[1] && r.cells[1].textContent.includes(ke.slice(0, 4)) && /발표/.test(r.cells[0].textContent));
+      ok('분기 표: 정식 공시 전 줄 = 발표 표시', !!tr, [ks, ke]);
+      sel.value = 'NVDA'; sel.dispatchEvent(new Event('change', { bubbles: true })); await W(250);
+    }
+  }
   /* SOXQ 구성 종목 */
   $('#sm-tabs [data-v="soxq-fin"]').click();
   for (let i = 0; i < 100 && !S.F.soxq; i++) await W(100);
@@ -3573,7 +3599,7 @@ SEMIS_JS = """async () => {
   cv.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true, pointerType: 'mouse' })); await W(40);
   ok('설명창 닫힘', tip.style.display === 'none');
   ok('참고 차트 = 로그 눈금 · 2002년부터', S.ch.ref.options.scales.y.type === 'logarithmic' && S.ch.ref.scales.x.min === Date.parse('2002-01-11') / 864e5, S.ch.ref.scales.x.min);
-  /* EPS 기준일 뒤(가격만 반영) 표시 — 가짜로 하루 더한 자료로 */
+  /* 기준일 뒤(스크립트가 그날까지 발표된 실적으로 다시 계산) 표시 — 가짜로 하루 더한 자료로 */
   const raw = await (await fetch('data/semis/soxx_pe.json', { cache: 'no-cache' })).json();
   const lr = raw.r[raw.r.length - 1].slice(), nd = new Date(Date.parse(lr[0]) + 3 * 864e5).toISOString().slice(0, 10);
   lr[0] = nd; lr[2] = +(lr[2] * 1.01).toFixed(2); raw.r.push(lr); raw.asof = nd;
@@ -3582,7 +3608,7 @@ SEMIS_JS = """async () => {
   ok('기준일 뒤 거래일 안내 · 차트 음영', new RegExp(n0 + '거래일').test(fzN) && S.ch.pe.$sm.fz === Date.parse(raw.frozen) / 864e5, fzN.slice(-80));
   const rc2 = cv.getBoundingClientRect(), ca2 = S.ch.pe.chartArea, xr = S.ch.pe.scales.x.getPixelForValue(S.ch.pe.scales.x.max);
   cv.dispatchEvent(new PointerEvent('pointermove', { clientX: rc2.left + xr, clientY: rc2.top + (ca2.top + ca2.bottom) / 2, bubbles: true, pointerType: 'mouse' })); await W(60);
-  ok('기준일 뒤 날짜 설명창: EPS 고정 안내', /기준 고정/.test(tip.textContent), tip.textContent.slice(-60));
+  ok('기준일 뒤 날짜 설명창: 그날까지 발표된 실적으로 계산 안내', /자동 계산/.test(tip.textContent) && /발표된 실적/.test(tip.textContent), tip.textContent.slice(-60));
   S.P.soxx = keep; D.go(true); await W(150);
   /* SOXQ PER */
   $('#sm-tabs [data-v="soxq-pe"]').click();

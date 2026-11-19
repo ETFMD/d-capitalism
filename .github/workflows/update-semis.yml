@@ -2,18 +2,23 @@ name: 반도체 지수 분석 갱신
 
 # [SEMIS] 'SOX와 NYSE 반도체 지수 분석' (data/semis/*.json) — scripts/update_semis.py
 #  · 미국장 마감 뒤 종가(야후 · 막히면 사이트 Worker)로 SOXX·SOXQ 일별 PER 을 이어 계산하고 구성 종목 30곳의 가격·시가총액·PER·비중·환율을 다시 씀
-#  · 기준일(파이프라인 값)까지 다시 계산해 저장값과 같은지 먼저 확인 — 다르면 쓰지 않고 실패(메일 알림)
-#  · EPS·분기 실적은 base.json 기준(eps_asof) 고정 — 그 뒤 실적을 발표한 종목은 화면에 '미반영'으로 표시(data/earnings.json 발표일)
-#  · 평일 06:25·08:45 KST(미국 마감 뒤 · 늦은 종가 보강) · 토요일 10:30 KST(금요일 종가 최종) · 내용이 바뀐 경우에만 커밋
+#  · 기준일(파이프라인 값)까지 기준 EPS 로 다시 계산해 저장값과 같은지 먼저 확인 — 다르면 쓰지 않고 실패(메일 알림)
+#  · 실적 발표 즉시 반영: '실적발표 캘린더 갱신'(30분~1시간마다)이 끝나면 바로 빠른 갱신(--quick) — 새로 발표한 종목이 있을 때만
+#    새 실제 EPS(야후·나스닥 — 기준과 같은 기준인지 확인)·최신 예상 · 8-K 보도자료('발표' 줄) → 정식 공시(XBRL) 로 분기·연간 재무 → 기업 PER·일별 PER 다시 계산
+#  · 예약 실행(전체): 평일 06:25·08:45 KST(미국 마감 뒤 · 늦은 종가 보강) · 토요일 10:30 KST — 모든 종목 예상 EPS·재무 확인(캘린더에 없는 해외 종목 포함)
+#  · 내용이 바뀐 경우에만 커밋 → '사이트 페이지 빌드'(workflow_run)가 자동 요약을 다시 만듦
 on:
   schedule:
     - cron: '25 21 * * 1-5'
     - cron: '45 23 * * 1-5'
     - cron: '30 1 * * 6'
+  workflow_run:
+    workflows: ['실적발표 캘린더 갱신']
+    types: [completed]
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['scripts/update_semis.py', 'data/semis/base.json', '.github/workflows/update-semis.yml']
+    paths: ['scripts/update_semis.py', 'scripts/semis/**', 'data/semis/base.json', '.github/workflows/update-semis.yml']
 
 permissions:
   contents: write
@@ -24,14 +29,30 @@ concurrency:
 
 jobs:
   update:
+    # 캘린더 실행이 실패했으면 건너뜀(그 실행의 자료가 안 올라감)
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    env:
+      SEMIS_RAW: /home/runner/.cache/semis
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.ref }}   # 앞 실행을 기다린 실행도 시작 시점 main 최신본에서
-      - name: 종가·환율로 갱신
-        run: python3 scripts/update_semis.py
+          ref: main   # 앞 실행을 기다린 실행·캘린더 뒤 실행도 시작 시점 main 최신본(새 data/earnings.json)에서
+      - name: 원자료 캐시 불러오기 (SEC 공시 목록·재무·보도자료)
+        uses: actions/cache/restore@v4
+        with:
+          path: /home/runner/.cache/semis
+          key: semis-raw-${{ github.run_id }}
+          restore-keys: semis-raw-
+      - name: 종가·환율·실적으로 갱신
+        run: python3 scripts/update_semis.py ${{ github.event_name == 'workflow_run' && '--quick' || '' }}
+      - name: 원자료 캐시 저장 (실패해도 받은 만큼은 다음 실행에 씀)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: /home/runner/.cache/semis
+          key: semis-raw-${{ github.run_id }}
       - name: 자료 검사
         run: python3 tests/semis_test.py
       - name: 변경된 경우에만 커밋

@@ -2,7 +2,10 @@
 """[SEMIS] data/semis/*.json 자료 검사 — 갱신 워크플로(update-semis.yml)가 커밋 전에 돌림 · 회귀 테스트에서도 돌림
 
 · 모양: 파일·칸·줄 수 · 날짜 순서 · 숫자 범위(PER·비중·계산 비중·예상치 비중)
-· 기준일(frozen)까지의 일별 PER = 파이프라인 게시본 그대로(줄 수·첫날·지문) · 기준일 뒤 줄 = 하루 PER 변화가 가격 변화와 맞음(EPS 고정이라 PER 비율 = 바구니 가격 비율 근처)
+· 기준일(frozen)까지의 일별 PER = 파이프라인 게시본 그대로(줄 수·첫날·지문) · 기준일 뒤 줄 = 하루 PER 변화가 가격 변화와 맞음
+  (그날 실적 발표가 없으면 EPS 가 같아 PER 비율 = 바구니 가격 비율 근처 · 발표 날은 더 넓게)
+· 실적 반영(eps.json): 새 실제 분기가 기준 뒤로 3달 간격으로 이어지고 발표일이 순서대로 · 예상 4개 · 모든 종목 EPS 창이 마지막 날에 만들어짐
+· 분기·연간 재무: '발표'(정식 공시 전) 줄은 종목마다 맨 끝에만
 · 기업 표: 30종목 · 비중 합 100 · 시가총액 합 = summary · 요약(summary.json) = 일별 PER 마지막 줄
 표준 라이브러리만 · 실패하면 종료 코드 1"""
 import datetime, hashlib, json, os, sys
@@ -41,11 +44,48 @@ def num(v):
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
+def eps_check(base):
+    """eps.json(기준 뒤 실적 반영분) 모양 · 기준과 이어짐 → {티커: 새 발표일 집합}"""
+    sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+    import update_semis as U
+    try:
+        X = load('eps.json')
+    except FileNotFoundError:
+        return {}, None
+    BE = U.base_eps(base)
+    rd = {}
+    ok(isinstance(X.get('c'), dict) and isinstance(X.get('fin'), dict), 'eps.json 모양')
+    for t, x in (X.get('c') or {}).items():
+        ok(t in BE, f'eps {t}: 기준에 없는 종목')
+        if t not in BE:
+            continue
+        be = BE[t]
+        acts = [v for v in be['s'] if not v[2]]
+        a, d, e = x.get('a') or [], x.get('d') or [], x.get('e') or []
+        ok(len(a) == len(d), f'eps {t}: 새 실제 {len(a)}개 ≠ 발표일 {len(d)}개')
+        qs = [acts[-1][0]] + [q for q, _ in a]
+        ok(all(qs[i + 1] - qs[i] == 3 for i in range(len(qs) - 1)), f'eps {t}: 새 실제 분기가 3달 간격이 아님 {qs}')
+        ds = [be['d'][-1]] + d
+        ok(all(isodate(z) for z in d) and all(ds[i] < ds[i + 1] for i in range(len(ds) - 1)), f'eps {t}: 발표일 순서 {ds[-3:]}')
+        ok(all(num(v) and abs(v) < 500 for _, v in a + e), f'eps {t}: EPS 값 범위')
+        if e:
+            eq = [q for q, _ in e]
+            ok(len(e) == 4 and eq[0] == qs[-1] + 3 and all(eq[i + 1] - eq[i] == 3 for i in range(3)), f'eps {t}: 예상 4개가 마지막 실제 뒤로 이어지지 않음 {eq}')
+        if x.get('at'):
+            ok(isodate(x['at']), f'eps {t}: at')
+        m = U.merge_eps(be, x)
+        ok(U.eps_at(m, '2099-12-31') is not None, f'eps {t}: 합친 EPS 창(최근 실제 4 + 예상 4)을 못 만듦')
+        rd[t] = set(d)
+    return rd, X
+
+
 def main():
     base = load('base.json')
     frozen = base['basis']
     summ = load('summary.json')
     ok(isodate(summ.get('basis', '')) and isodate(summ.get('eps_asof', '')), 'summary 기준일')
+    rd, X = eps_check(base)
+    ok(X is None or isodate(summ.get('eps_at') or ''), 'summary eps_at')
     for e in ('soxx', 'soxq'):
         pe, fin = load(e + '_pe.json'), load(e + '_fin.json')
         for o, n in ((pe, 'pe'), (fin, 'fin')):
@@ -68,16 +108,18 @@ def main():
             ok(num(r.get('cov')) and 0 < r['cov'] <= 100, f'{e} {r["date"]} cov={r.get("cov")}')
             ok(r.get('est') is None or (num(r['est']) and 0 <= r['est'] <= 100), f'{e} {r["date"]} est={r.get("est")}')
             ok(isodate(r.get('hold') or ''), f'{e} {r["date"]} hold')
-        # 기준일 뒤: EPS 고정 → PER 은 가격만 따라 움직임 (하루 30% 넘게 움직이면 가격 자료 이상)
+        # 기준일 뒤: 실적 발표가 없는 날은 EPS 가 같아 PER 은 가격만 따라 움직임 (하루 30% 넘게 움직이면 가격 자료 이상)
         aft = [r for r in rows if r['date'] > frozen]
         prev = next((r for r in reversed(rows) if r['date'] <= frozen), None)
+        bt0 = {x['t'] for x in base['etf'][e.upper()]['pe']['pos']}
         for r in aft:
+            rep_day = any(r['date'] >= dd > prev['date'] for t in bt0 for dd in rd.get(t, ())) if prev else False
             ok(r['hold'] == base['etf'][e.upper()]['pe']['hold'], f'{e} {r["date"]} 보유 기준 {r["hold"]}')
             for k in ('pe_ttm', 'pe_mix', 'pe_ntm'):
                 if prev and prev.get(k) and r.get(k):
                     ok(abs(r[k] / prev[k] - 1) < 0.3, f'{e} {r["date"]} {k} 하루 변화 {prev[k]}→{r[k]}')
             if prev and prev.get(pk) and r.get(pk) and prev.get('pe_ttm') and r.get('pe_ttm'):   # PER 비율과 ETF 가격 비율이 크게 어긋나지 않음(바구니 ≈ ETF)
-                ok(abs((r['pe_ttm'] / prev['pe_ttm']) / (r[pk] / prev[pk]) - 1) < 0.05, f'{e} {r["date"]} PER 변화와 {pk} 가격 변화가 어긋남')
+                ok(abs((r['pe_ttm'] / prev['pe_ttm']) / (r[pk] / prev[pk]) - 1) < (0.15 if rep_day else 0.05), f'{e} {r["date"]} PER 변화와 {pk} 가격 변화가 어긋남' + (' (실적 반영 날)' if rep_day else ''))
             prev = r
         last = rows[-1]
         s = summ[e]
@@ -114,6 +156,16 @@ def main():
             for r in qr:
                 by.setdefault(r['sym'], []).append(r['end'])
             ok(all(v == sorted(v) and len(v) == len(set(v)) for v in by.values()), f'{e} {kk} 기간 순서')
+            sp = {}
+            for r in qr:
+                sp.setdefault(r['sym'], []).append((r['end'], bool(r.get('supp'))))
+            for sym, v in sp.items():   # '발표'(정식 공시 전) 줄은 맨 끝에만 · 분기는 많아야 1줄
+                v.sort()
+                fl = [f for _, f in v]
+                ok(not any(fl[i] and not fl[i + 1] for i in range(len(fl) - 1)) and (kk == 'a' or sum(fl) <= 1), f'{e} {kk} {sym} 발표 줄 위치 {[d for d, f in v if f]}')
+            for r in qr:
+                if r['end'] > base['eps_asof'] and r.get('rev') is not None:
+                    ok(num(r['rev']) and r['rev'] > 0 and (r.get('opm') is None or -1000 < r['opm'] <= 100), f'{e} {kk} {r["sym"]} {r["end"]} 새 줄 값 범위')
             ok(set(by) <= syms and len(by) >= 29, f'{e} {kk} 기업 {len(by)}')   # 세레브라스(2026-05 상장)는 연간 자료가 아직 없음
             mc = {}
             for r in qr:
@@ -127,7 +179,9 @@ def main():
                         m = nb[len(nb) // 2] if len(nb) % 2 else (nb[len(nb) // 2 - 1] + nb[len(nb) // 2]) / 2
                         ok(x / m < 300, f'{e} {kk} {sym} {d} 시가총액이 앞뒤의 {x / m:.0f}배 (단위 오류?)')
         ok(fin['fx'].get('pair') == 'USD/KRW' and num(fin['fx'].get('rate')) and 900 < fin['fx']['rate'] < 2500, f'{e} 환율 {fin["fx"]}')
-        ok(isinstance(fin.get('stale'), list), f'{e} stale')
+        ok(isinstance(fin.get('stale'), list) and all(len(x) == 2 and x[0] in syms and isodate(x[1]) for x in fin['stale']), f'{e} stale')
+        ok(isinstance(fin.get('rep', []), list) and all(len(x) == 5 and x[0] in syms and isodate(x[1]) and num(x[3]) and x[4] in ('press', 'sec', 'yahoo', None) for x in fin.get('rep', [])), f'{e} rep')
+        ok(s.get('stale') == fin['stale'] and s.get('rep', []) == fin.get('rep', [])[:12], f'{e} summary 실적 상태 ≠ fin')
     U = {x[0] for e in ('soxx', 'soxq') for x in (summ[e].get('live') or {}).get('syms', []) + (summ[e].get('live') or {}).get('pos', [])}
     ok(0 < len(U) and len(U) + 3 <= 45, f'실시간 종목 수 {len(U)}+3 — Worker /qs 한도(45) 넘음')   # 화면 lvSyms = 두 ETF 합 + SOXX·SOXQ·KRW=X
     ref = load('sox_fwd_ref.json')

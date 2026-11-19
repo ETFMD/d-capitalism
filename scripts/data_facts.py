@@ -801,7 +801,7 @@ def _kunit(v):
 
 
 def autosum_semis():
-    """[SEMIS] SOX와 NYSE 반도체 지수 분석 — 지수 PER(후행·혼합·선행·역대 위치) · 시가총액 · 비중 상위 · 두 ETF 종목 차이 · 최저 선행 PER · 미반영"""
+    """[SEMIS] SOX와 NYSE 반도체 지수 분석 — 지수 PER(후행·혼합·선행·역대 위치) · 시가총액 · 비중 상위 · 두 ETF 종목 차이 · 최저 선행 PER · 최근 실적 반영 · 반영 대기"""
     sm = _load('semis/summary.json')
     fin = {}
     for e in ('soxx', 'soxq'):
@@ -831,13 +831,20 @@ def autosum_semis():
         if pe:
             li.append(f'{e.upper()} 구성 종목 중 선행 PER이 가장 낮은 곳은 ' + ', '.join(f'{esc(c["ko"])}({c["pe_ntm"]:.1f}배)' for c in pe[:3])
                       + ', 가장 높은 곳은 ' + ', '.join(f'{esc(c["ko"])}({c["pe_ntm"]:.1f}배)' for c in pe[::-1][:3]) + '입니다.')
+    rp = {}
+    for e in ('soxx', 'soxq'):
+        for x in sm[e].get('rep') or []:     # [티커, 발표일, 분기, 실제 EPS, 재무 출처] — 최근 14일 안 반영
+            if x[0] not in rp and (datetime.date.fromisoformat(d) - datetime.date.fromisoformat(x[1])).days <= 14:
+                rp[x[0]] = x
+    if rp:
+        li.append('최근 실적을 반영한 종목: ' + ', '.join(f'{esc(x[0])}({_md(x[1])} 발표 · {int(x[2][5:7])}월 분기 EPS {x[3]:.2f}달러)' for x in sorted(rp.values(), key=lambda x: (x[1], x[0]), reverse=True)) + '.')
     st = sorted({tuple(x) for e in ('soxx', 'soxq') for x in (sm[e].get('stale') or [])}, key=lambda t: (t[1], t[0]))
     if st:
-        li.append(f'EPS 기준일({ymd_dot(sm["eps_asof"])}) 뒤 실적을 발표해 아직 반영되지 않은 종목: ' + ', '.join(f'{esc(s_)}({_md(dd)})' for s_, dd in st) + '.')
+        li.append('실적을 발표했지만 새 실제 EPS가 자료원에 아직 올라오지 않아 반영을 기다리는 종목: ' + ', '.join(f'{esc(s_)}({_md(dd)})' for s_, dd in st) + '.')
     inner = _tbl(['지표', ('SOXX<br><small>NYSE 반도체 지수</small>', 'n'), ('SOXQ<br><small>필라델피아 반도체 지수(SOX)</small>', 'n')], rows) + _ul(li)
     return _sec('semis', '반도체 지수 요약 — 지금 PER과 구성 종목', f'SOXX·SOXQ 지수 PER과 구성 종목 <small>{_when(sm["updated"])} 갱신 · 자동 갱신</small>', inner,
                 f'자료: SEC 공시(10-K·10-Q·20-F·N-PORT), Zacks·Nasdaq EPS·컨센서스, Yahoo Finance 종가·환율 (data/semis). '
-                f'\'하위 N%\'는 2013년 8월 이후 거래일 가운데 지금보다 PER이 낮았던 날의 비율입니다. EPS·분기 실적은 {ymd_dot(sm["eps_asof"])} 기준이며, '
+                f'\'하위 N%\'는 2013년 8월 이후 거래일 가운데 지금보다 PER이 낮았던 날의 비율입니다. EPS·분기 실적은 실적 발표 즉시 반영합니다(마지막 확인 {ymd_dot(sm.get("eps_at") or sm["eps_asof"])}). '
                 '위 표·차트는 페이지를 열 때 최신 자료로 다시 그려집니다.')
 
 
