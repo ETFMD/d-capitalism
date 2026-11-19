@@ -1716,6 +1716,9 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .sm-meta b { color:var(--text2); font-weight:600; }
   .sm-stale { font-size:12.5px; color:var(--text2); background:rgba(254,152,0,.08); border:1px solid rgba(254,152,0,.32); border-radius:12px; padding:10px 14px; margin:0 0 14px; line-height:1.7; }
   .sm-stale b { color:#e08600; }
+  .sm-stale.ok { background:rgba(20,184,166,.08); border-color:rgba(20,184,166,.32); }
+  .sm-stale b.sm-ok { color:#14b8a6; }
+  html[data-theme="light"] .sm-stale b.sm-ok { color:#0b7d6e; }
   .sm-card { padding:20px 24px; margin-bottom:16px; }
   .sm-top { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
   .sm-top .acc-title small { font-size:11.5px; color:var(--text3); font-weight:500; margin-left:6px; }
@@ -1766,6 +1769,8 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .sm-ov td.nm small { font-weight:400; }
   .sm-neg { color:#f04452 !important; }
   .sm-flag { display:inline-block; font-family:var(--font); font-size:10px; font-weight:700; padding:1px 5px; border-radius:5px; margin-left:5px; vertical-align:1px; background:rgba(254,152,0,.15); color:#e08600; }
+  .sm-flag.sm-new { background:rgba(20,184,166,.15); color:#14b8a6; }
+  html[data-theme="light"] .sm-flag.sm-new { color:#0b7d6e; }
   .sm-hint { font-size:11.5px; color:var(--text3); margin:8px 0 0; line-height:1.6; }
   .sm-dhead { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; flex-wrap:wrap; }
   .sm-dname { font-size:19px; font-weight:800; color:var(--text); margin:0; letter-spacing:-.2px; }

@@ -6747,7 +6747,8 @@ var TAX = (function () {
    [SEMIS] SOX와 NYSE 반도체 지수 분석 — data/semis/*.json (scripts/update_semis.py · Actions '반도체 지수 분석 갱신' 평일 2번·토요일)
    · 보기 4개 = 위 카드: SOXX·SOXQ 구성 종목 실적(fin) · SOXX·SOXQ PER 추이(pe) — 주소 #v=soxq-pe (구성 종목: &co=티커 &p=a · PER: &r=5)
    · 처음엔 summary.json(1KB)만 받아 카드를 채우고, 고른 보기의 파일만 받음(fin 280~310KB · pe 200~270KB · 참고 PER 26KB)
-   · EPS·분기 재무는 base.json 의 eps_asof 로 고정 — 그 뒤 거래일 PER 은 가격만 반영(차트 주황 음영·설명창 표시) · 그 뒤 실적 발표 종목 = stale(미반영 표시)
+   · 실적 발표 즉시 반영(scripts/semis/eps.py·stmt.py · Actions '실적발표 캘린더 갱신' 뒤 빠른 갱신): 새 실제 EPS·최신 예상 → 기업 PER·일별 PER · 분기·연간 재무 줄(정식 공시 전 = 회사 발표 자료 '발표' 줄)
+   · frozen(기준일) 뒤 거래일 = 스크립트가 그날까지 발표된 EPS 로 다시 계산(차트 주황 음영) · stale = 발표했는데 실제 EPS 가 자료원에 아직 없음('반영 대기') · rep = 기준 뒤 반영한 실적('새 실적')
    · 기능은 사용자가 준 대시보드 4개(soxx_fin·soxq_fin·soxx_pe·soxq_pe) 그대로(정렬·찾기·기업 상세 14개 차트·기간 표·PER 요약·기간·선 끄기·바닥 표시·참고 차트) + 분야 고르기·역대 위치 막대
    · 공유 링크·내 저장함: window.dcStateX['semiconductor-index']
 ════════════════════════════════════════ */
@@ -6836,15 +6837,20 @@ var TAX = (function () {
       '<b>뉴욕 ' + nyT(L.rt) + '</b>(한국 ' + krT(L.rt) + ')' + (L.miss ? ' · ' + L.miss + '종목은 시세를 못 받아 지난 종가' : '') + ' · ';
     else if (L) lt = '<span class="sm-lv"><i></i>실시간</span>새 거래일 시세 없음 — 마지막 종가 그대로(미국 정규장이 열리면 바로 반영) · ';
     else if (LV.err && !LV.off) lt = '실시간 시세를 받지 못해 마지막 종가로 보여 줍니다 · ';
-    $('sm-meta').innerHTML = lt + '확정 종가 <b>' + dot(x.date) + '</b> · EPS·분기 실적 <b>' + dot(s.eps_asof) + '</b> 기준 · 환율 1달러 <b>' + num(rate() || (s.fx && s.fx.rate), 2) + '원</b>' + (lvFx() ? '(실시간)' : '') +
+    $('sm-meta').innerHTML = lt + '확정 종가 <b>' + dot(x.date) + '</b> · 실적(EPS·분기 재무) 발표 즉시 반영 · 마지막 확인 <b>' + dot(s.eps_at || s.eps_asof) + '</b> · 환율 1달러 <b>' + num(rate() || (s.fx && s.fx.rate), 2) + '원</b>' + (lvFx() ? '(실시간)' : '') +
       (isFinite(u) ? ' · 자료 ' + u.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' }) + ' 갱신' : '');
   }
+  function recent(d, x) { return x && d && dn(d) - dn(x) <= 14; }   /* '새 실적' 표시 기간: 마지막 종가 날짜에서 14일 안에 발표 */
+  function repTxt(x) { return md(x[1]) + ' 발표 · ' + (+x[2].slice(5, 7)) + '월 분기 EPS ' + num(x[3], 2) + '달러' + (x[4] === 'press' ? ' · 재무는 회사 발표 자료' : x[4] ? '' : ' · 분기 재무는 자료 대기'); }
   function staleBox() {
-    var s = S.sum, b = $('sm-stale'), st = s && s[etf()] && s[etf()].stale || [];
-    if (!st.length) { b.hidden = true; b.innerHTML = ''; return; }
+    var s = S.sum, b = $('sm-stale'), x = s && s[etf()], st = x && x.stale || [], rp = (x && x.rep || []).filter(function (r) { return recent(x.date, r[1]); });
+    if (!st.length && !rp.length) { b.hidden = true; b.innerHTML = ''; return; }
     var F = S.F[etf()], nm = function (sym) { var c = F && F.comp.filter(function (x) { return x.sym === sym; })[0]; return c ? esc(c.ko) + ' ' : ''; };
-    b.innerHTML = '<b>실적 발표 · 미반영</b> — EPS 기준일(' + dot(s.eps_asof) + ') 뒤에 실적을 발표한 종목: ' + st.map(function (x) { return nm(x[0]) + esc(x[0]) + '(' + md(x[1]) + ')'; }).join(', ') +
-      '. 이 종목들의 EPS·분기 실적은 아직 이전 자료이며, PER은 새 주가 ÷ 이전 EPS로 계산됩니다.';
+    b.innerHTML = (st.length ? '<b>반영 대기</b> — 실적을 발표했지만 새 실제 EPS가 아직 자료원(야후·나스닥)에 올라오지 않은 종목: ' + st.map(function (x) { return nm(x[0]) + esc(x[0]) + '(' + md(x[1]) + ' 발표)'; }).join(', ') +
+        '. 올라오는 대로(보통 몇 시간 안) 자동으로 반영되며, 그때까지 이 종목의 PER은 이전 EPS로 계산합니다.' : '') +
+      (rp.length ? (st.length ? '<br>' : '') + '<b class="sm-ok">새 실적 반영</b> — ' + rp.slice(0, 8).map(function (x) { return nm(x[0]) + esc(x[0]) + '(' + repTxt(x) + ')'; }).join(', ') +
+        '. 기업 PER·지수 PER·분기 실적에 들어갔습니다.' : '');
+    b.className = 'sm-stale' + (st.length ? '' : ' ok');
     b.hidden = false;
   }
 
@@ -6854,8 +6860,9 @@ var TAX = (function () {
     function bySym(blk) { var m = {}; objs(blk).forEach(function (o) { (m[o.sym] = m[o.sym] || []).push(o); }); Object.keys(m).forEach(function (k) { m[k].sort(function (a, b) { return a.end < b.end ? -1 : a.end > b.end ? 1 : 0; }); }); return m; }
     var comp = objs(d.c), segs = [], st = {}, low = null, tot = 0;
     comp.forEach(function (c) { if (segs.indexOf(c.seg) < 0) segs.push(c.seg); tot += c.mcap_usd || 0; if (c.pe_ntm != null && c.pe_ntm > 0 && (!low || c.pe_ntm < low.pe_ntm)) low = c; });
-    (d.stale || []).forEach(function (x) { st[x[0]] = x[1]; });
-    return { d: d, comp0: comp, comp: comp, q: bySym(d.q), a: bySym(d.a), segs: segs, st: st, low: low, tot: tot, lon: 0, lrt: 0 };
+    var rp = {}; (d.stale || []).forEach(function (x) { st[x[0]] = x[1]; });
+    (d.rep || []).forEach(function (x) { if (!rp[x[0]] && recent(d.asof, x[1])) rp[x[0]] = x; });   /* 최근 14일 안 반영 = '새 실적' */
+    return { d: d, comp0: comp, comp: comp, q: bySym(d.q), a: bySym(d.a), segs: segs, st: st, rp: rp, low: low, tot: tot, lon: 0, lrt: 0 };
   }
   function curCo() {
     var F = S.F[etf()]; if (!F) return null;
@@ -6896,7 +6903,7 @@ var TAX = (function () {
     $('sm-ov-b').innerHTML = list.map(function (r) {
       return '<tr data-sym="' + esc(r.sym) + '"' + (cur && r.sym === cur.sym ? ' class="sel"' : '') + '>' + COLS.map(function (c) {
         if (c === 'sym') return '<td>' + esc(r.sym) + '</td>';
-        if (c === 'ko') return '<td class="nm" title="' + esc(r.ko + ' · ' + r.seg) + '">' + esc(r.ko) + (F.st[r.sym] ? '<span class="sm-flag" title="' + dot(F.st[r.sym]) + ' 실적 발표 — EPS·분기 실적 아직 미반영">미반영</span>' : '') + '<small>' + esc(r.seg) + '</small></td>';
+        if (c === 'ko') return '<td class="nm" title="' + esc(r.ko + ' · ' + r.seg) + '">' + esc(r.ko) + (F.st[r.sym] ? '<span class="sm-flag" title="' + dot(F.st[r.sym]) + ' 실적 발표 — 새 실제 EPS가 자료원에 올라오면 자동 반영">반영 대기</span>' : F.rp[r.sym] ? '<span class="sm-flag sm-new" title="' + esc(repTxt(F.rp[r.sym])) + ' — 반영됨">새 실적</span>' : '') + '<small>' + esc(r.seg) + '</small></td>';
         var v = r[c], t = fmt(c, v), cl = '';
         if (c === 'mcap_usd') t += '<small>' + won(v) + '</small>';
         if (c === 'pe_gaap' && v == null && r.ni_ttm != null && r.ni_ttm < 0) { t = '적자'; cl = 'sm-neg'; }
@@ -6919,11 +6926,13 @@ var TAX = (function () {
       sel.__e = etf();
     }
     sel.value = c.sym;
-    var st = F.st[c.sym];
+    var st = F.st[c.sym], rp = F.rp[c.sym];
     $('sm-dname').innerHTML = esc(c.ko) + '<small>' + esc(c.sym) + '</small>';
     $('sm-dmeta').innerHTML = '재무 금액 단위: ' + esc(c.cur_ko) + ' · 분기 자료 시작 ' + esc(c.since_q || '—') + ' · 연간 자료 시작 ' + esc(c.since_a || '—') + ' · 최근 분기 ' + esc(c.last_q || '—') +
       ' · ' + esc(c.seg) + ' · 미국 상장 주가 ' + num(c.px, 2) + '달러(' + (c._lv ? (lvOpen(c._lv) ? '실시간' : '종가') + ' · 뉴욕 ' + nyT(c._lv) : dot(c.pxd || F.d.asof) + ' 종가') + ')' +
-      (st ? '<br><span class="sm-flag">미반영</span> ' + dot(st) + ' 실적을 발표했지만 아래 EPS·분기 실적은 아직 그 전 자료입니다.' : '');
+      (st ? '<br><span class="sm-flag">반영 대기</span> ' + dot(st) + ' 실적을 발표했지만 새 실제 EPS가 아직 자료원에 없어 PER은 이전 EPS로 계산 중입니다. 올라오는 대로 자동 반영됩니다.' :
+       rp ? '<br><span class="sm-flag sm-new">새 실적</span> ' + dot(rp[1]) + ' 발표 실적(' + (+rp[2].slice(5, 7)) + '월 분기 EPS ' + num(rp[3], 2) + '달러)을 PER에 반영했습니다' +
+            (rp[4] === 'press' ? ' · 최근 분기 재무는 회사 실적 발표 자료(<span class="sm-flag">발표</span>) 값이며 정식 공시(10-Q·10-K)가 나오면 그 값으로 바뀝니다.' : rp[4] ? '.' : ' · 그 분기 재무 표는 자료가 나오는 대로 채워집니다.') : '');
     $('sm-tiles').innerHTML = TILES.map(function (t) {
       var k = t[0], v = c[k], s = fmt(k, v), sub = '';
       if (k === 'mcap_usd') sub = won(v);
@@ -7022,7 +7031,7 @@ var TAX = (function () {
     return out;
   }
   function xlab(v, span) { var d = new Date(v * 864e5), y = d.getUTCFullYear(), m = d.getUTCMonth() + 1; return span > 900 || m === 1 ? String(y) : String(y).slice(2) + '.' + m; }
-  var PLUG = { id: 'smPlug', beforeDatasetsDraw: function (ch) {   /* EPS 기준일 뒤(가격만 반영) 주황 음영 */
+  var PLUG = { id: 'smPlug', beforeDatasetsDraw: function (ch) {   /* 기준일 뒤(스크립트가 매일 다시 계산하는 구간) 주황 음영 */
       var o = ch.$sm; if (!o || o.fz == null) return;
       var a = ch.chartArea, xs = ch.scales.x; if (o.fz >= xs.max) return;
       var x0 = Math.max(a.left, xs.getPixelForValue(Math.max(o.fz, xs.min)));
@@ -7104,7 +7113,7 @@ var TAX = (function () {
     peLead();
     var after = 0; for (var i = last; i >= 0 && P.frozen && P.date[i] > P.frozen; i--) after++;
     var fz = $('sm-pe-fz');
-    fz.innerHTML = '<span class="sm-tag">자동 갱신</span> 일별 PER은 ' + kdate(P.frozen) + '까지 실제 EPS 이력과 보유 종목으로 계산했고, 그 뒤 거래일은 미국장 마감 뒤 매일 새 종가로 이어 계산하되 EPS와 보유 종목은 ' + kdate(P.eps) + ' 자료로 고정해 가격 변화만 반영합니다' +
+    fz.innerHTML = '<span class="sm-tag">자동 갱신</span> 일별 PER은 ' + kdate(P.frozen) + '까지 실제 EPS 이력과 보유 종목으로 계산했고, 그 뒤 거래일은 미국장 마감 뒤 매일 새 종가와 그날까지 발표된 실제 EPS(실적 발표 즉시 반영)·최신 예상 EPS로 다시 계산합니다. 보유 종목은 마지막 보유 내역(' + kdate(P.k.hold[last]) + ')을 그대로 쓰며 지수 정기 변경은 반영되지 않습니다' +
       (after ? ' — 지금 ' + after + '거래일(' + dot(P.date[last - after + 1]) + '~' + dot(P.date[last]) + ', 차트의 주황 음영)이 여기에 해당합니다.' : '.') +
       ' 미국 정규장 중에는 구성 종목의 지금 가격으로 오늘 PER을 1분마다 다시 계산해 맨 위 숫자·요약 카드와 차트 끝 점(실시간)에 보여 주고, 장 마감 뒤 확정 종가로 이어 붙입니다.';
     fz.hidden = false;
@@ -7158,8 +7167,8 @@ var TAX = (function () {
       var px = P.k[pk][i]; return '<b>' + kdate(P.date[i]) + (e === 'soxx' ? ' · SOXX ' + num(px, 2) + '달러' : px != null ? ' · SOXQ ' + num(px, 2) + '달러' : ' · 상장 전(SOXX 보유로 계산)') + '</b>';
     };
     var fzNote = function (i) {
-      if (isL(i)) return '<p class="w">실시간 — 지금 가격 ÷ EPS(' + dot(P.eps) + ' 기준) · 장 마감 뒤 확정' + (L.miss ? ' · ' + L.miss + '종목은 지난 종가' : '') + '</p>';
-      return P.frozen && P.date[i] > P.frozen ? '<p class="w">EPS ' + dot(P.eps) + ' 기준 고정 — 가격 변화만 반영</p>' : '';
+      if (isL(i)) return '<p class="w">실시간 — 지금 가격 ÷ 마지막 확정일 EPS · 장 마감 뒤 확정' + (L.miss ? ' · ' + L.miss + '종목은 지난 종가' : '') + '</p>';
+      return P.frozen && P.date[i] > P.frozen ? '<p class="w">자동 계산 — 그날까지 발표된 실적 + 최신 예상 EPS · 보유 ' + dot(P.k.hold[i]) + ' 기준</p>' : '';
     };
     lineChart('pe', 'sm-pe-c', { xs: X, i0: i0, i1: i1, marks: marks, fz: fz, live: !!lx,
       sets: on.map(function (k) { return { arr: A[k], col: LCOL[k] }; }),
