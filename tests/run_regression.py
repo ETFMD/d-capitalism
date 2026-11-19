@@ -3552,7 +3552,7 @@ SEMIS_JS = """async () => {
     ok('실적 안내 상자: 반영 대기 · 새 실적(14일 안만)', !bx.hidden && /반영 대기/.test(bx.textContent) && bx.textContent.includes(sy[1]) && /새 실적 반영/.test(bx.textContent) && bx.textContent.includes(sy[2]) && bx.textContent.includes('EPS 1.23달러') && !bx.textContent.includes(sy[3] + '(') && !bx.classList.contains('ok'), bx.textContent.slice(0, 200));
     ok('표 표시: 반영 대기 · 새 실적 · 오래된 반영은 표시 없음', fl(sy[1]) === '반영 대기' && fl(sy[2]) === '새 실적' && fl(sy[3]) === '', [fl(sy[1]), fl(sy[2]), fl(sy[3])]);
     sel.value = sy[2]; sel.dispatchEvent(new Event('change', { bubbles: true })); await W(250);
-    ok('상세: 새 실적 · 회사 발표 자료 안내', /새 실적/.test($('#sm-dmeta').textContent) && /EPS 1\.23달러/.test($('#sm-dmeta').textContent) && /회사 실적 발표 자료/.test($('#sm-dmeta').textContent), $('#sm-dmeta').textContent.slice(-160));
+    ok('상세: 새 실적 · 회사 발표 자료 안내', /새 실적/.test($('#sm-dmeta').textContent) && /EPS 1[.]23달러/.test($('#sm-dmeta').textContent) && /회사 실적 발표 자료/.test($('#sm-dmeta').textContent), $('#sm-dmeta').textContent.slice(-160));
     sel.value = sy[1]; sel.dispatchEvent(new Event('change', { bubbles: true })); await W(250);
     ok('상세: 반영 대기 안내', /반영 대기/.test($('#sm-dmeta').textContent) && /이전 EPS/.test($('#sm-dmeta').textContent), $('#sm-dmeta').textContent.slice(-120));
     S.sum.soxx.stale = []; S.sum.soxx.rep = [r1]; D.go(true); await W(120);
@@ -3628,14 +3628,14 @@ SEMIS_JS = """async () => {
   D.applyQuotes(fq); await W(300);
   const LQ = S.L.soxq, PQ2 = S.P.soxq, n2 = PQ2.date.length;
   ok('실시간: SOXQ PER = 마지막 PER × 1.1 · 카드·설명·요약 카드에 실시간 표시', LQ && LQ.on && Math.abs(LQ.R - 1.1) < 1e-6 && ['pe_ttm', 'pe_mix', 'pe_ntm'].every(k => LQ[k] === Math.round(S.sum.soxq[k] * 1.1 * 100) / 100)
-    && /실시간/.test($('#sm-meta').textContent) && /실시간/.test($('#sm-tabs [data-v="soxq-pe"]').textContent) && $('#sm-pe-lead').textContent.includes(LQ.pe_ntm.toFixed(1)) && $$('#sm-stats .sm-lvb').length === 3, [LQ, $('#sm-meta').textContent.slice(0, 80)]);
+    && /실시간/.test($('#sm-meta').textContent) && /실시간/.test($('#sm-tabs [data-v="soxq-pe"]').textContent) && $('#sm-pe-lead').textContent.includes(num1(LQ.pe_ntm)) && $$('#sm-stats .sm-lvb').length === 3, [LQ, $('#sm-meta').textContent.slice(0, 80)]);
   const dl = S.ch.pe.data.datasets[0].data;
   ok('실시간: 차트 끝에 점 하나 더(다음 거래일 · 값 = 실시간) · 가격 차트도', dl.length === n2 + 1 && dl[n2].x === Date.parse(nx) / 864e5 && dl[n2].y === LQ.pe_ttm && S.ch.px.data.datasets[0].data[n2].y === LQ.px && Math.abs(LQ.px - S.sum.soxq.px * 1.1) < 1e-3, dl.slice(-2));
   ok('실시간: 역대 위치 = 저장된 날 중 실시간 값보다 낮은 비율', Math.abs(LQ.pe_ntm_p - PQ2.k.pe_ntm.filter(v => v != null && v < LQ.pe_ntm).length / PQ2.k.pe_ntm.filter(v => v != null).length * 100) < 1e-9, LQ.pe_ntm_p);
   const cvq = $('#sm-pe-c'); cvq.scrollIntoView({ block: 'center' }); await W(80);
   const rq = cvq.getBoundingClientRect(), aq = S.ch.pe.chartArea;
   cvq.dispatchEvent(new PointerEvent('pointermove', { clientX: rq.left + aq.right - 2, clientY: rq.top + (aq.top + aq.bottom) / 2, bubbles: true, pointerType: 'mouse' })); await W(60);
-  ok('실시간 점 설명창(오른쪽 끝)', /실시간/.test($('#sm-pe-box .sm-tip').textContent) && $('#sm-pe-box .sm-tip').textContent.includes(LQ.pe_ttm.toFixed(1)), $('#sm-pe-box .sm-tip').textContent.slice(0, 120));
+  ok('실시간 점 설명창(오른쪽 끝)', /실시간/.test($('#sm-pe-box .sm-tip').textContent) && $('#sm-pe-box .sm-tip').textContent.includes(num1(LQ.pe_ttm)), $('#sm-pe-box .sm-tip').textContent.slice(0, 120));
   cvq.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true, pointerType: 'mouse' }));
   $('#sm-tabs [data-v="soxq-fin"]').click(); await W(400);
   const FQ = S.F.soxq, w0 = FQ.comp0.map(c => c.weight || 0), w1 = FQ.comp.map(c => c.weight || 0), fr0 = rows()[0], fc0 = FQ.comp.find(c => c.sym === fr0.dataset.sym), fb0 = FQ.comp0.find(c => c.sym === fr0.dataset.sym);
