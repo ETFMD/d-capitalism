@@ -3599,6 +3599,56 @@ SEMIS_JS = """async () => {
   cv.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true, pointerType: 'mouse' })); await W(40);
   ok('설명창 닫힘', tip.style.display === 'none');
   ok('참고 차트 = 로그 눈금 · 2002년부터', S.ch.ref.options.scales.y.type === 'logarithmic' && S.ch.ref.scales.x.min === Date.parse('2002-01-11') / 864e5, S.ch.ref.scales.x.min);
+  /* 휠 확대·축소 · Shift 휠·끌어 옮기기 · 두 번 누르기 · [고른 기간으로] · 기간 단추로 풀기 (2026-11-22) */
+  {
+    const PF = 'sm', HX = '$sm';
+    const zc = ch => [ch.scales.x.min, ch.scales.x.max], zbt = () => $('#' + PF + '-pe-box .sm-zr');
+    const wh = (el, dy, x, y, o) => { const ev = new WheelEvent('wheel', Object.assign({ deltaY: dy, clientX: x, clientY: y, bubbles: true, cancelable: true }, o || {})); el.dispatchEvent(ev); return ev.defaultPrevented; };
+    cv.scrollIntoView({ block: 'center' }); await W(100);
+    const zr = cv.getBoundingClientRect(), za = S.ch.pe.chartArea, zx = zr.left + za.left + (za.right - za.left) * 0.3, zy = zr.top + (za.top + za.bottom) / 2;
+    const s0 = zc(S.ch.pe), y0 = S.ch.pe.scales.y.max, at = S.ch.pe.scales.x.getValueForPixel(zx - zr.left), fr = v => (at - v[0]) / (v[1] - v[0]);
+    ok('휠: 다 보이는데 줄이기 → 막지 않음(페이지 스크롤) · 단추 숨김', wh(cv, 100, zx, zy) === false && zbt().hidden);
+    let pv = 0; for (let i = 0; i < 4; i++) pv += wh(cv, -100, zx, zy) ? 1 : 0; await W(150);
+    const s1 = zc(S.ch.pe);
+    ok('휠 확대: 구간 줄어듦 · 마우스 자리 날짜 그대로 · 가격·비중 차트 같은 구간 · 세로축 = 보이는 구간 · [고른 기간으로] 보임', pv === 4 && s1[1] - s1[0] < (s0[1] - s0[0]) * 0.6 && Math.abs(fr(s1) - fr(s0)) < 0.03 && zc(S.ch.px).join() === s1.join() && zc(S.ch.cov).join() === s1.join() && S.ch.pe.scales.y.max <= y0 && !zbt().hidden, [s0, s1, fr(s0), fr(s1), y0, S.ch.pe.scales.y.max]);
+    wh(cv, 200, zx, zy, { shiftKey: true }); await W(150);
+    const s2 = zc(S.ch.pe);
+    ok('Shift+휠: 같은 폭으로 뒤 날짜로 옮김', s2[0] > s1[0] && Math.abs((s2[1] - s2[0]) - (s1[1] - s1[0])) <= 8, [s1, s2]);
+    cv.dispatchEvent(new PointerEvent('pointerdown', { clientX: zx, clientY: zy, button: 0, pointerId: 7, bubbles: true, cancelable: true, pointerType: 'mouse' }));
+    cv.dispatchEvent(new PointerEvent('pointermove', { clientX: zx + 120, clientY: zy, pointerId: 7, bubbles: true, pointerType: 'mouse' }));
+    cv.dispatchEvent(new PointerEvent('pointerup', { clientX: zx + 120, clientY: zy, pointerId: 7, bubbles: true, pointerType: 'mouse' })); await W(150);
+    const s3 = zc(S.ch.pe);
+    ok('마우스로 오른쪽으로 끌기 → 앞 날짜로 · 폭 그대로', s3[0] < s2[0] && Math.abs((s3[1] - s3[0]) - (s2[1] - s2[0])) <= 8, [s2, s3]);
+    const pc = $('#' + PF + '-px-c'), pr = pc.getBoundingClientRect(), pa = S.ch.px.chartArea;
+    for (let i = 0; i < 40; i++) wh(pc, -400, pr.left + (pa.left + pa.right) / 2, pr.top + (pa.top + pa.bottom) / 2); await W(200);
+    const s4 = zc(S.ch.pe), n4 = S.ch.pe.data.datasets[0].data.length, lb = S.ch.pe.scales.x.ticks.map(t => t.label);
+    ok('가격 차트에서 휠 → 세 차트 함께 · 가장 좁게 약 15거래일 · 눈금 월.일', zc(S.ch.px).join() === s4.join() && zc(S.ch.cov).join() === s4.join() && n4 >= 12 && n4 <= 30 && lb.length >= 2 && lb.every(l => /^(\\d{1,2}\\.\\d{1,2}|\\d{4})$/.test(l)), [n4, lb]);
+    cv.dispatchEvent(new PointerEvent('pointermove', { clientX: zr.left + (za.left + za.right) / 2, clientY: zy, bubbles: true, pointerType: 'mouse' })); await W(60);
+    const tp = $('#' + PF + '-pe-box .sm-tip');
+    ok('확대한 채 설명창 = 보이는 구간 안 날짜', tp.style.display === 'block' && S.ch.pe[HX].hx >= s4[0] && S.ch.pe[HX].hx <= s4[1], [S.ch.pe[HX].hx, s4]);
+    cv.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true, pointerType: 'mouse' })); await W(40);
+    cv.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); await W(150);
+    ok('두 번 누르기 → 고른 기간(전체) · 단추 숨김', zc(S.ch.pe).join() === s0.join() && zc(S.ch.cov).join() === s0.join() && zbt().hidden, zc(S.ch.pe));
+    for (let i = 0; i < 3; i++) wh(cv, -100, zx, zy); await W(150);
+    zbt().click(); await W(150);
+    ok('[고른 기간으로] 누르기 → 원래대로', zc(S.ch.pe).join() === s0.join() && zbt().hidden, zc(S.ch.pe));
+    for (let i = 0; i < 3; i++) wh(cv, -100, zx, zy); await W(150);
+    $('#' + PF + '-rng [data-r="3"]').click(); await W(150);
+    const st3 = (+P.date[last].slice(0, 4) - 3) + P.date[last].slice(4), i3 = P.date.findIndex(d => d >= st3);
+    ok('기간 단추 → 확대 풀리고 그 기간', S.ch.pe.scales.x.min === P.x[i3] && S.ch.pe.scales.x.max === P.x[last] && zbt().hidden, [S.ch.pe.scales.x.min, P.x[i3]]);
+    for (let i = 0; i < 3; i++) wh(cv, -100, zx, zy); await W(150);
+    ok('3년 안에서 확대 → 바깥 끝 = 3년', S.ch.pe.scales.x.min >= P.x[i3] && S.ch.pe.scales.x.max - S.ch.pe.scales.x.min < P.x[last] - P.x[i3], zc(S.ch.pe));
+    $('#' + PF + '-rng [data-r="all"]').click(); await W(150);
+    ok('전체로 돌아옴', zc(S.ch.pe).join() === s0.join() && zbt().hidden);
+  }
+  { const rcv = $('#sm-ref-c'); rcv.scrollIntoView({ block: 'center' }); await W(100);
+    const rr = rcv.getBoundingClientRect(), ra = S.ch.ref.chartArea, r0 = [S.ch.ref.scales.x.min, S.ch.ref.scales.x.max], ry0 = S.ch.ref.scales.y.max;
+    for (let i = 0; i < 5; i++) rcv.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: rr.left + ra.right - 20, clientY: rr.top + (ra.top + ra.bottom) / 2, bubbles: true, cancelable: true })); await W(150);
+    const r1 = [S.ch.ref.scales.x.min, S.ch.ref.scales.x.max];
+    ok('참고 차트 휠 확대 · 세로축(로그) = 보이는 구간 · 눈금 2개 이상 · 일별 차트는 그대로', r1[1] - r1[0] < (r0[1] - r0[0]) * 0.6 && S.ch.ref.scales.y.max <= ry0 && S.ch.ref.scales.y.ticks.length >= 2 && !$('#sm-ref-box .sm-zr').hidden && S.ch.pe.scales.x.min === P.x[0] && $('#sm-pe-box .sm-zr').hidden, [r0, r1, S.ch.ref.scales.y.ticks.map(t => t.value)]);
+    rcv.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); await W(150);
+    ok('참고 차트 두 번 누르기 → 2002년부터', S.ch.ref.scales.x.min === r0[0] && S.ch.ref.scales.x.max === r0[1] && $('#sm-ref-box .sm-zr').hidden, [S.ch.ref.scales.x.min, r0]);
+    cv.scrollIntoView({ block: 'center' }); await W(80); }
   /* 기준일 뒤(스크립트가 그날까지 발표된 실적으로 다시 계산) 표시 — 가짜로 하루 더한 자료로 */
   const raw = await (await fetch('data/semis/soxx_pe.json', { cache: 'no-cache' })).json();
   const lr = raw.r[raw.r.length - 1].slice(), nd = new Date(Date.parse(lr[0]) + 3 * 864e5).toISOString().slice(0, 10);
@@ -3637,6 +3687,10 @@ SEMIS_JS = """async () => {
   cvq.dispatchEvent(new PointerEvent('pointermove', { clientX: rq.left + aq.right - 2, clientY: rq.top + (aq.top + aq.bottom) / 2, bubbles: true, pointerType: 'mouse' })); await W(60);
   ok('실시간 점 설명창(오른쪽 끝)', /실시간/.test($('#sm-pe-box .sm-tip').textContent) && $('#sm-pe-box .sm-tip').textContent.includes(num1(LQ.pe_ttm)), $('#sm-pe-box .sm-tip').textContent.slice(0, 120));
   cvq.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true, pointerType: 'mouse' }));
+  { const zcv = $('#sm-pe-c'); zcv.scrollIntoView({ block: 'center' }); await W(80); const rq2 = zcv.getBoundingClientRect(), aq2 = S.ch.pe.chartArea;
+    for (let i = 0; i < 4; i++) zcv.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: rq2.left + aq2.left + 10, clientY: rq2.top + (aq2.top + aq2.bottom) / 2, bubbles: true, cancelable: true })); await W(150);
+    const lvz = S.ch.pe.$o.live, lvl = S.ch.pe.data.datasets[0].data.length; zcv.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); await W(150);
+    ok('확대해 끝이 안 보이면 실시간 점 표시 안 함 · 풀면 다시', lvz === false && lvl < n2 && S.ch.pe.$o.live === true && S.ch.pe.data.datasets[0].data.length === n2 + 1, [lvz, lvl, S.ch.pe.$o.live]); }
   $('#sm-tabs [data-v="soxq-fin"]').click(); await W(400);
   const FQ = S.F.soxq, w0 = FQ.comp0.map(c => c.weight || 0), w1 = FQ.comp.map(c => c.weight || 0), fr0 = rows()[0], fc0 = FQ.comp.find(c => c.sym === fr0.dataset.sym), fb0 = FQ.comp0.find(c => c.sym === fr0.dataset.sym);
   ok('실시간: 기업 표 30종목 = 가격·PER·시가총액 × 1.1 · 비중은 그대로(모두 같은 비율) · 합계', FQ.lon === 30 && Math.abs(FQ.tot / FQ.comp0.reduce((a, c) => a + (c.mcap_usd || 0), 0) - 1.1) < 1e-5 && w0.every((w, i) => Math.abs(w - w1[i]) < 1e-4)
@@ -3756,6 +3810,48 @@ USIDX_JS = """async () => {
   ok('차트 설명창: 날짜·QQQ 가격·3선·계산 비중', tip.style.display === 'block' && /년 .*월 .*일/.test(tip.textContent) && /QQQ/.test(tip.textContent) && (tip.textContent.match(/배/g) || []).length >= 3 && /계산 비중/.test(tip.textContent), tip.textContent.slice(0, 160));
   cv.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true, pointerType: 'mouse' })); await W(40);
   ok('설명창 닫힘', tip.style.display === 'none');
+  /* 휠 확대·축소 · Shift 휠·끌어 옮기기 · 두 번 누르기 · [고른 기간으로] · 기간 단추로 풀기 (2026-11-22) */
+  {
+    const PF = 'ux', HX = '$ux';
+    const zc = ch => [ch.scales.x.min, ch.scales.x.max], zbt = () => $('#' + PF + '-pe-box .sm-zr');
+    const wh = (el, dy, x, y, o) => { const ev = new WheelEvent('wheel', Object.assign({ deltaY: dy, clientX: x, clientY: y, bubbles: true, cancelable: true }, o || {})); el.dispatchEvent(ev); return ev.defaultPrevented; };
+    cv.scrollIntoView({ block: 'center' }); await W(100);
+    const zr = cv.getBoundingClientRect(), za = S.ch.pe.chartArea, zx = zr.left + za.left + (za.right - za.left) * 0.3, zy = zr.top + (za.top + za.bottom) / 2;
+    const s0 = zc(S.ch.pe), y0 = S.ch.pe.scales.y.max, at = S.ch.pe.scales.x.getValueForPixel(zx - zr.left), fr = v => (at - v[0]) / (v[1] - v[0]);
+    ok('휠: 다 보이는데 줄이기 → 막지 않음(페이지 스크롤) · 단추 숨김', wh(cv, 100, zx, zy) === false && zbt().hidden);
+    let pv = 0; for (let i = 0; i < 4; i++) pv += wh(cv, -100, zx, zy) ? 1 : 0; await W(150);
+    const s1 = zc(S.ch.pe);
+    ok('휠 확대: 구간 줄어듦 · 마우스 자리 날짜 그대로 · 가격·비중 차트 같은 구간 · 세로축 = 보이는 구간 · [고른 기간으로] 보임', pv === 4 && s1[1] - s1[0] < (s0[1] - s0[0]) * 0.6 && Math.abs(fr(s1) - fr(s0)) < 0.03 && zc(S.ch.px).join() === s1.join() && zc(S.ch.cov).join() === s1.join() && S.ch.pe.scales.y.max <= y0 && !zbt().hidden, [s0, s1, fr(s0), fr(s1), y0, S.ch.pe.scales.y.max]);
+    wh(cv, 200, zx, zy, { shiftKey: true }); await W(150);
+    const s2 = zc(S.ch.pe);
+    ok('Shift+휠: 같은 폭으로 뒤 날짜로 옮김', s2[0] > s1[0] && Math.abs((s2[1] - s2[0]) - (s1[1] - s1[0])) <= 8, [s1, s2]);
+    cv.dispatchEvent(new PointerEvent('pointerdown', { clientX: zx, clientY: zy, button: 0, pointerId: 7, bubbles: true, cancelable: true, pointerType: 'mouse' }));
+    cv.dispatchEvent(new PointerEvent('pointermove', { clientX: zx + 120, clientY: zy, pointerId: 7, bubbles: true, pointerType: 'mouse' }));
+    cv.dispatchEvent(new PointerEvent('pointerup', { clientX: zx + 120, clientY: zy, pointerId: 7, bubbles: true, pointerType: 'mouse' })); await W(150);
+    const s3 = zc(S.ch.pe);
+    ok('마우스로 오른쪽으로 끌기 → 앞 날짜로 · 폭 그대로', s3[0] < s2[0] && Math.abs((s3[1] - s3[0]) - (s2[1] - s2[0])) <= 8, [s2, s3]);
+    const pc = $('#' + PF + '-px-c'), pr = pc.getBoundingClientRect(), pa = S.ch.px.chartArea;
+    for (let i = 0; i < 40; i++) wh(pc, -400, pr.left + (pa.left + pa.right) / 2, pr.top + (pa.top + pa.bottom) / 2); await W(200);
+    const s4 = zc(S.ch.pe), n4 = S.ch.pe.data.datasets[0].data.length, lb = S.ch.pe.scales.x.ticks.map(t => t.label);
+    ok('가격 차트에서 휠 → 세 차트 함께 · 가장 좁게 약 15거래일 · 눈금 월.일', zc(S.ch.px).join() === s4.join() && zc(S.ch.cov).join() === s4.join() && n4 >= 12 && n4 <= 30 && lb.length >= 2 && lb.every(l => /^(\\d{1,2}\\.\\d{1,2}|\\d{4})$/.test(l)), [n4, lb]);
+    cv.dispatchEvent(new PointerEvent('pointermove', { clientX: zr.left + (za.left + za.right) / 2, clientY: zy, bubbles: true, pointerType: 'mouse' })); await W(60);
+    const tp = $('#' + PF + '-pe-box .sm-tip');
+    ok('확대한 채 설명창 = 보이는 구간 안 날짜', tp.style.display === 'block' && S.ch.pe[HX].hx >= s4[0] && S.ch.pe[HX].hx <= s4[1], [S.ch.pe[HX].hx, s4]);
+    cv.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true, pointerType: 'mouse' })); await W(40);
+    cv.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); await W(150);
+    ok('두 번 누르기 → 고른 기간(전체) · 단추 숨김', zc(S.ch.pe).join() === s0.join() && zc(S.ch.cov).join() === s0.join() && zbt().hidden, zc(S.ch.pe));
+    for (let i = 0; i < 3; i++) wh(cv, -100, zx, zy); await W(150);
+    zbt().click(); await W(150);
+    ok('[고른 기간으로] 누르기 → 원래대로', zc(S.ch.pe).join() === s0.join() && zbt().hidden, zc(S.ch.pe));
+    for (let i = 0; i < 3; i++) wh(cv, -100, zx, zy); await W(150);
+    $('#' + PF + '-rng [data-r="3"]').click(); await W(150);
+    const st3 = (+P.date[last].slice(0, 4) - 3) + P.date[last].slice(4), i3 = P.date.findIndex(d => d >= st3);
+    ok('기간 단추 → 확대 풀리고 그 기간', S.ch.pe.scales.x.min === P.x[i3] && S.ch.pe.scales.x.max === P.x[last] && zbt().hidden, [S.ch.pe.scales.x.min, P.x[i3]]);
+    for (let i = 0; i < 3; i++) wh(cv, -100, zx, zy); await W(150);
+    ok('3년 안에서 확대 → 바깥 끝 = 3년', S.ch.pe.scales.x.min >= P.x[i3] && S.ch.pe.scales.x.max - S.ch.pe.scales.x.min < P.x[last] - P.x[i3], zc(S.ch.pe));
+    $('#' + PF + '-rng [data-r="all"]').click(); await W(150);
+    ok('전체로 돌아옴', zc(S.ch.pe).join() === s0.join() && zbt().hidden);
+  }
   /* S&P 500 PER */
   $('#ux-tabs [data-v="spx-pe"]').click();
   for (let i = 0; i < 150 && !(S.P.spx && S.v === 'spx-pe' && S.ch.pe); i++) await W(100);
@@ -3779,6 +3875,10 @@ USIDX_JS = """async () => {
   const dl = S.ch.pe.data.datasets[0].data;
   ok('실시간: 차트 끝에 점 하나 더(다음 거래일 · 값 = 실시간) · 가격 차트도', dl.length === n2 + 1 && dl[n2].x === Date.parse(nx) / 864e5 && dl[n2].y === LQ.pe_ttm && S.ch.px.data.datasets[0].data[n2].y === LQ.px && Math.abs(LQ.px - S.sum.spx.px * 1.1) < 1e-3, dl.slice(-2));
   ok('실시간: 역대 위치 = 저장된 날 중 실시간 값보다 낮은 비율', Math.abs(LQ.pe_ntm_p - PS.k.pe_ntm.filter(v => v != null && v < LQ.pe_ntm).length / PS.k.pe_ntm.filter(v => v != null).length * 100) < 1e-9, LQ.pe_ntm_p);
+  { const zcv = $('#ux-pe-c'); zcv.scrollIntoView({ block: 'center' }); await W(80); const rq2 = zcv.getBoundingClientRect(), aq2 = S.ch.pe.chartArea;
+    for (let i = 0; i < 4; i++) zcv.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: rq2.left + aq2.left + 10, clientY: rq2.top + (aq2.top + aq2.bottom) / 2, bubbles: true, cancelable: true })); await W(150);
+    const lvz = S.ch.pe.$o.live, lvl = S.ch.pe.data.datasets[0].data.length; zcv.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); await W(150);
+    ok('확대해 끝이 안 보이면 실시간 점 표시 안 함 · 풀면 다시', lvz === false && lvl < n2 && S.ch.pe.$o.live === true && S.ch.pe.data.datasets[0].data.length === n2 + 1, [lvz, lvl, S.ch.pe.$o.live]); }
   ok('실시간: 카드 시가총액 = 합계 × 1.1', Math.abs(S.L.ndx.mcap / S.sum.ndx.mcap - 1.1) < 0.01 && /실시간/.test($('#ux-tabs [data-v="ndx-fin"]').textContent), S.L.ndx.mcap / S.sum.ndx.mcap);
   $('#ux-tabs [data-v="spx-fin"]').click(); await W(500);
   const FQ = S.F.spx, has = c => c.px > 0 && c.pxd, nlv = FQ.comp0.filter(has).length, fr0 = rows()[0], fc0 = FQ.comp.find(c => c.sym === fr0.dataset.sym), fb0 = FQ.comp0.find(c => c.sym === fr0.dataset.sym);

@@ -2102,6 +2102,8 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .sm-cbox { position:relative; height:400px; }
   .sm-cbox.s { height:180px; } .sm-cbox.xs { height:140px; } .sm-cbox.m { height:260px; }
   .sm-cbox canvas { display:block; width:100% !important; height:100% !important; touch-action:pan-y; }
+  .sm-zr { position:absolute; top:2px; right:10px; z-index:2; font:inherit; font-size:11px; font-weight:600; color:var(--accent); background:var(--card); border:1px solid rgba(49,130,246,.4); border-radius:6px; padding:3px 9px; cursor:pointer; }   /* 휠 확대 풀기 (반도체·나스닥 100/S&P 500 지수 분석) */
+  .sm-zr[hidden] { display:none; }
   .sm-tip { position:absolute; z-index:3; pointer-events:none; background:var(--bg3); border:1px solid var(--card-border); border-radius:10px; padding:8px 10px; font-size:12px; box-shadow:0 6px 20px rgba(0,0,0,.2); min-width:160px; max-width:300px; display:none; }
   .sm-tip b { display:block; font-size:11.5px; color:var(--text2); margin-bottom:4px; }
   .sm-tip div { display:flex; align-items:center; gap:6px; justify-content:space-between; white-space:nowrap; line-height:1.6; color:var(--text2); }
@@ -14311,13 +14313,13 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
           <span class="acc-title">일별 PER</span>
           <div class="chart-tabs" id="sm-rng" role="group" aria-label="기간"><button type="button" class="chart-tab active" data-r="all">전체</button><button type="button" class="chart-tab" data-r="10">10년</button><button type="button" class="chart-tab" data-r="5">5년</button><button type="button" class="chart-tab" data-r="3">3년</button><button type="button" class="chart-tab" data-r="1">1년</button></div>
         </div>
-        <p class="sm-note" id="sm-pe-desc">점선 세로선은 지난 반도체 바닥입니다. 차트 위에 마우스를 올리거나 손가락으로 누르면 그날 값이 나옵니다.</p>
+        <p class="sm-note" id="sm-pe-desc">점선 세로선은 지난 반도체 바닥입니다. 차트 위에 마우스를 올리거나 손가락으로 누르면 그날 값이 나옵니다. 마우스 휠로 확대·축소하고, 확대한 뒤에는 끌어서 옆으로 옮길 수 있습니다(두 번 누르면 원래대로).</p>
         <div class="sm-ptools" id="sm-lines" role="group" aria-label="그릴 PER">
           <button type="button" class="sm-lt" data-line="pe_ttm" aria-pressed="true"><i style="background:#3182f6"></i>후행</button>
           <button type="button" class="sm-lt" data-line="pe_mix" aria-pressed="true"><i style="background:#fe9800"></i>혼합</button>
           <button type="button" class="sm-lt" data-line="pe_ntm" aria-pressed="true"><i style="background:#14b8a6"></i>선행</button>
         </div>
-        <div class="sm-cbox" id="sm-pe-box"><canvas id="sm-pe-c" role="img" aria-label="일별 후행·혼합·선행 PER 차트"></canvas><div class="sm-tip"></div></div>
+        <div class="sm-cbox" id="sm-pe-box"><button type="button" class="sm-zr" data-zg="pe" hidden>고른 기간으로</button><canvas id="sm-pe-c" role="img" aria-label="일별 후행·혼합·선행 PER 차트"></canvas><div class="sm-tip"></div></div>
         <p class="sm-sub" id="sm-px-t">SOXX 종가</p>
         <p class="sm-note" id="sm-px-s"></p>
         <div class="sm-cbox s" id="sm-px-box"><canvas id="sm-px-c" role="img" aria-label="ETF 종가 차트"></canvas><div class="sm-tip"></div></div>
@@ -14329,7 +14331,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
         <div class="sm-top"><span class="acc-title">참고: 2002년부터의 선행 PER <small>필라델피아 반도체 지수 · 주간</small></span></div>
         <p class="sm-note" data-etf="soxx">History of Market이 공개한 애널리스트 예상 기준 선행 PER입니다. 지수와 계산 방식이 위 차트와 달라 직접 비교하면 안 됩니다. 2002~2010년은 이익이 0에 가까워 값이 크게 튀어 로그 눈금으로 그렸습니다.</p>
         <p class="sm-note" data-etf="soxq" hidden>History of Market이 공개한 애널리스트 예상 기준 선행 PER입니다. SOXQ와 같은 지수지만 이익 기준(회계연도 예상치 혼합)과 계산 방식이 달라 위 차트와 직접 비교하면 안 됩니다. 2002~2010년은 이익이 0에 가까워 값이 크게 튀어 로그 눈금으로 그렸습니다.</p>
-        <div class="sm-cbox m" id="sm-ref-box"><canvas id="sm-ref-c" role="img" aria-label="필라델피아 반도체 지수 선행 PER 참고 차트(로그 눈금)"></canvas><div class="sm-tip"></div></div>
+        <div class="sm-cbox m" id="sm-ref-box"><button type="button" class="sm-zr" data-zg="ref" hidden>전체 기간으로</button><canvas id="sm-ref-c" role="img" aria-label="필라델피아 반도체 지수 선행 PER 참고 차트(로그 눈금)"></canvas><div class="sm-tip"></div></div>
       </div>
       <details class="card sm-notes">
         <summary>계산 방법, 자료 출처, 한계</summary>
@@ -14526,13 +14528,13 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
           <span class="acc-title">일별 PER</span>
           <div class="chart-tabs" id="ux-rng" role="group" aria-label="기간"><button type="button" class="chart-tab active" data-r="all">전체</button><button type="button" class="chart-tab" data-r="10">10년</button><button type="button" class="chart-tab" data-r="5">5년</button><button type="button" class="chart-tab" data-r="3">3년</button><button type="button" class="chart-tab" data-r="1">1년</button></div>
         </div>
-        <p class="sm-note" id="ux-pe-desc">점선 세로선은 지난 주식시장 바닥입니다. 차트 위에 마우스를 올리거나 손가락으로 누르면 그날 값이 나옵니다.</p>
+        <p class="sm-note" id="ux-pe-desc">점선 세로선은 지난 주식시장 바닥입니다. 차트 위에 마우스를 올리거나 손가락으로 누르면 그날 값이 나옵니다. 마우스 휠로 확대·축소하고, 확대한 뒤에는 끌어서 옆으로 옮길 수 있습니다(두 번 누르면 원래대로).</p>
         <div class="sm-ptools" id="ux-lines" role="group" aria-label="그릴 PER">
           <button type="button" class="sm-lt" data-line="pe_ttm" aria-pressed="true"><i style="background:#3182f6"></i>후행</button>
           <button type="button" class="sm-lt" data-line="pe_mix" aria-pressed="true"><i style="background:#fe9800"></i>혼합</button>
           <button type="button" class="sm-lt" data-line="pe_ntm" aria-pressed="true"><i style="background:#14b8a6"></i>선행</button>
         </div>
-        <div class="sm-cbox" id="ux-pe-box"><canvas id="ux-pe-c" role="img" aria-label="일별 후행·혼합·선행 PER 차트"></canvas><div class="sm-tip"></div></div>
+        <div class="sm-cbox" id="ux-pe-box"><button type="button" class="sm-zr" data-zg="pe" hidden>고른 기간으로</button><canvas id="ux-pe-c" role="img" aria-label="일별 후행·혼합·선행 PER 차트"></canvas><div class="sm-tip"></div></div>
         <p class="sm-sub" id="ux-px-t">QQQ 종가</p>
         <p class="sm-note" id="ux-px-s"></p>
         <div class="sm-cbox s" id="ux-px-box"><canvas id="ux-px-c" role="img" aria-label="ETF 종가 차트"></canvas><div class="sm-tip"></div></div>
@@ -21925,7 +21927,10 @@ var TAX = (function () {
   function near(xs, v, i0, i1) { var lo = i0, hi = i1; while (lo < hi) { var m = (lo + hi) >> 1; if (xs[m] < v) lo = m + 1; else hi = m; } return lo > i0 && Math.abs(xs[lo - 1] - v) <= Math.abs(xs[lo] - v) ? lo - 1 : lo; }
   function xticks(lo, hi, w) {
     var span = hi - lo, maxN = Math.max(2, Math.floor((w || 600) / 64)), out = [], y0 = new Date(lo * 864e5).getUTCFullYear(), y1 = new Date(hi * 864e5).getUTCFullYear();
-    if (span > 900) {
+    if (span <= 120) {   /* 휠로 4달 안까지 확대: 날짜 눈금 — 매달 1일부터 k일 간격(달 끝 가까운 날은 다음 달 1일과 겹치므로 뺌) */
+      var ks = [1, 2, 3, 5, 7, 10, 15].filter(function (k) { return span / k <= maxN; })[0] || 15;
+      for (var t = Math.ceil(lo); t <= hi; t++) { var dm = new Date(t * 864e5).getUTCDate(); if ((dm - 1) % ks === 0 && dm <= 31 - ks / 2) out.push(t); }
+    } else if (span > 900) {
       var st = Math.max(1, Math.ceil((y1 - y0 + 1) / maxN));
       for (var y = y0; y <= y1; y++) { if (st > 1 && y % st) continue; var d = Math.round(Date.UTC(y, 0, 1) / 864e5); if (d >= lo && d <= hi) out.push(d); }
     } else {
@@ -21934,7 +21939,9 @@ var TAX = (function () {
     }
     return out;
   }
-  function xlab(v, span) { var d = new Date(v * 864e5), y = d.getUTCFullYear(), m = d.getUTCMonth() + 1; return span > 900 || m === 1 ? String(y) : String(y).slice(2) + '.' + m; }
+  function xlab(v, span) { var d = new Date(v * 864e5), y = d.getUTCFullYear(), m = d.getUTCMonth() + 1, dd = d.getUTCDate();
+    if (span <= 120) return m === 1 && dd === 1 ? String(y) : m + '.' + dd;   /* 휠로 확대한 짧은 구간: 월.일 */
+    return span > 900 || m === 1 ? String(y) : String(y).slice(2) + '.' + m; }
   var PLUG = { id: 'smPlug', beforeDatasetsDraw: function (ch) {   /* 기준일 뒤(스크립트가 매일 다시 계산하는 구간) 주황 음영 */
       var o = ch.$sm; if (!o || o.fz == null) return;
       var a = ch.chartArea, xs = ch.scales.x; if (o.fz >= xs.max) return;
@@ -21960,7 +21967,64 @@ var TAX = (function () {
       }
       c.restore();
     } };
-  function lineChart(key, cid, o) {   /* o: { xs, i0, i1, sets:[{k, arr, col, w}], y:{min,max,log,fmt,n}, marks, fz, tip(i), dots(i) } */
+
+  /* ── 휠 확대·축소 (2026-11-22 · 사용자 요청) — 마우스 휠: 마우스 자리 날짜를 고정한 채 확대·축소 · Shift/가로 휠·확대한 뒤 끌기: 옆으로 옮기기 · 두 번 누르기·[고른 기간으로]: 원래대로
+     · 묶음 o.zg — 'pe' = 일별 PER·종가·계산 비중 세 차트가 같은 구간으로 함께 움직임 · 'ref' = 참고 차트(따로)
+     · 바깥 끝 = 고른 기간(o.f0~o.f1, 기간 단추) · 가장 좁게 = 약 15거래일 · 다 보이는데 더 줄이면 페이지 스크롤 그대로 · 기간 단추·ETF 바꾸면 풀림
+     · 확대 구간은 날짜 값으로 들고 있다가(ZM) 차트를 다시 그릴 때 그 안의 줄만 그림 → 세로축이 보이는 구간에 맞춰지고 실시간 갱신·선 끄기에도 그대로 ── */
+  var ZM = { pe: null, ref: null }, ZQ = {}, ZMIN = 15;
+  function zwin(g, xs, f0, f1) {   /* 확대 구간 → 그릴 줄 [첫, 끝] */
+    var z = ZM[g]; if (!z) return [f0, f1];
+    var a = near(xs, z[0], f0, f1), b = near(xs, z[1], f0, f1);
+    if (b - a < 2) { ZM[g] = null; return [f0, f1]; }
+    return [a, b];
+  }
+  function zdraw(g) { if (g === 'ref') refChart(); else peCharts(); }
+  function zbtn(g) { document.querySelectorAll('#sm-pe .sm-zr[data-zg="' + g + '"]').forEach(function (b) { b.hidden = !ZM[g]; }); }
+  function zset(o, lo, span, cv, e) {   /* 새 구간 저장 → 다음 그림 틀에 한 번만 다시 그림(휠·끌기가 빨라도) */
+    var F0 = o.xs[o.f0], F1 = o.xs[o.f1], g = o.zg;
+    if (lo + span > F1) lo = F1 - span; if (lo < F0) lo = F0;
+    ZM[g] = span >= F1 - F0 - 1e-9 ? null : [lo, lo + span];
+    var q = ZQ[g]; ZQ[g] = { cv: cv, x: e.clientX, y: e.clientY };
+    if (!q) requestAnimationFrame(function () { var r = ZQ[g]; ZQ[g] = null; zdraw(g); if (r && r.cv.__ch) hover(r.cv, { clientX: r.x, clientY: r.y, pointerType: 'mouse' }); });
+  }
+  function zwire(cv) {
+    var dr = null;
+    cv.addEventListener('wheel', function (e) {
+      var ch = cv.__ch, o = ch && ch.$o, a = ch && ch.chartArea; if (!o || !o.zg || !a) return;
+      var rc = cv.getBoundingClientRect(), px = e.clientX - rc.left, py = e.clientY - rc.top;
+      if (px < a.left || px > a.right || py < a.top || py > a.bottom) return;
+      var F0 = o.xs[o.f0], F1 = o.xs[o.f1], full = F1 - F0, z = ZM[o.zg] || [F0, F1], lo = z[0], span = z[1] - z[0];
+      if (!(full > 0) || !(span > 0)) return;
+      var unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1, side = Math.abs(e.deltaX) > Math.abs(e.deltaY);
+      if (e.shiftKey || side) {   /* Shift·가로 휠 = 옆으로 옮기기 */
+        if (span >= full) return;
+        e.preventDefault();
+        var dd = (side ? e.deltaX : e.deltaY) * unit;
+        lo += span * Math.max(-0.5, Math.min(0.5, dd / 1000));
+      } else {
+        var dy = e.deltaY * unit; if (!dy) return;
+        if (dy > 0 && span >= full) return;   /* 다 보이는데 더 줄이기 = 페이지 스크롤 */
+        e.preventDefault();
+        var mn = Math.min(full, full / Math.max(1, o.f1 - o.f0) * ZMIN), ns = Math.max(mn, Math.min(full, span * Math.pow(2, Math.max(-1, Math.min(1, dy / 400)))));
+        var at = Math.max(lo, Math.min(lo + span, ch.scales.x.getValueForPixel(px)));
+        lo = at - (at - lo) / span * ns; span = ns;
+      }
+      zset(o, lo, span, cv, e);
+    }, { passive: false });
+    cv.addEventListener('pointerdown', function (e) {   /* 확대한 뒤 마우스로 끌어 옮기기 (손가락은 그대로 — 페이지 스크롤·값 보기) */
+      var ch = cv.__ch, o = ch && ch.$o; if (e.pointerType !== 'mouse' || e.button !== 0 || !o || !o.zg || !ZM[o.zg]) return;
+      e.preventDefault();
+      dr = { x: e.clientX, z: ZM[o.zg].slice(), w: Math.max(1, ch.chartArea.right - ch.chartArea.left), o: o };
+      try { cv.setPointerCapture(e.pointerId); } catch (x) {}
+      cv.style.cursor = 'grabbing';
+    });
+    cv.addEventListener('pointermove', function (e) { if (!dr) return; var s = dr.z[1] - dr.z[0]; zset(dr.o, dr.z[0] - (e.clientX - dr.x) / dr.w * s, s, cv, e); });
+    var up = function () { if (!dr) return; dr = null; var o = cv.__ch && cv.__ch.$o; cv.style.cursor = o && o.zg && ZM[o.zg] ? 'grab' : ''; };
+    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+    cv.addEventListener('dblclick', function () { var o = cv.__ch && cv.__ch.$o; if (o && o.zg && ZM[o.zg]) { ZM[o.zg] = null; zdraw(o.zg); } });
+  }
+  function lineChart(key, cid, o) {   /* o: { xs, i0, i1, sets:[{k, arr, col, w}], y:{min,max,log,fmt,n}, marks, fz, tip(i), dots(i), zg·f0·f1(휠 확대 묶음·바깥 끝) } */
     var cv = $(cid); if (!cv || typeof Chart === 'undefined') return;
     kill(key);
     var th = theme(), x0 = o.xs[o.i0], x1 = o.xs[o.i1], span = x1 - x0;
@@ -21976,7 +22040,7 @@ var TAX = (function () {
       return d;
     });
     var y = o.y.log ? { type: 'logarithmic', min: o.y.min, max: o.y.max, grid: { color: th.grid }, border: { display: false },
-                        afterBuildTicks: function (ax) { ax.ticks = [5, 10, 20, 50, 100, 200].filter(function (t) { return t >= ax.min && t <= ax.max; }).map(function (v) { return { value: v }; }); },
+                        afterBuildTicks: function (ax) { var f = function (t) { return t >= ax.min && t <= ax.max; }, tk = [5, 10, 20, 50, 100, 200].filter(f); if (tk.length < 2) tk = [5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100, 150, 200].filter(f); ax.ticks = tk.map(function (v) { return { value: v }; }); },
                         ticks: { color: th.tick, font: { size: 11 }, callback: o.y.fmt } }
                     : { min: o.y.min, max: o.y.max, beginAtZero: true, grid: { color: th.grid }, border: { display: false }, ticks: { color: th.tick, font: { size: 11 }, maxTicksLimit: o.y.n || 6, callback: o.y.fmt } };
     var ch = new Chart(cv.getContext('2d'), { type: 'line', data: { datasets: dsets }, plugins: [PLUG],
@@ -21993,7 +22057,9 @@ var TAX = (function () {
       var mv = function (e) { hover(cv, e); };
       cv.addEventListener('pointermove', mv); cv.addEventListener('pointerdown', mv);
       cv.addEventListener('pointerleave', function (e) { if (e.pointerType !== 'touch') unhover(cv); });
+      zwire(cv);
     }
+    cv.style.cursor = o.zg && ZM[o.zg] ? 'grab' : '';
     S.ch[key] = ch;
   }
   function unhover(cv) {
@@ -22014,6 +22080,7 @@ var TAX = (function () {
   function peView() {
     var e = etf(), P = S.P[e], n = P.date.length, last = n - 1;
     $('sm-pe-t').textContent = ETF() + ' PER 추이';
+    ZM.pe = ZM.ref = null;   /* ETF·보기를 바꾸면 휠 확대 풀기 */
     peLead();
     var after = 0; for (var i = last; i >= 0 && P.frozen && P.date[i] > P.frozen; i--) after++;
     var fz = $('sm-pe-fz');
@@ -22037,7 +22104,7 @@ var TAX = (function () {
       (on ? '<span class="sm-lv on"><i></i>' + (lvOpen(L.rt) ? '실시간' : '종가 반영') + '</span><b>뉴욕 ' + nyT(L.rt) + '</b> ' + (lvOpen(L.rt) ? '정규장 가격' : '정규장 종가') + ' 기준으로 ' + vals(function (k) { return L[k]; }) +
             '입니다(장 마감 뒤 확정). 마지막 확정 종가(' + kdate(P.date[last]) + ')로는 ' + vals(fix).replace(/<\/?b>/g, '') + '였습니다.'
          : '마지막 거래일 <b>' + kdate(P.date[last]) + '</b> 종가 기준으로 ' + vals(fix) + '입니다.');
-    $('sm-pe-desc').textContent = '점선 세로선은 지난 반도체 바닥' + (e === 'soxq' ? ', 실선은 SOXQ 상장일' : '') + '입니다.' + (on ? ' 맨 끝 점은 실시간 값(장 마감 뒤 확정)입니다.' : '') + ' 차트 위에 마우스를 올리거나 손가락으로 누르면 그날 값이 나옵니다.';
+    $('sm-pe-desc').textContent = '점선 세로선은 지난 반도체 바닥' + (e === 'soxq' ? ', 실선은 SOXQ 상장일' : '') + '입니다.' + (on ? ' 맨 끝 점은 실시간 값(장 마감 뒤 확정)입니다.' : '') + ' 차트 위에 마우스를 올리거나 손가락으로 누르면 그날 값이 나옵니다. 마우스 휠로 확대·축소하고, 확대한 뒤에는 끌어서 옆으로 옮길 수 있습니다(두 번 누르면 원래대로).';
   }
   function peStats() {
     var e = etf(), P = S.P[e], st = P.st, L = S.L[e], on = !!(L && L.on);
@@ -22061,7 +22128,8 @@ var TAX = (function () {
     var X = lx ? P.x.concat([lx]) : P.x, ext = function (a, v) { return lx ? a.concat([v]) : a; };
     var A = {}; KEYS.forEach(function (k) { A[k] = ext(P.k[k], L && L[k]); });
     var PX = ext(P.k[P.pk], L && L.px), CV = ext(P.k.cov, P.k.cov[n - 1]);
-    var i0 = i0of(P), i1 = X.length - 1, pk = P.pk, th = theme(), fz = P.frozen && (P.asof > P.frozen || lx) ? dn(P.frozen) : null;
+    var f0 = i0of(P), f1 = X.length - 1, zw = zwin('pe', X, f0, f1), i0 = zw[0], i1 = zw[1], pk = P.pk, th = theme(), fz = P.frozen && (P.asof > P.frozen || lx) ? dn(P.frozen) : null;
+    var lvOn = !!lx && i1 === f1, zo = { zg: 'pe', f0: f0, f1: f1 };   /* 실시간 점은 보이는 끝이 자료 끝일 때만 */
     var on = KEYS.filter(function (k) { return S.on[k]; }), mx = 0;
     for (var i = i0; i <= i1; i++) on.forEach(function (k) { var v = A[k][i]; if (v != null && v > mx) mx = v; });
     var marks = BOTTOMS.map(function (b) { return [dn(b[0]), b[1], 0]; }); if (e === 'soxq') marks.push([dn(LIST_Q), 'SOXQ 상장', 1]);
@@ -22074,7 +22142,7 @@ var TAX = (function () {
       if (isL(i)) return '<p class="w">실시간 — 지금 가격 ÷ 마지막 확정일 EPS · 장 마감 뒤 확정' + (L.miss ? ' · ' + L.miss + '종목은 지난 종가' : '') + '</p>';
       return P.frozen && P.date[i] > P.frozen ? '<p class="w">자동 계산 — 그날까지 발표된 실적 + 최신 예상 EPS · 보유 ' + dot(P.k.hold[i]) + ' 기준</p>' : '';
     };
-    lineChart('pe', 'sm-pe-c', { xs: X, i0: i0, i1: i1, marks: marks, fz: fz, live: !!lx,
+    lineChart('pe', 'sm-pe-c', { xs: X, i0: i0, i1: i1, zg: zo.zg, f0: f0, f1: f1, marks: marks, fz: fz, live: lvOn,
       sets: on.map(function (k) { return { arr: A[k], col: LCOL[k] }; }),
       y: { min: 0, max: mx ? undefined : 1, fmt: function (v) { return v + '배'; } },
       dots: function (i) { return on.map(function (k) { return [A[k][i], LCOL[k]]; }); },
@@ -22085,14 +22153,15 @@ var TAX = (function () {
         if (P.k.est[j] > 0) h += '<p>선행 EPS 중 현재 예상치 ' + num(P.k.est[j], 0) + '%</p>';
         return h + fzNote(i);
       } });
-    lineChart('px', 'sm-px-c', { xs: X, i0: i0, i1: i1, fz: fz, live: !!lx, sets: [{ arr: PX, col: th.px, w: 1.4 }],
+    lineChart('px', 'sm-px-c', { xs: X, i0: i0, i1: i1, zg: zo.zg, f0: f0, f1: f1, fz: fz, live: lvOn, sets: [{ arr: PX, col: th.px, w: 1.4 }],
       y: { min: 0, fmt: function (v) { return '$' + v; }, n: 5 },
       dots: function (i) { return [[PX[i], th.px]]; },
       tip: function (i) { var v = PX[i]; return '<b>' + (isL(i) ? (lvOpen(L.rt) ? '실시간' : '종가') + ' · 뉴욕 ' + nyT(L.rt) : kdate(P.date[i])) + '</b><div><span>' + ETF() + '</span><em>' + (v != null ? num(v, 2) + '달러' : '상장 전') + '</em></div>'; } });
-    lineChart('cov', 'sm-cov-c', { xs: X, i0: i0, i1: i1, fz: fz, sets: [{ arr: CV, col: COVC, w: 1.4 }],
+    lineChart('cov', 'sm-cov-c', { xs: X, i0: i0, i1: i1, zg: zo.zg, f0: f0, f1: f1, fz: fz, sets: [{ arr: CV, col: COVC, w: 1.4 }],
       y: { min: 0, max: 100, fmt: function (v) { return v + '%'; }, n: 3 },
       dots: function (i) { return [[CV[i], COVC]]; },
       tip: function (i) { var j = isL(i) ? n - 1 : i; return '<b>' + (isL(i) ? '실시간 · 뉴욕 ' + nyT(L.rt) : kdate(P.date[i])) + '</b><div><span>계산 비중</span><em>' + num(CV[i], 1) + '%</em></div><p>보유 기준 ' + esc(P.k.hold[j]) + '</p>'; } });
+    zbtn('pe');
   }
 
   /* ── 실시간 반영 (Worker GET /qs — 야후 정규장 가격 · 열려 있는 동안 1분마다 · 장 마감 뒤 10분마다)
@@ -22194,12 +22263,13 @@ var TAX = (function () {
     var R = S.ref, box = $('sm-ref-box');
     if (!R || !R.length) { kill('ref'); if (!box.querySelector('.sm-none')) box.insertAdjacentHTML('beforeend', '<div class="sm-none">참고 자료를 불러오지 못했습니다.</div>'); return; }
     var old = box.querySelector('.sm-none'); if (old) old.remove();
-    var xs = R.map(function (r) { return dn(r[0]); }), ys = R.map(function (r) { return r[1]; }), lo = Infinity, hi = 0;
-    ys.forEach(function (v) { if (v < lo) lo = v; if (v > hi) hi = v; });
-    lineChart('ref', 'sm-ref-c', { xs: xs, i0: 0, i1: R.length - 1, sets: [{ arr: ys, col: REFC, w: 1.4 }],
+    var xs = R.map(function (r) { return dn(r[0]); }), ys = R.map(function (r) { return r[1]; }), lo = Infinity, hi = 0, zw = zwin('ref', xs, 0, R.length - 1);
+    for (var i = zw[0]; i <= zw[1]; i++) { var v = ys[i]; if (v < lo) lo = v; if (v > hi) hi = v; }   /* 세로축 = 보이는 구간 */
+    lineChart('ref', 'sm-ref-c', { xs: xs, i0: zw[0], i1: zw[1], zg: 'ref', f0: 0, f1: R.length - 1, sets: [{ arr: ys, col: REFC, w: 1.4 }],
       y: { log: true, min: Math.max(5, lo * 0.9), max: hi * 1.05, fmt: function (v) { return v + '배'; } },
       dots: function (i) { return [[ys[i], REFC]]; },
       tip: function (i) { return '<b>' + kdate(R[i][0]) + ' 주</b><div><span><i style="background:' + REFC + '"></i>선행</span><em>' + pe1(ys[i]) + '</em></div>'; } });
+    zbtn('ref');
   }
 
   /* ── 보기 전환 · 자료 받기 ── */
@@ -22295,7 +22365,8 @@ var TAX = (function () {
       return;
     }
     if ((b = t.closest('#sm-per [data-p]'))) { var p = b.getAttribute('data-p'); if (p !== S.p) { S.p = p; document.querySelectorAll('#sm-per .chart-tab').forEach(function (x) { x.classList.toggle('active', x === b); }); minis(); pd(); writeHash(); } return; }
-    if ((b = t.closest('#sm-rng [data-r]'))) { S.rng = b.getAttribute('data-r'); document.querySelectorAll('#sm-rng .chart-tab').forEach(function (x) { x.classList.toggle('active', x === b); }); peCharts(); writeHash(); return; }
+    if ((b = t.closest('#sm-pe .sm-zr[data-zg]'))) { ZM[b.getAttribute('data-zg')] = null; zdraw(b.getAttribute('data-zg')); return; }
+    if ((b = t.closest('#sm-rng [data-r]'))) { S.rng = b.getAttribute('data-r'); ZM.pe = null; document.querySelectorAll('#sm-rng .chart-tab').forEach(function (x) { x.classList.toggle('active', x === b); }); peCharts(); writeHash(); return; }
     if ((b = t.closest('#sm-lines [data-line]'))) {
       var ln = b.getAttribute('data-line'), cnt = KEYS.filter(function (x) { return S.on[x]; }).length;
       if (S.on[ln] && cnt === 1) return;   /* 선은 하나 이상 남김 (원본과 같음) */
@@ -22624,7 +22695,10 @@ var TAX = (function () {
   function near(xs, v, i0, i1) { var lo = i0, hi = i1; while (lo < hi) { var m = (lo + hi) >> 1; if (xs[m] < v) lo = m + 1; else hi = m; } return lo > i0 && Math.abs(xs[lo - 1] - v) <= Math.abs(xs[lo] - v) ? lo - 1 : lo; }
   function xticks(lo, hi, w) {
     var span = hi - lo, maxN = Math.max(2, Math.floor((w || 600) / 64)), out = [], y0 = new Date(lo * 864e5).getUTCFullYear(), y1 = new Date(hi * 864e5).getUTCFullYear();
-    if (span > 900) {
+    if (span <= 120) {   /* 휠로 4달 안까지 확대: 날짜 눈금 — 매달 1일부터 k일 간격(달 끝 가까운 날은 다음 달 1일과 겹치므로 뺌) */
+      var ks = [1, 2, 3, 5, 7, 10, 15].filter(function (k) { return span / k <= maxN; })[0] || 15;
+      for (var t = Math.ceil(lo); t <= hi; t++) { var dm = new Date(t * 864e5).getUTCDate(); if ((dm - 1) % ks === 0 && dm <= 31 - ks / 2) out.push(t); }
+    } else if (span > 900) {
       var st = Math.max(1, Math.ceil((y1 - y0 + 1) / maxN));
       for (var y = y0; y <= y1; y++) { if (st > 1 && y % st) continue; var d = Math.round(Date.UTC(y, 0, 1) / 864e5); if (d >= lo && d <= hi) out.push(d); }
     } else {
@@ -22633,7 +22707,9 @@ var TAX = (function () {
     }
     return out;
   }
-  function xlab(v, span) { var d = new Date(v * 864e5), y = d.getUTCFullYear(), m = d.getUTCMonth() + 1; return span > 900 || m === 1 ? String(y) : String(y).slice(2) + '.' + m; }
+  function xlab(v, span) { var d = new Date(v * 864e5), y = d.getUTCFullYear(), m = d.getUTCMonth() + 1, dd = d.getUTCDate();
+    if (span <= 120) return m === 1 && dd === 1 ? String(y) : m + '.' + dd;   /* 휠로 확대한 짧은 구간: 월.일 */
+    return span > 900 || m === 1 ? String(y) : String(y).slice(2) + '.' + m; }
   var PLUG = { id: 'uxPlug',
     afterDatasetsDraw: function (ch) {   /* 바닥 세로선 + 마우스 자리 세로선·점 */
       var o = ch.$ux; if (!o) return;
@@ -22654,7 +22730,64 @@ var TAX = (function () {
       }
       c.restore();
     } };
-  function lineChart(key, cid, o) {   /* o: { xs, i0, i1, sets:[{arr, col, w}], y:{min,max,fmt,n}, marks, tip(i), dots(i), live } */
+
+  /* ── 휠 확대·축소 (2026-11-22 · 사용자 요청) — 마우스 휠: 마우스 자리 날짜를 고정한 채 확대·축소 · Shift/가로 휠·확대한 뒤 끌기: 옆으로 옮기기 · 두 번 누르기·[고른 기간으로]: 원래대로
+     · 묶음 o.zg — 'pe' = 일별 PER·종가·계산 비중 세 차트가 같은 구간으로 함께 움직임
+     · 바깥 끝 = 고른 기간(o.f0~o.f1, 기간 단추) · 가장 좁게 = 약 15거래일 · 다 보이는데 더 줄이면 페이지 스크롤 그대로 · 기간 단추·ETF 바꾸면 풀림
+     · 확대 구간은 날짜 값으로 들고 있다가(ZM) 차트를 다시 그릴 때 그 안의 줄만 그림 → 세로축이 보이는 구간에 맞춰지고 실시간 갱신·선 끄기에도 그대로 ── */
+  var ZM = { pe: null }, ZQ = {}, ZMIN = 15;
+  function zwin(g, xs, f0, f1) {   /* 확대 구간 → 그릴 줄 [첫, 끝] */
+    var z = ZM[g]; if (!z) return [f0, f1];
+    var a = near(xs, z[0], f0, f1), b = near(xs, z[1], f0, f1);
+    if (b - a < 2) { ZM[g] = null; return [f0, f1]; }
+    return [a, b];
+  }
+  function zdraw(g) { peCharts(); }
+  function zbtn(g) { document.querySelectorAll('#ux-pe .sm-zr[data-zg="' + g + '"]').forEach(function (b) { b.hidden = !ZM[g]; }); }
+  function zset(o, lo, span, cv, e) {   /* 새 구간 저장 → 다음 그림 틀에 한 번만 다시 그림(휠·끌기가 빨라도) */
+    var F0 = o.xs[o.f0], F1 = o.xs[o.f1], g = o.zg;
+    if (lo + span > F1) lo = F1 - span; if (lo < F0) lo = F0;
+    ZM[g] = span >= F1 - F0 - 1e-9 ? null : [lo, lo + span];
+    var q = ZQ[g]; ZQ[g] = { cv: cv, x: e.clientX, y: e.clientY };
+    if (!q) requestAnimationFrame(function () { var r = ZQ[g]; ZQ[g] = null; zdraw(g); if (r && r.cv.__ch) hover(r.cv, { clientX: r.x, clientY: r.y, pointerType: 'mouse' }); });
+  }
+  function zwire(cv) {
+    var dr = null;
+    cv.addEventListener('wheel', function (e) {
+      var ch = cv.__ch, o = ch && ch.$o, a = ch && ch.chartArea; if (!o || !o.zg || !a) return;
+      var rc = cv.getBoundingClientRect(), px = e.clientX - rc.left, py = e.clientY - rc.top;
+      if (px < a.left || px > a.right || py < a.top || py > a.bottom) return;
+      var F0 = o.xs[o.f0], F1 = o.xs[o.f1], full = F1 - F0, z = ZM[o.zg] || [F0, F1], lo = z[0], span = z[1] - z[0];
+      if (!(full > 0) || !(span > 0)) return;
+      var unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1, side = Math.abs(e.deltaX) > Math.abs(e.deltaY);
+      if (e.shiftKey || side) {   /* Shift·가로 휠 = 옆으로 옮기기 */
+        if (span >= full) return;
+        e.preventDefault();
+        var dd = (side ? e.deltaX : e.deltaY) * unit;
+        lo += span * Math.max(-0.5, Math.min(0.5, dd / 1000));
+      } else {
+        var dy = e.deltaY * unit; if (!dy) return;
+        if (dy > 0 && span >= full) return;   /* 다 보이는데 더 줄이기 = 페이지 스크롤 */
+        e.preventDefault();
+        var mn = Math.min(full, full / Math.max(1, o.f1 - o.f0) * ZMIN), ns = Math.max(mn, Math.min(full, span * Math.pow(2, Math.max(-1, Math.min(1, dy / 400)))));
+        var at = Math.max(lo, Math.min(lo + span, ch.scales.x.getValueForPixel(px)));
+        lo = at - (at - lo) / span * ns; span = ns;
+      }
+      zset(o, lo, span, cv, e);
+    }, { passive: false });
+    cv.addEventListener('pointerdown', function (e) {   /* 확대한 뒤 마우스로 끌어 옮기기 (손가락은 그대로 — 페이지 스크롤·값 보기) */
+      var ch = cv.__ch, o = ch && ch.$o; if (e.pointerType !== 'mouse' || e.button !== 0 || !o || !o.zg || !ZM[o.zg]) return;
+      e.preventDefault();
+      dr = { x: e.clientX, z: ZM[o.zg].slice(), w: Math.max(1, ch.chartArea.right - ch.chartArea.left), o: o };
+      try { cv.setPointerCapture(e.pointerId); } catch (x) {}
+      cv.style.cursor = 'grabbing';
+    });
+    cv.addEventListener('pointermove', function (e) { if (!dr) return; var s = dr.z[1] - dr.z[0]; zset(dr.o, dr.z[0] - (e.clientX - dr.x) / dr.w * s, s, cv, e); });
+    var up = function () { if (!dr) return; dr = null; var o = cv.__ch && cv.__ch.$o; cv.style.cursor = o && o.zg && ZM[o.zg] ? 'grab' : ''; };
+    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+    cv.addEventListener('dblclick', function () { var o = cv.__ch && cv.__ch.$o; if (o && o.zg && ZM[o.zg]) { ZM[o.zg] = null; zdraw(o.zg); } });
+  }
+  function lineChart(key, cid, o) {   /* o: { xs, i0, i1, sets:[{arr, col, w}], y:{min,max,fmt,n}, marks, tip(i), dots(i), live, zg·f0·f1(휠 확대 묶음·바깥 끝) } */
     var cv = $(cid); if (!cv || typeof Chart === 'undefined') return;
     kill(key);
     var th = theme(), x0 = o.xs[o.i0], x1 = o.xs[o.i1], span = x1 - x0;
@@ -22684,7 +22817,9 @@ var TAX = (function () {
       var mv = function (e) { hover(cv, e); };
       cv.addEventListener('pointermove', mv); cv.addEventListener('pointerdown', mv);
       cv.addEventListener('pointerleave', function (e) { if (e.pointerType !== 'touch') unhover(cv); });
+      zwire(cv);
     }
+    cv.style.cursor = o.zg && ZM[o.zg] ? 'grab' : '';
     S.ch[key] = ch;
   }
   function unhover(cv) {
@@ -22705,6 +22840,7 @@ var TAX = (function () {
   function peView() {
     var e = etf();
     $('ux-pe-t').textContent = IX() + ' PER 추이';
+    ZM.pe = null;   /* 지수·보기를 바꾸면 휠 확대 풀기 */
     peLead();
     peStats();
     $('ux-px-t').textContent = ETF() + ' 종가';
@@ -22725,7 +22861,7 @@ var TAX = (function () {
     var a = x && x.adj, R = on && L.R ? L.R : 1;
     $('ux-pe-adj').innerHTML = a ? '<span class="sm-tag">조정 EPS 기준</span>애널리스트가 집계한 회사 발표 조정 EPS(나스닥)로 지금 바구니를 계산하면 후행 <b>' + pe1(a.pe_ttm && a.pe_ttm * R) + '</b>, 혼합 <b>' + pe1(a.pe_mix && a.pe_mix * R) + '</b>, 선행 <b>' + pe1(a.pe_ntm && a.pe_ntm * R) + '</b>입니다' +
       (on ? '(실시간)' : '') + ' — 흔히 인용하는 지수 PER에 가까운 값이며, 과거 자료가 없어 차트에는 그리지 않습니다(조정 EPS가 있는 종목 비중 ' + num(a.pe_ntm_cov, 0) + '%).' : '';
-    $('ux-pe-desc').textContent = '점선 세로선은 지난 주식시장 바닥입니다.' + (on ? ' 맨 끝 점은 실시간 값(장 마감 뒤 확정)입니다.' : '') + ' 차트 위에 마우스를 올리거나 손가락으로 누르면 그날 값이 나옵니다.';
+    $('ux-pe-desc').textContent = '점선 세로선은 지난 주식시장 바닥입니다.' + (on ? ' 맨 끝 점은 실시간 값(장 마감 뒤 확정)입니다.' : '') + ' 차트 위에 마우스를 올리거나 손가락으로 누르면 그날 값이 나옵니다. 마우스 휠로 확대·축소하고, 확대한 뒤에는 끌어서 옆으로 옮길 수 있습니다(두 번 누르면 원래대로).';
   }
   function peStats() {
     var e = etf(), P = S.P[e], st = P.st, L = S.L[e], on = !!(L && L.on);
@@ -22749,7 +22885,8 @@ var TAX = (function () {
     var X = lx ? P.x.concat([lx]) : P.x, ext = function (a, v) { return lx ? a.concat([v]) : a; };
     var A = {}; KEYS.forEach(function (k) { A[k] = ext(P.k[k], L && L[k]); });
     var PX = ext(P.k[P.pk], L && L.px), CV = ext(P.k.cov, P.k.cov[n - 1]);
-    var i0 = i0of(P), i1 = X.length - 1, th = theme();
+    var f0 = i0of(P), f1 = X.length - 1, zw = zwin('pe', X, f0, f1), i0 = zw[0], i1 = zw[1], th = theme();
+    var lvOn = !!lx && i1 === f1;   /* 실시간 점은 보이는 끝이 자료 끝일 때만 */
     var on = KEYS.filter(function (k) { return S.on[k]; }), mx = 0;
     for (var i = i0; i <= i1; i++) on.forEach(function (k) { var v = A[k][i]; if (v != null && v > mx) mx = v; });
     var marks = BOTTOMS.map(function (b) { return [dn(b[0]), b[1], 0]; });
@@ -22758,7 +22895,7 @@ var TAX = (function () {
       if (isL(i)) return '<b>' + (lvOpen(L.rt) ? '실시간' : '종가') + ' · 뉴욕 ' + nyT(L.rt) + ' · ' + ETF() + ' ' + num(L.px, 2) + '달러</b>';
       var px = P.k[P.pk][i]; return '<b>' + kdate(P.date[i]) + (px != null ? ' · ' + ETF() + ' ' + num(px, 2) + '달러' : '') + '</b>';
     };
-    lineChart('pe', 'ux-pe-c', { xs: X, i0: i0, i1: i1, marks: marks, live: !!lx,
+    lineChart('pe', 'ux-pe-c', { xs: X, i0: i0, i1: i1, zg: 'pe', f0: f0, f1: f1, marks: marks, live: lvOn,
       sets: on.map(function (k) { return { arr: A[k], col: LCOL[k] }; }),
       y: { min: 0, max: mx ? undefined : 1, fmt: function (v) { return v + '배'; } },
       dots: function (i) { return on.map(function (k) { return [A[k][i], LCOL[k]]; }); },
@@ -22770,14 +22907,15 @@ var TAX = (function () {
         if (isL(i)) h += '<p class="w">실시간 — 지금 가격 ÷ 마지막 EPS · 장 마감 뒤 확정' + (L.miss ? ' · ' + L.miss + '종목은 지난 종가' : '') + '</p>';
         return h;
       } });
-    lineChart('px', 'ux-px-c', { xs: X, i0: i0, i1: i1, live: !!lx, sets: [{ arr: PX, col: th.px, w: 1.4 }],
+    lineChart('px', 'ux-px-c', { xs: X, i0: i0, i1: i1, zg: 'pe', f0: f0, f1: f1, live: lvOn, sets: [{ arr: PX, col: th.px, w: 1.4 }],
       y: { min: 0, fmt: function (v) { return '$' + v; }, n: 5 },
       dots: function (i) { return [[PX[i], th.px]]; },
       tip: function (i) { var v = PX[i]; return '<b>' + (isL(i) ? (lvOpen(L.rt) ? '실시간' : '종가') + ' · 뉴욕 ' + nyT(L.rt) : kdate(P.date[i])) + '</b><div><span>' + ETF() + '</span><em>' + (v != null ? num(v, 2) + '달러' : '—') + '</em></div>'; } });
-    lineChart('cov', 'ux-cov-c', { xs: X, i0: i0, i1: i1, sets: [{ arr: CV, col: COVC, w: 1.4 }],
+    lineChart('cov', 'ux-cov-c', { xs: X, i0: i0, i1: i1, zg: 'pe', f0: f0, f1: f1, sets: [{ arr: CV, col: COVC, w: 1.4 }],
       y: { min: 0, max: 100, fmt: function (v) { return v + '%'; }, n: 3 },
       dots: function (i) { return [[CV[i], COVC]]; },
       tip: function (i) { var j = isL(i) ? n - 1 : i; return '<b>' + (isL(i) ? '실시간 · 뉴욕 ' + nyT(L.rt) : kdate(P.date[i])) + '</b><div><span>계산 비중</span><em>' + num(CV[i], 1) + '%</em></div><p>보유 기준 ' + esc(P.k.hold[j]) + '</p>'; } });
+    zbtn('pe');
   }
 
   /* ── 실시간 반영 (Worker GET /qs — 야후 정규장 가격 · 열려 있는 동안 1분마다 · 장 마감 뒤 10분마다)
@@ -22965,7 +23103,8 @@ var TAX = (function () {
       return;
     }
     if ((b = t.closest('#ux-per [data-p]'))) { var p = b.getAttribute('data-p'); if (p !== S.p) { S.p = p; document.querySelectorAll('#ux-per .chart-tab').forEach(function (x) { x.classList.toggle('active', x === b); }); minis(); pd(); writeHash(); } return; }
-    if ((b = t.closest('#ux-rng [data-r]'))) { S.rng = b.getAttribute('data-r'); document.querySelectorAll('#ux-rng .chart-tab').forEach(function (x) { x.classList.toggle('active', x === b); }); peCharts(); writeHash(); return; }
+    if ((b = t.closest('#ux-pe .sm-zr[data-zg]'))) { ZM.pe = null; zdraw('pe'); return; }
+    if ((b = t.closest('#ux-rng [data-r]'))) { S.rng = b.getAttribute('data-r'); ZM.pe = null; document.querySelectorAll('#ux-rng .chart-tab').forEach(function (x) { x.classList.toggle('active', x === b); }); peCharts(); writeHash(); return; }
     if ((b = t.closest('#ux-lines [data-line]'))) {
       var ln = b.getAttribute('data-line'), cnt = KEYS.filter(function (x) { return S.on[x]; }).length;
       if (S.on[ln] && cnt === 1) return;   /* 선은 하나 이상 남김 */
