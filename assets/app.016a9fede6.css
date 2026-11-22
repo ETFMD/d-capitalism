@@ -1815,6 +1815,8 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
   .sm-cbox { position:relative; height:400px; }
   .sm-cbox.s { height:180px; } .sm-cbox.xs { height:140px; } .sm-cbox.m { height:260px; }
   .sm-cbox canvas { display:block; width:100% !important; height:100% !important; touch-action:pan-y; }
+  .sm-zr { position:absolute; top:2px; right:10px; z-index:2; font:inherit; font-size:11px; font-weight:600; color:var(--accent); background:var(--card); border:1px solid rgba(49,130,246,.4); border-radius:6px; padding:3px 9px; cursor:pointer; }   /* 휠 확대 풀기 (반도체·나스닥 100/S&P 500 지수 분석) */
+  .sm-zr[hidden] { display:none; }
   .sm-tip { position:absolute; z-index:3; pointer-events:none; background:var(--bg3); border:1px solid var(--card-border); border-radius:10px; padding:8px 10px; font-size:12px; box-shadow:0 6px 20px rgba(0,0,0,.2); min-width:160px; max-width:300px; display:none; }
   .sm-tip b { display:block; font-size:11.5px; color:var(--text2); margin-bottom:4px; }
   .sm-tip div { display:flex; align-items:center; gap:6px; justify-content:space-between; white-space:nowrap; line-height:1.6; color:var(--text2); }
