@@ -20623,12 +20623,12 @@ window.dcAdmin = (function () {
 var SMB = (function () {
   'use strict';
   /* 종목 = 시뮬레이터 SS_ASSETS 와 같은 순서 (팔기·평가 순서가 같아야 소수점까지 같음)
-     · SOXL·SOXX(EXT)는 2026-11-05 맨 뒤에 붙임 — 처음엔 실제 일봉만('SOXL SMA 200 백테스트' — 같은 날 'SOXL SMA 160 백테스트' /soxl-sma160/ 로 이름 바꿈), 같은 날 투자전략 시뮬레이터에도 추가(prices.csv 열 · 선택지)
+     · SOXL·SOXX(EXT)는 2026-11-05 맨 뒤에 붙임 · TECL·XLK 는 2026-11-27 그 뒤에(투자전략 시뮬레이터 선택지 추가 — 이 엔진은 시뮬레이터 자료 'sim' 검증용으로 받기만 · 화면 종목은 C.tk 그대로) — 처음엔 실제 일봉만('SOXL SMA 200 백테스트' — 같은 날 'SOXL SMA 160 백테스트' /soxl-sma160/ 로 이름 바꿈), 같은 날 투자전략 시뮬레이터에도 추가(prices.csv 열 · 선택지)
      · 앞 7개만 쓰는 설정(TQQQ 화면)은 예전과 소수점까지 같은 값 (쓰지 않는 종목은 늘 보유 0 이라 팔기·평가·양도세·분배금 순서에 끼지 않음 — tests/sma200_test.cjs 가 확인) */
-  var EXT = ['soxl', 'soxx'];
+  var EXT = ['soxl', 'soxx', 'tecl', 'xlk'];
   var ASSETS = ['tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq'].concat(EXT);
   var SIM = ASSETS.slice();          /* 시뮬레이터 자료(prices.csv)에 있는 종목 = 전부 */
-  var UNLEV = { tqqq: 'qqq', qld: 'qqq', sso: 'spy', spxl: 'spy', qqq: 'qqq', spy: 'spy', sqqq: 'qqq', soxl: 'soxx', soxx: 'soxx' };
+  var UNLEV = { tqqq: 'qqq', qld: 'qqq', sso: 'spy', spxl: 'spy', qqq: 'qqq', spy: 'spy', sqqq: 'qqq', soxl: 'soxx', soxx: 'soxx', tecl: 'xlk', xlk: 'xlk' };
   var DED = 2500000, RATE = 0.22, Y = 365.25;
   /* 투자전략 시뮬레이터 라이브러리 #43 'SMA 200' 프리셋 (src/stratsim/30-library.js) */
   var PRESET = { sig: 'qqq', win: '200', ul: 'tqqq', cr: '4', eb: '0', xb: '0', oh: '90', cool: '80', ohw: '9', coolw: '7', cb: '0', cs: '0', settle: '1', out: 'cash', din: '15', dout: '15', bg: '40', bga: 'tqqq', bgw: '200', cost: '0.02' };
@@ -20641,22 +20641,22 @@ var SMB = (function () {
   var WIN = opts(rng(10, 300, 10));
   var CONF = [['0', '0 (바로)'], ['2', '2'], ['3', '3'], ['5', '5'], ['10', '10']];
   var OPTS = {
-    sig: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'].map(function (v) { return [v, tk(v)]; }),
+    sig: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'].map(function (v) { return [v, tk(v)]; }),
     win: WIN,
-    ul: ['tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'qqq', 'spy', 'soxl', 'soxx'].map(function (v) { return [v, tk(v)]; }),
+    ul: ['tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'qqq', 'spy', 'soxl', 'soxx', 'tecl', 'xlk'].map(function (v) { return [v, tk(v)]; }),
     eb: BUF, xb: BUF, cb: CONF, cs: CONF,
     settle: [['0', '0 (바로)'], ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']],
     ohw: opts(rng(2, 30, 1)), oh: opts(rng(10, 90, 5), function (v) { return v + ' 이상'; }).concat([['0', '끔 — 강제 매도 안 함']]),
     coolw: opts(rng(2, 30, 1)), cool: opts(rng(10, 90, 5), function (v) { return v + ' 미만'; }).concat([['0', '수준 상관없이 (끔)']]),
-    out: ['cash', 'qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'].map(function (v) { return [v, tk(v)]; }),
+    out: ['cash', 'qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'].map(function (v) { return [v, tk(v)]; }),
     cr: opts(rng(0, 13, 0.5).concat([14, 15, 16, 18, 20]), function (v) { return (+v).toFixed(1) + '%'; }),
     din: DAYS, dout: DAYS,
     cost: opts([0, 0.01, 0.02, 0.03, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 0.75, 1], function (v) { return v + '%'; }),
-    bga: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'].map(function (v) { return [v, tk(v)]; }),
+    bga: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'].map(function (v) { return [v, tk(v)]; }),
     bg: opts(rng(5, 100, 5), function (v) { return '+' + v + '%'; }).concat([['0', '끔']]),
     bgw: WIN
   };
-  /* 받을 수 있는 값 = 시뮬레이터 선택지(OPTS — 2026-11-05 부터 SOXL·SOXX 포함) — 화면마다 보일 종목은 화면이 고름(C.tk) · XOPTS 는 예전 이름(같은 것) */
+  /* 받을 수 있는 값 = 시뮬레이터 선택지(OPTS — 2026-11-05 부터 SOXL·SOXX · 2026-11-27 부터 TECL·XLK 포함) — 화면마다 보일 종목은 화면이 고름(C.tk) · XOPTS 는 예전 이름(같은 것) */
   var XOPTS = OPTS;
   /* 받을 수 없는 값은 프리셋 값으로 (시뮬레이터 ssCleanParams 와 같은 규칙) · base = 빈 칸을 채울 프리셋(없으면 라이브러리 'SMA 200' — SOXL 화면은 자기 기본값) */
   function clean(raw, base) {
@@ -20947,9 +20947,9 @@ var SMB = (function () {
   }
 
   /* ── 자료 만들기 ── */
-  /* 시뮬레이터 자료 data/stratsim/prices.csv (날짜,qqq,tqqq,spy,qld,sso,spxl,sqqq,soxl,soxx) — 시뮬레이터 ssParsePrices 와 같은 규칙(tqqq 칸이 빈 날은 뺌 · 다른 빈칸은 0 · 7열 예전 파일이면 soxl·soxx 0) */
+  /* 시뮬레이터 자료 data/stratsim/prices.csv (날짜,qqq,tqqq,spy,qld,sso,spxl,sqqq,soxl,soxx,tecl,xlk) — 시뮬레이터 ssParsePrices 와 같은 규칙(tqqq 칸이 빈 날은 뺌 · 다른 빈칸은 0 · 7·9열 예전 파일이면 없는 열 0) */
   function fromCsv(text) {
-    var d = [], px = { tqqq: [], qqq: [], spy: [], qld: [], sso: [], spxl: [], sqqq: [], soxl: [], soxx: [] }, REST = ['spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'];
+    var d = [], px = { tqqq: [], qqq: [], spy: [], qld: [], sso: [], spxl: [], sqqq: [], soxl: [], soxx: [], tecl: [], xlk: [] }, REST = ['spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'];
     String(text).split(/\r?\n/).forEach(function (ln) {
       var c0 = ln.charCodeAt(0); if (!(c0 >= 48 && c0 <= 57)) return;
       var c = ln.split(','); if (c[2] == null || c[2] === '') return;
@@ -21071,7 +21071,7 @@ function S2PAGE(C) {
   var PRE_ASSETS = REAL_ASSETS;   /* 상장 전 포함 = 이 종목들의 실제 일봉 앞에 상장 전 재현을 이어 붙임 (SQQQ 는 실제 일봉이 없어 뺌) */
   var TKN = { sig: 1, ul: 1, out: 1, bga: 1 };   /* 종목 칸 — 이 화면이 보일 종목(C.tk)만 · 나머지 칸은 시뮬레이터 선택지 그대로 */
   var PRE_HINT = '상장 전은 재현 가격(ETF 차트 비교·72루틴 화면 \'상장 전 포함\'과 같은 식 — 지수나 같은 지수의 다른 ETF × 배수 · 현금 금리 · 상장 뒤 실제와 맞춘 비용) + 상장 뒤 실제 일봉 · 계산은 실전과 같음(1주 단위 · 수수료 · SEC · 분배금 원천징수) · 재현 구간은 분배금을 가격에 넣어 따로 없음';
-  var NM = { tqqq: 'TQQQ', qqq: 'QQQ', spy: 'SPY', qld: 'QLD', sso: 'SSO', spxl: 'SPXL', sqqq: 'SQQQ', soxl: 'SOXL', soxx: 'SOXX', cash: '현금' };
+  var NM = { tqqq: 'TQQQ', qqq: 'QQQ', spy: 'SPY', qld: 'QLD', sso: 'SSO', spxl: 'SPXL', sqqq: 'SQQQ', soxl: 'SOXL', soxx: 'SOXX', tecl: 'TECL', xlk: 'XLK', cash: '현금' };
   /* 기본값 — 라이브러리 'SMA 200' 조건에서 '팔았을 때 들고 있을 것'만 SPY · 그 현금 이자 0% (사용자 지시 2026-10-22 · SMB.PRESET 은 라이브러리 그대로 — 시뮬레이터 검증용)
      · '상장 전 포함'(상장 전 재현 + 실제 일봉)·'sim'(투자전략 시뮬레이터 검증용)은 자료 칸에서만 고름 — 고를 때 다른 조건은 그대로
        ('상장 전 포함' 단추는 사용자 지시로 뺌 2026-10-22 · 시뮬레이터와 같은 숫자를 보려면 수수료 0.02% · 세금 미포함 · 현금 · 4%)
