@@ -200,8 +200,13 @@ function ssTxFromShared(rows) {
   S.tx = st; S.txStash = st;
 }
 
-// 진입을 첫 거래일로 (정확한 날짜 + 손잡이)
-function ssTxApplyEntry() { if (!S.tx) return; S.ed = S.tx.entryDate; S.e = ssQIdxForDate(S.tx.entryDate); }
+// 진입을 첫 거래일로 (정확한 날짜 + 손잡이) — 청산보다 앞이면 기간 손잡이와 같은 규칙(ssSetPeriod)으로: 청산과 같은 분기여도 청산이 다음 분기로 밀리지 않게
+function ssTxApplyEntry() {
+  if (!S.tx) return;
+  const d = S.tx.entryDate, p = ssPeriodDates();
+  if (DS.idx.has(d) && d < p.exitDate) ssSetPeriod(d, p.exitDate, false, !p.xd);
+  else { S.ed = d; S.e = ssQIdxForDate(d); }
+}
 
 // 시트 연결이면 열 때마다 조용히 다시 받아 옴 (실패하면 저장된 것 그대로)
 async function ssTxRefreshSheet() {

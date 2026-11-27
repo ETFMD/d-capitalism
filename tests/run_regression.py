@@ -3325,6 +3325,72 @@ def stratsim_check(br, base, fail, ignorable):
                 and z2['x0'] > z1['x0'] and z2['x1'] - z2['x0'] == z1['x1'] - z1['x0']
                 and z3['x0'] == 0 and z3['x1'] == z3['n'] - 1 and not z3['btn'] and z4['sy'] > 0):
             fail('strategy-simulator', '휠 확대·축소 이상: 처음 %s · 확대 %s · Shift 이동 %s · 더블클릭 %s · 전체에서 줄이기 %s' % (z0, z1, z2, z3, z4))
+        # 1-3) 기간 슬라이더 = 거래일 단위 (2026-11-28 — 예전엔 분기 단위): 손잡이를 끌면 분기말이 아닌 날로도 옮겨짐 · 손잡이 ←→ = 그 손잡이 하루 ·
+        #      Shift+→ = 63거래일 · 분기 경계(진입 2015-12-31)에 놓으면 예전 분기 번호(ed 없음 · 숫자도 분기 번호로 넣은 화면과 같음) ·
+        #      청산 End = 분기 번호(최신을 따라감) · 진입이 청산과 같은 분기여도 청산이 다음 분기로 밀리지 않음 · 달력으로 고른 분기말 = 분기 번호 ·
+        #      ◀ = 분기 번호 하나씩 · 손잡이 위치·라벨 = 계산(R.ctx — 45-period.js ssPeriodDates 가 ssRender 와 같은 규칙인지)
+        try:
+            pg.goto(base + 'strategy-simulator/#ss=' + tok(st), wait_until='load'); pg.wait_for_function('() => window.SSM && SSM.ready()', timeout=60000); pg.wait_for_timeout(1500)
+            SLS = """() => { const S = SSM.S, R = SSM.R, D = SSM.DS, t = [...document.querySelectorAll('#ss-range .ss-th')];
+              return { e: S.e, x: S.x, ed: S.ed, xd: S.xd, en: R.ctx.entryDate, ex: R.ctx.exitDate, ei: D.idx.get(R.ctx.entryDate), xi: D.idx.get(R.ctx.exitDate),
+                ae: +t[0].getAttribute('aria-valuenow'), ax: +t[1].getAttribute('aria-valuenow'), de: document.getElementById('ss-de').textContent, dx: document.getElementById('ss-dx').textContent, qmax: D.q.length - 1 }; }"""
+            sl = lambda: pg.evaluate(SLS)
+            days = pg.evaluate("() => SSM.DS.days.map(d => d.date)")
+            qd = pg.evaluate("() => SSM.DS.q.map(r => r[0])")
+            qset = set(qd)
+            fmt = lambda d: '%d.%d.%d' % (int(d[:4]), int(d[5:7]), int(d[8:]))
+            bad = []
+            pg.evaluate("() => document.getElementById('ss-range').scrollIntoView({ block: 'center' })"); pg.wait_for_timeout(200)
+            th = pg.locator('#ss-range .ss-th')
+            bb = th.nth(0).bounding_box()
+            cx, cy = bb['x'] + bb['width'] / 2, bb['y'] + bb['height'] / 2
+            pg.mouse.move(cx, cy); pg.mouse.down()
+            seen = []
+            for k in range(1, 31):
+                pg.mouse.move(cx + k, cy); pg.wait_for_timeout(25)
+                seen.append(pg.evaluate("() => +document.querySelector('#ss-range .ss-th').getAttribute('aria-valuenow')"))
+            pg.mouse.up(); pg.wait_for_timeout(300)
+            a = sl(); dd = [days[i] for i in seen]
+            if not (len(set(dd)) >= 8 and any(d not in qset for d in dd) and len(set(dd)) > len(set(d[:4] + str((int(d[5:7]) - 1) // 3) for d in dd))):
+                bad.append('끌기가 거래일 단위가 아님 %s' % dd[:10])
+            if not (a['ae'] == a['ei'] and a['ax'] == a['xi'] and a['de'] == fmt(a['en']) and a['dx'] == fmt(a['ex']) and a['ex'] == '2025-12-31' and a['xd'] == ''
+                    and ((a['en'] in qset and a['ed'] == '') or (a['en'] not in qset and a['ed'] == a['en']))):
+                bad.append('끌기 뒤 손잡이·라벨·계산이 다름 %s' % {k: a[k] for k in ('e', 'x', 'ed', 'xd', 'en', 'ex', 'ae', 'ei', 'de')})
+            th.nth(0).focus(); i0 = sl()['ae']
+            pg.keyboard.press('ArrowRight'); r1 = sl(); pg.keyboard.press('ArrowLeft'); r2 = sl(); pg.keyboard.press('Shift+ArrowRight'); r3 = sl()
+            if not (r1['ae'] == r1['ei'] == i0 + 1 and r2['ei'] == i0 and r3['ei'] == i0 + 63 and r3['ex'] == '2025-12-31'):
+                bad.append('손잡이 키(→ 하루 · ← 하루 · Shift+→ 63거래일) 이상 %s' % [i0, r1['ei'], r2['ei'], r3['ei'], r3['ex']])
+            k15 = days.index('2015-12-31')
+            pg.evaluate("(d) => { SSM.S.ed = d; SSM.render(); }", days[k15 - 3]); th.nth(0).focus()
+            for _ in range(3): pg.keyboard.press('ArrowRight')
+            r4 = sl()
+            m1 = pg.evaluate("() => JSON.stringify(SSM.R.metrics)")
+            m2 = pg.evaluate("(e) => { SSM.S.e = e; SSM.S.ed = ''; SSM.render(); return JSON.stringify(SSM.R.metrics); }", qd.index('2015-12-31') + 1)
+            if not (r4['en'] == '2015-12-31' and r4['ed'] == '' and r4['e'] == qd.index('2015-12-31') + 1 and m1 == m2):
+                bad.append('분기 경계(2015-12-31)가 분기 번호로 안 적히거나 숫자가 다름 %s' % {k: r4[k] for k in ('e', 'ed', 'en')})
+            th.nth(1).focus(); pg.keyboard.press('End'); r5 = sl()
+            pg.keyboard.press('ArrowLeft'); r6 = sl(); pg.keyboard.press('ArrowRight'); r7 = sl()
+            if not (r5['ex'] == days[-1] and r5['xd'] == '' and r5['x'] == r5['qmax'] and r6['ex'] == days[-2] and (r6['xd'] == days[-2] or days[-2] in qset)
+                    and r7['xd'] == '' and r7['x'] == r7['qmax'] and r7['en'] == '2015-12-31'):
+                bad.append('청산 끝(최신 따라감)·하루 앞 이상 %s' % [{k: r[k] for k in ('x', 'xd', 'ex')} for r in (r5, r6, r7)])
+            kx, kn = qd.index('2025-12-31'), days.index('2025-11-03')
+            pg.evaluate("([x, d]) => { const S = SSM.S; S.x = x; S.xd = ''; S.e = x - 4; S.ed = d; SSM.render(); }", [kx, days[kn - 2]]); th.nth(0).focus()
+            for _ in range(2): pg.keyboard.press('ArrowRight')
+            r8 = sl()
+            if not (r8['en'] == '2025-11-03' and r8['ex'] == '2025-12-31' and r8['xd'] == ''):
+                bad.append('진입이 청산과 같은 분기일 때 청산이 밀림 %s' % {k: r8[k] for k in ('e', 'x', 'ed', 'xd', 'en', 'ex')})
+            pg.click('#ss-pick-e'); pg.wait_for_timeout(300)
+            pg.evaluate("() => { const p = document.querySelector('.ss-dcal'); p.querySelector('select.ss-dcy').value = '2025'; const m = p.querySelector('select.ss-dcm'); m.value = '5'; m.dispatchEvent(new Event('change', { bubbles: true })); }")
+            pg.click('.ss-dcal .ss-dcd[data-date="2025-06-30"]'); pg.wait_for_timeout(300); r9 = sl()
+            if not (r9['en'] == '2025-06-30' and r9['ed'] == '' and r9['e'] == qd.index('2025-06-30') + 1 and r9['ex'] == '2025-12-31'):
+                bad.append('달력으로 고른 분기말이 분기 번호로 안 적힘 %s' % {k: r9[k] for k in ('e', 'ed', 'en', 'ex')})
+            pg.click('#ss-play-l'); pg.wait_for_timeout(250); pg.click('#ss-play-l'); pg.wait_for_timeout(250); r10 = sl()
+            if not (r10['e'] == r9['e'] - 1 and r10['x'] == r9['x'] - 1 and r10['ed'] == '' and r10['xd'] == ''):
+                bad.append('◀ 한 걸음이 분기 번호 하나가 아님 %s' % [r9['e'], r9['x'], r10['e'], r10['x']])
+            for b in bad:
+                fail('strategy-simulator', '기간 슬라이더(거래일 단위): ' + b)
+        except Exception as e:
+            fail('strategy-simulator', '기간 슬라이더 검사 실패: %s' % str(e)[:200])
         # 2) 라이브러리 · 써 보기 (사용자 코드 전략)
         pg.evaluate("() => { for (const k of Object.keys(localStorage)) if (k.startsWith('dc_ss_')) localStorage.removeItem(k); }")
         pg.goto(base + 'strategy-simulator/', wait_until='load'); pg.wait_for_timeout(2500)

@@ -57,9 +57,9 @@ function ssShellHtml() {
     + '<div id="ss-tip"></div>'
     + '<div class="ss-period"><button type="button" class="ss-play" id="ss-play-l" aria-pressed="false" title="한 분기씩 뒤로 · 재생">◀</button>'
     + '<div class="ss-range2" id="ss-range"><div class="ss-rtrack"></div><div class="ss-rfill"></div>'
-    + '<div class="ss-td" id="ss-tde"><span>진입</span><div class="ss-tdr"><b id="ss-de">2010년 1분기</b><button type="button" class="ss-ibtn" id="ss-pick-e" title="진입일 정확히 고르기" aria-label="진입일 정확히 고르기">' + SS_SVG.cal + '</button></div></div>'
+    + '<div class="ss-td" id="ss-tde"><span>진입</span><div class="ss-tdr"><b id="ss-de">—</b><button type="button" class="ss-ibtn" id="ss-pick-e" title="진입일 정확히 고르기" aria-label="진입일 정확히 고르기">' + SS_SVG.cal + '</button></div></div>'
     + '<div class="ss-td" id="ss-tdx"><span>청산</span><div class="ss-tdr"><b id="ss-dx">—</b><button type="button" class="ss-ibtn" id="ss-pick-x" title="청산일 정확히 고르기" aria-label="청산일 정확히 고르기">' + SS_SVG.cal + '</button></div></div>'
-    + '<div class="ss-th" data-h="e" role="slider" aria-label="진입"></div><div class="ss-th" data-h="x" role="slider" aria-label="청산"></div></div>'
+    + '<div class="ss-th" data-h="e" role="slider" aria-label="진입" title="끌어서 진입일 옮기기 · 누른 뒤 ←·→ 하루씩 · Shift+←·→ 한 분기씩"></div><div class="ss-th" data-h="x" role="slider" aria-label="청산" title="끌어서 청산일 옮기기 · 누른 뒤 ←·→ 하루씩 · Shift+←·→ 한 분기씩"></div></div>'
     + '<button type="button" class="ss-play" id="ss-play-r" aria-pressed="false" title="한 분기씩 앞으로 · 재생">▶</button></div>'
     + '</section></div>';
 }

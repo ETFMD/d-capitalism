@@ -1,62 +1,117 @@
 /* ── [STRATSIM] 45 기간 (진입·청산) ────────────────────────────────────────
-   이중 슬라이더(최근 분기에 해상도를 몰아주는 로그 휨) · 손잡이 위 라벨 · ◀▶ 재생 · 화살표 키 · 정확한 날짜 달력 */
+   이중 슬라이더(거래일 단위 · 최근에 해상도를 몰아주는 로그 휨) · 손잡이 위 라벨 · ◀▶ 재생 · 화살표 키 · 정확한 날짜 달력
+   · 2026-11-28 분기 → 거래일 단위: 손잡이가 분기 경계(진입 = 직전 분기 마지막 거래일 · 청산 = 분기 마지막 거래일)에 놓이면
+     예전과 같은 분기 번호(S.e·S.x)로, 그 밖의 날이면 정확한 날짜(S.ed·S.xd — 달력으로 고른 것과 같은 계산)로 적음
+     → 분기 경계에서는 숫자·공유 링크·저장값이 예전과 똑같고, 청산이 맨 끝(최신)이면 다음 날 자료가 붙어도 최신을 따라감
+   · 손잡이를 누른 뒤 ←·→ = 그 손잡이 하루(거래일)씩 · Shift+←·→ / PageUp·PageDown = 한 분기(63거래일)씩 · Home·End = 끝까지
+     막대(손잡이 밖)를 누른 뒤 ←·→ = 둘 다 하루씩 · ◀▶ = 둘 다 한 분기씩 (둘 다 분기 경계면 예전처럼 분기 번호로) */
+
+const SS_STEP_Q = 63;   // 한 분기 거래일 수 (SS_PERIOD_DAYS.quarterly 와 같음) — Shift+화살표 · ◀▶ 한 걸음(정확한 날짜일 때)
+
+// 지금 S 가 가리키는 진입·청산 (ssRender 첫머리와 같은 정리 규칙 — S 는 바꾸지 않음)
+//   41-render.js 는 과최적화 탐색기 계산 해시(scripts/stratsim_fit.cjs HASH_FILES)에 들어가 고치면 탐색기 표 전체를 다시 계산하므로 같은 규칙을 여기 따로 둠
+//   — 둘이 같은지는 tests/run_regression.py 'strategy-simulator' 기간 슬라이더 검사가 화면 계산(R.ctx)과 대조
+function ssPeriodDates() {
+  const qmax = DS.q.length - 1;
+  let e = Number.isFinite(S.e) ? S.e : 0, x = Number.isFinite(S.x) ? S.x : qmax;
+  if (e < 0) e = 0;
+  if (x < 0) x = qmax;
+  if (e > qmax) e = qmax;
+  if (x > qmax) x = qmax;
+  if (e >= x) { x = Math.min(e + 1, qmax); e = Math.min(e, x - 1); if (e < 0) e = 0; }
+  let ed = S.ed, xd = S.xd;
+  if (ed && !DS.idx.has(ed)) ed = '';
+  if (xd && !DS.idx.has(xd)) xd = '';
+  if (ed && xd && ed >= xd) { ed = ''; xd = ''; }
+  return { e, x, ed, xd, entryDate: ed || DS.q[e > 0 ? e - 1 : e][0], exitDate: xd || DS.q[x][0] };
+}
+// 날짜가 분기 마지막 거래일이면 그 분기 행 번호, 아니면 −1
+function ssQRowIdx(d) { const i = ssQIdxForDate(d); return DS.q[i] && DS.q[i][0] === d ? i : -1; }
+// 진입·청산 거래일(dE < dX) → S.e·S.x·S.ed·S.xd
+//   canonE·canonX: 그 쪽 날짜가 분기 경계면 분기 번호로 적음(정확한 날짜 지움 — 슬라이더·달력) · false 면 정확한 날짜 그대로(거래내역 첫날 · 가만히 둔 정확한 날짜)
+//   분기 번호가 겹치면(진입 분기 ≥ 청산 분기 — 화면 계산이 청산을 다음 분기로 밀어 버림) 진입을 정확한 날짜로 두고 번호만 청산 앞 분기로
+//   (예전 달력도 같은 날 고르면 청산이 다음 분기로 밀렸음 — 같이 고침)
+function ssSetPeriod(dE, dX, canonE, canonX) {
+  const qmax = DS.q.length - 1;
+  const kE = canonE ? ssQRowIdx(dE) : -1, kX = canonX ? ssQRowIdx(dX) : -1;
+  let ed = kE >= 0 ? '' : dE, xd = kX >= 0 ? '' : dX;
+  let e = kE >= 0 ? kE + 1 : ssQIdxForDate(dE), x = kX >= 0 ? kX : ssQIdxForDate(dX);
+  if (e >= x) {
+    if (x >= 1) { ed = dE; e = x - 1; }
+    else { ed = dE; xd = dX; e = 0; x = Math.min(1, qmax); }
+  }
+  S.e = e; S.x = x; S.ed = ed; S.xd = xd;
+}
 
 const ssPeriodUI = {
-  el: null, fill: null, th: [], max: 0, playT: null, playDir: 0,
+  el: null, fill: null, th: [], max: 0, ei: 0, xi: 0, raf: 0, playT: null, playDir: 0,
   init(root) {
     this.el = root.querySelector('#ss-range');
     this.fill = this.el.querySelector('.ss-rfill');
     this.th = [this.el.querySelector('[data-h="e"]'), this.el.querySelector('[data-h="x"]')];
-    this.max = DS.q.length - 1;
+    this.max = DS.days.length - 1;
+    this.th.forEach((t) => { t.setAttribute('tabindex', '0'); t.setAttribute('aria-valuemin', '0'); t.setAttribute('aria-valuemax', String(this.max)); });
+    this.sync();
     const el = this.el;
-    // 손잡이 끌기 (진입 ≤ 청산 − 1)
+    const track = (move) => {
+      const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); document.removeEventListener('touchmove', move); document.removeEventListener('touchend', up); };
+      document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+      document.addEventListener('touchmove', move, { passive: false }); document.addEventListener('touchend', up);
+    };
+    // 손잡이 끌기 (진입 ≤ 청산 − 1 거래일)
     this.th.forEach((t, k) => {
       const start = (ev) => {
         ev.preventDefault();
+        this.sync();
         const rect = el.getBoundingClientRect();
-        const move = (e2) => {
+        track((e2) => {
           const cx = e2.touches ? e2.touches[0].clientX : e2.clientX;
-          let v = this.toVal((cx - rect.left) / rect.width * 100);
-          if (k === 0) S.e = Math.max(0, Math.min(v, S.x - 1)); else S.x = Math.min(this.max, Math.max(v, S.e + 1));
-          this.layout();
-          this.changed(k === 0 ? 'e' : 'x');
-        };
-        const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); document.removeEventListener('touchmove', move); document.removeEventListener('touchend', up); };
-        document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
-        document.addEventListener('touchmove', move, { passive: false }); document.addEventListener('touchend', up);
+          const v = this.toVal((cx - rect.left) / rect.width * 100);
+          if (k === 0) this.set(Math.min(v, this.xi - 1), this.xi, 'e'); else this.set(this.ei, Math.max(v, this.ei + 1), 'x');
+        });
       };
       t.addEventListener('mousedown', start);
       t.addEventListener('touchstart', start, { passive: false });
+      // 손잡이 키: 그 손잡이만 하루씩 · Shift / PageUp·PageDown 한 분기씩 · Home·End 끝까지
+      t.addEventListener('keydown', (ev) => {
+        const big = ev.shiftKey || ev.key === 'PageUp' || ev.key === 'PageDown';
+        const d = ev.key === 'ArrowRight' || ev.key === 'ArrowUp' || ev.key === 'PageUp' ? 1 : ev.key === 'ArrowLeft' || ev.key === 'ArrowDown' || ev.key === 'PageDown' ? -1 : 0;
+        if (!d && ev.key !== 'Home' && ev.key !== 'End') return;
+        ev.preventDefault(); ev.stopPropagation();
+        this.sync();
+        const n = d * (big ? SS_STEP_Q : 1);
+        if (k === 0) this.set(ev.key === 'Home' ? 0 : ev.key === 'End' ? this.xi - 1 : Math.min(this.ei + n, this.xi - 1), this.xi, 'e', true);
+        else this.set(this.ei, ev.key === 'Home' ? this.ei + 1 : ev.key === 'End' ? this.max : Math.max(this.xi + n, this.ei + 1), 'x', true);
+      });
     });
-    // 채운 막대 끌기 = 둘이 같이 (폭 유지 · % 로 따라감)
+    // 채운 막대 끌기 = 둘이 같이 (거래일 수 유지 · % 로 따라감)
     const fillStart = (ev) => {
       ev.preventDefault();
+      this.sync();
       const rect = el.getBoundingClientRect(), x0 = ev.touches ? ev.touches[0].clientX : ev.clientX;
-      const span = S.x - S.e, p0 = this.toPct(S.e);
-      const move = (e2) => {
+      const span = this.xi - this.ei, p0 = this.toPct(this.ei);
+      track((e2) => {
         const cx = e2.touches ? e2.touches[0].clientX : e2.clientX;
         let ne = this.toVal(p0 + (cx - x0) / rect.width * 100), nx = ne + span;
         if (ne < 0) { ne = 0; nx = span; }
         if (nx > this.max) { nx = this.max; ne = this.max - span; }
-        S.e = ne; S.x = nx;
-        this.layout(); this.changed();
-      };
-      const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); document.removeEventListener('touchmove', move); document.removeEventListener('touchend', up); };
-      document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
-      document.addEventListener('touchmove', move, { passive: false }); document.addEventListener('touchend', up);
+        this.set(ne, nx, null);
+      });
     };
     this.fill.addEventListener('mousedown', fillStart);
     this.fill.addEventListener('touchstart', fillStart, { passive: false });
     // 트랙 누르기 = 가까운 손잡이를 그리로
     el.querySelector('.ss-rtrack').addEventListener('click', (ev) => {
+      this.sync();
       const rect = el.getBoundingClientRect(), v = this.toVal((ev.clientX - rect.left) / rect.width * 100);
-      let side;
-      if (Math.abs(v - S.e) < Math.abs(v - S.x)) { S.e = Math.min(v, S.x - 1); side = 'e'; } else { S.x = Math.max(v, S.e + 1); side = 'x'; }
-      this.layout(); this.changed(side);
+      if (Math.abs(v - this.ei) < Math.abs(v - this.xi)) this.set(Math.min(v, this.xi - 1), this.xi, 'e', true);
+      else this.set(this.ei, Math.max(v, this.ei + 1), 'x', true);
     });
+    // 막대 키(손잡이 밖을 눌러 막대에 초점): 둘 다 하루씩 · Shift 한 분기씩
     el.setAttribute('tabindex', '0');
-    el.addEventListener('keydown', (ev) => { if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return; ev.preventDefault(); this.step(ev.key === 'ArrowRight' ? 1 : -1); });
-    el.addEventListener('mousedown', () => el.focus());
+    el.addEventListener('keydown', (ev) => { if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return; ev.preventDefault(); this.shift((ev.key === 'ArrowRight' ? 1 : -1) * (ev.shiftKey ? SS_STEP_Q : 1)); });
+    // 누른 곳에 초점: 손잡이면 그 손잡이(키로 하루씩 이어서 맞추게), 아니면 막대
+    el.addEventListener('mousedown', (ev) => { const t = ev.target.closest && ev.target.closest('.ss-th'); (t || el).focus({ preventScroll: true }); });
     const pl = root.querySelector('#ss-play-l'), pr = root.querySelector('#ss-play-r');
     pl.addEventListener('click', () => (this.playDir === -1 ? this.stop() : this.play(-1)));
     pr.addEventListener('click', () => (this.playDir === 1 ? this.stop() : this.play(1)));
@@ -65,8 +120,8 @@ const ssPeriodUI = {
     root.querySelector('#ss-pick-x').addEventListener('click', (ev) => ssDatePick.open('x', ev.currentTarget));
     window.addEventListener('resize', () => this.layout());
   },
-  // 분기 위치 ↔ 막대 % — 오늘에서 먼 분기일수록 촘촘한 로그 눈금
-  //   오늘에서 k 분기 떨어진 곳 = 100·(1 − ln(1 + k/s) / ln(1 + max/s)) %,  s = max(1, 전체 분기 수 × 7.5%)
+  // 거래일 위치 ↔ 막대 % — 오늘에서 먼 날일수록 촘촘한 로그 눈금 (예전 분기 눈금과 같은 모양)
+  //   오늘에서 k 거래일 떨어진 곳 = 100·(1 − ln(1 + k/s) / ln(1 + max/s)) %,  s = max(1, 전체 거래일 수 × 7.5%)
   warp() { const max = this.max, s = Math.max(1, max * 0.075); return { max, s, full: Math.log1p(max / s) }; },
   toPct(v) {
     const w = this.warp();
@@ -81,9 +136,43 @@ const ssPeriodUI = {
     const back = w.s * Math.expm1((1 - share) * w.full);
     return Math.round(Math.min(w.max, Math.max(0, w.max - back)));
   },
+  // S → 지금 진입·청산 거래일 위치
+  sync() {
+    const p = ssPeriodDates(), a = DS.idx.get(p.entryDate), b = DS.idx.get(p.exitDate);
+    if (a != null) this.ei = a;
+    if (b != null) this.xi = b;
+  },
+  // 진입·청산 거래일 위치로 옮김 (side: 'e' 진입만 · 'x' 청산만 · null 둘 다) — now: 바로 다시 계산(아니면 다음 화면 그리기 때 한 번)
+  set(ei, xi, side, now) {
+    const N = this.max;
+    ei = Math.max(0, Math.min(Math.round(ei), N - 1));
+    xi = Math.max(ei + 1, Math.min(Math.round(xi), N));
+    if (ei === this.ei && xi === this.xi) return false;   // 같은 날이면 다시 계산하지 않음
+    const dE = DS.days[ei].date, dX = DS.days[xi].date;
+    // 움직인 쪽은 분기 경계면 분기 번호로 · 가만히 둔 쪽은 지금 적힌 방식(분기 번호 / 정확한 날짜) 그대로
+    ssSetPeriod(dE, dX, side !== 'x' || !S.ed, side !== 'e' || !S.xd);
+    this.ei = ei; this.xi = xi;
+    this.labels(dE, dX, S.ed, S.xd);
+    this.layout();
+    if (now) { this.cancel(); ssChanged(); } else this.queue();
+    return true;
+  },
+  // 끄는 동안은 화면 그리기마다 한 번만 다시 계산 (마우스가 움직일 때마다 전부 다시 계산하지 않게)
+  queue() { if (this.raf) return; this.raf = requestAnimationFrame(() => { this.raf = 0; ssChanged(); }); },
+  cancel() { if (this.raf) { cancelAnimationFrame(this.raf); this.raf = 0; } },
+  labels(dE, dX, ed, xd) {
+    const de = document.getElementById('ss-de'), dx = document.getElementById('ss-dx');
+    if (de) de.textContent = ssDate(dE);
+    if (dx) dx.textContent = ssDate(dX);
+    const pe = document.getElementById('ss-pick-e'), px = document.getElementById('ss-pick-x');
+    if (pe) pe.classList.toggle('on', !!ed);
+    if (px) px.classList.toggle('on', !!xd);
+    if (this.th[0]) { this.th[0].setAttribute('aria-valuenow', String(this.ei)); this.th[0].setAttribute('aria-valuetext', '진입 ' + ssDate(dE)); }
+    if (this.th[1]) { this.th[1].setAttribute('aria-valuenow', String(this.xi)); this.th[1].setAttribute('aria-valuetext', '청산 ' + ssDate(dX)); }
+  },
   layout() {
     if (!this.el) return;
-    const ep = this.toPct(S.e), xp = this.toPct(S.x);
+    const ep = this.toPct(this.ei), xp = this.toPct(this.xi);
     this.th[0].style.left = ep + '%'; this.th[1].style.left = xp + '%';
     this.fill.style.left = ep + '%'; this.fill.style.width = (xp - ep) + '%';
     // 손잡이 위 라벨: 겹치면 양쪽으로 밀고 가장자리 안에
@@ -101,26 +190,34 @@ const ssPeriodUI = {
     }
     eL.style.left = eC + 'px'; xL.style.left = xC + 'px';
   },
+  // 다시 계산한 뒤(ssRender) — 정리된 진입·청산으로 손잡이·라벨을 맞춤
   update(e, x, ed, xd) {
-    const de = document.getElementById('ss-de'), dx = document.getElementById('ss-dx');
-    if (de) de.textContent = ed ? ssDate(ed) : ssQLabel(DS.q[e][0]);
-    if (dx) dx.textContent = xd ? ssDate(xd) : ssQLabel(DS.q[x][0]);
-    const pe = document.getElementById('ss-pick-e'), px = document.getElementById('ss-pick-x');
-    if (pe) pe.classList.toggle('on', !!ed);
-    if (px) px.classList.toggle('on', !!xd);
+    if (!this.el) return;
+    const dE = ed || DS.q[e > 0 ? e - 1 : e][0], dX = xd || DS.q[x][0];
+    const a = DS.idx.get(dE), b = DS.idx.get(dX);
+    if (a != null) this.ei = a;
+    if (b != null) this.xi = b;
+    this.labels(dE, dX, ed, xd);
     this.layout();
   },
-  // 움직인 쪽의 정확한 날짜만 지움 (둘 다 움직이면 둘 다)
-  changed(side) {
-    if (side === 'e' || side == null) S.ed = '';
-    if (side === 'x' || side == null) S.xd = '';
-    ssChanged();
-  },
-  step(dir) {
-    const ne = S.e + dir, nx = S.x + dir;
+  // 둘 다 n 거래일 (끝에 닿으면 멈춤)
+  shift(n) {
+    this.sync();
+    const ne = this.ei + n, nx = this.xi + n;
     if (ne < 0 || nx > this.max) return false;
-    S.e = ne; S.x = nx; this.layout(); this.changed();
-    return true;
+    return this.set(ne, nx, null, true);
+  },
+  // ◀▶ 한 걸음 = 한 분기: 둘 다 분기 경계면 분기 번호로(예전과 같음), 아니면 둘 다 63거래일
+  step(dir) {
+    if (!S.ed && !S.xd) {
+      const p = ssPeriodDates(), ne = p.e + dir, nx = p.x + dir;
+      if (ne < 0 || nx > DS.q.length - 1) return false;
+      this.cancel();
+      S.e = ne; S.x = nx;
+      ssChanged();
+      return true;
+    }
+    return this.shift(dir * SS_STEP_Q);
   },
   stop() {
     if (this.playT) { clearInterval(this.playT); this.playT = null; }
@@ -152,8 +249,8 @@ const ssDatePick = {
     window.removeEventListener('resize', this._rp);
     window.removeEventListener('scroll', this._sc, true);
   },
-  effEntry() { if (S.ed) return S.ed; const i = S.e > 0 ? S.e - 1 : S.e; return DS.q[i] && DS.q[i][0]; },
-  effExit() { return S.xd || (DS.q[S.x] && DS.q[S.x][0]); },
+  effEntry() { return ssPeriodDates().entryDate; },
+  effExit() { return ssPeriodDates().exitDate; },
   pos(pop, trig) { ssPlacePop(pop, trig, pop.offsetWidth || 260, 260, 0); },
   grid(side, y, m) {
     const pop = this.st.pop, bound = side === 'e' ? this.effExit() : this.effEntry();
@@ -189,7 +286,7 @@ const ssDatePick = {
     pop.className = 'ss-dcal';
     pop.innerHTML = '<div class="ss-dch"><button type="button" class="ss-dcn" data-nav="-1" aria-label="이전 달">&lsaquo;</button><span><select class="ss-isel ss-dcy" aria-label="연도">' + yo.join('') + '</select><select class="ss-isel ss-dcm" aria-label="월">' + mo + '</select></span><button type="button" class="ss-dcn" data-nav="1" aria-label="다음 달">&rsaquo;</button></div>'
       + '<div class="ss-dcw">' + ['일', '월', '화', '수', '목', '금', '토'].map((w) => '<span>' + w + '</span>').join('') + '</div><div class="ss-dcg"></div>'
-      + '<div class="ss-dcf"><button type="button" class="ss-dcclr">분기 기본값 쓰기</button></div>';
+      + '<div class="ss-dcf"><button type="button" class="ss-dcclr" title="고른 날이 든 분기의 경계(진입 = 그 분기 시작 · 청산 = 그 분기 끝)로 맞춤">분기 경계로 맞추기</button></div>';
     document.body.appendChild(pop);
     this.pos(pop, trig);
     trig.classList.add('open');
@@ -207,9 +304,13 @@ const ssDatePick = {
       const day = ev.target.closest('.ss-dcd');
       if (day && !day.disabled) {
         const d = day.dataset.date;
-        if (side === 'e') { S.ed = d; S.e = ssQIdxForDate(d); } else { S.xd = d; S.x = ssQIdxForDate(d); }
+        // 고른 날이 분기 경계면 슬라이더처럼 분기 번호로 — 같은 날이면 고른 방법과 상관없이 같은 숫자
+        //   (주간·연간 9sig 는 분기 번호 계산과 정확한 날짜 계산의 리밸런스 날이 달라, 예전엔 달력 2025.12.31 과 막대 '2025년 4분기'의 숫자가 달랐음)
+        // 다른 쪽은 지금 적힌 방식 그대로
+        const p = ssPeriodDates();
+        if (side === 'e') ssSetPeriod(d, p.exitDate, true, !p.xd); else ssSetPeriod(p.entryDate, d, !p.ed, true);
         this.close();
-        ssPeriodUI.layout();
+        ssPeriodUI.cancel();
         ssChanged();
         return;
       }
