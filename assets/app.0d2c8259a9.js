@@ -9323,6 +9323,7 @@ var TAX = (function () {
   /* ── 상장 전 백테스트 ──
      식: data/etfbt/<0~15>.json (scripts/etf_bt_fit.py · 매주 Actions) — 키 'K:코드' · 'U:티커'
      재료: 후보 일봉(Worker /etf — K:·N: 네이버 · U:·Y: 야후) · 현금·채권 지수 금리(data/etfbt/r/R_·B_*.json) · 원/달러 15:30 종가(r/F_USDKRW.json) · S&P 500 TR 1988년 전(r/X_SPXTR.json) · 달력(국내 코스피 · 미국 S&P 500 날짜)
+           · 옵션 전략 지수(r/C_·D_·Z_*.json) · 파마-프렌치 미국 업종 총수익(r/P_*.json — 섹터 ETF 1980년~ 재료 · 1926년부터 받은 것 중 화면 달력 앞 두 달부터)
      식에 쓴 ETF 가 자기 식을 가지고 그 오차(이어 붙인 구간 포함)가 연 5% 이하면 그 백테스트까지 이어 붙임(최대 3단 — 파이썬 chain_start 와 같음) */
   /* 통화 → 야후 USD 교차 (scripts/etf_bt_data.py FX_PAIR 와 같음 — 회귀 테스트가 대조) · XXXUSD=X 는 '통화 당 USD', 나머지 XXX=X 는 'USD 당 통화' */
   var FXSYM = { JPY: 'JPY=X', CNY: 'CNY=X', HKD: 'HKD=X', TWD: 'TWD=X', SGD: 'SGD=X', INR: 'INR=X', AUD: 'AUDUSD=X', EUR: 'EURUSD=X', GBP: 'GBPUSD=X', CAD: 'CAD=X', BRL: 'BRL=X', MXN: 'MXN=X',
@@ -9361,10 +9362,10 @@ var TAX = (function () {
       var d = [j.d0]; for (var i = 0; i < j.dd.length; i++) d.push(d[i] + j.dd[i]);
       return { d: d, a: j.a, base: j.base, cur: 'USD' };
     });
-    else if (t === 'C' || t === 'D' || t === 'Z') p = file().then(function (j) {   /* 옵션 전략 지수 (C: Cboe 미국 · D: 한국거래소 국내 · Z: 코스피 200 커버드콜 모의) — 파이썬이 정리한 일봉 그대로 */
+    else if (t === 'C' || t === 'D' || t === 'Z' || t === 'P') p = file().then(function (j) {   /* 옵션 전략 지수 (C: Cboe 미국 · D: 한국거래소 국내 · Z: 코스피 200 커버드콜 모의) · P: 파마-프렌치 미국 업종 총수익 — 파이썬이 정리한 일봉 그대로 */
       if (!j || !j.a || !j.dd || j.a.length !== j.dd.length + 1) throw new Error('optidx');
       var d = [j.d0]; for (var i = 0; i < j.dd.length; i++) d.push(d[i] + j.dd[i]);
-      return { d: d, a: j.a, cur: t === 'C' ? 'USD' : 'KRW' };
+      return { d: d, a: j.a, cur: t === 'C' || t === 'P' ? 'USD' : 'KRW' };
     });
     else {
       var same = t === 'K' || t === 'U' ? S.data[t + sym] : null;           /* 고른 종목과 같은 일봉이면 그대로 */
@@ -14986,7 +14987,7 @@ window.MBT = (function () {
     if (t === 'R' || t === 'B') p = file().then(function (j) { var r = X.btParseRate(j); if (!r) throw new Error('rate'); return r; });
     else if (t === 'F') p = file().then(function (j) { var f = X.parseFx(j); if (!f) throw new Error('fx'); return { d: f.d, a: f.v, v: f.v, cur: 'KRW' }; });
     else if (t === 'X') p = file().then(function (j) { if (!j || !j.a || !j.dd || j.a.length !== j.dd.length + 1) throw new Error('ext'); var d = [j.d0]; for (var i = 0; i < j.dd.length; i++) d.push(d[i] + j.dd[i]); return { d: d, a: j.a, base: j.base, cur: 'USD' }; });
-    else if (t === 'C' || t === 'D' || t === 'Z') p = file().then(function (j) { if (!j || !j.a || !j.dd || j.a.length !== j.dd.length + 1) throw new Error('optidx'); var d = [j.d0]; for (var i = 0; i < j.dd.length; i++) d.push(d[i] + j.dd[i]); return { d: d, a: j.a, cur: t === 'C' ? 'USD' : 'KRW' }; });
+    else if (t === 'C' || t === 'D' || t === 'Z' || t === 'P') p = file().then(function (j) { if (!j || !j.a || !j.dd || j.a.length !== j.dd.length + 1) throw new Error('optidx'); var d = [j.d0]; for (var i = 0; i < j.dd.length; i++) d.push(d[i] + j.dd[i]); return { d: d, a: j.a, cur: t === 'C' || t === 'P' ? 'USD' : 'KRW' }; });   /* P: 파마-프렌치 미국 업종 총수익 (ETF 차트 비교 fetchDep 과 같음) */
     else { var m = t === 'K' || t === 'N' ? 'k' : 'u'; p = raw(m, sym).then(function (txt) { var s = (m === 'k' ? X.parseK : X.parseU)(txt); if (!s || s.d.length < 2) throw new Error('nodata'); return X.btClean(key, depOf(s)); }); }
     DEPP[key] = p.then(function (r) { DEP[key] = r; delete DEPP[key]; return r; }, function (e) { delete DEPP[key]; throw e; });
     return DEPP[key];
