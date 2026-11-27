@@ -8,6 +8,8 @@
           U:<티커>  미국 상장 ETF·주식 (야후 v8 — c 종가 · a adjclose · 분배 내역)
           Y:<기호>  지수·선물·환율·코인 (야후 — 가격)
           C:<기호>  Cboe 옵션 전략 지수 (BuyWrite·PutWrite·칼라·버퍼·커버드콜 등 약 200개 · cdn-api.cboe.com 일별 종가 CSV — 매번 전체 기간)
+          P:<업종>  파마-프렌치 12업종 일별 총수익 (켄 프렌치 교수 자료실 · CRSP 미국 상장 전 종목 시가총액 가중 · 배당 재투자 · 1926-07-01 ~ ·
+                    달마다 1~3달 늦게 갱신 · 매번 전체 기간) — S&P 500 섹터 지수(일별 과거 값을 받을 곳이 없음) 대신 섹터 ETF(XLK·XLE·XLF …) 상장 전 재료
           D:<지수 ID> 한국거래소 옵션 전략 지수 (코스피 200 커버드콜 ATM·위클리 커버드콜·타겟 위클리 커버드콜·고배당·반도체·코스닥 150 커버드콜·
                     양매도·풋매도·버퍼 등 약 56개 · KRX 지수 누리집(index.krx.co.kr) '파생상품지수 > 옵션' 일별 종가 — 매번 전체 기간)
                     + 재료 D:K2G01P 코스피 200(가격, 1990~) — 모의 커버드콜(Z:)의 기초자산 · VKOSPI 는 옵션 지수 목록의 D:O2901P
@@ -23,8 +25,9 @@
   python3 scripts/etf_bt_data.py --only U:SPY,K:069500
   python3 scripts/etf_bt_data.py --skip-meta --src cboe   # Cboe 옵션 전략 지수만
   python3 scripts/etf_bt_data.py --skip-meta --src krx    # 한국거래소 옵션 전략 지수만
+  python3 scripts/etf_bt_data.py --skip-meta --src ff     # 파마-프렌치 12업종만
 """
-import argparse, concurrent.futures as cf, datetime, json, math, os, re, sys, threading, time, urllib.error, urllib.parse, urllib.request
+import argparse, concurrent.futures as cf, datetime, io, json, math, os, re, sys, threading, time, urllib.error, urllib.parse, urllib.request, zipfile
 from http import cookiejar
 
 import numpy as np
@@ -42,7 +45,7 @@ YAHOO_IDX = [
     ('^SOX', 'US', 'USD', 'PHLX Semiconductor'), ('^NYA', 'US', 'USD', 'NYSE Composite'), ('^SPXEW', 'US', 'USD', 'S&P 500 EW'), ('^SP400', 'US', 'USD', 'S&P 400'),
     ('^SP600', 'US', 'USD', 'S&P 600'), ('^W5000', 'US', 'USD', 'Wilshire 5000'), ('^OEX', 'US', 'USD', 'S&P 100'), ('^DJT', 'US', 'USD', 'Dow Transports'),
     ('^DJU', 'US', 'USD', 'Dow Utilities'), ('^NYFANG', 'US', 'USD', 'NYSE FANG+'), ('^SP500-60', 'US', 'USD', 'S&P 500 Real Estate'), ('^XOI', 'US', 'USD', 'NYSE Arca Oil'),
-    ('^HUI', 'US', 'USD', 'Gold Bugs'), ('^BKX', 'US', 'USD', 'KBW Bank'), ('^NBI', 'US', 'USD', 'Nasdaq Biotech'), ('^XAU', 'US', 'USD', 'PHLX Gold/Silver'),
+    ('^XCI', 'US', 'USD', 'NYSE Arca Computer Technology'), ('^HUI', 'US', 'USD', 'Gold Bugs'), ('^BKX', 'US', 'USD', 'KBW Bank'), ('^NBI', 'US', 'USD', 'Nasdaq Biotech'), ('^XAU', 'US', 'USD', 'PHLX Gold/Silver'),
     ('^SPGSCI', 'US', 'USD', 'S&P GSCI'), ('DX-Y.NYB', 'US', 'USD', 'Dollar Index'), ('^PUT', 'US', 'USD', 'S&P 500 PutWrite'),
     ('^N225', 'AS', 'JPY', 'Nikkei 225'), ('^HSI', 'AS', 'HKD', 'Hang Seng'), ('^HSCE', 'AS', 'HKD', 'Hang Seng China Ent.'), ('000001.SS', 'AS', 'CNY', 'Shanghai Composite'),
     ('399001.SZ', 'AS', 'CNY', 'Shenzhen Component'), ('^TWII', 'AS', 'TWD', 'TAIEX'), ('^STI', 'AS', 'SGD', 'Straits Times'), ('^AXJO', 'AS', 'AUD', 'ASX 200'),
@@ -125,6 +128,22 @@ def yahoo_holding_key(sym):
         return 'U:' + sym
     return None
 NAVER_IDX = [('KOSPI', 'KR', 'KRW', '코스피'), ('KOSDAQ', 'KR', 'KRW', '코스닥'), ('KPI200', 'KR', 'KRW', '코스피 200')]
+# 파마-프렌치 12업종 일별 총수익 — [업종 기호(자료 머리줄과 같게), 한글 이름, 영문 이름] · 키 'P:<기호>' · 식 이름 '한글|영문'(화면이 언어에 맞춰 고름)
+#   출처: Kenneth R. French Data Library '12 Industry Portfolios [Daily]' (CRSP 자료로 만든 미국 상장 전 종목 · 시가총액 가중 · 배당 재투자 · 일별 %)
+#   S&P 500 섹터 지수(정보기술 등)는 일별 과거 값을 받을 곳이 없어(야후는 최근 값만 · S&P 누리집은 막힘) 같은 업종의 이 지수로
+#   (2026-11-27 시험 · XLK 1998-12 ~ 2026-09 식 고르기 교차 검증 연 오차: 나스닥 100 × 0.95 7.1% · BusEq × 0.94 4.8% · NYSE Arca 컴퓨터 기술 + 나스닥 100 4.6%(1985-10~)
+#    · 2009~2026 로만 맞추고 1999~2008 실제 XLK 와 견준 가짜 상장 시험: BusEq 연 수익률 차 +2.7%p · 추적오차 7.2% / 나스닥 100 +3.7%p · 11.7% / 컴퓨터 기술 + 나스닥 100 +3.4%p · 7.8%)
+FF_ZIP = 'https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/12_Industry_Portfolios_daily_CSV.zip'
+FF12 = [('NoDur', '비내구 소비재', 'consumer nondurables'), ('Durbl', '내구 소비재', 'consumer durables'), ('Manuf', '제조', 'manufacturing'),
+        ('Enrgy', '에너지', 'energy'), ('Chems', '화학', 'chemicals'), ('BusEq', 'IT·전자 장비', 'business equipment (tech)'), ('Telcm', '통신', 'telecom'),
+        ('Utils', '유틸리티', 'utilities'), ('Shops', '도소매', 'wholesale & retail'), ('Hlth', '헬스케어', 'healthcare'), ('Money', '금융', 'finance'),
+        ('Other', '기타(광업·건설·운송·서비스)', 'other (mining, construction, transport, services)')]
+
+
+def ff_name(sym):
+    """'미국 IT·전자 장비 업종 총수익(파마-프렌치)|US business equipment (tech) industry TR (Fama-French)'"""
+    ko, en = next(((k, e) for s, k, e in FF12 if s == sym), (sym, sym))
+    return '미국 %s 업종 총수익(파마-프렌치)|US %s industry TR (Fama-French)' % (ko, en)
 # ECOS 817Y002 시장금리(일별) — [항목 코드, 이름]
 ECOS_RATES = [('010502000', 'CD91'), ('010101000', 'CALL'), ('010190000', 'KTB1'), ('010200000', 'KTB3'), ('010200001', 'KTB5'), ('010210000', 'KTB10'),
               ('010220000', 'KTB20'), ('010230000', 'KTB30'), ('010240000', 'KTB50'), ('010300000', 'CORP3'), ('010400000', 'MSB91'), ('010400001', 'MSB1'),
@@ -297,6 +316,65 @@ def cboe_series(sym):
     s['a'] = s['c'].copy()
     s['v_d'], s['v_a'] = np.zeros(0, np.int32), np.zeros(0)
     return s
+
+
+# ───────────── 파마-프렌치 12업종 일별 총수익 (P:) ─────────────
+_ff, _ff_lock = {}, threading.Lock()
+
+
+def ff_parse(raw):
+    """압축 파일 바이트 → {업종: 일봉} — 첫 표('Average Value Weighted Returns -- Daily' · 일별 %)를 곱해 수준으로
+    (1926-07-01 전날 = 1 · 소수 6자리 — 화면이 받는 파일과 같은 값 · 빠진 값(-99.99·-999)인 날은 그 업종만 건너뜀)"""
+    z = zipfile.ZipFile(io.BytesIO(raw))
+    names = [n for n in z.namelist() if n.lower().endswith('.csv')]
+    if len(names) != 1:
+        raise ValueError('압축 안 파일 %s' % names)
+    t = z.read(names[0]).decode('latin-1').splitlines()
+    i = next((k for k, l in enumerate(t) if 'Average Value Weighted Returns' in l and 'Daily' in l), None)
+    if i is None:
+        raise ValueError('가치 가중 표 없음')
+    head = [h.strip() for h in t[i + 1].split(',')]
+    want = [x[0] for x in FF12]
+    if head[1:] != want:
+        raise ValueError('머리줄 %s' % head)
+    rows = []
+    for l in t[i + 2:]:
+        f = [x.strip() for x in l.split(',')]
+        if len(f) != len(want) + 1 or not re.match(r'^\d{8}$', f[0]):
+            break                                             # 표 끝 (빈 줄 · 다음 표 제목)
+        rows.append((day(datetime.date(int(f[0][:4]), int(f[0][4:6]), int(f[0][6:]))), [float(x) for x in f[1:]]))
+    if len(rows) < 20000 or any(b[0] <= a[0] for a, b in zip(rows, rows[1:])):
+        raise ValueError('일 수 %d · 날짜 순서' % len(rows))
+    out = {}
+    for j, sym in enumerate(want):
+        d, a, lv = [], [], 1.0
+        for x, v in rows:
+            r = v[j]
+            if r <= -99.0 or not math.isfinite(r):
+                continue
+            lv *= 1.0 + r / 100.0
+            if not lv > 0:
+                raise ValueError('%s 수준 %s' % (sym, lv))
+            d.append(x); a.append(round(lv, 6))
+        s = {'d': np.array(d, np.int32), 'c': np.array(a, np.float64)}
+        s['a'] = s['c'].copy()
+        s['v_d'], s['v_a'] = np.zeros(0, np.int32), np.zeros(0)
+        out[sym] = s
+    return out
+
+
+def ff_all():
+    """파마-프렌치 12업종 (한 번 받아 여러 키가 나눠 씀 · 실패도 한 번만)"""
+    with _ff_lock:
+        if 'e' in _ff:
+            raise _ff['e']
+        if 'v' not in _ff:
+            try:
+                _ff['v'] = ff_parse(get(FF_ZIP, timeout=90))
+            except Exception as e:
+                _ff['e'] = e
+                raise
+        return _ff['v']
 
 
 # ───────────── 한국거래소 옵션 전략 지수 (코스피 200 커버드콜·위클리 커버드콜·양매도·버퍼 …) ─────────────
@@ -570,7 +648,7 @@ def main():
     ap.add_argument('--threads', type=int, default=6)
     ap.add_argument('--skip-meta', action='store_true')
     ap.add_argument('--meta-days', type=int, default=7, help='이 날수보다 오래된 구성 정보만 다시 받음')
-    ap.add_argument('--src', choices=('all', 'yahoo', 'naver', 'cboe', 'krx'), default='all', help='이 출처의 일봉만')
+    ap.add_argument('--src', choices=('all', 'yahoo', 'naver', 'cboe', 'krx', 'ff'), default='all', help='이 출처의 일봉만')
     ap.add_argument('--retry-err', action='store_true', help='지난번 실패한 키만')
     a = ap.parse_args()
     C = Cache(a.cache)
@@ -629,6 +707,8 @@ def main():
         keys['Y:' + s] = ('yahoo', s, mk, cur, 'idx')
     for s, mk, cur, nm in NAVER_IDX:
         keys['N:' + s] = ('naver', s, mk, cur, 'idx')
+    for s, ko, en in FF12:
+        keys['P:' + s] = ('ff', s, 'US', 'USD', 'idx')
     cboe_names = {}
     if not a.only and a.src in ('all', 'cboe'):
         try:
@@ -699,7 +779,7 @@ def main():
     if a.retry_err:
         keys = {k: v for k, v in keys.items() if k not in uni or uni[k].get('err')}
     log('일봉 대상 %d개 (국내 ETF %d · 미국 ETF %d · 지수 등 %d · Cboe 옵션 전략 지수 %d · 한국거래소 옵션 전략 지수 %d · 주식 %d)' % (
-        len(keys), len(kr), len(us), len(YAHOO_IDX) + len(NAVER_IDX), sum(1 for v in keys.values() if v[0] == 'cboe'),
+        len(keys), len(kr), len(us), len(YAHOO_IDX) + len(NAVER_IDX) + len(FF12), sum(1 for v in keys.values() if v[0] == 'cboe'),
         sum(1 for v in keys.values() if v[0] == 'krx'), sum(1 for v in keys.values() if v[4] == 'stk')))
 
     # 3. 일봉
@@ -714,6 +794,9 @@ def main():
             elif src == 'cboe':
                 new, info = cboe_series(sym), {'cur': 'USD', 'name': cboe_names.get(sym) or sym}
                 old = None                                            # Cboe CSV 는 늘 전체 기간 → 통째로 바꿈 (지수 회사가 고친 과거 값도 반영)
+            elif src == 'ff':
+                new, info = ff_all()[sym], {'cur': 'USD', 'name': ff_name(sym)}
+                old = None                                            # 늘 전체 기간 → 통째로 바꿈 (CRSP 가 고친 과거 값도 반영)
             elif src == 'krx':
                 inf = krx_info[sym]
                 new, info = krx_series(inf), {'cur': 'KRW', 'name': inf.get('nm') or sym, 'name_en': inf.get('en') or '', 'krx': inf}

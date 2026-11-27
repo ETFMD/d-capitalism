@@ -32,9 +32,11 @@ const pick = a => a[Math.floor(rnd() * a.length)];
   check('시뮬레이터 자료 달력 = 시뮬레이터', Dsim.d.length === DS.days.length && Dsim.d.every((x, i) => x === DS.days[i].date));
   check('시뮬레이터 자료 종목 = SMB.SIM = 시뮬레이터 SS_ASSETS (SOXL·SOXX 2026-11-05 · TECL·XLK 2026-11-27 맨 뒤 추가)', JSON.stringify(Object.keys(Dsim.px).sort()) === JSON.stringify(SMB.SIM.slice().sort()) && JSON.stringify(SMB.ASSETS) === JSON.stringify(SMB.SIM) &&
     JSON.stringify(SMB.ASSETS) === JSON.stringify(M.SS_ASSETS) && JSON.stringify(SMB.EXT) === '["soxl","soxx","tecl","xlk"]' && SMB.ASSETS.slice(-4).join() === 'soxl,soxx,tecl,xlk', [Object.keys(Dsim.px), SMB.ASSETS, M.SS_ASSETS]);
-  {   /* SOXL·SOXX 열: 1994-05-04(필라델피아 반도체 지수 첫날)부터 값 · TECL: 1998-12-22(XLK 실제 첫날) · XLK: 1971-02-05(자료 첫날 — 나스닥 100 재현) · 그 전은 0 · 빈 날 없음 */
-    const f = k => Dsim.px[k].findIndex(v => v > 0), F0 = { soxl: '1994-05-04', soxx: '1994-05-04', tecl: '1998-12-22', xlk: Dsim.d[0] };
-    check('시뮬레이터 자료 SOXL·SOXX 1994-05-04 · TECL 1998-12-22 · XLK 자료 첫날부터 · 그 뒤 빈 날 없음', Object.keys(F0).every(k => Dsim.d[f(k)] === F0[k] && Dsim.px[k].slice(f(k)).every(v => v > 0)) && Dsim.d[0] === '1971-02-05', Object.keys(F0).map(k => Dsim.d[f(k)]));
+  {   /* SOXL·SOXX 열: 1994-05-04(필라델피아 반도체 지수 첫날)부터 값 · XLK: 1971-02-05(자료 첫날 — 상장 전 재현) · 그 전은 0 · 빈 날 없음
+       TECL: XLK 재현을 이어 붙여 자료 첫날부터(2026-11-27 파마-프렌치 업종 재료 — XLK 식 오차가 이어 붙이기 한도 5% 안) · 예전 자료(XLK 실제 첫날 1998-12-22 부터)도 받음
+       (재현 식 갱신 → 시뮬레이터 자료 갱신 사이 몇 시간) */
+    const f = k => Dsim.px[k].findIndex(v => v > 0), F0 = { soxl: ['1994-05-04'], soxx: ['1994-05-04'], tecl: [Dsim.d[0], '1998-12-22'], xlk: [Dsim.d[0]] };
+    check('시뮬레이터 자료 SOXL·SOXX 1994-05-04 · TECL 자료 첫날(또는 예전 1998-12-22) · XLK 자료 첫날부터 · 그 뒤 빈 날 없음', Object.keys(F0).every(k => F0[k].indexOf(Dsim.d[f(k)]) >= 0 && Dsim.px[k].slice(f(k)).every(v => v > 0)) && Dsim.d[0] === '1971-02-05', Object.keys(F0).map(k => Dsim.d[f(k)]));
   }
   for (const k of SMB.SIM) check('시뮬레이터 자료 가격 ' + k, Dsim.px[k].every((v, i) => v === DS.days[i][k] || (Number.isNaN(v) && Number.isNaN(DS.days[i][k]))));
   const NP = FULL ? 3000 : 700;

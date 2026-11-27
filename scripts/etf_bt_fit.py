@@ -46,6 +46,13 @@ MIN_W = 0.03            # 더하는 항의 배수가 이보다 작으면(사실�
 W_MAX, WZ_MAX = 3.5, 1.5  # 배수 상한 (가장 큰 레버리지 3배 + 여유 · 콜 매도 덧씌우기) — 현금 같은 후보에 수십 배를 곱해 잡음을 맞추는 것을 막음
 E_DROP = 0.5            # 검증 오차가 연 50%를 넘으면 재현이라 할 수 없어 백테스트를 붙이지 않음
 CHAIN_EC = 0.05         # 후보 ETF 의 백테스트(이어 붙인 앞 구간 포함 오차)가 연 5% 이하일 때만 이어 붙임 (화면 BT_CHAIN_EC)
+# 늦게 갱신되는 재료 — P: 파마-프렌치 12업종 일별 총수익 (켄 프렌치 자료실 · 달마다 1~3달 늦게 · 1926 ~) · S&P 500 섹터 지수 대신 섹터 ETF 의 1980년~ 재료
+#   지금까지 이어지지 않아 보통 후보(끝 = 대상 마지막 날 − 5거래일 안)가 못 됨 → 미국 대상마다 '이 재료를 넣고 그 재료의 마지막 날까지로 맞춘'
+#   고르기를 한 번 더 하고(같은 구간에서 다른 모든 후보와 겨룸), 거기서 이 재료를 쓰는 식이 뽑히고 보통 고르기(구간 끝까지)의 식보다
+#   교차 검증 오차가 작을 때(거의 같으면 1년 넘게 더 먼 과거까지 될 때 — best_select 와 같은 규칙 · pick_p)만 그 식을 씀
+P_LAG_MAX = 130         # 재료의 마지막 날이 대상 마지막 날보다 이 거래일 수(약 6달) 안으로 늦을 때만 후보 (분기마다 갱신될 때도 있어 여유)
+P_MIN_DAYS = 2520       # 대상 상장 뒤 10년(거래일) 넘게 맞출 수 있을 때만 — 끝 몇 달을 빼도 맞춤에 영향이 작고, 짧은 ETF 는 오래된 ETF 체인으로 충분
+P_WARN = 90             # 재료 마지막 날이 미국 마지막 거래일보다 이만큼 넘게 늦으면 경고 (곧 후보에서 빠짐 — 자료실 갱신·주소 확인)
 # 보수·추적 차이 d 줄이기 · 교차 검증 · 예상 오차 보정 — '젊은 ETF 흉내' 시험(10년 넘은 ETF 300개를 최근 120·250·450거래일만 있는 것처럼
 # 식을 고른 뒤 그 전 최대 10년 실제 값과 비교)에서 정함
 #   d = 맞춘 d 를 사전값 d0 쪽으로 당긴 사후 평균 · d0 = −보수 + Σ 배수 × 후보 ETF 보수 · SE = 추적오차 ÷ √년
@@ -68,7 +75,7 @@ US_CAL_FROM = (datetime.date(1980, 1, 1) - EPOCH).days   # 화면이 받는 야�
 CLOSE_UTC = {'KR': 6.5, 'AS': 7.5, 'EU': 16.5, 'US': 21.0, 'FX': 22.0, 'CX': 24.0, 'RK': 6.5, 'RU': 21.0}
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from etf_bt_data import YAHOO_IDX, NAVER_IDX, FX_PAIR, norm_cur, single_stock_keys, krx_en_name   # noqa: E402
+from etf_bt_data import YAHOO_IDX, NAVER_IDX, FX_PAIR, ff_name, norm_cur, single_stock_keys, krx_en_name   # noqa: E402
 YIDX_NAMES = {x[0]: x[3] for x in YAHOO_IDX + NAVER_IDX}
 
 # 금리·변동성 수준·중복 지수는 후보에서 뺌 (^GSPC·^SP500TR → 배당 재투자 S&P 500 'X:SPXTR' · 원/달러 → 'F:USDKRW')
@@ -212,6 +219,16 @@ def is_kr(key):
 def opt_idx(key):
     """옵션 전략 지수 키 — C: Cboe(미국) · D: 한국거래소(국내) · Z: 모의 커버드콜 — 전략이 이미 든 지수라 콜 매도 덧씌우기·음수·큰 배수를 쓰지 않음"""
     return key[:2] in ('C:', 'D:', 'Z:')
+
+
+def lagged(key):
+    """늦게 갱신되는 재료 키 — P: 파마-프렌치 12업종 (P_LAG_MAX)"""
+    return key[:2] == 'P:'
+
+
+def hosted(key):
+    """화면이 data/etfbt/r/<키>.json 으로 받는 재료 (야후·네이버로 받을 수 없는 것) — 옵션 전략 지수 C:·D:·Z: · 파마-프렌치 업종 P:"""
+    return opt_idx(key) or lagged(key)
 
 
 def shard_of(key):
@@ -920,16 +937,26 @@ def main():
         log('::warning::연방기금 금리(FRED DFF) 자료가 없어 레버리지·인버스 미국 ETF 식을 단기국채 금리로 맞춤 (scripts/etf_bt_data.py FRED 받기 확인)')
     elif 'US' in E.cal and int(D.series(LEV_RATE)['d'][-1]) < int(E.cal['US'][-1]) - 10:   # FRED 받기가 여러 번 실패 — 마지막 날 뒤는 현금 수익 0 으로 맞춰짐
         log('::warning::연방기금 금리(FRED DFF) 마지막 날 %s 이 미국 마지막 거래일 %s 보다 10일 넘게 앞섬 (FRED 받기 확인)' % (ymd(int(D.series(LEV_RATE)['d'][-1])), ymd(int(E.cal['US'][-1]))))
-    # 안전장치: 지난 식이 쓰던 옵션 전략 지수(C: Cboe · D: 한국거래소 — 화면이 r/<키>.json 으로 받는 것)의 절반 넘게 이번 자료에 없으면
+    # 안전장치: 지난 식이 쓰던 화면용 재료(C: Cboe · D: 한국거래소 · Z: 모의 · P: 파마-프렌치 — 화면이 r/<키>.json 으로 받는 것)의 절반 넘게 이번 자료에 없으면
     #   (받기 막힘 + 캐시 없음) 계산하지 않고 멈춤 — 식·r/*.json 이 지난 것 그대로 남아 화면은 계속 맞고, 다음 실행이 다시 받음
     #   (지수 몇 개만 없어진 경우는 그 지수 없이 다시 고름 · 출처마다 따로 셈 · --force 로 무시)
     if not a.only and not a.force:
         old_r = load_recipes(a.out)
-        for pre, nm_ in (('C:', 'Cboe'), ('D:', '한국거래소'), ('Z:', '모의 커버드콜(한국거래소 코스피 200·VKOSPI)')):
+        for pre, nm_ in (('C:', 'Cboe 옵션 전략 지수'), ('D:', '한국거래소 옵션 전략 지수'), ('Z:', '모의 커버드콜(한국거래소 코스피 200·VKOSPI)'),
+                         ('P:', '파마-프렌치 업종 지수')):
             used_c, miss = hosted_missing(old_r, D, pre)
-            if len(used_c) >= 3 and len(miss) * 2 > len(used_c):
-                raise SystemExit('지난 식이 쓰던 %s 옵션 전략 지수 %d개 중 %d개가 이번 자료에 없어 멈춤 (받기 실패 의심 · --force 로 무시): %s'
+            # 파마-프렌치 업종은 한 파일(압축)에서 함께 받아 있고 없음이 같이 감 → 하나라도 쓰던 것이 없으면 멈춤
+            if len(used_c) >= (1 if pre == 'P:' else 3) and len(miss) * 2 > len(used_c):
+                raise SystemExit('지난 식이 쓰던 %s %d개 중 %d개가 이번 자료에 없어 멈춤 (받기 실패 의심 · --force 로 무시): %s'
                                  % (nm_, len(used_c), len(miss), ' '.join(miss[:10])))
+    pl = [x for x in (D.series(k) for k in cands if lagged(k)) if x is not None and len(x['d'])]
+    if not pl:
+        log('::warning::파마-프렌치 12업종(P:) 자료가 없음 — 섹터 ETF 상장 전 재현이 이 재료 없이 (scripts/etf_bt_data.py FF_ZIP 받기 확인)')
+    elif 'US' in E.cal:
+        lag_ = len(E.cal['US']) - int(np.searchsorted(E.cal['US'], min(int(x['d'][-1]) for x in pl), side='right'))
+        if lag_ > P_WARN:
+            log('::warning::파마-프렌치 12업종(P:) 마지막 날 %s 이 미국 마지막 거래일보다 %d거래일 앞섬 — %d거래일 넘게 앞서면 후보에서 빠짐 (켄 프렌치 자료실 갱신·주소 확인)'
+                % (ymd(min(int(x['d'][-1]) for x in pl)), lag_, P_LAG_MAX))
 
     # 달력별 '그날 알 수 있는 값' 기준 후보 초과수익 행렬 (상관으로 후보를 좁힐 때) — float32 · 첫날 전은 NaN
     mats = {}
@@ -939,6 +966,8 @@ def main():
         cols, keys, starts, ends = [], [], [], []
         for k in cands:
             if k == 'F:USDKRW' and cal_name == 'US':
+                continue
+            if lagged(k) and cal_name == 'KR':           # 파마-프렌치 업종(미국)은 미국 대상만 — 국내 ETF 는 미국 ETF 체인으로 (그 ETF 가 이 재료를 쓰면 이어 붙음)
                 continue
             info = D.info(k)
             fmk = info.get('mk') or 'US'
@@ -966,6 +995,18 @@ def main():
             import traceback
             log('실패', tk, repr(e)[:200]); traceback.print_exc()
             r = None
+        if not is_kr(tk) and 'US' in mats:
+            # 늦게 갱신되는 재료(P: 파마-프렌치 업종)를 넣은 고르기 — 그 재료의 마지막 날까지 같은 구간에서 모든 후보와 겨뤄 이 재료를 쓰는 식이 뽑히고
+            #   보통 고르기의 식보다 나을 때만 (pick_p)
+            try:
+                rp = fit_target(D, E, mats, tk, recipes, a.explain, log, pmode=True)
+            except Exception as e:
+                import traceback
+                log('실패(P)', tk, repr(e)[:200]); traceback.print_exc()
+                rp = None
+            if rp is not None and any(lagged(t[0]) for t in rp['m']) and pick_p(recipes, D, E, tk, r, rp):
+                r = rp
+                stats['p'] = stats.get('p', 0) + 1
         if r is None:
             stats['none'] = stats.get('none', 0) + 1
         else:
@@ -981,6 +1022,23 @@ def main():
         json.dump(recipes, open(a.dump, 'w', encoding='utf-8'), ensure_ascii=False)
     write_out(a.out, recipes, D, a.only, a.force)
     log('끝 %s · %.0fs' % (stats, time.time() - t0))
+
+
+def pick_p(recipes, D, E, tk, r, rp):
+    """P: 를 넣은 고르기(rp)를 쓸까 — 보통 고르기(r)와 best_select 와 같은 규칙: 교차 검증 오차가 작은 쪽 · 거의 같으면(NEAR_REL·NEAR_ABS)
+    1년(NEAR_GAIN) 넘게 더 먼 과거까지 재현되는 쪽 (항을 앞에서부터 하나씩 고르는 방식이라 P: 를 넣은 고르기가 같은 구간에서도 더 나쁜 식에 멈출 수 있어 꼭 견줌)"""
+    if r is None or not r.get('e') or not r.get('m'):
+        return True
+    if not rp.get('e'):
+        return False
+    st_ = lambda x: max(chain_start(recipes, D, tk, x, 0), first_possible(D, E, x))
+    sa, sb = rp['e'][2], r['e'][2]
+    if max(sa, sb) <= min(sa, sb) * (1 + NEAR_REL) + NEAR_ABS:
+        a_, b_ = st_(rp), st_(r)
+        if sa <= sb:
+            return not (b_ <= a_ - NEAR_GAIN)            # P 식이 더 작음 — 보통 식이 1년 넘게 더 먼 과거까지일 때만 보통 식
+        return a_ <= b_ - NEAR_GAIN                       # 보통 식이 더 작음 — P 식이 1년 넘게 더 먼 과거까지일 때만 P 식
+    return sa < sb
 
 
 def chain_start(recipes, D, tk, r, depth):
@@ -1116,7 +1174,8 @@ def fresh_end(cal, dl, lag, us_cal):
     return len(cal) - 1 if i >= len(us_cal) else int(np.searchsorted(cal, int(us_cal[i]), side='right')) - 1
 
 
-def fit_target(D, E, mats, tk, recipes, explain, log):
+def fit_target(D, E, mats, tk, recipes, explain, log, pmode=False):
+    """pmode: 늦게 갱신되는 재료(P:)를 후보에 넣고 맞추는 구간 끝을 그 재료의 마지막 날로 (main 이 미국 대상마다 한 번 더 부름)"""
     cal_name, tcur = ('KR', 'KRW') if is_kr(tk) else ('US', 'USD')
     mt = mats.get(cal_name)
     s = D.series(tk)
@@ -1158,6 +1217,23 @@ def fit_target(D, E, mats, tk, recipes, explain, log):
         elig[cidx] = False
     if not krx_all and len(didx):
         elig[didx] = False
+    pidx = mt.get('pidx')
+    if pidx is None:                                    # 늦게 갱신되는 재료(P: 파마-프렌치 업종) 열 번호 (한 번만)
+        pidx = mt['pidx'] = np.array([i for i, k in enumerate(keys_of(mt)) if lagged(k)], np.int64)
+    if len(pidx):                                       # 보통 고르기: 후보 아님 · pmode: 상장 15거래일 전부터 있고 마지막 날이 P_LAG_MAX 안으로 늦음
+        elig[pidx] = ((starts[pidx] < first - 15) & (ends[pidx] >= last - P_LAG_MAX)) if pmode else False
+    if pmode:
+        pe = pidx[elig[pidx]] if len(pidx) else pidx
+        if not len(pe):
+            return None
+        # 맞추는 구간 끝 = 그 재료가 모두 값을 낸 마지막 날 (그 뒤는 '변화 없음'으로 이어 써질 뿐) — 이 구간에서 다른 모든 후보와 같이 겨룸
+        cut = min(fresh_end(cal, int(D.series(keys[j])['d'][-1]), E.known_lag(D.info(keys[j]).get('mk') or 'US', cal_name), E.cal['US']) for j in pe) + 1
+        if cut < hi:
+            hi = cut
+            n_all = hi - lo
+            base['n'] = n_all
+        if n_all < P_MIN_DAYS:
+            return None
     ti_ = mt['kidx'].get(tk)
     if ti_ is not None:
         elig[ti_] = False
@@ -1530,8 +1606,8 @@ def fee_of(D, key):
 def inc_sig(D, key):
     """후보 시계열에 빠진 수익(배당·이자·선물 롤)을 d0 이 모르는 정도(연)
     · 0: 분배 재투자 수정가(국내 ETF 네이버 · 미국 ETF·종목 야후)·S&P 500 TR·금리 합성·코인 · PI_SIG: 가격 지수·국내 종목(네이버 가격)·선물·환율"""
-    if key in SYN or key == 'X:SPXTR' or key.startswith('U:') or key.startswith('C:'):
-        return 0.0                                    # C: Cboe 옵션 전략 지수 = 배당·이자를 담은 총수익 지수
+    if key in SYN or key == 'X:SPXTR' or key.startswith('U:') or key.startswith('C:') or lagged(key):
+        return 0.0                                    # C: Cboe 옵션 전략 지수 · P: 파마-프렌치 업종 = 배당을 담은 총수익
     if key.startswith('D:'):                          # 한국거래소 옵션 지수: ID 끝 T = 총수익(TR) · P = 가격 지수(배당 빠짐)
         return 0.0 if key.endswith('T') else PI_SIG
     if key.startswith('Z:'):                          # 모의 커버드콜: 코스피 200 가격 지수 기반(배당 빠짐) · 모의 프리미엄과 실제의 차이
@@ -1598,6 +1674,8 @@ def name_of(D, key):
         return SYN_NAME[key]
     if key.startswith('Y:') or key.startswith('N:'):
         return YIDX_NAMES.get(key[2:]) or key[2:]
+    if lagged(key):                                   # '미국 IT·전자 장비 업종 총수익(파마-프렌치)|US business equipment (tech) industry TR (Fama-French)'
+        return ff_name(key[2:])
     if key.startswith('C:'):                          # 'S&P 500 30-Delta BuyWrite(BXMD)' — 영문 지수 이름(한·영 화면 공통) · 지수 회사 이름은 뺌
         nm = re.sub(r'\s*\bIndex\b', '', D.info(key).get('name') or key[2:])
         nm = re.sub(r'\s+', ' ', re.sub(r'\bcboe\b', ' ', nm, flags=re.I)).strip() or key[2:]
@@ -1744,7 +1822,7 @@ def _ser(d, vals, nd):
 
 
 def hosted_missing(old, D, pre):
-    """지난 식들이 쓰던 옵션 전략 지수(pre = 'C:' Cboe · 'D:' 한국거래소 · 'Z:' 모의 커버드콜) → (그 목록, 그중 이번 자료에 없는 것 — 받기 실패·캐시 없음)"""
+    """지난 식들이 쓰던 화면용 재료(pre = 'C:' Cboe · 'D:' 한국거래소 · 'Z:' 모의 커버드콜 · 'P:' 파마-프렌치 업종) → (그 목록, 그중 이번 자료에 없는 것 — 받기 실패·캐시 없음)"""
     used = sorted({f[0] for r in old.values() for f in r['m'] if f[0].startswith(pre)})
 
     def gone(k):
@@ -1787,17 +1865,21 @@ def write_out(out, recipes, D, only, force=False):
         json.dump({'updated': now, 'e': sh}, open(os.path.join(out, '%d.json' % i), 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
     # 화면이 받는 보조 자료 — 금리(현금·채권 지수를 같은 식으로) · 원/달러 15:30 종가 · S&P 500 TR 앞부분
     used = {f[0] for r in recipes.values() for f in r['m']} | {'R:KRW', 'R:USD'} | {r['cr'] for r in recipes.values() if r.get('cr')}
-    for k in sorted(k for k in used if opt_idx(k)):    # 옵션 전략 지수 C: Cboe · D: 한국거래소 (정리한 일봉 그대로 — 화면이 같은 값으로 계산)
+    for k in sorted(k for k in used if hosted(k)):     # 옵션 전략 지수 C: Cboe · D: 한국거래소 · Z: 모의 · P: 파마-프렌치 업종 (정리한 일봉 그대로 — 화면이 같은 값으로 계산)
         s = D.series(k)
         if s is None or not len(s['d']):
             continue
-        j = _ser(s['d'], s['a'], 6)
+        d_, a_ = s['d'], s['a']
+        if lagged(k):                                   # 1926년부터의 업종 지수 → 화면 달력(1980~) 첫날 값이 있게 두 달 앞부터만
+            i0 = int(np.searchsorted(d_, US_CAL_FROM - 62))
+            d_, a_ = d_[i0:], a_[i0:]
+        j = _ser(d_, a_, 6)
         json.dump({'updated': now, 'k': k, 'd0': j['d0'], 'dd': j['dd'], 'a': j['v']},
                   open(os.path.join(out, 'r', k.replace(':', '_') + '.json'), 'w', encoding='utf-8'), separators=(',', ':'))
-    # 이제 어느 식도 쓰지 않는 옵션 전략 지수 파일은 지움 (오래된 값이 남아 있지 않게 · 워크플로가 지운 파일도 커밋)
-    keep = {k.replace(':', '_') + '.json' for k in used if opt_idx(k)}
+    # 이제 어느 식도 쓰지 않는 재료 파일은 지움 (오래된 값이 남아 있지 않게 · 워크플로가 지운 파일도 커밋)
+    keep = {k.replace(':', '_') + '.json' for k in used if hosted(k)}
     for f in sorted(os.listdir(os.path.join(out, 'r'))):
-        if re.match(r'^[CDZ]_[A-Za-z0-9]+\.json$', f) and f not in keep:
+        if re.match(r'^[CDZP]_[A-Za-z0-9]+\.json$', f) and f not in keep:
             os.remove(os.path.join(out, 'r', f))
     for k in sorted(used & set(SYN)):
         s = D.series(k)

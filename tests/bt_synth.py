@@ -15,6 +15,8 @@
   D:O2903P  한국거래소 옵션 지수(코스피 200 커버드콜 ATM) 자체의 식 — 코스피 200 + 월간 콜 매도 + 모의 커버드콜 Z:M00L90
             (지수 기준일 전 재현 · 이 식만 쓰는 재료 · 모의 커버드콜은 파이썬이 만든 파일 data/etfbt/r/Z_M00L90.json)
   K:289480  D:O2903P 1배 ← 체인: 지수 파일(data/etfbt/r/D_O2903P.json)에 지수 식의 백테스트를 이어 붙여 기준일(2013) 전까지 · 이름 '한글|영문'
+  U:VGT     파마-프렌치 업종 총수익 P:BusEq 1.12배 (data/etfbt/r/P_BusEq.json — 미국 달력 첫날 전부터 · 달력에 없는 날 포함 · 대상 마지막 날보다
+            먼저 끝남(실제처럼 1~3달 늦게 갱신) · 이름 '한글|영문')
 """
 import datetime as _dt
 import json
@@ -28,11 +30,13 @@ NSHARD = 16
 
 BT_FIRST = {'K133690': _dt.date(2010, 10, 18), 'K122630': _dt.date(2010, 2, 22), 'UQLD': _dt.date(2006, 6, 21), 'UTQQQ': _dt.date(2010, 2, 11),
             'USSO': _dt.date(2006, 6, 21), 'UIWM': _dt.date(2000, 5, 26), 'K091160': _dt.date(2012, 1, 2), 'UQYLD': _dt.date(2013, 12, 12),
-            'K289480': _dt.date(2018, 2, 9)}
+            'K289480': _dt.date(2018, 2, 9), 'UVGT': _dt.date(2004, 1, 30)}
 CBOE_FROM = _dt.date(1994, 12, 30)                # 합성 Cboe 옵션 전략 지수(C:BXNT) 시작 (미국 달력 안)
 KRX_FROM = _dt.date(2013, 1, 2)                   # 합성 한국거래소 옵션 지수(D:O2903P) 기준일 (국내 달력 안)
 ZSIM_FROM = _dt.date(2003, 1, 2)                  # 합성 모의 커버드콜(Z:M00L90) 시작 — 실제처럼 VKOSPI 시작일 (국내 달력 안)
 ZSIM_NAME = '코스피 200 커버드콜 모의(월간 ATM · VKOSPI×0.9)|KOSPI 200 covered call model (monthly ATM, VKOSPI×0.9)'
+FF_FROM, FF_TO = _dt.date(1984, 11, 1), _dt.date(2026, 8, 31)   # 합성 파마-프렌치 업종(P:BusEq) — 미국 달력 첫날 전부터 · 대상 마지막 날 전에 끝남
+FF_NAME = '미국 IT·전자 장비 업종 총수익(파마-프렌치)|US business equipment (tech) industry TR (Fama-French)'   # scripts/etf_bt_data.ff_name('BusEq')
 DEP_FIRST = {'K005930': _dt.date(1996, 1, 3),   # 후보 종목 합성 일봉 시작 (자료 오류를 일부러 넣음 — run_regression.etf_series)
              'KKPI200': _dt.date(1996, 1, 3)}   # 코스피 200 (한국거래소 옵션 지수 식만 쓰는 후보 — 지수 식의 재료까지 받는지)
 CAL_FIRST = {'KKOSPI': _dt.date(1995, 1, 3), 'U^GSPC': _dt.date(1985, 1, 2), 'U^SP500TR': _dt.date(1990, 1, 2)}
@@ -71,6 +75,9 @@ def recipes():
         'K:289480': {'s': day(BT_FIRST['K289480']), 'c': 'KRW', 'n': 900, 'dv': {'y': 0.07, 'f': 12, 'm': list(range(1, 13)), 'dom': 28, 'tx': 0.3},
                      'm': [['D:O2903P', 0, 1.0, 'n', 'KRW', '코스피 200 커버드콜 ATM 지수|KOSPI 200 Covered Call ATM']], 'd': -0.004,
                      'e': [0.001, 0.008, 0.0081, 3], 'k': 'fit', 'ec': 0.02657},
+        # 파마-프렌치 업종 총수익(P:) — 화면이 data/etfbt/r/P_BusEq.json 을 받아(달러) 같은 값으로 계산하는지 · 한·영 이름
+        'U:VGT': {'s': day(BT_FIRST['UVGT']), 'c': 'USD', 'n': 2600, 'dv': {'y': 0.012, 'f': 4, 'm': [3, 6, 9, 12], 'dom': 24, 'tx': 1.0},
+                  'm': [['P:BusEq', 0, 1.12, 'n', 'USD', FF_NAME]], 'd': -0.006, 'e': [0.01, 0.028, 0.03, 3], 'k': 'fit', 'ec': 0.03},
         # 국내 종목 후보(합성 일봉에 튀었다 돌아온 값·가격제한폭 밖 끊김을 넣음) — 화면이 자료 정리(btClean)를 거쳐 쓰는지
         'K:091160': {'s': day(BT_FIRST['K091160']), 'c': 'KRW', 'n': 900, 'm': [['K:005930', 0, 1.2, 'n', 'KRW', '삼성전자']], 'd': -0.003,
                      'e': [0.002, 0.012, 0.0122, 3], 'k': 'fit', 'ec': 0.0122},
@@ -153,6 +160,12 @@ class Synth:
         g = [x for x in self.cal_days('N:KOSPI') if x >= day(ZSIM_FROM)]
         return {'d': g, 'a': [round(1000.0 * math.exp(0.00018 * t + 0.03 * math.sin(t / 71.0) + 0.006 * math.sin(t / 4.0)), 6) for t in range(len(g))]}
 
+    def ff(self, key):
+        """합성 파마-프렌치 업종 총수익 (월~금 모든 날 — 미국 달력에 없는 날 포함 · FF_FROM ~ FF_TO · 소수 6자리 — 파이썬이 만든 파일과 같은 자릿수)"""
+        d0, d1 = day(FF_FROM), day(FF_TO)
+        g = [x for x in range(d0, d1 + 1) if (x + 3) % 7 < 5]
+        return {'d': g, 'a': [round(300.0 * math.exp(0.00045 * t + 0.06 * math.sin(t / 83.0) + 0.012 * math.sin(t / 6.0)), 6) for t in range(len(g))]}
+
     def file(self, name):
         """data/etfbt/r/<name> 본문"""
         def ser(d):
@@ -171,6 +184,9 @@ class Synth:
         if name == 'D_O2903P.json':
             c = self.krx('D:O2903P'); d0, dd = ser(c['d'])
             return json.dumps({'updated': up, 'k': 'D:O2903P', 'd0': d0, 'dd': dd, 'a': c['a']})
+        if name == 'P_BusEq.json':
+            c = self.ff('P:BusEq'); d0, dd = ser(c['d'])
+            return json.dumps({'updated': up, 'k': 'P:BusEq', 'd0': d0, 'dd': dd, 'a': c['a']})
         if name == 'Z_M00L90.json':
             c = self.zsim('Z:M00L90'); d0, dd = ser(c['d'])
             return json.dumps({'updated': up, 'k': 'Z:M00L90', 'd0': d0, 'dd': dd, 'a': c['a']})
@@ -201,8 +217,8 @@ def expected(syn):
                 s = {'d': d, 'a': lv, 'c': lv, 'y': y}
             elif key == 'F:USDKRW':
                 f = syn.usdkrw(); s = {'d': np.array(f['d'], np.int64), 'a': np.array(f['c'], np.float64), 'c': np.array(f['c'], np.float64)}
-            elif key[:2] in ('C:', 'D:', 'Z:'):
-                c = syn.cboe(key) if key[0] == 'C' else syn.krx(key) if key[0] == 'D' else syn.zsim(key)
+            elif key[:2] in ('C:', 'D:', 'Z:', 'P:'):
+                c = syn.cboe(key) if key[0] == 'C' else syn.krx(key) if key[0] == 'D' else syn.ff(key) if key[0] == 'P' else syn.zsim(key)
                 s = {'d': np.array(c['d'], np.int64), 'a': np.array(c['a'], np.float64), 'c': np.array(c['a'], np.float64)}
             elif key == 'X:SPXTR':
                 pre, base = syn.spx_pre(), self.series('Y:^SP500TR')      # 뒷부분 = 자료 오류를 정리한 ^SP500TR (화면 btSplice 와 같게)
@@ -337,6 +353,57 @@ def fit_selfcheck():
         u, m = F.hosted_missing(old, FD(True), pre)
         if m or len(u) != 1:
             out.append('안전장치 %s: 쓴 %s · 없음 %s' % (pre, u, m))
+    # 파마-프렌치 업종(P:): 쓰던 것이 받기 실패(err)면 '없음' · 있으면 '있음' · 화면 파일 대상(hosted)·늦게 갱신(lagged) · 이름 '한글|영문'
+    oldp = {'U:XLK': {'m': [['P:BusEq', 0, 1.0]]}}
+    fdp = FD(True); fdp.uni['P:BusEq'] = {'n': 26000}
+    u, m = F.hosted_missing(oldp, fdp, 'P:')
+    if u != ['P:BusEq'] or m:
+        out.append('안전장치 P: 있음: 쓴 %s · 없음 %s' % (u, m))
+    fdp.uni['P:BusEq'] = {'n': 26000, 'err': 'fail'}
+    u, m = F.hosted_missing(oldp, fdp, 'P:')
+    if m != ['P:BusEq']:
+        out.append('안전장치 P: 받기 실패를 없다고 보지 않음: %s' % m)
+    if not (F.hosted('P:BusEq') and F.lagged('P:BusEq') and F.hosted('C:BXM') and not F.lagged('C:BXM') and not F.hosted('U:SPY')):
+        out.append('hosted·lagged 판정 이상')
+    import etf_bt_data as B
+    if B.ff_name('BusEq') != FF_NAME or F.inc_sig(None, 'P:BusEq') != 0.0:
+        out.append('파마-프렌치 이름·총수익 판정 이상: %s · %s' % (B.ff_name('BusEq'), F.inc_sig(None, 'P:BusEq')))
+    if [x[0] for x in B.FF12] != ['NoDur', 'Durbl', 'Manuf', 'Enrgy', 'Chems', 'BusEq', 'Telcm', 'Utils', 'Shops', 'Hlth', 'Money', 'Other']:
+        out.append('파마-프렌치 12업종 목록이 자료 머리줄과 다름')
+    # 파마-프렌치 압축 파일 읽기(ff_parse): 첫 표(가치 가중)만 · 빠진 값(-99.99)인 날은 그 업종만 건너뜀 · 수준 = 누적 곱(소수 6자리) · 머리줄이 다르면 실패
+    import io, zipfile
+    nm = [x[0] for x in B.FF12]
+    dd_, x_ = [], _dt.date(1926, 7, 1)
+    while len(dd_) < 20005:
+        if x_.weekday() < 5:
+            dd_.append(x_)
+        x_ += _dt.timedelta(1)
+    rv = lambda i, j: round(0.01 * ((i * 7 + j * 3) % 11 - 5) + 0.02, 2)
+
+    def mk(head, miss):
+        lines = ['This file was created using the 202609 CRSP database.', '', '  Average Value Weighted Returns -- Daily', ',' + ','.join(head)]
+        for i, dt in enumerate(dd_):
+            lines.append(dt.strftime('%Y%m%d') + ',' + ','.join('%7.2f' % (-99.99 if (i, j) in miss else rv(i, j)) for j in range(12)))
+        lines += ['', '  Average Equal Weighted Returns -- Daily', ',' + ','.join(head)] + [dt.strftime('%Y%m%d') + ',' + ','.join(['  5.00'] * 12) for dt in dd_[:50]]
+        b = io.BytesIO()
+        with zipfile.ZipFile(b, 'w') as z:
+            z.writestr('12_Industry_Portfolios_Daily.csv', '\r\n'.join(lines) + '\r\n')
+        return b.getvalue()
+    try:
+        o = B.ff_parse(mk(nm, {(10, 5)}))
+        bq, lv, ref = o['BusEq'], 1.0, []
+        for i in range(len(dd_)):
+            if i != 10:
+                lv *= 1 + rv(i, 5) / 100.0; ref.append(round(lv, 6))
+        if len(bq['d']) != len(dd_) - 1 or [float(v) for v in bq['a']] != ref or int(bq['d'][0]) != day(dd_[0]) or len(o['NoDur']['d']) != len(dd_):
+            out.append('ff_parse: BusEq %d일(기대 %d) · 값 같음 %s' % (len(bq['d']), len(dd_) - 1, [float(v) for v in bq['a']][:3] == ref[:3]))
+    except Exception as ex:
+        out.append('ff_parse 실패: %r' % ex)
+    try:
+        B.ff_parse(mk(nm[:11] + ['Oth'], set()))
+        out.append('ff_parse: 머리줄이 달라도 읽음')
+    except ValueError:
+        pass
     # 맞추는 구간 끝(fresh_end): 늦게 나오는 지수의 오늘이 없으면 그 전날까지 — 2026-10 국내 달력(9일 한글날 휴장) · 미국 달력
     kr = np.array([day(_dt.date(2026, 10, x)) for x in (5, 6, 7, 8, 12)], np.int64)
     us = np.array([day(_dt.date(2026, 10, x)) for x in (5, 6, 7, 8, 9)], np.int64)

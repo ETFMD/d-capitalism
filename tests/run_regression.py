@@ -661,7 +661,7 @@ def bt_check(fail, b, local):
     S_, rows, ds = b.get('s') or {}, b.get('rows') or [], b.get('ds') or []
     if not S_ or not rows:
         return F('화면 값 없음: %s' % json.dumps(b, ensure_ascii=False)[:300])
-    want = ['K133690', 'K122630', 'UTQQQ', 'USSO', 'K091160', 'UQYLD', 'K289480'] if local else ['K498400', 'K360750', 'UTQQQ']   # 배포: 셋 다 MAX(가장 늦은 백테스트 시작) 뒤에 상장
+    want = ['K133690', 'K122630', 'UTQQQ', 'USSO', 'K091160', 'UQYLD', 'K289480', 'UVGT'] if local else ['K498400', 'K360750', 'UTQQQ']   # 배포: 셋 다 MAX(가장 늦은 백테스트 시작) 뒤에 상장
     for k in want:
         s = S_.get(k)
         if not s or not s['bt'] or s['list'] is None or s['first'] >= s['list']:
@@ -752,12 +752,16 @@ def bt_check(fail, b, local):
     want_lab = {'K133690': r'SPY×원/달러 · 예상 오차 연 ±3\.4%p$', 'K122630': r'KODEX 200 0\.90배 \+ 위클리 콜 매도\(커버 33% · 1\.0% OTM\) · 예상 오차 연 ±5\.2%p$',
                 'UTQQQ': r'QLD 1\.5배 · 예상 오차 연 ±1\.1%p \(이어 붙인 앞 구간 ±2\.0%p\)$', 'USSO': r'S&P 500 TR 2\.0배 · 예상 오차 연 ±2\.1%p$',
                 'UQYLD': r'^백테스트: NASDAQ-100 BuyWrite V2\(BXNT\) · 예상 오차 연 ±1\.8%p$',
-                'K289480': r'^백테스트: 코스피 200 커버드콜 ATM 지수 · 예상 오차 연 ±1\.4%p \(이어 붙인 앞 구간 ±4\.4%p\)$'}
+                'K289480': r'^백테스트: 코스피 200 커버드콜 ATM 지수 · 예상 오차 연 ±1\.4%p \(이어 붙인 앞 구간 ±4\.4%p\)$',
+                'UVGT': r'^백테스트: 미국 IT·전자 장비 업종 총수익\(파마-프렌치\) 1\.1배 · 예상 오차 연 ±5\.0%p$'}
     for k, pat in want_lab.items():
         if not re.search(pat, (lab.get(k) or {}).get('info', '')):
             F('%s 방법 문구 %r 없음: %s' % (k, pat, (lab.get(k) or {}).get('info', '')[:140]))
     # 색 = 예상 오차(이어 붙인 앞 구간이 더 크면 그것) 연 3% 미만 초록 g · 8% 미만 노랑 m · 그 밖 빨강 b
-    want_cls = {'K133690': 'm', 'K122630': 'm', 'UTQQQ': 'g', 'USSO': 'g', 'UQYLD': 'g', 'K289480': 'm'}
+    want_cls = {'K133690': 'm', 'K122630': 'm', 'UTQQQ': 'g', 'USSO': 'g', 'UQYLD': 'g', 'K289480': 'm', 'UVGT': 'm'}
+    # 파마-프렌치 업종(P:): 미국 달력 첫날(합성 1985-01-02)부터 · 재료 파일이 대상 마지막 날 전에 끝나도(늦게 갱신) 상장 전 구간은 그대로
+    if S_.get('UVGT') and S_['UVGT']['first'] != (bt_synth.CAL_FIRST['U^GSPC'] - _EP).days:
+        F('UVGT 백테스트 시작 %s ≠ 미국 달력 첫날 %s (파마-프렌치 업종 재료)' % (S_['UVGT']['first'], bt_synth.CAL_FIRST['U^GSPC']))
     for k, c in want_cls.items():
         if not (lab.get(k) or {}).get('cls', '').endswith('ecx-bt ' + c):
             F('%s 오차 색 %r 아님: %s' % (k, c, (lab.get(k) or {}).get('cls')))
@@ -765,7 +769,8 @@ def bt_check(fail, b, local):
 
 def bt_data_check(fail):
     """저장소의 백테스트 식 묶음(data/etfbt) 점검 — 지수 식 이름에 지수 회사 이름(Cboe) 없음 · 한국거래소 옵션 지수(D:)·모의 커버드콜(Z:) 이름은
-    '한글|영문'(영문에 한글 없음) · 식이 쓰는 옵션 전략 지수(C:·D:·Z:)는 화면이 받을 파일(data/etfbt/r/<키>.json)이 있음 · 쓰지 않는 지수 파일은 없음"""
+    '한글|영문'(영문에 한글 없음) · 식이 쓰는 옵션 전략 지수(C:·D:·Z:)·파마-프렌치 업종(P:)은 화면이 받을 파일(data/etfbt/r/<키>.json)이 있음 · 쓰지 않는 파일은 없음
+    · P: 파일은 화면 달력 첫날(1980-01-02) 전부터 · 1926년 값은 넣지 않음(크기)"""
     F = lambda m: fail('etf-backtest', m)
     d = os.path.join(ROOT, 'data', 'etfbt')
     used, bad = set(), []
@@ -776,22 +781,30 @@ def bt_data_check(fail):
             F('식 묶음 %d 읽기 실패: %r' % (i, ex)); continue
         for k, r in e.items():
             for t in r.get('m') or []:
-                if t[0][:2] in ('C:', 'D:', 'Z:'):
+                if t[0][:2] in ('C:', 'D:', 'Z:', 'P:'):
                     used.add(t[0])
                 nm = t[5] if len(t) > 5 else ''
                 if t[0][:2] not in ('K:', 'U:') and re.search('cboe', nm, re.I):     # 지수 이름만 (Cboe Global Markets 주식 'CBOE' 같은 보유 종목은 그대로)
                     bad.append('%s 이름에 Cboe: %s' % (k, nm))
-                if t[0][:2] in ('D:', 'Z:'):
+                if t[0][:2] in ('D:', 'Z:', 'P:'):
                     en = nm.split('|')[1] if '|' in nm else ''
                     if not en or re.search(r'[가-힣]', en):
                         bad.append('%s 의 %s 영문 이름 없음: %s' % (k, t[0], nm))
     for x in bad[:5]:
         F('식 이름 점검: ' + x)
-    have = {f[:-5].replace('_', ':', 1) for f in os.listdir(os.path.join(d, 'r')) if re.match(r'^[CDZ]_[A-Za-z0-9]+\.json$', f)}
+    have = {f[:-5].replace('_', ':', 1) for f in os.listdir(os.path.join(d, 'r')) if re.match(r'^[CDZP]_[A-Za-z0-9]+\.json$', f)}
     if used - have:
-        F('식이 쓰는 옵션 전략 지수 파일 없음: %s' % sorted(used - have)[:5])
+        F('식이 쓰는 옵션 전략 지수·업종 지수 파일 없음: %s' % sorted(used - have)[:5])
     if have - used:
-        F('쓰지 않는 옵션 전략 지수 파일 남음: %s' % sorted(have - used)[:5])
+        F('쓰지 않는 옵션 전략 지수·업종 지수 파일 남음: %s' % sorted(have - used)[:5])
+    d80 = (_dt.date(1980, 1, 2) - _dt.date(1970, 1, 1)).days
+    for k in sorted(k for k in have & used if k.startswith('P:')):
+        try:
+            j = json.load(open(os.path.join(d, 'r', k.replace(':', '_') + '.json'), encoding='utf-8'))
+            if not (d80 - 70 <= j['d0'] < d80) or len(j['a']) != len(j['dd']) + 1 or min(j['dd']) <= 0 or min(j['a']) <= 0:
+                F('%s 파일 이상: 첫날 %s · 값 %d · 날 간격 %d' % (k, (_dt.date(1970, 1, 1) + _dt.timedelta(j['d0'])).isoformat(), len(j['a']), len(j['dd'])))
+        except Exception as ex:
+            F('%s 파일 읽기 실패: %r' % (k, ex))
 
 
 
@@ -952,6 +965,58 @@ def bt_zsim_live(page, base, fail, errs, ignorable):
         for t in [t for t, u in errs if not ignorable(t, u)][:3]:
             F('[%s] 모의 커버드콜 점검 콘솔 오류: %s' % (lang, t[:200]))
     print('    모의 커버드콜 실사이트 점검: %s' % ', '.join('%s(%s~)' % (k[2:], (ep + _dt.timedelta(R[k]['st'])).isoformat()) for k in picks), flush=True)
+
+
+def bt_ff_live(page, base, fail, errs, ignorable):
+    """배포 사이트 점검 — 파마-프렌치 업종(P:)을 쓰는 미국 ETF 식(XLK 가 있으면 XLK + 시작이 가장 이른 것 · 최대 2개)
+    · 백테스트 시작일(화면이 재료로 계산) = 식의 st · 재료 받기 오류 없음 · P_*.json 을 실제로 받음 · 한국어판 이름 한글 · 영어판 영문 · 예상 오차·색 = 식 값
+    · 어느 식도 P: 를 쓰지 않으면 실패 (자료실 받기가 멈췄거나 갱신이 6달 넘게 늦어 후보에서 빠진 것 — etf_bt_fit.py P_LAG_MAX)"""
+    F = lambda m: fail('etf-backtest', m)
+    d = os.path.join(ROOT, 'data', 'etfbt')
+    R = {}
+    for i in range(16):
+        R.update(json.load(open(os.path.join(d, '%d.json' % i), encoding='utf-8'))['e'])
+    use = sorted((k for k, r in R.items() if k.startswith('U:') and any(t[0].startswith('P:') for t in r['m'])), key=lambda k: (R[k]['st'], k))
+    if not use:
+        return F('파마-프렌치 업종(P:)을 쓰는 미국 ETF 식이 저장소에 없음 (자료실 받기·갱신 지연 확인)')
+    picks = (['U:XLK'] if 'U:XLK' in use else []) + [k for k in use if k != 'U:XLK'][:2 - (1 if 'U:XLK' in use else 0)]
+    hash_ = '#e=%s&p=MAX' % ','.join('U' + k[2:] for k in picks)
+    ep = _dt.date(1970, 1, 1)
+    for lang, pre in (('ko', ''), ('en', 'en/')):
+        errs.clear()
+        page.goto('about:blank'); page.goto(base + pre + 'etf-compare/' + hash_, wait_until='load')
+        try:
+            z = page.evaluate(BTZ_JS, len(picks))
+        except Exception as ex:
+            F('[%s] 업종 지수 점검 실행 실패: %r' % (lang, ex)); continue
+        if z.get('none'):
+            F('[%s] ECXdebug 없음' % lang); continue
+        if z['depErr'] or z['btErr']:
+            F('[%s] 백테스트 재료·식 받기 실패: %s · %s' % (lang, z['depErr'][:5], z['btErr'][:5]))
+        for o in z['s']:
+            rc = o['rc']
+            if not rc:
+                F('[%s] %s 화면이 백테스트 식을 못 읽음' % (lang, o['key'])); continue
+            if not o['bt'] or o['first'] != rc['st']:
+                F('[%s] %s 백테스트 시작 %s ≠ 식 %s (백테스트 %d일)' % (lang, o['key'], o['first'] and (ep + _dt.timedelta(o['first'])).isoformat(),
+                                                              (ep + _dt.timedelta(rc['st'])).isoformat(), o['bt']))
+            pk = [k for k in o['need'] if k.startswith('P:')]
+            if not pk or any(k not in z['dep'] for k in pk):
+                F('[%s] %s 업종 지수 파일을 받지 않음: 필요 %s · 받은 것 %s' % (lang, o['key'], pk, [k for k in z['dep'] if k.startswith('P:')]))
+            names = [nm.split('|')[1 if lang == 'en' else 0] for nm, cc in rc['names'] if '|' in nm and not cc]
+            if not names or any(nm not in o['info'] for nm in names):
+                F('[%s] %s 방법 문구에 업종 지수 이름 없음: %s (기대 %s)' % (lang, o['key'], o['info'][:160], names))
+            if lang == 'en' and (any(re.search(r'[가-힣]', nm) for nm in names) or re.search(r'[가-힣]', o['info'])):
+                F('[en] %s 방법 문구에 한글: %s' % (o['key'], o['info'][:160]))
+            x, xc = rc['x'], rc.get('xc')
+            shown = xc if (xc is not None and x is not None and xc > x * 1.05 + 0.0005) else None
+            w_ = max(x or 0, shown or 0)
+            if not o['cls'].endswith('ecx-bt ' + ('g' if w_ < 0.03 else 'm' if w_ < 0.08 else 'b')):
+                F('[%s] %s 오차 색 %s (예상 오차 %.4f)' % (lang, o['key'], o['cls'], w_))
+        for t in [t for t, u in errs if not ignorable(t, u)][:3]:
+            F('[%s] 업종 지수 점검 콘솔 오류: %s' % (lang, t[:200]))
+    print('    파마-프렌치 업종 실사이트 점검: %s' % ', '.join('%s(%s~ · %s)' % (k[2:], (ep + _dt.timedelta(R[k]['st'])).isoformat(),
+                                                                  '+'.join(t[0] for t in R[k]['m'])) for k in picks), flush=True)
 
 
 def etf_expect(keys, S, mode, E=None, open_=False):
@@ -3216,7 +3281,7 @@ def stratsim_check(br, base, fail, ignorable):
             os.remove(tf)
             ws = json.loads(pr.stdout.strip().splitlines()[-1])
             okS = gs['ready'] and gs['n'] == ws['n'] == 65 and all(c[0] == sc['p']['ul'] and c[3] is None and abs(c[1] - w[0]) < 1e-6 and abs(c[2] - w[1]) < 1e-6 for c, w, sc in zip(gs['cfg'], ws['cfg'], SC)) \
-                and len(gs['cfg']) == len(ws['cfg']) == 4 and gs['first'] == ['1994-05-04', '1994-05-04', '1998-12-22', '1971-02-05'] and gs['last'] == [True] * 4 and ws['opts'] == ['soxl,soxx,tecl,xlk'] * 4
+                and len(gs['cfg']) == len(ws['cfg']) == 4 and gs['first'][:2] + gs['first'][3:] == ['1994-05-04', '1994-05-04', '1971-02-05'] and gs['first'][2] in ('1971-02-05', '1998-12-22') and gs['last'] == [True] * 4 and ws['opts'] == ['soxl,soxx,tecl,xlk'] * 4
             if not okS:
                 fail('strategy-simulator', 'SOXL·SOXX·TECL·XLK 전략 숫자·자료·선택지 이상: 화면 %s · Node %s' % (json.dumps(gs, ensure_ascii=False)[:300], json.dumps(ws)[:240]))
         except Exception as e:
@@ -5383,6 +5448,15 @@ def main():
                     t_ = page.evaluate("() => (document.querySelector('#ecx-stats .ecx-bt') || {}).textContent || ''")
                     if not re.match(r'^Backtest: KOSPI 200 Covered Call ATM · expected error ±1\.4pp/yr \(chained earlier part ±4\.4pp\)$', t_):
                         fail('en/etf-compare', '백테스트 방법 문구(한국거래소 옵션 지수 영문 이름)가 영어가 아님: %s' % t_[:160])
+                    # 파마-프렌치 업종(P:) 이름도 영어판에서 영문 (합성 식 UVGT)
+                    page.goto('about:blank'); page.goto(base + 'en/etf-compare/#e=UVGT&p=MAX', wait_until='load')
+                    try:
+                        page.wait_for_function("() => window.ECXdebug && ECXdebug.S.ready && document.querySelector('#ecx-stats .ecx-bt')", timeout=45000)
+                    except Exception:
+                        pass
+                    t_ = page.evaluate("() => (document.querySelector('#ecx-stats .ecx-bt') || {}).textContent || ''")
+                    if not re.match(r'^Backtest: US business equipment \(tech\) industry TR \(Fama-French\) 1\.1x · expected error ±5\.0pp/yr$', t_):
+                        fail('en/etf-compare', '백테스트 방법 문구(파마-프렌치 업종 영문 이름)가 영어가 아님: %s' % t_[:160])
             # 상장 전 백테스트 — 로컬: 합성 식(환 노출·체인·콜 매도 덧씌우기·S&P TR 이어 붙이기·재료 없음)을 파이썬 기준 구현과 숫자까지 · 배포: 실제 식 점검
             print('[ETF] 상장 전 백테스트', flush=True)
             errs.clear()
@@ -5391,7 +5465,7 @@ def main():
                 page.wait_for_function(ready, timeout=45000)
             except Exception:
                 pass
-            hash_ = '#e=K133690,K122630,UTQQQ,USSO,UIWM,K091160,UQYLD,K289480&p=MAX' if local else '#e=K498400,K360750,UTQQQ&p=MAX'
+            hash_ = '#e=K133690,K122630,UTQQQ,USSO,UIWM,K091160,UQYLD,K289480,UVGT&p=MAX' if local else '#e=K498400,K360750,UTQQQ&p=MAX'
             try:
                 b = page.evaluate(bt_synth.BT_JS, {'hash': hash_})
             except Exception as ex:
@@ -5401,8 +5475,9 @@ def main():
                     fail('etf-backtest', '%s: %s' % (t['name'], json.dumps(t.get('info'), ensure_ascii=False)))
             bt_check(fail, b, local)
             bt_data_check(fail)
-            if not local:   # 실제 식·자료: 모의 커버드콜(Z:)을 쓰는 ETF 백테스트가 식대로 그려지는지 (한·영)
+            if not local:   # 실제 식·자료: 모의 커버드콜(Z:)·파마-프렌치 업종(P:)을 쓰는 ETF 백테스트가 식대로 그려지는지 (한·영)
                 bt_zsim_live(page, base, fail, errs, ignorable)
+                bt_ff_live(page, base, fail, errs, ignorable)
             if local:   # 식 고르기 스크립트의 모의 커버드콜 계산·받기 실패 안전장치 (합성 자료로)
                 try:
                     for m_ in bt_synth.fit_selfcheck():
