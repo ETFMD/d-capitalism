@@ -17,7 +17,7 @@ function ssCustomData() {
     tqqq: d.map((r) => r.tqqq), qqq: d.map((r) => r.qqq), spy: d.map((r) => r.spy),
     qld: d.map((r) => r.qld), sso: d.map((r) => r.sso), spxl: d.map((r) => r.spxl), sqqq: col('sqqq'),
     soxl: col('soxl'), soxx: col('soxx'),   // 2026-11-05 — 1994-05 전은 0(자료 없음)
-    tecl: col('tecl'), xlk: col('xlk'),     // 2026-11-27 — TECL 1998-12-22 전은 0(자료 없음) · XLK 는 1971 부터(상장 전 = 나스닥 100 재현)
+    tecl: col('tecl'), xlk: col('xlk'),     // 2026-11-27 — 둘 다 1971 부터(상장 전 = 파마-프렌치 IT 업종 재현 · TECL = 그 3배)
     nfci: DS.nfci ? DS.nfci.slice() : d.map(() => NaN),
   };
   return _ssCustomData;

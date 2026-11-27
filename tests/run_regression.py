@@ -3281,7 +3281,7 @@ def stratsim_check(br, base, fail, ignorable):
             os.remove(tf)
             ws = json.loads(pr.stdout.strip().splitlines()[-1])
             okS = gs['ready'] and gs['n'] == ws['n'] == 65 and all(c[0] == sc['p']['ul'] and c[3] is None and abs(c[1] - w[0]) < 1e-6 and abs(c[2] - w[1]) < 1e-6 for c, w, sc in zip(gs['cfg'], ws['cfg'], SC)) \
-                and len(gs['cfg']) == len(ws['cfg']) == 4 and gs['first'][:2] + gs['first'][3:] == ['1994-05-04', '1994-05-04', '1971-02-05'] and gs['first'][2] in ('1971-02-05', '1998-12-22') and gs['last'] == [True] * 4 and ws['opts'] == ['soxl,soxx,tecl,xlk'] * 4
+                and len(gs['cfg']) == len(ws['cfg']) == 4 and gs['first'] == ['1994-05-04', '1994-05-04', '1971-02-05', '1971-02-05'] and gs['last'] == [True] * 4 and ws['opts'] == ['soxl,soxx,tecl,xlk'] * 4
             if not okS:
                 fail('strategy-simulator', 'SOXL·SOXX·TECL·XLK 전략 숫자·자료·선택지 이상: 화면 %s · Node %s' % (json.dumps(gs, ensure_ascii=False)[:300], json.dumps(ws)[:240]))
         except Exception as e:

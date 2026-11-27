@@ -7,7 +7,8 @@
 //   SOXL(반도체 지수 3배)·SOXX(반도체 지수 1배)는 2026-11-05 맨 뒤에 추가 — 앞 7종목의 순서·계산은 그대로(쓰지 않는 종목은 보유 0)
 //   SOXL·SOXX 자료는 1994-05-04(필라델피아 반도체 지수 첫날)부터 · 그 전은 0(자료 없음)
 //   TECL(기술주 섹터 지수 3배)·XLK(Technology Select Sector Index 1배)는 2026-11-27 맨 뒤에 추가 — 앞 9종목 그대로
-//   XLK 상장(1998-12-22) 전 = 나스닥 100 재현(1985-10 전 나스닥 종합 · ETF 차트 비교 재현 식) 1971-02-05 부터 · TECL 은 1998-12-22 부터(그 전은 0)
+//   XLK 상장(1998-12-22) 전 = 미국 IT·전자 장비 업종 총수익(파마-프렌치 BusEq × 0.94 · ETF 차트 비교 재현 식 · 2026-11-27 저녁 — 처음엔 나스닥 100) 1971-02-05 부터
+//   · TECL = 그 XLK 재현 × 3(이어 붙이기 한도 안) 이라 TECL 도 1971-02-05 부터 (처음엔 1998-12-22 부터)
 const SS_ASSETS = ['tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'];
 const SS_COL = { tqqq: 1, qqq: 2, spy: 3, qld: 4, sso: 5, spxl: 6, sqqq: 7, soxl: 8, soxx: 9, tecl: 10, xlk: 11 };
 const SS_KEY_OF = ['date', 'tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'];
@@ -157,7 +158,7 @@ function ssSma(vals, w) {
   return out;
 }
 // 와일더 RSI (첫 값 = 1..w 차이 단순 평균, 그다음 지수 평활)
-//   · 앞쪽 0(자료 없음 — SOXL·SOXX 1994-05 전 · TECL 1998-12 전)은 건너뛰고 첫 가격부터 셈 (2026-11-05 · 0 이 이어지는 구간을 'RSI 100 과열'로 읽지 않게
+//   · 앞쪽 0(자료 없음 — SOXL·SOXX 1994-05 전)은 건너뛰고 첫 가격부터 셈 (2026-11-05 · 0 이 이어지는 구간을 'RSI 100 과열'로 읽지 않게
 //     — 앞 7종목은 1971년부터 0 이 없어 예전과 같은 값 · SMA 200 백테스트 엔진 SMB.rsi 와 같은 식)
 function ssRsi(vals, w) {
   const out = new Array(vals.length).fill(null);
