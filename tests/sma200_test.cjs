@@ -30,11 +30,11 @@ const pick = a => a[Math.floor(rnd() * a.length)];
   /* ── ① 시뮬레이터와 같게 ── */
   const Dsim = SMB.fromCsv(fs.readFileSync(path.join(ROOT, 'data', 'stratsim', 'prices.csv'), 'utf8'));
   check('시뮬레이터 자료 달력 = 시뮬레이터', Dsim.d.length === DS.days.length && Dsim.d.every((x, i) => x === DS.days[i].date));
-  check('시뮬레이터 자료 종목 = SMB.SIM = 시뮬레이터 SS_ASSETS (SOXL·SOXX 2026-11-05 맨 뒤 추가)', JSON.stringify(Object.keys(Dsim.px).sort()) === JSON.stringify(SMB.SIM.slice().sort()) && JSON.stringify(SMB.ASSETS) === JSON.stringify(SMB.SIM) &&
-    JSON.stringify(SMB.ASSETS) === JSON.stringify(M.SS_ASSETS) && JSON.stringify(SMB.EXT) === '["soxl","soxx"]' && SMB.ASSETS.slice(-2).join() === 'soxl,soxx', [Object.keys(Dsim.px), SMB.ASSETS, M.SS_ASSETS]);
-  {   /* SOXL·SOXX 열: 1994-05-04(필라델피아 반도체 지수 첫날)부터 값 · 그 전은 0 · 빈 날 없음 */
-    const f = k => Dsim.px[k].findIndex(v => v > 0);
-    check('시뮬레이터 자료 SOXL·SOXX: 1994-05-04 부터 · 그 뒤 빈 날 없음', ['soxl', 'soxx'].every(k => Dsim.d[f(k)] === '1994-05-04' && Dsim.px[k].slice(f(k)).every(v => v > 0)), ['soxl', 'soxx'].map(k => Dsim.d[f(k)]));
+  check('시뮬레이터 자료 종목 = SMB.SIM = 시뮬레이터 SS_ASSETS (SOXL·SOXX 2026-11-05 · TECL·XLK 2026-11-27 맨 뒤 추가)', JSON.stringify(Object.keys(Dsim.px).sort()) === JSON.stringify(SMB.SIM.slice().sort()) && JSON.stringify(SMB.ASSETS) === JSON.stringify(SMB.SIM) &&
+    JSON.stringify(SMB.ASSETS) === JSON.stringify(M.SS_ASSETS) && JSON.stringify(SMB.EXT) === '["soxl","soxx","tecl","xlk"]' && SMB.ASSETS.slice(-4).join() === 'soxl,soxx,tecl,xlk', [Object.keys(Dsim.px), SMB.ASSETS, M.SS_ASSETS]);
+  {   /* SOXL·SOXX 열: 1994-05-04(필라델피아 반도체 지수 첫날)부터 값 · TECL: 1998-12-22(XLK 실제 첫날) · XLK: 1971-02-05(자료 첫날 — 나스닥 100 재현) · 그 전은 0 · 빈 날 없음 */
+    const f = k => Dsim.px[k].findIndex(v => v > 0), F0 = { soxl: '1994-05-04', soxx: '1994-05-04', tecl: '1998-12-22', xlk: Dsim.d[0] };
+    check('시뮬레이터 자료 SOXL·SOXX 1994-05-04 · TECL 1998-12-22 · XLK 자료 첫날부터 · 그 뒤 빈 날 없음', Object.keys(F0).every(k => Dsim.d[f(k)] === F0[k] && Dsim.px[k].slice(f(k)).every(v => v > 0)) && Dsim.d[0] === '1971-02-05', Object.keys(F0).map(k => Dsim.d[f(k)]));
   }
   for (const k of SMB.SIM) check('시뮬레이터 자료 가격 ' + k, Dsim.px[k].every((v, i) => v === DS.days[i][k] || (Number.isNaN(v) && Number.isNaN(DS.days[i][k]))));
   const NP = FULL ? 3000 : 700;
@@ -166,7 +166,7 @@ const pick = a => a[Math.floor(rnd() * a.length)];
   };
   const runs = recheck(D, fx, FULL ? 1200 : 250, t => {
     const p = {}; for (const k in SMB.OPTS) p[k] = rnd() < 0.6 ? SMB.PRESET[k] : pick(SMB.OPTS[k])[0];
-    for (const k of ['sig', 'ul', 'out', 'bga']) if (p[k] === 'sqqq' || p[k] === 'soxl' || p[k] === 'soxx') p[k] = SMB.PRESET[k];   /* TQQQ 쪽 실제 일봉 자료(D)에 없는 종목 */
+    for (const k of ['sig', 'ul', 'out', 'bga']) if (['sqqq', 'soxl', 'soxx', 'tecl', 'xlk'].indexOf(p[k]) >= 0) p[k] = SMB.PRESET[k];   /* TQQQ 쪽 실제 일봉 자료(D)에 없는 종목 */
     if (t % 4 === 0) Object.assign(p, SMB.PRESET);
     return p;
   }, '');
@@ -246,7 +246,7 @@ const pick = a => a[Math.floor(rnd() * a.length)];
     };
     simDates(D, fx, FULL ? 800 : 200, SMB.PRESET, t => {
       const p = {}; for (const k in SMB.OPTS) p[k] = rnd() < 0.5 ? SMB.PRESET[k] : pick(SMB.OPTS[k])[0];
-      for (const k of ['sig', 'ul', 'out', 'bga']) if (p[k] === 'sqqq' || p[k] === 'soxl' || p[k] === 'soxx') p[k] = SMB.PRESET[k];   /* TQQQ 쪽 실제 일봉 자료(D)에 없는 종목 */
+      for (const k of ['sig', 'ul', 'out', 'bga']) if (['sqqq', 'soxl', 'soxx', 'tecl', 'xlk'].indexOf(p[k]) >= 0) p[k] = SMB.PRESET[k];   /* TQQQ 쪽 실제 일봉 자료(D)에 없는 종목 */
       if (t % 3 === 0) p.settle = pick(['2', '3', '4', '5']);
       return p;
     }, '');
@@ -324,7 +324,7 @@ const pick = a => a[Math.floor(rnd() * a.length)];
         const R1 = SMB.run(D, pp, o), R2 = SMB.run(Dn, pp, o); tried++;
         if (R1.final === R2.final && R1.liq === R2.liq && R1.taxPaid === R2.taxPaid && R1.eq.every((v, i) => v === R2.eq[i]) && R1.nSell === R2.nSell) same++;
       }
-      check('SOXL·SOXX 칸이 있어도 TQQQ 쪽 결과 그대로 (' + tried + '가지)', same === tried, [same, tried]);
+      check('SOXL·SOXX·TECL·XLK 칸이 있어도 TQQQ 쪽 결과 그대로 (' + tried + '가지)', same === tried, [same, tried]);
       /* SOXL 설정도 자료에 다른 종목이 더 있어도 같은 날 같은 값 (TQQQ 쪽 실제 일봉을 함께 넣은 큰 자료와 비교 — 달력이 같은 기본값 첫날 ~) */
       const XA = Object.assign({}, X, XS), DA = SMB.fromSeries(XA), a1 = SMB.firstValid(DX, PX), a2 = DA.d.indexOf(DX.d[a1]);
       const fxA2 = MBT.fxFor(DA.d, Fx), oX = { capital: 1e5, mode: 'real', fee: 0.0025, sec: 0.0000206, divTax: 0.15, intTax: 0.154, rows: false };
