@@ -13142,7 +13142,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
         <article class="g-card"><h3>전략 규칙</h3><ul class="g-list">
 <li><b>9sig</b> — 시작 금액의 60%로 TQQQ 를, 40%는 현금(연 4% 이자)으로 둡니다. 분기마다 목표 = 직전 보유액 × 1.09 + 그 분기 새 돈의 절반. 보유액이 목표보다 많으면 넘는 만큼 팔아 현금으로, 적으면 모자란 만큼 현금의 90% 안에서 삽니다. 최근 2년 고점보다 30% 넘게 떨어져 있으면 매도 신호를 두 번까지 건너뛰고, 한 분기에 100% 넘게 오르면 주식 비중을 60%로 되돌립니다</li>
 <li><b>SMA(이동평균 추세)</b> — QQQ 종가가 200일 이동평균 위면 TQQQ, 아래면 현금(연 4%). 15거래일에 나눠 사고, RSI(9) 90 이상이면 팔며, RSI(7) 80 미만일 때만 삽니다. TQQQ 가 자기 200일선보다 40% 넘게 위면 '버블 보험'으로 전부 현금. 버퍼·확인 일수·결제일·대기 종목도 바꿀 수 있습니다</li>
-<li><b>그냥 보유</b> — 진입일에 사고 적립금도 같은 종목을 계속 사며 팔지 않습니다 (TQQQ·QLD·QQQ·SPY·SSO·SPXL·SQQQ)</li>
+<li><b>그냥 보유</b> — 진입일에 사고 적립금도 같은 종목을 계속 사며 팔지 않습니다 (TQQQ·QLD·QQQ·SPY·SSO·SPXL·SQQQ·SOXL·SOXX·TECL·XLK)</li>
 <li><b>현금 복리</b> — 같은 돈을 주식 대신 연 4%(조절 가능) 이자 현금으로만 모았을 때의 기준선</li>
 <li><b>사용자 전략</b> — 원하는 규칙을 말로 적으면 AI 에게 줄 설명서가 만들어지고, AI 가 써 준 코드를 붙여 넣으면 다른 선과 함께 그려집니다 · <b>전략 라이브러리</b>에는 이렇게 만든 40여 개 전략이 성과와 함께 들어 있습니다</li></ul></article>
         <article class="g-card"><h3>계산 가정</h3><ul class="g-list">
@@ -13154,7 +13154,7 @@ body:has(.mh-sheet-bg) .dsh-fab,body:has(.mh-sheet-bg) .kk-fabs,body:has(.mh-ove
 <li>지난 결과는 미래 수익을 보장하지 않으며, 특히 상장 전 재현 구간은 실제 거래가 아니라 계산한 값입니다</li></ul></article>
       </div>
       <div class="g-card g-faqs"><h3>자주 묻는 질문</h3>
-<details class="g-faq"><summary>TQQQ 가 없던 2010년 이전 가격은 어떻게 만들었나요?</summary><div class="g-ans"><p>이 사이트의 다른 백테스트(ETF 차트 비교의 상장 전 점선, 무한매수법·72루틴·VR 백테스트의 '상장 전 포함')와 <b>같은 재현 식</b>으로 만듭니다. ETF마다 상장 후 실제 하루 총수익(분배금 재투자)을 가장 잘 따라간 식을 교차 검증으로 고르고(매주 다시 맞춤), 그 식을 상장 전 날들에 하루씩 거꾸로 적용합니다. 식은 '그날 현금 수익 + 배수 × (기초 자산 수익 − 현금 수익) + 상장 뒤 실제와 맞춘 연 비용' 꼴이라 빌린 돈의 이자와 보수가 저절로 들어갑니다 — 예를 들어 TQQQ ≈ QLD 의 1.5배, QLD ≈ QQQ 의 2배, QQQ ≈ 나스닥100 지수(배당 몫 포함), SPXL ≈ SSO 의 1.5배, SSO ≈ S&amp;P 500 배당 재투자 지수의 2배, SQQQ ≈ QID 의 1.5배. 더 오래된 ETF의 실제 값이 있으면 그것을 먼저 쓰고(QQQ 1999년~, QLD·SSO·QID 2006년~), 그 전은 지수로 내려갑니다. 현금·이자 금리는 레버리지·인버스 ETF 는 <b>미국 연방기금 금리</b>(은행끼리 하루 빌리는 금리 — 실제 펀드의 담보 운용·스와프 이자에 가까움), 그 밖은 미국 단기국채 금리를 씁니다. 1993~2009년 실제 레버리지·인버스 펀드 15개를 2010년 뒤 자료로 맞춰 그 전 해마다 견줘 보니 연방기금 금리 쪽 오차가 더 작았습니다(특히 국채 금리가 급락한 2007~2008년). 금리가 높던 1970~80년대에는 빌린 돈의 이자가 커서, 3배 상품의 하루 수익이 지수 하루 수익의 3배보다 해마다 약 16%p(1970년대)~22%p(1980년대) 낮게 쌓입니다(빌린 몫 2배 × 그 시절 연방기금 금리 평균 7~10% + 보수).</p><p>재료: 나스닥100 지수(1985년 10월~) · 그 전은 나스닥 종합지수(1971년 2월 5일 첫날부터) / S&amp;P 500 배당 재투자 지수(1988년 전은 S&amp;P 500 가격 지수에 로버트 실러의 월 배당을 더해 이어 붙임) / 금리 = 미국 13주 국채 금리·연방기금 금리. 나스닥 지수가 없던 1971년 전은 검증할 수 있는 실제 자료가 없어 쓰지 않으므로, 시뮬레이터 자료는 <b>1971년 2월 5일부터</b>입니다. 상장 후 실제 값과 견준 예상 오차는 연 ±1~2.5%p 입니다(ETF 차트 비교 표의 '예상 오차', 이어 붙인 앞 단계 오차 포함). 각 ETF 상장일(SPY 1993년, QQQ 1999년, QLD·SSO 2006년, SPXL 2008년, TQQQ·SQQQ 2010년)부터는 실제 수정주가이고, 상장 첫날의 하루 변화도 재현 식 그대로 이어집니다.</p></div></details>
+<details class="g-faq"><summary>TQQQ 가 없던 2010년 이전 가격은 어떻게 만들었나요?</summary><div class="g-ans"><p>이 사이트의 다른 백테스트(ETF 차트 비교의 상장 전 점선, 무한매수법·72루틴·VR 백테스트의 '상장 전 포함')와 <b>같은 재현 식</b>으로 만듭니다. ETF마다 상장 후 실제 하루 총수익(분배금 재투자)을 가장 잘 따라간 식을 교차 검증으로 고르고(매주 다시 맞춤), 그 식을 상장 전 날들에 하루씩 거꾸로 적용합니다. 식은 '그날 현금 수익 + 배수 × (기초 자산 수익 − 현금 수익) + 상장 뒤 실제와 맞춘 연 비용' 꼴이라 빌린 돈의 이자와 보수가 저절로 들어갑니다 — 예를 들어 TQQQ ≈ QLD 의 1.5배, QLD ≈ QQQ 의 2배, QQQ ≈ 나스닥100 지수(배당 몫 포함), SPXL ≈ SSO 의 1.5배, SSO ≈ S&amp;P 500 배당 재투자 지수의 2배, SQQQ ≈ QID 의 1.5배. 더 오래된 ETF의 실제 값이 있으면 그것을 먼저 쓰고(QQQ 1999년~, QLD·SSO·QID 2006년~), 그 전은 지수로 내려갑니다. 현금·이자 금리는 레버리지·인버스 ETF 는 <b>미국 연방기금 금리</b>(은행끼리 하루 빌리는 금리 — 실제 펀드의 담보 운용·스와프 이자에 가까움), 그 밖은 미국 단기국채 금리를 씁니다. 1993~2009년 실제 레버리지·인버스 펀드 15개를 2010년 뒤 자료로 맞춰 그 전 해마다 견줘 보니 연방기금 금리 쪽 오차가 더 작았습니다(특히 국채 금리가 급락한 2007~2008년). 금리가 높던 1970~80년대에는 빌린 돈의 이자가 커서, 3배 상품의 하루 수익이 지수 하루 수익의 3배보다 해마다 약 16%p(1970년대)~22%p(1980년대) 낮게 쌓입니다(빌린 몫 2배 × 그 시절 연방기금 금리 평균 7~10% + 보수).</p><p>재료: 나스닥100 지수(1985년 10월~) · 그 전은 나스닥 종합지수(1971년 2월 5일 첫날부터) / S&amp;P 500 배당 재투자 지수(1988년 전은 S&amp;P 500 가격 지수에 로버트 실러의 월 배당을 더해 이어 붙임) / 금리 = 미국 13주 국채 금리·연방기금 금리. 나스닥 지수가 없던 1971년 전은 검증할 수 있는 실제 자료가 없어 쓰지 않으므로, 시뮬레이터 자료는 <b>1971년 2월 5일부터</b>입니다. 상장 후 실제 값과 견준 예상 오차는 연 ±1~2.5%p 입니다(ETF 차트 비교 표의 '예상 오차', 이어 붙인 앞 단계 오차 포함). 각 ETF 상장일(SPY 1993년, XLK 1998년, QQQ 1999년, SOXX 2001년, QLD·SSO 2006년, SPXL·TECL 2008년, TQQQ·SQQQ·SOXL 2010년)부터는 실제 수정주가이고, 상장 첫날의 하루 변화도 재현 식 그대로 이어집니다.</p><p><b>반도체·기술주 섹터</b>: SOXX ≈ 필라델피아 반도체 지수, SOXL ≈ SOXX 의 3배라 반도체 지수가 시작한 <b>1994년 5월 4일부터</b>입니다. XLK(Technology Select Sector Index — 미국 대형 기술주 섹터)는 같은 교차 검증에서 나스닥100 지수(약 0.95배)를 따라가는 식이 골라져 1971년부터 있지만, 기술주 섹터 지수 자체가 아니라 비슷하게 움직이는 지수로 만든 값이라 오차가 연 ±7%p 정도로 큽니다. TECL ≈ XLK 의 3배인데 XLK 재현 식의 오차가 이어 붙이는 한도(연 5%p)를 넘어 XLK 실제 값이 있는 <b>1998년 12월 22일부터</b>입니다. 그 전 날은 가격이 0(자료 없음)이라 그 종목으로는 사고팔지 않습니다.</p></div></details>
 <details class="g-faq"><summary>9sig 는 어떤 전략인가요?</summary><div class="g-ans"><p>제이슨 켈리(Jason Kelly)가 책 『The 3% Signal』에서 소개한 '분기마다 목표선까지 사고파는' 기계적 리밸런싱(3Sig)을, 그가 운영하는 투자 레터에서 3배 레버리지용으로 키운 9Sig 를 따른 것으로 목표선이 분기마다 9%씩 올라갑니다. 오르면 목표를 넘는 몫을 팔아 현금을 쌓고, 떨어지면 그 현금으로 싸게 사서 감정 없이 '싸게 사고 비싸게 팔기'를 되풀이합니다. 폭락 중에는 팔지 않고 버티는 규칙(최근 고점 대비 30% 하락)과 급등 뒤 비중을 되돌리는 규칙이 함께 들어 있고, 설정 창에서 주기(매주·매달·매 분기·매년)·목표 성장률·현금 비중·현금을 둘 종목·적립금 바로 투자 비율·리밸런스 시점까지 바꿔 볼 수 있습니다.</p></div></details>
 <details class="g-faq"><summary>설정을 이것저것 바꿔 가장 좋은 값을 고르면 되나요?</summary><div class="g-ans"><p>과거에 가장 잘 맞았던 설정이 앞으로도 가장 좋다는 보장은 없습니다. 지나간 가격에 딱 맞춘 설정일수록 다른 기간에서는 크게 무너지기 쉬운데, 이를 과최적화라고 합니다. 설정 창의 '과최적화 탐색기'에서 1971·1990·2010년부터 기간을 나눠 같은 설정이 얼마나 꾸준했는지 확인하고, 아래 기간 막대로 진입 시점을 여러 번 바꿔 보거나 '분석 표'로 시작 시점마다의 결과를 함께 보는 것이 좋습니다.</p></div></details>
 <details class="g-faq"><summary>연평균 수익률과 낙폭 옆의 숫자는 무엇인가요?</summary><div class="g-ans"><p>범례 칩의 첫 숫자는 진입부터 청산까지의 연평균 수익률(돈 가중), 두 번째는 그 사이 고점 대비 가장 크게 떨어졌던 비율(최대 낙폭)입니다. 차트를 끌어 구간을 고르면 그 구간의 수익률로 바뀝니다. 설정 창에는 연평균 수익률·시작 금액·끝 금액·최대 낙폭(언제부터 언제까지였는지)과 리밸런스·매매 기록이 나오고, 기록은 CSV 로 내려받을 수 있습니다.</p></div></details>
@@ -35529,12 +35529,12 @@ window.dcAdmin = (function () {
 var SMB = (function () {
   'use strict';
   /* 종목 = 시뮬레이터 SS_ASSETS 와 같은 순서 (팔기·평가 순서가 같아야 소수점까지 같음)
-     · SOXL·SOXX(EXT)는 2026-11-05 맨 뒤에 붙임 — 처음엔 실제 일봉만('SOXL SMA 200 백테스트' — 같은 날 'SOXL SMA 160 백테스트' /soxl-sma160/ 로 이름 바꿈), 같은 날 투자전략 시뮬레이터에도 추가(prices.csv 열 · 선택지)
+     · SOXL·SOXX(EXT)는 2026-11-05 맨 뒤에 붙임 · TECL·XLK 는 2026-11-27 그 뒤에(투자전략 시뮬레이터 선택지 추가 — 이 엔진은 시뮬레이터 자료 'sim' 검증용으로 받기만 · 화면 종목은 C.tk 그대로) — 처음엔 실제 일봉만('SOXL SMA 200 백테스트' — 같은 날 'SOXL SMA 160 백테스트' /soxl-sma160/ 로 이름 바꿈), 같은 날 투자전략 시뮬레이터에도 추가(prices.csv 열 · 선택지)
      · 앞 7개만 쓰는 설정(TQQQ 화면)은 예전과 소수점까지 같은 값 (쓰지 않는 종목은 늘 보유 0 이라 팔기·평가·양도세·분배금 순서에 끼지 않음 — tests/sma200_test.cjs 가 확인) */
-  var EXT = ['soxl', 'soxx'];
+  var EXT = ['soxl', 'soxx', 'tecl', 'xlk'];
   var ASSETS = ['tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq'].concat(EXT);
   var SIM = ASSETS.slice();          /* 시뮬레이터 자료(prices.csv)에 있는 종목 = 전부 */
-  var UNLEV = { tqqq: 'qqq', qld: 'qqq', sso: 'spy', spxl: 'spy', qqq: 'qqq', spy: 'spy', sqqq: 'qqq', soxl: 'soxx', soxx: 'soxx' };
+  var UNLEV = { tqqq: 'qqq', qld: 'qqq', sso: 'spy', spxl: 'spy', qqq: 'qqq', spy: 'spy', sqqq: 'qqq', soxl: 'soxx', soxx: 'soxx', tecl: 'xlk', xlk: 'xlk' };
   var DED = 2500000, RATE = 0.22, Y = 365.25;
   /* 투자전략 시뮬레이터 라이브러리 #43 'SMA 200' 프리셋 (src/stratsim/30-library.js) */
   var PRESET = { sig: 'qqq', win: '200', ul: 'tqqq', cr: '4', eb: '0', xb: '0', oh: '90', cool: '80', ohw: '9', coolw: '7', cb: '0', cs: '0', settle: '1', out: 'cash', din: '15', dout: '15', bg: '40', bga: 'tqqq', bgw: '200', cost: '0.02' };
@@ -35547,22 +35547,22 @@ var SMB = (function () {
   var WIN = opts(rng(10, 300, 10));
   var CONF = [['0', '0 (바로)'], ['2', '2'], ['3', '3'], ['5', '5'], ['10', '10']];
   var OPTS = {
-    sig: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'].map(function (v) { return [v, tk(v)]; }),
+    sig: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'].map(function (v) { return [v, tk(v)]; }),
     win: WIN,
-    ul: ['tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'qqq', 'spy', 'soxl', 'soxx'].map(function (v) { return [v, tk(v)]; }),
+    ul: ['tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'qqq', 'spy', 'soxl', 'soxx', 'tecl', 'xlk'].map(function (v) { return [v, tk(v)]; }),
     eb: BUF, xb: BUF, cb: CONF, cs: CONF,
     settle: [['0', '0 (바로)'], ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']],
     ohw: opts(rng(2, 30, 1)), oh: opts(rng(10, 90, 5), function (v) { return v + ' 이상'; }).concat([['0', '끔 — 강제 매도 안 함']]),
     coolw: opts(rng(2, 30, 1)), cool: opts(rng(10, 90, 5), function (v) { return v + ' 미만'; }).concat([['0', '수준 상관없이 (끔)']]),
-    out: ['cash', 'qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'].map(function (v) { return [v, tk(v)]; }),
+    out: ['cash', 'qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'].map(function (v) { return [v, tk(v)]; }),
     cr: opts(rng(0, 13, 0.5).concat([14, 15, 16, 18, 20]), function (v) { return (+v).toFixed(1) + '%'; }),
     din: DAYS, dout: DAYS,
     cost: opts([0, 0.01, 0.02, 0.03, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 0.75, 1], function (v) { return v + '%'; }),
-    bga: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'].map(function (v) { return [v, tk(v)]; }),
+    bga: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'].map(function (v) { return [v, tk(v)]; }),
     bg: opts(rng(5, 100, 5), function (v) { return '+' + v + '%'; }).concat([['0', '끔']]),
     bgw: WIN
   };
-  /* 받을 수 있는 값 = 시뮬레이터 선택지(OPTS — 2026-11-05 부터 SOXL·SOXX 포함) — 화면마다 보일 종목은 화면이 고름(C.tk) · XOPTS 는 예전 이름(같은 것) */
+  /* 받을 수 있는 값 = 시뮬레이터 선택지(OPTS — 2026-11-05 부터 SOXL·SOXX · 2026-11-27 부터 TECL·XLK 포함) — 화면마다 보일 종목은 화면이 고름(C.tk) · XOPTS 는 예전 이름(같은 것) */
   var XOPTS = OPTS;
   /* 받을 수 없는 값은 프리셋 값으로 (시뮬레이터 ssCleanParams 와 같은 규칙) · base = 빈 칸을 채울 프리셋(없으면 라이브러리 'SMA 200' — SOXL 화면은 자기 기본값) */
   function clean(raw, base) {
@@ -35853,9 +35853,9 @@ var SMB = (function () {
   }
 
   /* ── 자료 만들기 ── */
-  /* 시뮬레이터 자료 data/stratsim/prices.csv (날짜,qqq,tqqq,spy,qld,sso,spxl,sqqq,soxl,soxx) — 시뮬레이터 ssParsePrices 와 같은 규칙(tqqq 칸이 빈 날은 뺌 · 다른 빈칸은 0 · 7열 예전 파일이면 soxl·soxx 0) */
+  /* 시뮬레이터 자료 data/stratsim/prices.csv (날짜,qqq,tqqq,spy,qld,sso,spxl,sqqq,soxl,soxx,tecl,xlk) — 시뮬레이터 ssParsePrices 와 같은 규칙(tqqq 칸이 빈 날은 뺌 · 다른 빈칸은 0 · 7·9열 예전 파일이면 없는 열 0) */
   function fromCsv(text) {
-    var d = [], px = { tqqq: [], qqq: [], spy: [], qld: [], sso: [], spxl: [], sqqq: [], soxl: [], soxx: [] }, REST = ['spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'];
+    var d = [], px = { tqqq: [], qqq: [], spy: [], qld: [], sso: [], spxl: [], sqqq: [], soxl: [], soxx: [], tecl: [], xlk: [] }, REST = ['spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'];
     String(text).split(/\r?\n/).forEach(function (ln) {
       var c0 = ln.charCodeAt(0); if (!(c0 >= 48 && c0 <= 57)) return;
       var c = ln.split(','); if (c[2] == null || c[2] === '') return;
@@ -35977,7 +35977,7 @@ function S2PAGE(C) {
   var PRE_ASSETS = REAL_ASSETS;   /* 상장 전 포함 = 이 종목들의 실제 일봉 앞에 상장 전 재현을 이어 붙임 (SQQQ 는 실제 일봉이 없어 뺌) */
   var TKN = { sig: 1, ul: 1, out: 1, bga: 1 };   /* 종목 칸 — 이 화면이 보일 종목(C.tk)만 · 나머지 칸은 시뮬레이터 선택지 그대로 */
   var PRE_HINT = '상장 전은 재현 가격(ETF 차트 비교·72루틴 화면 \'상장 전 포함\'과 같은 식 — 지수나 같은 지수의 다른 ETF × 배수 · 현금 금리 · 상장 뒤 실제와 맞춘 비용) + 상장 뒤 실제 일봉 · 계산은 실전과 같음(1주 단위 · 수수료 · SEC · 분배금 원천징수) · 재현 구간은 분배금을 가격에 넣어 따로 없음';
-  var NM = { tqqq: 'TQQQ', qqq: 'QQQ', spy: 'SPY', qld: 'QLD', sso: 'SSO', spxl: 'SPXL', sqqq: 'SQQQ', soxl: 'SOXL', soxx: 'SOXX', cash: '현금' };
+  var NM = { tqqq: 'TQQQ', qqq: 'QQQ', spy: 'SPY', qld: 'QLD', sso: 'SSO', spxl: 'SPXL', sqqq: 'SQQQ', soxl: 'SOXL', soxx: 'SOXX', tecl: 'TECL', xlk: 'XLK', cash: '현금' };
   /* 기본값 — 라이브러리 'SMA 200' 조건에서 '팔았을 때 들고 있을 것'만 SPY · 그 현금 이자 0% (사용자 지시 2026-10-22 · SMB.PRESET 은 라이브러리 그대로 — 시뮬레이터 검증용)
      · '상장 전 포함'(상장 전 재현 + 실제 일봉)·'sim'(투자전략 시뮬레이터 검증용)은 자료 칸에서만 고름 — 고를 때 다른 조건은 그대로
        ('상장 전 포함' 단추는 사용자 지시로 뺌 2026-10-22 · 시뮬레이터와 같은 숫자를 보려면 수수료 0.02% · 세금 미포함 · 현금 · 4%)

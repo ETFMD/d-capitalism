@@ -3,19 +3,21 @@
    · 돈 가중 수익률(IRR) · 일별 최대 낙폭.  (빌드가 src/stratsim/*.js 를 한 IIFE 로 묶음)
    계산 규칙은 원본 Strategies Simulator(tqqq.networthcast.com)와 같게 맞춤 — 코드는 새로 씀 */
 
-// 종목 열 순서: 행 = [날짜, tqqq, qqq, spy, qld, sso, spxl, sqqq, soxl, soxx]
+// 종목 열 순서: 행 = [날짜, tqqq, qqq, spy, qld, sso, spxl, sqqq, soxl, soxx, tecl, xlk]
 //   SOXL(반도체 지수 3배)·SOXX(반도체 지수 1배)는 2026-11-05 맨 뒤에 추가 — 앞 7종목의 순서·계산은 그대로(쓰지 않는 종목은 보유 0)
 //   SOXL·SOXX 자료는 1994-05-04(필라델피아 반도체 지수 첫날)부터 · 그 전은 0(자료 없음)
-const SS_ASSETS = ['tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'];
-const SS_COL = { tqqq: 1, qqq: 2, spy: 3, qld: 4, sso: 5, spxl: 6, sqqq: 7, soxl: 8, soxx: 9 };
-const SS_KEY_OF = ['date', 'tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'];
+//   TECL(기술주 섹터 지수 3배)·XLK(Technology Select Sector Index 1배)는 2026-11-27 맨 뒤에 추가 — 앞 9종목 그대로
+//   XLK 상장(1998-12-22) 전 = 나스닥 100 재현(1985-10 전 나스닥 종합 · ETF 차트 비교 재현 식) 1971-02-05 부터 · TECL 은 1998-12-22 부터(그 전은 0)
+const SS_ASSETS = ['tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'];
+const SS_COL = { tqqq: 1, qqq: 2, spy: 3, qld: 4, sso: 5, spxl: 6, sqqq: 7, soxl: 8, soxx: 9, tecl: 10, xlk: 11 };
+const SS_KEY_OF = ['date', 'tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'];
 // 레버리지 종목의 기초(비레버리지) 짝 — 버블 보험 기본 측정 종목
-const SS_UNLEV = { tqqq: 'qqq', qld: 'qqq', sso: 'spy', spxl: 'spy', qqq: 'qqq', spy: 'spy', sqqq: 'qqq', soxl: 'soxx', soxx: 'soxx' };
+const SS_UNLEV = { tqqq: 'qqq', qld: 'qqq', sso: 'spy', spxl: 'spy', qqq: 'qqq', spy: 'spy', sqqq: 'qqq', soxl: 'soxx', soxx: 'soxx', tecl: 'xlk', xlk: 'xlk' };
 const SS_PERIOD_DAYS = { weekly: 5, monthly: 21, quarterly: 63, yearly: 252 };
 
 // 전체 자료 (initData 가 채움)
 const DS = {
-  days: null,      // [{date, tqqq, qqq, spy, qld, sso, spxl, sqqq, soxl, soxx}]
+  days: null,      // [{date, tqqq, qqq, spy, qld, sso, spxl, sqqq, soxl, soxx, tecl, xlk}]
   rows: null,      // 같은 날들을 행 모양으로
   idx: null,       // Map 날짜 → days 위치
   q: null, m: null, w: null, y: null,  // 기간 마지막 거래일 행
@@ -26,9 +28,9 @@ const DS = {
 
 const ssDash = (d8) => d8.slice(0, 4) + '-' + d8.slice(4, 6) + '-' + d8.slice(6, 8);
 
-// data/stratsim/prices.csv (날짜,qqq,tqqq,spy,qld,sso,spxl,sqqq,soxl,soxx) → days
-// tqqq 칸이 빈 날은 뺌 · 다른 종목 빈칸·읽을 수 없는 값은 0 (7열 예전 파일이면 soxl·soxx 는 0)
-const SS_CSV_REST = ['spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx'];   // 4~10번째 칸
+// data/stratsim/prices.csv (날짜,qqq,tqqq,spy,qld,sso,spxl,sqqq,soxl,soxx,tecl,xlk) → days
+// tqqq 칸이 빈 날은 뺌 · 다른 종목 빈칸·읽을 수 없는 값은 0 (7·9열 예전 파일이면 없는 열은 0)
+const SS_CSV_REST = ['spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'];   // 4~12번째 칸
 function ssParsePrices(text) {
   const out = [];
   for (const ln of String(text).split(/\r?\n/)) {
@@ -53,7 +55,7 @@ function ssParseNfci(text) {
   return out;
 }
 
-const ssRowOf = (d) => SS_KEY_OF.map((k) => d[k]);   // [날짜, tqqq, qqq, spy, qld, sso, spxl, sqqq, soxl, soxx]
+const ssRowOf = (d) => SS_KEY_OF.map((k) => d[k]);   // [날짜, tqqq, qqq, spy, qld, sso, spxl, sqqq, soxl, soxx, tecl, xlk]
 
 // 같은 기간(키)의 마지막 거래일만 남김 — 날짜 순서 그대로
 function ssLastPer(days, keyOf) {
@@ -155,7 +157,7 @@ function ssSma(vals, w) {
   return out;
 }
 // 와일더 RSI (첫 값 = 1..w 차이 단순 평균, 그다음 지수 평활)
-//   · 앞쪽 0(자료 없음 — SOXL·SOXX 1994-05 전)은 건너뛰고 첫 가격부터 셈 (2026-11-05 · 0 이 이어지는 구간을 'RSI 100 과열'로 읽지 않게
+//   · 앞쪽 0(자료 없음 — SOXL·SOXX 1994-05 전 · TECL 1998-12 전)은 건너뛰고 첫 가격부터 셈 (2026-11-05 · 0 이 이어지는 구간을 'RSI 100 과열'로 읽지 않게
 //     — 앞 7종목은 1971년부터 0 이 없어 예전과 같은 값 · SMA 200 백테스트 엔진 SMB.rsi 와 같은 식)
 function ssRsi(vals, w) {
   const out = new Array(vals.length).fill(null);
