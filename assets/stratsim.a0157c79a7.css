@@ -528,6 +528,8 @@ html[data-theme="light"] .ss-isel { color-scheme: light; }
 .ss-rfill { position: absolute; top: 12px; height: 6px; border-radius: 6px; background: var(--accent); cursor: grab; }
 .ss-th { position: absolute; top: 6px; width: 18px; height: 18px; margin-left: -9px; border-radius: 50%; background: var(--accent); border: 3px solid var(--bg2); box-shadow: 0 0 0 1px var(--accent); cursor: grab; z-index: 2; }
 .ss-range2:focus-visible .ss-th { box-shadow: 0 0 0 3px rgba(49,130,246,.35); }
+.ss-th:focus { outline: none; }
+.ss-th:focus-visible { box-shadow: 0 0 0 1px var(--accent), 0 0 0 5px rgba(49,130,246,.45); }
 .ss-td { position: absolute; bottom: 34px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; white-space: nowrap; }
 .ss-td > span { font-size: 11px; color: var(--text3); }
 .ss-tdr { display: inline-flex; align-items: center; gap: 4px; }
