@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """[STRATSIM] 투자전략 시뮬레이터 가격 자료 갱신 — data/stratsim/prices.csv · nfci.csv · updated.txt
 
-· 일봉: 야후 파이낸스 수정주가(분할·분배금 반영) QQQ·TQQQ·SPY·QLD·SSO·SPXL·SQQQ·SOXL·SOXX (SOXL·SOXX 2026-11-05 추가 — 맨 뒤 열)
+· 일봉: 야후 파이낸스 수정주가(분할·분배금 반영) QQQ·TQQQ·SPY·QLD·SSO·SPXL·SQQQ·SOXL·SOXX·TECL·XLK (SOXL·SOXX 2026-11-05 · TECL·XLK 2026-11-27 추가 — 맨 뒤 열)
+  - TECL 상장 전은 재료(XLK 실제 일봉)가 1998-12-22 부터라 그 전 줄은 빈칸 · XLK 상장 전은 나스닥 100(1985-10 전 나스닥 종합) 재현이라 1971-02-05 부터
   - SOXL·SOXX 상장 전은 재료(필라델피아 반도체 지수)가 1994-05-04 부터라 그 전 줄은 빈칸(= 자료 없음 · 화면은 0 으로 읽음)
-  - 7열이던 예전 파일도 읽음(새 열은 빈칸으로 시작해 이번 실행에서 채움) · prelist.csv 에 열이 없으면 그 열의 상장 전은 빈칸(경고)
+  - 7열·9열이던 예전 파일도 읽음(새 열은 빈칸으로 시작해 이번 실행에서 채움) · prelist.csv 에 열이 없으면 그 열의 상장 전은 빈칸(경고)
   - 각 ETF 상장일부터는 야후 값으로 바꿔 씀(야후가 고친 지난 값도 따라감)
   - 상장 전 = data/stratsim/prelist.csv(상장 첫날 = 1 인 재현 수준 · scripts/stratsim_prelist.py 가 ETF 차트 비교·무한매수법/72루틴
     백테스트와 같은 재현 식으로 매주 만듦) × 야후 상장 첫날 수정 종가 → 상장 첫날 하루 변화도 재현 식 그대로 이어짐
     (야후가 분배금으로 지난 값을 다시 조정해도 상장 첫날 값에 맞춰 함께 따라감) · prelist.csv 첫날(1971-02-05) 전 줄은 지움
   - 장중에 돌면 오늘의 아직 끝나지 않은 일봉도 넣음(화면이 '아직 끝나지 않은 값'으로 표시) — 마감 뒤 다음 실행이 확정값으로 바꿈
 · NFCI: 미국 시카고 연은 금융 여건 지수(FRED, 주간) — 실패해도 가격 갱신은 그대로
-· 검사: 9종목이 모두 있는 날만 새로 붙임 · 값은 양수·유한(빈칸은 그 열의 처음 앞쪽에만) · 야후 첫 일봉이 상장일과 5일 넘게 다르거나 행이 줄거나
+· 검사: 11종목이 모두 있는 날만 새로 붙임 · 값은 양수·유한(빈칸은 그 열의 처음 앞쪽에만) · 야후 첫 일봉이 상장일과 5일 넘게 다르거나 행이 줄거나
   하루 변동이 ±70% 를 넘으면(분할 미반영 등) 아무것도 쓰지 않고 멈춤
   · 야후가 상장 첫날 값을 빠뜨리면(수정 종가 null 등) 파일 값 × 야후가 지난 값을 다시 조정한 비율로 이음
   · prelist.csv 를 쓸 수 없으면(상장 첫날이 IPO 와 다름·날 빠짐 등) 매시간 갱신은 멈추지 않고 상장 전 줄만 예전처럼 비율만 맞춤(경고)
@@ -28,12 +29,13 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DIR = os.environ.get('STRATSIM_DIR') or os.path.join(ROOT, 'data', 'stratsim')   # 시험할 때만 다른 폴더
 PRICES, NFCI, STAMP = os.path.join(DIR, 'prices.csv'), os.path.join(DIR, 'nfci.csv'), os.path.join(DIR, 'updated.txt')
 PRELIST = os.path.join(DIR, 'prelist.csv')
-COLS = ['qqq', 'tqqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx']   # 파일 열 순서 (date 다음 · soxl·soxx 는 2026-11-05 맨 뒤에 추가)
-OLD7 = COLS[:7]             # 예전 파일 머리줄 (읽기만 — 다음 쓰기부터 9열)
+COLS = ['qqq', 'tqqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk']   # 파일 열 순서 (date 다음 · soxl·soxx 2026-11-05 · tecl·xlk 2026-11-27 맨 뒤에 추가)
+OLD7 = COLS[:7]             # 처음 7열 — 빈칸이 없어야 하는 열 · 예전 파일 머리줄
+OLD_N = (7, 9)              # 예전 파일 열 수 (읽기만 — 다음 쓰기부터 11열)
 DATA_START = '1971-02-05'   # 자료 첫날 = scripts/stratsim_prelist.py START (나스닥 종합지수 첫날) — 바꿀 땐 두 곳 같이
 IPO = {'qqq': '1999-03-10', 'tqqq': '2010-02-11', 'spy': '1993-01-29', 'qld': '2006-06-21', 'sso': '2006-06-21', 'spxl': '2008-11-05', 'sqqq': '2010-02-11',
-       'soxl': '2010-03-11', 'soxx': '2001-07-13'}
-LATE = {'soxl': '1994-05-04', 'soxx': '1994-05-04'}   # 상장 전 재현이 늦게 시작하는 열(그 전 줄은 빈칸) — stratsim_prelist.py LATE 와 같음
+       'soxl': '2010-03-11', 'soxx': '2001-07-13', 'tecl': '2008-12-30', 'xlk': '1998-12-22'}   # 야후 첫 일봉 (TECL 실제 상장 2008-12-17 · 야후 일봉은 12-30 부터)
+LATE = {'soxl': '1994-05-04', 'soxx': '1994-05-04', 'tecl': '1998-12-22'}   # 상장 전 재현이 늦게 시작하는 열(그 전 줄은 빈칸) — stratsim_prelist.py LATE 와 같음
 NOISE = 5e-6
 MAX_MOVE = 0.70
 # 야후는 같은 요청이라도 UA 에 따라 429 로 막을 때가 있어 짧은 UA → 브라우저 UA 를 번갈아 시도
@@ -87,16 +89,17 @@ def fmt(v):
 
 
 def read_prices():
-    """{날짜: [글자 9칸]} — 7열 예전 파일이면 새 열(soxl·soxx)은 '' (빈칸 = 자료 없음)"""
+    """{날짜: [글자 11칸]} — 7열·9열 예전 파일이면 새 열(soxl·soxx · tecl·xlk)은 '' (빈칸 = 자료 없음)"""
     rows = {}
     with open(PRICES, encoding='utf-8') as f:
         rd = csv.reader(f)
         head = next(rd)
         if head == ['date'] + COLS:
             pad = 0
-        elif head == ['date'] + OLD7:
-            pad = len(COLS) - len(OLD7)
-            print(f'  prices.csv: 예전 7열 파일 — 새 열 {COLS[7:]} 을 이번에 채움')
+        elif any(head == ['date'] + COLS[:n] for n in OLD_N):
+            n = len(head) - 1
+            pad = len(COLS) - n
+            print(f'  prices.csv: 예전 {n}열 파일 — 새 열 {COLS[n:]} 을 이번에 채움')
         else:
             raise SystemExit(f'prices.csv 머리줄이 예상과 다름: {head}')
         for r in rd:
@@ -173,7 +176,7 @@ def update_prices(fetch=True):
             print(f'  prelist.csv 첫날 {p0} 전 줄 {len(cut)}개({cut[0]} ~ {cut[-1]})를 지움')
     real, used = {}, {}
     for i, c in enumerate(COLS):
-        fresh = not any(old[d][i] != '' for d in dates_old)   # 이 열이 지금 파일에 없음(7열 → 9열 처음)
+        fresh = not any(old[d][i] != '' for d in dates_old)   # 이 열이 지금 파일에 없음(7열·9열 → 11열 처음)
         if fetch:
             real[c] = yahoo_daily(c.upper())
         else:                       # --prelist-only: 상장 뒤 값은 지금 파일 그대로
@@ -222,7 +225,7 @@ def update_prices(fetch=True):
                 new_vals[d][i] = real[c][d]
             elif d < first:         # 야후에 빠진 상장 초기 날 → 파일 값 × k
                 new_vals[d][i] = o_ * k if o_ is not None else None
-    # 새 날: 9종목이 모두 있는 날만
+    # 새 날: 11종목이 모두 있는 날만
     last = dates_old[-1]
     added = []
     for d in (sorted(set.intersection(*[set(real[c]) for c in COLS])) if fetch else []):
