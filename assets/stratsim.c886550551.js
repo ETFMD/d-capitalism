@@ -12,7 +12,8 @@
 //   SOXL(반도체 지수 3배)·SOXX(반도체 지수 1배)는 2026-11-05 맨 뒤에 추가 — 앞 7종목의 순서·계산은 그대로(쓰지 않는 종목은 보유 0)
 //   SOXL·SOXX 자료는 1994-05-04(필라델피아 반도체 지수 첫날)부터 · 그 전은 0(자료 없음)
 //   TECL(기술주 섹터 지수 3배)·XLK(Technology Select Sector Index 1배)는 2026-11-27 맨 뒤에 추가 — 앞 9종목 그대로
-//   XLK 상장(1998-12-22) 전 = 나스닥 100 재현(1985-10 전 나스닥 종합 · ETF 차트 비교 재현 식) 1971-02-05 부터 · TECL 은 1998-12-22 부터(그 전은 0)
+//   XLK 상장(1998-12-22) 전 = 미국 IT·전자 장비 업종 총수익(파마-프렌치 BusEq × 0.94 · ETF 차트 비교 재현 식 · 2026-11-27 저녁 — 처음엔 나스닥 100) 1971-02-05 부터
+//   · TECL = 그 XLK 재현 × 3(이어 붙이기 한도 안) 이라 TECL 도 1971-02-05 부터 (처음엔 1998-12-22 부터)
 const SS_ASSETS = ['tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'];
 const SS_COL = { tqqq: 1, qqq: 2, spy: 3, qld: 4, sso: 5, spxl: 6, sqqq: 7, soxl: 8, soxx: 9, tecl: 10, xlk: 11 };
 const SS_KEY_OF = ['date', 'tqqq', 'qqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'];
@@ -162,7 +163,7 @@ function ssSma(vals, w) {
   return out;
 }
 // 와일더 RSI (첫 값 = 1..w 차이 단순 평균, 그다음 지수 평활)
-//   · 앞쪽 0(자료 없음 — SOXL·SOXX 1994-05 전 · TECL 1998-12 전)은 건너뛰고 첫 가격부터 셈 (2026-11-05 · 0 이 이어지는 구간을 'RSI 100 과열'로 읽지 않게
+//   · 앞쪽 0(자료 없음 — SOXL·SOXX 1994-05 전)은 건너뛰고 첫 가격부터 셈 (2026-11-05 · 0 이 이어지는 구간을 'RSI 100 과열'로 읽지 않게
 //     — 앞 7종목은 1971년부터 0 이 없어 예전과 같은 값 · SMA 200 백테스트 엔진 SMB.rsi 와 같은 식)
 function ssRsi(vals, w) {
   const out = new Array(vals.length).fill(null);
@@ -1110,7 +1111,7 @@ function ssCustomData() {
     tqqq: d.map((r) => r.tqqq), qqq: d.map((r) => r.qqq), spy: d.map((r) => r.spy),
     qld: d.map((r) => r.qld), sso: d.map((r) => r.sso), spxl: d.map((r) => r.spxl), sqqq: col('sqqq'),
     soxl: col('soxl'), soxx: col('soxx'),   // 2026-11-05 — 1994-05 전은 0(자료 없음)
-    tecl: col('tecl'), xlk: col('xlk'),     // 2026-11-27 — TECL 1998-12-22 전은 0(자료 없음) · XLK 는 1971 부터(상장 전 = 나스닥 100 재현)
+    tecl: col('tecl'), xlk: col('xlk'),     // 2026-11-27 — 둘 다 1971 부터(상장 전 = 파마-프렌치 IT 업종 재현 · TECL = 그 3배)
     nfci: DS.nfci ? DS.nfci.slice() : d.map(() => NaN),
   };
   return _ssCustomData;
@@ -5946,7 +5947,7 @@ function ssCParamLabel(sp, v) { const m = ssCParamOpts(sp).find((o) => String(o.
 function ssCustomPanelHtml(cfg, m, cw) {
   const res = SB.res[cfg.id], err = res && res.error, schema = (res && res.schema) || [];
   let h = '<div class="ss-wip">⚠ 사용자 전략 기능은 아직 다듬는 중이라 결과가 바뀔 수 있습니다.</div>' + ssColorBar()
-    + '<div class="ss-note2">전략 코드가 읽을 수 있는 종목: <code>tqqq</code> <code>qld</code> <code>qqq</code> <code>spy</code> <code>sso</code> <code>spxl</code> <code>sqqq</code> <code>soxl</code> <code>soxx</code> <code>tecl</code> <code>xlk</code>(일별 종가 · SOXL·SOXX 는 1994-05-04, TECL 은 1998-12-22 부터) + <code>nfci</code>(금융 여건 지수). 아무 종목이나 규칙에 쓸 수 있습니다.</div>'
+    + '<div class="ss-note2">전략 코드가 읽을 수 있는 종목: <code>tqqq</code> <code>qld</code> <code>qqq</code> <code>spy</code> <code>sso</code> <code>spxl</code> <code>sqqq</code> <code>soxl</code> <code>soxx</code> <code>tecl</code> <code>xlk</code>(일별 종가 · SOXL·SOXX 는 1994-05-04 부터) + <code>nfci</code>(금융 여건 지수). 아무 종목이나 규칙에 쓸 수 있습니다.</div>'
     + '<button type="button" id="ss-cedit" class="ss-btn ss-ceditb">전략 고치기</button>';
   if (cfg.desc) h += '<div class="ss-desc">' + ssEsc(cfg.desc) + '</div>';
   if (err) h += '<div class="ss-err"><b>실행하지 못했습니다:</b> ' + ssEsc(err) + ' <span class="ss-mut">— \'전략 고치기\'로 코드를 고쳐 주세요.</span></div>';
@@ -6797,7 +6798,7 @@ const SS_PROMPT = `# 백테스트 전략 코드 부탁
   - data.xlk  XLK  (기술주 섹터 지수 — TECL 이 3배로 따르는 지수의 1배 ETF)
   상장 전 기간은 지수로 재현한 값이라 TQQQ·SQQQ 도 1971년 2월 5일(자료 첫날)부터 있습니다.
   SOXL·SOXX 는 반도체 지수가 1994년 5월 4일부터라 그 전 날은 0 입니다(그 기간에는 사고팔 수 없음 — 가격이 0 이면 건너뛰세요).
-  TECL 은 1998년 12월 22일(XLK 상장일)부터라 그 전 날은 0 입니다. XLK 는 상장 전을 나스닥 100 으로 재현해 1971년부터 있습니다.
+  XLK·TECL 은 상장 전을 미국 IT·전자 장비 업종 총수익(파마-프렌치)으로 재현해 1971년 2월 5일부터 있습니다(TECL = 그 재현의 3배).
 - data.nfci : 미국 시카고 연은 금융 여건 지수(NFCI). 주간 발표값을 발표 지연(7일)을 두고 거래일마다 채운 것이라 미리 알 수 없는 값은 없습니다.
   가격이 아니라 지표입니다(0 보다 크면 평소보다 돈줄이 빡빡함, +0.5 넘으면 신용 불안). 자료 첫날 무렵 발표 전 날은 NaN 일 수 있으니 쓰기 전에 isFinite() 로 확인하세요.
 - 종목 id(위 소문자 이름)로 data[id] 처럼 꺼낼 수 있습니다 — 종목을 설정으로 고르게 할 때 이렇게 쓰세요.
