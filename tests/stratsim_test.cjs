@@ -80,7 +80,7 @@ for (const kind of ['9sig', 'sma']) {
     document: { getElementById() { return null; }, addEventListener() {}, querySelector() { return null; }, querySelectorAll() { return []; } }, window: { addEventListener() {} } };
   vm.createContext(lctx);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'stratsim', '30-library.js'), 'utf8') + ';globalThis.__L = { lib: SS_LIBRARY };', lctx);
-  // ⓪ 프리셋 전략(앱 기본 SMA 200 · SOXL SMA 160 · 9sig · 과최적화 후보 …)의 손잡이가 모두 시뮬레이터 선택지 안 — 밖이면 '써 보기'에서 말없이 기본값으로 바뀜 · 번호 겹침 없음
+  // ⓪ 프리셋 전략(앱 기본 SMA 200 · SOXL SMA 160 · TECL SMA 250 · 9sig · 과최적화 후보 …)의 손잡이가 모두 시뮬레이터 선택지 안 — 밖이면 '써 보기'에서 말없이 기본값으로 바뀜 · 번호 겹침 없음
   {
     const all = lctx.__L.lib, pre = all.filter((e) => e.preset);
     for (const e of pre) {
@@ -94,6 +94,10 @@ for (const kind of ['9sig', 'sma']) {
     const sx = all.filter((e) => e.name === 'SOXL SMA 160');
     n++;
     if (sx.length !== 1 || !sx[0].preset || sx[0].preset.params.ul !== 'soxl' || sx[0].preset.params.sig !== 'soxl' || sx[0].preset.params.win !== '160') fail("라이브러리 'SOXL SMA 160' 프리셋 없음·이상: " + JSON.stringify(sx));
+    // TECL 판 (2026-11-28 — TECL 설정 탐색 후보 A · 프로젝트 문서 'TECL-SMA-최적설정-탐색' 의 손잡이 그대로)
+    const tx = all.filter((e) => e.name === 'TECL SMA 250'), TXP = { sig: 'xlk', win: '250', ul: 'tecl', cr: '0', eb: '0', xb: '3', oh: '90', cool: '60', ohw: '7', coolw: '14', cb: '0', cs: '10', settle: '2', out: 'cash', din: '0', dout: '15', bg: '75', bga: 'tecl', bgw: '250', cost: '0.02' };
+    n++;
+    if (tx.length !== 1 || !tx[0].preset || tx[0].preset.type !== 'sma' || JSON.stringify(tx[0].preset.params) !== JSON.stringify(TXP)) fail("라이브러리 'TECL SMA 250' 프리셋 없음·이상: " + JSON.stringify(tx));
   }
   const LIB = lctx.__L.lib.filter((e) => e.code);
   const DSd = M.DS.days, ND = DSd.length;
