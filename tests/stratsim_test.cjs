@@ -97,8 +97,9 @@ for (const kind of ['9sig', 'sma']) {
     const sx = all.filter((e) => e.name === 'SOXL SMA 160');
     n++;
     if (sx.length !== 1 || !sx[0].preset || sx[0].preset.params.ul !== 'soxl' || sx[0].preset.params.sig !== 'soxl' || sx[0].preset.params.win !== '160') fail("라이브러리 'SOXL SMA 160' 프리셋 없음·이상: " + JSON.stringify(sx));
-    // TECL 판 (2026-11-28 — TECL 설정 탐색 후보 A · 프로젝트 문서 'TECL-SMA-최적설정-탐색' 의 손잡이 그대로)
-    const tx = all.filter((e) => e.name === 'TECL SMA 250'), TXP = { sig: 'xlk', win: '250', ul: 'tecl', cr: '0', eb: '0', xb: '3', oh: '90', cool: '60', ohw: '7', coolw: '14', cb: '0', cs: '10', settle: '2', out: 'cash', din: '0', dout: '15', bg: '75', bga: 'tecl', bgw: '250', cost: '0.02' };
+    // TECL 판 (2026-11-28 — TECL 설정 탐색 후보 A · 프로젝트 문서 'TECL-SMA-최적설정-탐색' 의 손잡이 그대로
+    //  · 같은 날 사용자 결정: 거래 비용 0.02 → 0.25% · 양도세 22% · 원천징수 15% 켬)
+    const tx = all.filter((e) => e.name === 'TECL SMA 250'), TXP = { sig: 'xlk', win: '250', ul: 'tecl', cr: '0', eb: '0', xb: '3', oh: '90', cool: '60', ohw: '7', coolw: '14', cb: '0', cs: '10', settle: '2', out: 'cash', din: '0', dout: '15', bg: '75', bga: 'tecl', bgw: '250', cost: '0.25', tax: '22', wht: '15' };
     n++;
     if (tx.length !== 1 || !tx[0].preset || tx[0].preset.type !== 'sma' || JSON.stringify(tx[0].preset.params) !== JSON.stringify(TXP)) fail("라이브러리 'TECL SMA 250' 프리셋 없음·이상: " + JSON.stringify(tx));
   }
@@ -352,6 +353,50 @@ for (const kind of ['9sig', 'sma']) {
     n++;
     if (shot(e, x, '', '', i, m) !== shot(e, x, Q[e - 1][0], Q[x][0], i, m)) fail('분기 번호 ↔ 정확한 날짜(같은 날 ' + Q[e - 1][0] + '~' + Q[x][0] + ') 화면 숫자가 다름');
   }
+}
+// 세금 (2026-11-28 — 양도세 22% · 분배금 미국 원천징수 15% 선택 · SMA 추세 · 그냥 보유 · 엔진 대조는 tests/sma200_test.cjs ⑦)
+{
+  const vm = require('vm'), lx = { console, Math, Date, JSON, Number, String, Array, Object, Boolean, RegExp, Error, Map, Set, parseFloat, parseInt, isFinite, Infinity, NaN,
+    document: { getElementById() { return null; }, addEventListener() {}, querySelector() { return null; }, querySelectorAll() { return []; } }, window: { addEventListener() {} } };
+  vm.createContext(lx);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'stratsim', '30-library.js'), 'utf8') + ';globalThis.__L = { lib: SS_LIBRARY };', lx);
+  const lib = lx.__L.lib, on = lib.filter((e) => e.preset && e.preset.params && (+e.preset.params.tax > 0 || +e.preset.params.wht > 0)).map((e) => e.name).sort();
+  n++;
+  if (JSON.stringify(on) !== JSON.stringify(['SMA 200', 'SOXL SMA 160', 'TECL SMA 250'])) fail('라이브러리 세금 켠 전략 = SMA 200 · SOXL SMA 160 · TECL SMA 250 만: ' + JSON.stringify(on));
+  for (const nm of ['SMA 200', 'SOXL SMA 160', 'TECL SMA 250']) {
+    const e = lib.find((x) => x.name === nm), pp = e && e.preset.params;
+    n++;
+    if (!pp || pp.tax !== '22' || pp.wht !== '15' || pp.cost !== '0.25') fail("라이브러리 '" + nm + "' 세금·비용: " + JSON.stringify(pp));
+  }
+  const d0 = M.ssDefaults('sma'), b0 = M.ssDefaults('bh');
+  n++;
+  if (d0.tax !== '0' || d0.wht !== '0' || b0.tax !== '0' || b0.wht !== '0') fail('새 전략·그냥 보유 기본값은 세금 끔: ' + JSON.stringify([d0, b0]));
+  // 저장 전략이 세금을 켜면 그냥 보유 기본 선도 같은 세금(보이는 것만) · 화면 숫자에 세금 요약
+  const p43 = M.ssCleanParams('sma', lib.find((x) => x.name === 'SMA 200').preset.params);
+  S.saved = [{ id: 't1', type: 'sma', name: 'SMA 200', params: p43, color: '#ffffff', hidden: false }];
+  S.e = M.DS.q.findIndex((r) => r[0] >= '2010-12-31'); S.x = M.DS.q.length - 1; S.iPos = M.ssInitialToPos(100000); S.mPos = M.ssMonthlyToPos(0); S.raise = '0'; S.ed = ''; S.xd = ''; S.editing = null; S.panel = null; S.infl = false; S.tx = null;
+  const bd = M.ssBaseDefaults('bh');
+  n++;
+  if (bd.tax !== '22' || bd.wht !== '15') fail('그냥 보유 기본 선 = 저장 전략 세금: ' + JSON.stringify(bd));
+  M.ssRender();
+  const mt = M.R.metrics['cfg:t1'], mb = M.R.metrics.bh, lb = (M.R.datasets.find((d) => d._key === 'bh') || {}).label || '';
+  n++;
+  if (!mt || !mt.tax || !(mt.tax.paid > 0) || !(mt.tax.whtPaid > 0) || !(mt.tax.liq > 0 && mt.tax.liq <= mt.end * 1.0001) || mt.tax.hold) fail('SMA 200 세금 요약: ' + JSON.stringify(mt && mt.tax));
+  n++;
+  if (!mb || !mb.tax || !mb.tax.hold || !(mb.tax.due > 0) || !(mb.tax.whtPaid > 0) || Math.abs(mb.tax.liq - (mb.end - mb.tax.due)) > 1e-6 || !/세금/.test(lb)) fail('그냥 보유 세금 요약·선 이름: ' + JSON.stringify([mb && mb.tax, lb]));
+  S.saved[0].hidden = true;
+  n++;
+  if (M.ssBaseDefaults('bh').tax !== '0') fail('숨긴 저장 전략은 그냥 보유 기본 선 세금에 안 들어감');
+  M.ssRender();
+  n++;
+  if (M.R.metrics.bh.tax || /세금/.test((M.R.datasets.find((d) => d._key === 'bh') || {}).label || '')) fail('세금 켠 전략을 숨기면 그냥 보유 기본 선은 세금 없음');
+  // 세금 끈 같은 SMA 와 비교: 켜면 끝 금액이 작고 TAX 기록이 생김
+  S.saved = [{ id: 't2', type: 'sma', name: 'a', params: Object.assign({}, p43, { tax: '0', wht: '0' }), color: '#ffffff', hidden: false }, { id: 't3', type: 'sma', name: 'b', params: p43, color: '#eeeeee', hidden: false }];
+  M.ssRender();
+  const ma = M.R.metrics['cfg:t2'], mbb = M.R.metrics['cfg:t3'];
+  n++;
+  if (!(ma && mbb && mbb.end < ma.end && !ma.tax && M.R.cfgSim.t3.log.some((l) => l.action === 'TAX'))) fail('세금 켬 < 끔 · 양도세 기록: ' + JSON.stringify([ma && ma.end, mbb && mbb.end]));
+  S.saved = [];
 }
 console.log('stratsim_test: 검사 ' + n + '개 · 실패 ' + bad + '개');
 process.exit(bad ? 1 : 0);

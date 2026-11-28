@@ -25,6 +25,10 @@ const DS = {
   mIn: null,       // 기간 이름 → [기간 i 에 속한 월 행 위치들]
   nfci: null,      // 거래일마다 NFCI (발표 7일 뒤부터) — 없으면 NaN
   smaD: {}, smaM: {}, rsiD: {}, rsiM: {},
+  taxRaw: null,    // 받은 세금 자료 { divs, fx } (ssSetTaxData)
+  divY: null,      // 종목 → 날짜 위치마다 분배금 ÷ 전날 종가 (상장 뒤 실제 분배금 · 없으면 null)
+  fx: null,        // 날짜 위치마다 원/달러 (없으면 null → ssFx 가 1,300원)
+  whtF: {},        // '종목|원천징수율' → 날짜 위치마다 누적 원천징수 배수 (그냥 보유 선 · ssWhtFactor)
 };
 
 const ssDash = (d8) => d8.slice(0, 4) + '-' + d8.slice(4, 6) + '-' + d8.slice(6, 8);
@@ -107,6 +111,59 @@ function ssAlignNfci(days, weekly) {
   });
 }
 
+// ── 세금 자료 (2026-11-28 — 양도세 22% · 분배금 미국 원천징수 15% 선택) ──
+// 분배금: data/stratsim/divs.csv (날짜,종목,주당 분배금,전날 종가 — 야후 상장 뒤 실제 분배금 · scripts/update_stratsim.py)
+//   → DS.divY[종목] = 날짜 위치마다 '분배금 ÷ 전날 종가'(없으면 0). 가격 자료가 야후 수정주가(분배금 재투자)라 원천징수 몫만 따로 뺌
+//   · 상장 전 재현 구간은 분배금 기록이 없음(사용자 결정 2026-11-28 — 상장 뒤 실제 분배금만)
+// 원/달러: data/usdkrw.json (한국은행 매매기준율 · 1990-01-03 ~) → DS.fx[날짜 위치] = 그날 또는 그 전 마지막 값 · 첫 값 전 날 = 첫 값
+//   (SMA 200 백테스트 엔진 SMB·자동매매 프로그램과 같은 규칙)
+function ssParseDivs(text) {
+  const out = [];
+  for (const ln of String(text || '').split(/\r?\n/)) {
+    const c0 = ln.charCodeAt(0);
+    if (!(c0 >= 48 && c0 <= 57)) continue;
+    const c = ln.split(','), dv = parseFloat(c[2]), pc = parseFloat(c[3]);
+    if (!c[1] || !(dv > 0) || !(pc > 0)) continue;
+    out.push({ date: ssDash(c[0]), k: c[1].trim().toLowerCase(), y: dv / pc });
+  }
+  return out;
+}
+function ssParseFx(j) {
+  if (!j || !Array.isArray(j.c) || !Array.isArray(j.dd) || !Number.isFinite(+j.d0)) return null;
+  const n = j.c.length, d = new Array(n);
+  let x = +j.d0;
+  for (let i = 0; i < n; i++) { if (i) x += j.dd[i - 1]; d[i] = new Date(x * 864e5).toISOString().slice(0, 10); }
+  return { d, c: j.c.map(Number) };
+}
+// 받은 세금 자료를 지금 달력(DS.days)에 맞춤 — 자료를 다시 읽으면(ssInitData) 다시 맞춤
+function ssSetTaxData(divs, fx) {
+  DS.taxRaw = { divs: divs || null, fx: fx || null };
+  ssAlignTax();
+}
+function ssAlignTax() {
+  const R = DS.taxRaw;
+  DS.divY = null; DS.fx = null;
+  if (!R || !DS.days) return;
+  const N = DS.days.length;
+  if (R.divs && R.divs.length) {
+    DS.divY = {};
+    for (const e of R.divs) {
+      const i = DS.idx.get(e.date);
+      if (i == null || SS_COL[e.k] == null) continue;   // 달력에 없는 날(휴장 차이) · 모르는 종목은 건너뜀
+      (DS.divY[e.k] = DS.divY[e.k] || new Float64Array(N))[i] += e.y;
+    }
+  }
+  if (R.fx && R.fx.d.length) {
+    const F = R.fx, out = new Float64Array(N);
+    let k = 0;
+    for (let i = 0; i < N; i++) { const d = DS.days[i].date; while (k + 1 < F.d.length && F.d[k + 1] <= d) k++; out[i] = F.c[k]; }
+    DS.fx = out;
+  }
+}
+// 원/달러 — 자료가 없으면(받지 못함) 1,300원으로 셈하고 화면이 알림(DS.fx 없음)
+const SS_FX_FALLBACK = 1300;
+const ssFx = (i) => (DS.fx ? DS.fx[Math.max(0, Math.min(DS.fx.length - 1, i))] : SS_FX_FALLBACK);
+
 function ssInitData(days, nfciWeekly) {
   DS.days = days;
   DS.rows = days.map(ssRowOf);
@@ -118,6 +175,8 @@ function ssInitData(days, nfciWeekly) {
   DS.mIn = { weekly: ssMonthsWithin(DS.w), monthly: ssMonthsWithin(DS.m), quarterly: ssMonthsWithin(DS.q), yearly: ssMonthsWithin(DS.y) };
   DS.nfci = nfciWeekly && nfciWeekly.length ? ssAlignNfci(days, nfciWeekly) : days.map(() => NaN);
   DS.smaD = {}; DS.smaM = {}; DS.rsiD = {}; DS.rsiM = {};
+  DS.whtF = {};
+  ssAlignTax();
 }
 const ssPeriodRows = (name) => (name === 'weekly' ? DS.w : name === 'monthly' ? DS.m : name === 'yearly' ? DS.y : name === 'quarterly' ? DS.q : null);
 

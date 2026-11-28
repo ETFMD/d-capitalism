@@ -19,8 +19,8 @@ const SS_AN_RATE = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 7, 8, 10,
 const SS_AN_PILLS = { '9sig': ['ul', 'g', 'per', 'cash', 'cr', 'cd', 'cw', 'sp', 'bp', 'park'], sma: ['ul', 'sig', 'win', 'cr', 'eb', 'xb', 'oh', 'cool', 'out', 'din', 'dout', 'bg', 'bga'] };
 const SS_AN_PLAB = {
   '9sig': { cash: '현금 비중', park: '안전 몫', ul: '종목', cr: '현금 이자', per: '리밸런스', g: '목표 성장', cd: '폭락 기준', cw: '고점 기간', st: '급등 뒤 비중', sp: '급등 기준', bp: '매수 한도', cost: '거래 비용', dep: '적립금 바로 투자', rp: '리밸런스 시점', tc: '목표 기준' },
-  sma: { ul: '보유 종목', sig: '신호 종목', win: '이동평균(일)', eb: '살 때 여유', xb: '팔 때 여유', cb: '매수 확인(일)', cs: '매도 확인(일)', settle: '결제 대기(일)', ohw: '과열 RSI 기간', oh: 'RSI 과열 매도', coolw: '매수 RSI 기간', cool: 'RSI 매수 조건', out: '나와 있을 때', cr: '현금 이자', din: '나눠 사기', dout: '나눠 옮기기', cost: '거래 비용', bga: '버블 기준 종목', bg: '버블 보험', bgw: '버블 이동평균' },
-  bh: { ul: '종목' },
+  sma: { ul: '보유 종목', sig: '신호 종목', win: '이동평균(일)', eb: '살 때 여유', xb: '팔 때 여유', cb: '매수 확인(일)', cs: '매도 확인(일)', settle: '결제 대기(일)', ohw: '과열 RSI 기간', oh: 'RSI 과열 매도', coolw: '매수 RSI 기간', cool: 'RSI 매수 조건', out: '나와 있을 때', cr: '현금 이자', din: '나눠 사기', dout: '나눠 옮기기', cost: '거래 비용', bga: '버블 기준 종목', bg: '버블 보험', bgw: '버블 이동평균' , tax: '양도세', wht: '원천징수' },
+  bh: { ul: '종목', tax: '양도세', wht: '원천징수' },
 };
 // 칸 색: 못함(파랑) → 비슷(회청) → 나음(빨강)
 const SS_AN_DN = [49, 130, 246], SS_AN_MID = [71, 85, 105], SS_AN_UP = [240, 68, 82];
@@ -109,7 +109,8 @@ function ssAnSim(inp, qi0, qi1, needs) {
   const out = { log: null, bh: null, sma: null };
   if (needs.n9) {
     const p9 = S.base['9sig'];
-    const r = ssRun9(Object.assign({ initial: inp.initial, monthly: inp.monthly, raise: inp.raise, rate: ssRate9(p9), baseRate: inp.rate, qi0, qi1, period: p9.per || 'quarterly' }, ssOpts9(p9)));
+    const r = ssRun9(Object.assign({ initial: inp.initial, monthly: inp.monthly, raise: inp.raise, rate: ssRate9(p9), baseRate: inp.rate, qi0, qi1, period: p9.per || 'quarterly',
+      bhWht: ssBhTaxOf(ssBaseDefaults('bh')).wht }, ssOpts9(p9)));   // 그냥 보유 비교 = 본 화면 기본 선과 같은 원천징수(세금 켠 저장 전략을 따름 · 2026-11-28)
     out.log = r.log; out.bh = r.bh;
   }
   if (needs.sma) {
@@ -139,7 +140,7 @@ function ssAnCfgPoints(cfg, inp, qi0, qi1) {
   }
   if (cfg.type === 'sma') return ssRunSma(Object.assign(base, { rate: ssRate9(p) }, ssOptsSma(p))).points.map((pt) => ({ date: pt.date, value: pt.value }));
   if (cfg.type === 'bh') {
-    const r = ssRun9(Object.assign(base, { rate: 0 })), key = SS_COL[p.ul] ? p.ul : 'tqqq';
+    const r = ssRun9(Object.assign(base, { rate: 0, bhWht: ssBhTaxOf(p).wht })), key = SS_COL[p.ul] ? p.ul : 'tqqq';
     return (r.bh[key] || []).map((pt) => ({ date: pt.date, value: pt.value }));
   }
   if (cfg.type === 'invested') {

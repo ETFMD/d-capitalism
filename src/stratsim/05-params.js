@@ -12,6 +12,9 @@ const SS_RATE_OPTS = ssOpts([...ssRange(0, 13, 0.5), 14, 15, 16, 18, 20], (v) =>
 const SS_COST_OPTS = ssOpts([0, 0.01, 0.02, 0.03, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 0.75, 1], (v) => v + '%');
 const SS_WIN_OPTS = ssOpts(ssRange(10, 300, 10));
 const SS_BUF_OPTS = ssOpts([...ssRange(0, 2, 0.1), 2.5, 3, 3.5, 4, 4.5, 5, ...ssRange(6, 50, 1)], (v) => v + '%');
+// 세금 (2026-11-28) — 양도세 22% (해외주식 · 해마다 250만 원 공제 · 이듬해 5월 납부) · 분배금 미국 원천징수 15% (상장 뒤 실제 분배금)
+const SS_TAX_OPTS = [['0', '끔'], ['22', '22%']];
+const SS_WHT_OPTS = [['0', '끔'], ['15', '15%']];
 const SS_DAYS_OPTS = ssOpts([...ssRange(0, 15, 1), 20, 25, 30, 42, 63, 84, 105, 126],
   (v) => (v === 0 ? '즉시' : v === 42 ? '2개월' : v === 63 ? '3개월' : v === 84 ? '4개월' : v === 105 ? '5개월' : v === 126 ? '6개월' : v + '일'));
 
@@ -56,9 +59,15 @@ const SS_PSMA = [
   { k: 'bga', def: 'tqqq', opts: ['qqq', 'spy', 'tqqq', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'].map((v) => [v, SS_TICK(v)]) },
   { k: 'bg', def: '40', opts: [...ssOpts(ssRange(5, 100, 5), (v) => '+' + v + '%'), ['0', '끔']] },
   { k: 'bgw', def: '200', opts: SS_WIN_OPTS },
+  { k: 'tax', def: '0', opts: SS_TAX_OPTS },
+  { k: 'wht', def: '0', opts: SS_WHT_OPTS },
 ];
 
-const SS_PBH = [{ k: 'ul', def: 'tqqq', opts: ['tqqq', 'qld', 'qqq', 'spy', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'].map((v) => [v, SS_TICK(v)]) }];
+const SS_PBH = [
+  { k: 'ul', def: 'tqqq', opts: ['tqqq', 'qld', 'qqq', 'spy', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk'].map((v) => [v, SS_TICK(v)]) },
+  { k: 'tax', def: '0', opts: SS_TAX_OPTS },
+  { k: 'wht', def: '0', opts: SS_WHT_OPTS },
+];
 // 현금 복리: r = 금리 슬라이더 위치(0~1000, 기본 200 = 4%)
 const SS_PINV = [{ k: 'r', def: '200', opts: null }];
 
@@ -134,6 +143,12 @@ function ssOptsSma(p) {
     confirmBuy: +p.cb || 0,
     confirmSell: +p.cs || 0,
     settle: +p.settle || 0,
+    taxRate: (+p.tax || 0) / 100,
+    whtRate: (+p.wht || 0) / 100,
   };
 }
+// 그냥 보유의 세금 손잡이 → 소수 { tax, wht }
+const ssBhTaxOf = (p) => ({ tax: (+(p && p.tax) || 0) / 100, wht: (+(p && p.wht) || 0) / 100 });
+// 세금을 켠 설정인가 (SMA · 그냥 보유)
+const ssTaxOn = (p) => !!(p && ((+p.tax || 0) > 0 || (+p.wht || 0) > 0));
 const ssRate9 = (p) => (+p.cr || 0) / 100;

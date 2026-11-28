@@ -10,6 +10,9 @@
     백테스트와 같은 재현 식으로 매주 만듦) × 야후 상장 첫날 수정 종가 → 상장 첫날 하루 변화도 재현 식 그대로 이어짐
     (야후가 분배금으로 지난 값을 다시 조정해도 상장 첫날 값에 맞춰 함께 따라감) · prelist.csv 첫날(1971-02-05) 전 줄은 지움
   - 장중에 돌면 오늘의 아직 끝나지 않은 일봉도 넣음(화면이 '아직 끝나지 않은 값'으로 표시) — 마감 뒤 다음 실행이 확정값으로 바꿈
+· 분배금(2026-11-28 — 시뮬레이터 '분배금 미국 원천징수 15%'·양도세 원가): data/stratsim/divs.csv = 날짜,종목,주당 분배금,전날 종가
+  - 같은 야후 응답의 분배금(events.dividends · 분할 반영)과 전날 종가(quote close · 분할만 반영) — 원천징수 몫 = 분배금 ÷ 전날 종가
+  - 상장 뒤 실제 분배금만(상장 전 재현 구간은 기록 없음) · 받지 못한 종목은 예전 줄을 그대로 둠 · 바뀔 때만 씀
 · NFCI: 미국 시카고 연은 금융 여건 지수(FRED, 주간) — 실패해도 가격 갱신은 그대로
 · 검사: 11종목이 모두 있는 날만 새로 붙임 · 값은 양수·유한(빈칸은 그 열의 처음 앞쪽에만) · 야후 첫 일봉이 상장일과 5일 넘게 다르거나 행이 줄거나
   하루 변동이 ±70% 를 넘으면(분할 미반영 등) 아무것도 쓰지 않고 멈춤
@@ -28,6 +31,8 @@ from zoneinfo import ZoneInfo
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DIR = os.environ.get('STRATSIM_DIR') or os.path.join(ROOT, 'data', 'stratsim')   # 시험할 때만 다른 폴더
 PRICES, NFCI, STAMP = os.path.join(DIR, 'prices.csv'), os.path.join(DIR, 'nfci.csv'), os.path.join(DIR, 'updated.txt')
+DIVS = os.path.join(DIR, 'divs.csv')
+DIV_GOT = {}                # 종목 → [(날짜, 분배금, 전날 종가)] (이번 실행에 야후에서 받은 것 — update_prices 가 채움)
 PRELIST = os.path.join(DIR, 'prelist.csv')
 COLS = ['qqq', 'tqqq', 'spy', 'qld', 'sso', 'spxl', 'sqqq', 'soxl', 'soxx', 'tecl', 'xlk']   # 파일 열 순서 (date 다음 · soxl·soxx 2026-11-05 · tecl·xlk 2026-11-27 맨 뒤에 추가)
 OLD7 = COLS[:7]             # 처음 7열 — 빈칸이 없어야 하는 열 · 예전 파일 머리줄
@@ -57,8 +62,9 @@ def get(url, tries=3, ua=None):
     raise err
 
 
-def yahoo_daily(sym):
-    """야후 v8 차트 → {YYYY-MM-DD: 수정 종가} (거래소 시간대 날짜)"""
+def yahoo_daily(sym, divs=None):
+    """야후 v8 차트 → {YYYY-MM-DD: 수정 종가} (거래소 시간대 날짜)
+    divs(리스트)를 주면 분배금을 [(날짜, 주당 분배금, 전날 종가)]로 채움 — 같은 응답의 분할 반영 값끼리"""
     now = int(time.time()) + 86400
     q = f'period1=0&period2={now}&interval=1d&events=div%7Csplit&includeAdjustedClose=true&includePrePost=false'
     err = None
@@ -78,6 +84,34 @@ def yahoo_daily(sym):
                 out[datetime.datetime.fromtimestamp(t, tz).strftime('%Y-%m-%d')] = float(v)
             if len(out) < 100:
                 raise RuntimeError(f'{sym}: 일봉이 너무 적음 ({len(out)})')
+            if divs is not None:
+                try:
+                    cl = (((res.get('indicators') or {}).get('quote') or [{}])[0] or {}).get('close') or []
+                    closes = []
+                    for t, v in zip(ts, cl):
+                        if v is not None and math.isfinite(v) and v > 0:
+                            closes.append((datetime.datetime.fromtimestamp(t, tz).strftime('%Y-%m-%d'), float(v)))
+                    closes.sort()
+                    cdates = [d for d, _ in closes]
+                    import bisect
+                    for e in ((res.get('events') or {}).get('dividends') or {}).values():
+                        amt = float(e.get('amount') or 0)
+                        if not (amt > 0 and math.isfinite(amt)):
+                            continue
+                        d = datetime.datetime.fromtimestamp(int(e['date']), tz).strftime('%Y-%m-%d')
+                        j = bisect.bisect_left(cdates, d)
+                        if j <= 0 or j >= len(cdates) or cdates[j] != d:
+                            continue            # 분배락일이 일봉에 없음 · 첫날 — 전날 종가를 모름
+                        pc = closes[j - 1][1]
+                        if not (0 < amt / pc < 0.5):
+                            print(f'::warning::{sym} {d} 분배금 {amt} / 전날 종가 {pc} 가 이상 — 건너뜀')
+                            continue
+                        divs.append((d, amt, pc))
+                    divs.sort()
+                except Exception as e2:     # 분배금은 덤 — 가격 갱신은 그대로
+                    print(f'  {sym}: 분배금 읽기 실패 ({e2}) — divs.csv 의 이 종목 줄은 그대로')
+                    divs.clear()
+                    divs.append(None)
             return out
         except Exception as e:
             err = e
@@ -178,7 +212,10 @@ def update_prices(fetch=True):
     for i, c in enumerate(COLS):
         fresh = not any(old[d][i] != '' for d in dates_old)   # 이 열이 지금 파일에 없음(7열·9열 → 11열 처음)
         if fetch:
-            real[c] = yahoo_daily(c.upper())
+            dl = []
+            real[c] = yahoo_daily(c.upper(), dl)
+            if dl != [None]:
+                DIV_GOT[c] = [x for x in dl if x[0] >= IPO[c]]
         else:                       # --prelist-only: 상장 뒤 값은 지금 파일 그대로
             if fresh:               # 새 열은 야후를 받아야 채울 수 있음 → 이번엔 빈칸 그대로(다음 매시간 갱신이 채움)
                 print(f'  {c}: 지금 파일에 없는 새 열 — --prelist-only 에서는 건너뜀')
@@ -303,6 +340,33 @@ def update_prices(fetch=True):
     return True
 
 
+def update_divs():
+    """divs.csv — 이번에 받은 종목은 새 값, 받지 못한 종목은 예전 줄 그대로 · 바뀔 때만 씀 (True = 바뀜)"""
+    old = {}
+    if os.path.exists(DIVS):
+        for ln in open(DIVS, encoding='utf-8').read().splitlines()[1:]:
+            c = ln.split(',')
+            if len(c) >= 4 and c[1]:
+                old.setdefault(c[1], []).append(ln)
+    rows = []
+    for c in COLS:
+        if c in DIV_GOT:
+            rows += [f"{d.replace('-', '')},{c},{fmt(a)},{fmt(pc)}" for d, a, pc in DIV_GOT[c]]
+        else:
+            rows += old.get(c, [])
+    rows.sort()
+    text = 'date,asset,div,prev_close\n' + ''.join(r + '\n' for r in rows)
+    cur = open(DIVS, encoding='utf-8').read() if os.path.exists(DIVS) else ''
+    if text == cur:
+        print(f'divs.csv: 바뀐 것 없음 ({len(rows)}줄)')
+        return False
+    with open(DIVS + '.tmp', 'w', encoding='utf-8', newline='\n') as f:
+        f.write(text)
+    os.replace(DIVS + '.tmp', DIVS)
+    print(f'divs.csv: 저장 — {len(rows)}줄 (받은 종목 {len(DIV_GOT)}개 · 그대로 둔 종목 {len([c for c in COLS if c not in DIV_GOT and c in old])}개)')
+    return True
+
+
 def update_nfci():
     raw = get('https://fred.stlouisfed.org/graph/fredgraph.csv?id=NFCI', ua=UA_FRED).decode('utf-8', 'replace')
     rows = []
@@ -333,6 +397,8 @@ def update_nfci():
 def main():
     only = '--prelist-only' in sys.argv[1:]
     ch = update_prices(fetch=not only)
+    if not only and DIV_GOT:
+        ch = update_divs() or ch
     if not only:
         try:
             ch = update_nfci() or ch

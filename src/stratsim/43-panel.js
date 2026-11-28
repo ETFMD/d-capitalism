@@ -25,7 +25,7 @@ function ssSetParam(type, owner, k, v) {
 // ── 열기·닫기 ──
 function ssOpenBasePanel(type, keep) {
   S.editing = null; S.pendingName = null;
-  if (!keep) S.base[type] = ssDefaults(type);   // 열 때는 늘 기본값 사본에서 시작 (공유 링크로 열린 창은 링크 값 그대로)
+  if (!keep) S.base[type] = ssBaseDefaults(type);   // 열 때는 늘 기본값 사본에서 시작 (공유 링크로 열린 창은 링크 값 그대로)
   S.hide[type] = false;                      // 숨겨 둔 선이면 다시 보이게
   S.panel = type;
   ssShowPanel();
@@ -59,7 +59,7 @@ function ssClosePanel() {
 }
 // 기본 패널에서 바꾼 것이 있으면 닫기 전에 물어봄 (저장 전략은 바로바로 저장되므로 묻지 않음)
 function ssAttemptClose() {
-  if (S.panel && !ssParamsEqual(S.panel, S.base[S.panel], ssDefaults(S.panel))) {
+  if (S.panel && !ssParamsEqual(S.panel, S.base[S.panel], ssBaseDefaults(S.panel))) {
     const type = S.panel;
     ssDialog('바꾼 설정을 저장할까요?', '<b>' + ssEsc(SS_TYPE_NAMES[type]) + '</b> 설정을 바꿨습니다. 기본 선은 바꾼 값을 기억하지 않아 닫으면 기본값으로 돌아갑니다. 새 전략으로 저장해 둘까요?',
       [{ t: '그냥 닫기', fn: () => ssClosePanel() }, { t: '저장', pri: true, fn: () => { ssSaveFromBase(type); ssClosePanel(); } }]);
@@ -152,10 +152,21 @@ function ssCtlsSma(owner) {
     + '<p class="ss-line">사고팔 때마다 수수료·슬리피지 ' + c('cost') + ' 가 듭니다.' + ssTipI('거래마다 드는 비용 — 증권사 수수료 + 슬리피지(예상 가격과 실제 체결 가격의 차이).\n\n사고팔 때 모두 붙으므로 종목을 갈아타면 두 번 냅니다.\n\n예: 0.1% 면 $10,000 매수가 $9,990 어치가 됩니다. 자주 거래하는 전략일수록 여러 번 내므로, 올려 보면 현실 마찰이 결과를 얼마나 깎는지 보입니다.') + '</p>'
     + '<div class="ss-cgt">버블 보험' + ssTipI('거품 브레이크. 시장이 평균선 위로 아주 멀리 달아났을 때(1999년·2021년 말처럼) 3배 종목을 들고 있는 것은 특히 위험합니다 — 그래서 이 규칙은 주 신호와 상관없이 전부 현금으로 미리 팝니다. 고른 종목이 자기 이동평균보다 얼마나 위에 있는지로 재며, 위의 \'팔았을 때 들고 있을 것\'(보통 매도 때만 적용)과는 따로입니다.') + '</div>'
     + '<p class="ss-line">' + c('bga') + ' 가 ' + c('bgw') + '일 이동평균보다 ' + c('bg') + ' 위면 전부 현금으로 팝니다.</p>'
+    + ssTaxLines(c)
     + '</div>';
 }
+// 세금 두 줄 (SMA · 그냥 보유 같은 글 · 2026-11-28)
+const SS_TAX_TIP = '해외주식 양도세 — 판 금액에서 산 금액을 뺀 원화 손익(사고판 날 결제일의 원/달러)을 해마다 모아 250만 원을 빼고 이 비율만큼, 이듬해 5월 1일(휴장이면 다음 거래일)에 계좌에서 냅니다. 현금이 모자라면 그날 종가에 모자란 만큼 팔아서 냅니다.\n\n자동매매 프로그램·SMA 200 백테스트와 같은 계산입니다(선입선출). 끝 날 아직 안 낸 세금과 전부 팔면 낼 세금은 아래 통계 칸에 따로 보입니다.\n\n원/달러는 한국은행 매매기준율(1990년부터 — 그 전은 1990년 첫 값).';
+const SS_WHT_TIP = '미국 ETF 분배금에서 미국이 떼는 세금(한미 조세 조약 15%).\n\n가격 자료는 분배금을 그날 다시 산 것으로 친 수정주가라, 분배락일마다 그 분배금 몫의 15%만큼 주식을 줄입니다.\n\nETF 상장 뒤 실제 분배금만 셉니다 — 상장 전 재현 구간(예: TQQQ 2010년 전)은 분배금 기록이 없어 떼지 않습니다.';
+function ssTaxLines(c) {
+  return '<div class="ss-cgt">세금</div>'
+    + '<p class="ss-line">팔아서 남긴 이익에 양도세 ' + c('tax') + ' 를 냅니다.' + ssTipI(SS_TAX_TIP) + '</p>'
+    + '<p class="ss-line">분배금에서 미국 원천징수 ' + c('wht') + ' 를 뗍니다.' + ssTipI(SS_WHT_TIP) + '</p>';
+}
 function ssCtlsBh(owner) {
-  return '<div class="ss-cg"><p class="ss-line">진입할 때 ' + ssCtl('bh', owner, 'ul') + ' 를 사고, 매달 적립금도 계속 사 모으며 팔지 않습니다.' + ssTipI('시작 금액을 진입일에 사고 매달 적립금도 같은 종목을 더 삽니다. 아무것도 팔지 않습니다.') + '</p></div>';
+  return '<div class="ss-cg">' + ssTaxLines((k) => ssCtl('bh', owner, k)).replace('팔아서 남긴 이익에', '끝 날 전부 판다고 보고 이익에')
+    + '<p class="ss-note">팔지 않으므로 해마다 내는 양도세는 없습니다 — 끝 날 한 번에 다 판다고 보고 낼 세금을 아래 통계 칸에 보여 줍니다. 저장 전략(SMA·그냥 보유) 중 세금을 켠 것이 있으면 이 기본 선도 같은 세금으로 그립니다.</p></div>'
+    + '<div class="ss-cg"><p class="ss-line">진입할 때 ' + ssCtl('bh', owner, 'ul') + ' 를 사고, 매달 적립금도 계속 사 모으며 팔지 않습니다.' + ssTipI('시작 금액을 진입일에 사고 매달 적립금도 같은 종목을 더 삽니다. 아무것도 팔지 않습니다.') + '</p></div>';
 }
 function ssCtlsInv(owner) {
   const p = ssParamsOf('invested', owner);
@@ -178,7 +189,19 @@ function ssStatsGrid(m) {
     + ssStatCard('시작 금액', 'dollar', ssMoney(Math.round(m.start || 0)), '', '', '고른 기간이 시작될 때의 평가액 — 여기서 처음 투자한 금액입니다.')
     + ssStatCard('끝 금액', 'flag', ssMoney(Math.round(m.end || 0)), '', '', '고른 기간이 끝날 때의 평가액. 차트에서 이 선이 끝나는 자리입니다.')
     + ssStatCard('최대 낙폭', 'trendDown', ssDD(m.maxDD), 'ss-dn', ssDDRange(m.ddPeak, m.ddTrough), '기간 중 고점에서 저점까지 가장 크게 떨어진 비율 — 매일 종가로 다시 평가하므로 분기 중간의 폭락도 잡힙니다. 아래 날짜가 언제였는지입니다.')
+    + (m.tax ? ssTaxCard(m.tax) : '')
     + '</div>';
+}
+
+// 세금 칸 — 끝 날 전부 팔고 세금까지 낸 뒤 금액 · 낸 양도세·원천징수 · 아직 안 낸 양도세
+function ssTaxCard(t) {
+  const sub = [];
+  if (t.rate > 0 && !t.hold) sub.push('낸 양도세 ' + ssMoney(Math.round(t.paid || 0)));
+  if (t.wht > 0) sub.push('원천징수 ' + ssMoney(Math.round(t.whtPaid || 0)) + (t.divs ? '' : ' (분배금 자료 없음)'));
+  if (t.rate > 0) sub.push((t.hold ? '끝에 팔면 낼 양도세 ' : '아직 안 낸 양도세 ') + ssMoney(Math.round(t.due || 0)) + (t.fx ? '' : ' (원/달러 자료 없어 1,300원)'));
+  const tip = '끝 날 종가에 전부 팔고(거래 비용 포함) 아직 안 낸 양도세까지 낸 뒤 남는 금액입니다' + (t.hold ? ' — 그냥 보유는 팔지 않으므로 끝 날 한 번에 판다고 보고 그해 250만 원을 한 번 뺍니다.' : ' — 지난해 세금 중 아직 안 낸 것(5월 전) + 올해 판 이익 + 끝 날 팔 때 생기는 이익을 합쳐 250만 원을 빼고 셉니다.')
+    + '\n\n차트의 선과 끝 금액은 그날까지 실제로 낸 세금만 뺀 평가액입니다.';
+  return ssStatCard('끝에 다 팔면 (세후)', 'dollar', ssMoney(Math.round(t.liq || 0)), '', sub.join(' · '), tip).replace('<div class="ss-stat">', '<div class="ss-stat ss-wide">');
 }
 
 // ── 기록 표 ──
@@ -242,6 +265,7 @@ function ssSmaRowInfo(log, i, ul) {
     case 'ENTER': case 'EXIT': label = swap(from, held); break;
     case 'BG-GTFO': label = '버블: ' + T(from) + ' 매도 → 현금'; break;
     case 'BG-CLEAR': label = '버블 끝: ' + T(held) + ' 매수'; break;
+    case 'TAX': label = '양도세 ' + ssMoney(Math.round(l.tax || 0)) + ' 냄'; break;
     case 'START': label = '시작'; break;
     case 'END': label = '기간 끝'; break;
     default: label = l.action;

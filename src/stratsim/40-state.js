@@ -94,7 +94,20 @@ function ssApplyMain(o, fromLink) {
 }
 // 기본 선(그냥 보유·현금 복리)의 계산값: 그 설정 창을 열어 고치는 중일 때만 바꾼 값, 나머지 때는 늘 표준값
 // (원본과 같음 — 주소에 bu·r 만 있고 창이 닫혀 있으면 표준 TQQQ·4% 로 그림)
-function ssBaseEff(type) { return S.panel === type ? S.base[type] : ssDefaults(type); }
+function ssBaseEff(type) { return S.panel === type ? S.base[type] : ssBaseDefaults(type); }
+// 기본 선의 표준값 — 그냥 보유는 세금만 저장 전략을 따름(2026-11-28 · 같은 기준 비교): 보이는 저장 전략(SMA·그냥 보유) 중
+//   양도세·원천징수를 켠 것이 있으면 기본 선도 같은 세금으로 (선 이름에 '· 세금') · 그 창을 열어 직접 바꾸면 바꾼 값
+function ssBaseDefaults(type) {
+  const d = ssDefaults(type);
+  if (type === 'bh') {
+    for (const c of S.saved || []) {
+      if (!c || c.hidden || (c.type !== 'sma' && c.type !== 'bh') || !c.params) continue;
+      if ((+c.params.tax || 0) > 0) d.tax = String(c.params.tax);
+      if ((+c.params.wht || 0) > 0) d.wht = String(c.params.wht);
+    }
+  }
+  return d;
+}
 const SS_RAISE_OPTS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '12', '15', '20', '25'];
 
 function ssLoadStorage() {

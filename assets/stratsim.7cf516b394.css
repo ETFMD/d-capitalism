@@ -582,6 +582,7 @@ html[data-theme="light"] .ss-isel { color-scheme: light; }
 .ss-subchip, .ss-lchip { padding: 7px 10px; }
 .ss-lsw { width: 16px; height: 3px; border-radius: 2px; flex-shrink: 0; }
 .ss-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ss-stat.ss-wide { grid-column: 1 / -1; }   /* 세금 칸(끝에 다 팔면 · 세후) — 한 줄 전체 */
 .ss-stat { background: var(--bg3); border: 1px solid var(--card-border); border-radius: 11px; padding: 9px 11px; min-width: 0; }
 .ss-sth { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .ss-stl { font-size: 11.5px; color: var(--text3); }

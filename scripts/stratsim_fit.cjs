@@ -41,6 +41,10 @@ function loadEngine(pricesText) {
   const prices = pricesText != null ? pricesText : fs.readFileSync(process.env.STRATSIM_PRICES || path.join(ROOT, 'data', 'stratsim', 'prices.csv'), 'utf8');
   const nfci = fs.readFileSync(path.join(ROOT, 'data', 'stratsim', 'nfci.csv'), 'utf8');
   M.ssInitData(M.ssParsePrices(prices), M.ssParseNfci(nfci));
+  // 세금 자료(분배금 · 원/달러 — 2026-11-28 · 화면과 같게 · 없으면 세금 계산만 '자료 없음')
+  const rd = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch (e) { return null; } };
+  const dv = rd(path.join(ROOT, 'data', 'stratsim', 'divs.csv')), fx = rd(path.join(ROOT, 'data', 'usdkrw.json'));
+  M.ssSetTaxData(M.ssParseDivs(dv || ''), fx ? M.ssParseFx(JSON.parse(fx)) : null);
   return M;
 }
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);

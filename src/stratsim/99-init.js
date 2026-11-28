@@ -19,16 +19,21 @@ async function ssBoot() {
   let stamp = '';
   try { const r = await fetch('data/stratsim/updated.txt', { cache: 'no-store' }); if (r.ok) stamp = (await r.text()).trim(); } catch (e) {}
   const v = encodeURIComponent(stamp || String(Date.now()).slice(0, 7));
-  let pricesTxt, nfciTxt = '';
+  let pricesTxt, nfciTxt = '', divTxt = '', fxJson = null;
+  // 세금 자료(분배금 · 원/달러 — 2026-11-28)는 없어도 화면은 그대로(세금을 켠 전략의 통계 칸이 '자료 없음'으로 알림)
+  const opt = (u) => fetch(u).then((r) => (r.ok ? r : null)).catch(() => null);
   try {
-    const [p, n] = await Promise.all([fetch('data/stratsim/prices.csv?v=' + v), fetch('data/stratsim/nfci.csv?v=' + v).catch(() => null)]);
+    const [p, n, dv, fx] = await Promise.all([fetch('data/stratsim/prices.csv?v=' + v), opt('data/stratsim/nfci.csv?v=' + v), opt('data/stratsim/divs.csv?v=' + v), opt('data/usdkrw.json?v=' + v)]);
     if (!p.ok) throw new Error('HTTP ' + p.status);
     pricesTxt = await p.text();
-    if (n && n.ok) nfciTxt = await n.text();
+    if (n) nfciTxt = await n.text();
+    if (dv) try { divTxt = await dv.text(); } catch (e) { divTxt = ''; }
+    if (fx) try { fxJson = await fx.json(); } catch (e) { fxJson = null; }
   } catch (e) { fail('가격 자료를 불러오지 못했습니다 — 새로고침해 주세요.'); return; }
   const days = ssParsePrices(pricesTxt);
   if (days.length < 300) { fail('가격 자료가 올바르지 않습니다 — 새로고침해 주세요.'); return; }
   ssInitData(days, ssParseNfci(nfciTxt));
+  ssSetTaxData(ssParseDivs(divTxt), ssParseFx(fxJson));
   if (stamp) {
     const d = new Date(stamp);
     if (!Number.isNaN(d.getTime())) {

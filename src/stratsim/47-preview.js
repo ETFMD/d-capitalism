@@ -15,8 +15,11 @@ function ssPdTotals(type, owner, k) {
   const ov = ctx.anyOv ? { ed: ctx.entryDate, xd: ctx.exitDate } : {};
   if (type === 'bh') {
     const rows = ctx.anyOv ? (() => { const q = ssExactRows('quarterly', ctx.entryDate, ctx.exitDate); return q && q.length >= 2 ? q : null; })() : null;
-    const r = ssRun9(Object.assign({}, common, { rate: 0.04, baseRate: ctx.rate, period: 'quarterly', rows }, ov, ssOpts9(ssDefaults('9sig'))));
-    return opts.map((v) => { const a = r.bh[v] || []; return a.length ? a[a.length - 1].value : 0; });
+    const run = (pp) => ssRun9(Object.assign({}, common, { rate: 0.04, baseRate: ctx.rate, period: 'quarterly', rows, bhWht: ssBhTaxOf(pp).wht }, ov, ssOpts9(ssDefaults('9sig'))));
+    if (k === 'ul') { const r = run(p0); return opts.map((v) => { const a = r.bh[v] || []; return a.length ? a[a.length - 1].value : 0; }); }
+    // 세금 손잡이(2026-11-28): 원천징수는 끝 금액이 줄고, 양도세는 팔지 않으므로 끝 금액이 같음(끝에 팔면 낼 세금은 통계 칸)
+    const ul = SS_COL[p0.ul] ? p0.ul : 'tqqq';
+    return opts.map((v) => { const a = run(Object.assign({}, p0, { [k]: v })).bh[ul] || []; return a.length ? a[a.length - 1].value : 0; });
   }
   return opts.map((v) => {
     const p = Object.assign({}, p0, { [k]: v });

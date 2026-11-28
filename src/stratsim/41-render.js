@@ -88,7 +88,8 @@ function ssRender() {
   if (anyOv) { const q = ssExactRows(mainPeriod, entryDate, exitDate); if (q && q.length >= 2) rows = q; }
   const ovOpt = anyOv ? { ed: entryDate, xd: exitDate } : {};
   const sampleW = grain === 'weekly' && mainPeriod !== 'weekly';
-  const base = ssRun9(Object.assign({ initial, monthly, raise, rate: ssRate9(p9), baseRate: rate, qi0, qi1: x, period: mainPeriod, rows, sched, sampleQ: false, sampleW }, ovOpt, ssOpts9(p9)));
+  const pBh = ssBaseEff('bh'), tBh = ssBhTaxOf(pBh);   // 그냥 보유 기본 선의 세금(원천징수는 선에 · 양도세는 끝 날 요약에)
+  const base = ssRun9(Object.assign({ initial, monthly, raise, rate: ssRate9(p9), baseRate: rate, qi0, qi1: x, period: mainPeriod, rows, sched, sampleQ: false, sampleW, bhWht: tBh.wht }, ovOpt, ssOpts9(p9)));
   R.base = base;
   const ctx = { initial, monthly, raise, rate, qi0, qi1: x, e, ed: anyOv ? entryDate : '', xd: anyOv ? exitDate : '', anyOv, entryDate, exitDate, sched, grain, latest, prevDay, labels: [], years: 1, contributed: base.contributed };
   R.ctx = ctx;
@@ -114,14 +115,15 @@ function ssRender() {
   const metrics = {}, yday = {}, datasets = [];
   const defl = S.infl ? ssInflFactor(prevDay, labels[0]) : 1;
   // ── 그냥 보유 (기본 선)
-  const bhUl = ssBaseEff('bh').ul, bhKey = SS_COL[bhUl] ? bhUl : 'tqqq';
+  const bhUl = pBh.ul, bhKey = SS_COL[bhUl] ? bhUl : 'tqqq';
   const bhPts = base.bh[bhKey] || [];
   const bhD = onLabels(sampleW ? (base.bhS[bhKey] || []) : bhPts, (p) => p.value);
   const bhFinal = bhPts.length ? bhPts[bhPts.length - 1].value : 0;
   const bhDD = bhPts.length && bhPts[0].shares != null ? ssDailyDD(bhPts.map((p) => ({ date: p.date, shares: p.shares, cash: 0 })), bhKey) : ssSeriesDD(bhD, labels);
-  metrics.bh = { cagr: mw(bhFinal, 'r9'), start: bhD[0], end: bhD[bhD.length - 1], maxDD: bhDD.pct * 100, ddPeak: bhDD.peakDate, ddTrough: bhDD.troughDate };
+  metrics.bh = { cagr: mw(bhFinal, 'r9'), start: bhD[0], end: bhD[bhD.length - 1], maxDD: bhDD.pct * 100, ddPeak: bhDD.peakDate, ddTrough: bhDD.troughDate,
+    tax: ssTaxOn(pBh) && bhPts.length ? ssBhTaxSum(bhKey, tBh, ctx, bhPts) : null };
   if (latest && bhPts.length && bhPts[bhPts.length - 1].shares > 0) { const y = ssRepriceYesterday({ [bhKey]: bhPts[bhPts.length - 1].shares }, 0); if (y != null) yday.bh = y * defl; }
-  datasets.push(ssDs('bh', '그냥 보유 ' + bhKey.toUpperCase(), bhD, ssBaseColor('bh'), { borderWidth: 2, borderDash: [6, 3], hidden: S.hide.bh }));
+  datasets.push(ssDs('bh', '그냥 보유 ' + bhKey.toUpperCase() + (ssTaxOn(pBh) ? ' · 세금' : ''), bhD, ssBaseColor('bh'), { borderWidth: 2, borderDash: [6, 3], hidden: S.hide.bh }));
   // ── 현금 복리 (모든 적립을 이자 붙는 현금으로)
   const invD = onLabels(sampleW ? base.samples : log, (l) => l.base);
   const invDD = ssSeriesDD(invD, labels);
@@ -132,7 +134,7 @@ function ssRender() {
   R.cfgSim = {};
   for (const cfg of S.saved) {
     const s = ssCfgSeries(cfg, ctx);
-    metrics['cfg:' + cfg.id] = { cagr: s.cagr, start: s.start, end: s.end, maxDD: s.maxDD, ddPeak: s.ddPeak, ddTrough: s.ddTrough, pending: s.pending, error: s.error };
+    metrics['cfg:' + cfg.id] = { cagr: s.cagr, start: s.start, end: s.end, maxDD: s.maxDD, ddPeak: s.ddPeak, ddTrough: s.ddTrough, pending: s.pending, error: s.error, tax: s.tax || null };
     if (s.yday != null) yday['cfg:' + cfg.id] = s.yday;
     datasets.push(ssDs('cfg:' + cfg.id, cfg.name, s.data, cfg.color, { borderWidth: 2, hidden: !!cfg.hidden, cfgId: cfg.id }));
     if (cfg.type === '9sig' && s.sub && cfg.subShown) {
@@ -218,7 +220,7 @@ function ssCfgSeries(cfg, ctx, lite) {
     const v = ssRepriceYesterday(hold, cash);
     return v == null ? null : v * (S.infl ? ssInflFactor(ctx.prevDay, L[0]) : 1);
   };
-  let points = null, sub = null, ddc = null, ddKey = null, ddMulti = null, yd = null;
+  let points = null, sub = null, ddc = null, ddKey = null, ddMulti = null, yd = null, taxSum = null;
   const common = { initial: ctx.initial, monthly: ctx.monthly, raise: ctx.raise, qi0: ctx.qi0, qi1: ctx.qi1, sched: ctx.sched };
   const exactQ = () => { if (!ctx.anyOv) return null; const q = ssExactRows('quarterly', ctx.entryDate, ctx.exitDate); return q && q.length >= 2 ? q : null; };
   if (cfg.type === '9sig') {
@@ -249,14 +251,17 @@ function ssCfgSeries(cfg, ctx, lite) {
     const r = ssRunSma(Object.assign({}, common, { rate: ssRate9(p), dd: !lite, sampleW: ctx.grain === 'weekly' }, ovOpt, ssOptsSma(p)));
     points = r.points.map((pt) => ({ date: pt.date, value: pt.value }));
     ddMulti = r.dd || null;
-    R.cfgSim[cfg.id] = { type: 'sma', log: r.log, points: r.points, dd: ddMulti };
+    R.cfgSim[cfg.id] = { type: 'sma', log: r.log, points: r.points, dd: ddMulti, tax: r.tax };
+    taxSum = r.tax ? ssTaxSum(r.tax) : null;
     const lc = ddMulti && ddMulti.length ? ddMulti[ddMulti.length - 1] : null;
     if (lc) yd = yFrom(lc.h, lc.cash);
   } else if (cfg.type === 'bh') {
     const q = exactQ();
-    const r = ssRun9(Object.assign({}, common, { rate: 0, rows: q, sampleW: ctx.grain === 'weekly' }, ovOpt));
+    const tb = ssBhTaxOf(p);
+    const r = ssRun9(Object.assign({}, common, { rate: 0, rows: q, sampleW: ctx.grain === 'weekly', bhWht: tb.wht }, ovOpt));
     const key = SS_COL[p.ul] ? p.ul : 'tqqq';
     const raw = r.bh[key] || [], samp = r.bhS[key] || [];
+    if (!lite && ssTaxOn(p) && raw.length) taxSum = ssBhTaxSum(key, tb, ctx, raw);
     points = (ctx.grain === 'weekly' ? samp : raw).map((pt) => ({ date: pt.date, value: pt.value }));
     ddc = raw.map((pt) => ({ date: pt.date, shares: pt.shares, cash: 0 }));
     ddKey = key;
@@ -276,7 +281,20 @@ function ssCfgSeries(cfg, ctx, lite) {
   const dd = ddMulti && ddMulti.length ? ssDailyDDMulti(ddMulti) : ddc && ddc.length ? ssDailyDD(ddc, ddKey) : ssSeriesDD(data, L);
   const mode = cfg.type === 'sma' ? 'day' : cfg.type === 'invested' ? 'r9base' : 'r9', cd0 = mode === 'day' ? ctx.entryDate : points && points.length ? String(points[0].date) : null;
   const cagr = ssCfgCagr(ctx, finalV, mode, cd0, L.length ? ssSrcDate(points, L[L.length - 1]) : null);
-  return { data, cagr, maxDD: dd.pct * 100, start: startV, end: finalV, sub, ddPeak: dd.peakDate, ddTrough: dd.troughDate, yday: yd };
+  return { data, cagr, maxDD: dd.pct * 100, start: startV, end: finalV, sub, ddPeak: dd.peakDate, ddTrough: dd.troughDate, yday: yd, tax: taxSum };
+}
+// 세금 요약(화면 통계 칸) — SMA: 엔진 결과 r.tax · 그냥 보유: ssBhTaxEnd(끝 날 전부 판다고 보고)
+//   { rate, wht, paid(낸 양도세 $), whtPaid(낸 원천징수 $), due(아직 안 낸 양도세 $), liq(끝 날 전부 팔고 세금까지 낸 뒤 $), hold(그냥 보유), fx·divs(자료 받음) }
+function ssTaxSum(t) {
+  return { rate: t.rate, wht: t.wht, paid: t.paid, whtPaid: t.whtPaid, due: t.due, liq: t.liq, ext: t.ext, hold: false, fx: t.fx, divs: t.divs };
+}
+function ssBhTaxSum(key, tb, ctx, pts) {
+  const d0 = String(pts[0].date), d1 = String(pts[pts.length - 1].date);
+  const r = ssBhTaxEnd({ key, d0, d1, initial: ctx.initial, sched: ctx.sched || ssSchedule(ctx.monthly, ctx.raise, d0, d1), wht: tb.wht, tax: tb.tax });
+  if (!r) return null;
+  // 끝 금액은 선의 끝 값을 그대로(같은 계산 — 시험이 둘이 같은지 확인) · 낼 양도세만 뺌
+  const end = pts[pts.length - 1].value;
+  return { rate: tb.tax, wht: tb.wht, paid: 0, whtPaid: r.wht, due: r.due, liq: end - r.due, ext: 0, hold: true, fx: !!DS.fx, divs: !!DS.divY };
 }
 
 // 사용자 전략: 격리 실행 결과(캐시)로 선을 만듦 — 없으면 실행을 걸어 두고, 돌아오면 다시 그림

@@ -174,13 +174,21 @@ const pick = a => a[Math.floor(rnd() * a.length)];
   const sIdx = i => i + (D.d[i] < '2024-05-28' ? 2 : 1);
 
   /* ── ④ 도우미 ── */
-  {   /* 프리셋 = 투자전략 시뮬레이터 라이브러리 'SMA 200' (src/stratsim/30-library.js — 라이브러리를 고치면 여기서 알림) · 선택지 = 시뮬레이터 편집 창(SS_PSMA) */
-    const lib = fs.readFileSync(path.join(ROOT, 'src', 'stratsim', '30-library.js'), 'utf8'), i0 = lib.indexOf("name: 'SMA 200'"), m = i0 < 0 ? null : /preset:\s*\{\s*type:\s*'sma',\s*params:\s*(\{[^}]*\})/.exec(lib.slice(i0, i0 + 3000));
+  {   /* 라이브러리 'SMA 200' (src/stratsim/30-library.js) = 이 화면 기본값(실전 — 자동매매 프로그램 고정 규칙) + 거래 비용 0.25% · 양도세 22% · 원천징수 15%
+         (2026-11-28 사용자 결정 — 예전엔 SMB.PRESET(현금·4%·완충 0·15일 · 이 화면 기본값의 바탕)과 같았음. SMB.PRESET 은 예전 값 그대로 — 저장값 옮기기가 씀)
+       · 선택지 = 시뮬레이터 편집 창(SS_PSMA) — 시뮬레이터에만 있는 세금 손잡이(tax · wht)는 이 엔진에선 run 의 tax · divTax 로 */
+    const lib = fs.readFileSync(path.join(ROOT, 'src', 'stratsim', '30-library.js'), 'utf8'), i0 = lib.indexOf("name: 'SMA 200'"), m = i0 < 0 ? null : /preset:\s*\{\s*type:\s*'sma',\s*params:\s*(\{[^}]*\})/.exec(lib.slice(i0, i0 + 4000));
     const lp = m ? new Function('return ' + m[1])() : null;
-    check('프리셋 = 라이브러리 SMA 200', !!lp && JSON.stringify(Object.keys(lp).sort().map(k => [k, lp[k]])) === JSON.stringify(Object.keys(SMB.PRESET).sort().map(k => [k, SMB.PRESET[k]])), [lp, SMB.PRESET]);
+    const want = Object.assign({}, SMB.PRESET, { out: 'spy', cr: '0', din: '5', dout: '5', xb: '0.8', cost: '0.25', tax: '22', wht: '15' });
+    const sj = o => JSON.stringify(Object.keys(o).sort().map(k => [k, o[k]]));
+    check('라이브러리 SMA 200 = 이 화면 기본값(실전) + 비용 0.25% · 양도세 22% · 원천징수 15%', !!lp && sj(lp) === sj(want), [lp, want]);
+    const bi = src.indexOf('function base(mode) {'), bs = bi < 0 ? '' : src.slice(bi, bi + 1500);
+    const dv = k => { const r = new RegExp('\\b' + k + " = '([^']*)'").exec(src); return r ? r[1] : null; };
+    check('이 화면 기본값(실전) 손잡이 = 라이브러리 SMA 200 (팔았을 때 · 이자 · 나눠 사기 · 팔 때 완충)', bi > 0 && /SMB\.PRESET/.test(bs) && dv('DEF_OUT') === 'spy' && dv('DEF_CR') === '0' && dv('DEF_DAYS') === '5' && dv('DEF_XB') === '0.8', [dv('DEF_OUT'), dv('DEF_CR'), dv('DEF_DAYS'), dv('DEF_XB')]);
     const sp = {}; (M.SS_PSMA || []).forEach(q => { sp[q.k] = (q.opts || []).map(o => String(o[0])); });
     const same = Object.keys(SMB.OPTS).every(k => sp[k] && JSON.stringify(sp[k]) === JSON.stringify(SMB.OPTS[k].map(o => String(o[0]))));
-    check('선택지 = 시뮬레이터 편집 창', Object.keys(sp).length > 0 && same && Object.keys(sp).every(k => SMB.OPTS[k]), Object.keys(sp));
+    const TAXK = ['tax', 'wht'];
+    check('선택지 = 시뮬레이터 편집 창 (세금 손잡이 tax · wht 는 시뮬레이터에만)', Object.keys(sp).length > 0 && same && Object.keys(sp).every(k => SMB.OPTS[k] || TAXK.includes(k)) && TAXK.every(k => sp[k]), Object.keys(sp));
   }
   check('clean: 선택지 밖 → 프리셋', SMB.clean({ win: '123', sig: 'xx', bg: '0', cr: '20' }).win === '200' && SMB.clean({ sig: 'xx' }).sig === 'qqq' && SMB.clean({ bg: '0' }).bg === '0' && SMB.clean({ cr: '20' }).cr === '20');
   {
@@ -294,9 +302,10 @@ const pick = a => a[Math.floor(rnd() * a.length)];
       document: { getElementById() { return null; }, addEventListener() {}, querySelector() { return null; }, querySelectorAll() { return []; } }, window: { addEventListener() {} } };
     vm.createContext(lc); vm.runInContext(fs.readFileSync(path.join(ROOT, 'src', 'stratsim', '30-library.js'), 'utf8') + ';globalThis.__L = SS_LIBRARY;', lc);
     const L = lc.__L.filter(e => e.name === 'SOXL SMA 160'), pr = L[0] && L[0].preset, pp = pr ? Object.assign({}, pr.params) : {};
-    const cost = pp.cost; delete pp.cost;
-    check("라이브러리 'SOXL SMA 160' 프리셋 = SOXL 화면 기본값 (손잡이 전부 · 비용 0.02% · 번호 하나뿐 · 선택지 안)", L.length === 1 && pr.type === 'sma' && cost === '0.02' && sortJ(pp) === sortJ(C160) &&
-      lc.__L.filter(e => e.n === L[0].n).length === 1 && sortJ(SMB.clean(pr.params)) === sortJ(Object.assign({}, SMB.PRESET, pr.params)), [L.length, pr]);
+    const cost = pp.cost, tx2 = pp.tax, wh2 = pp.wht; delete pp.cost; delete pp.tax; delete pp.wht;
+    const pe = Object.assign({}, pr ? pr.params : {}); delete pe.tax; delete pe.wht;
+    check("라이브러리 'SOXL SMA 160' 프리셋 = SOXL 화면 기본값 (손잡이 전부 · 비용 0.25% · 양도세 22% · 원천징수 15% — 2026-11-28 · 번호 하나뿐 · 선택지 안)", L.length === 1 && pr.type === 'sma' && cost === '0.25' && tx2 === '22' && wh2 === '15' && sortJ(pp) === sortJ(C160) &&
+      lc.__L.filter(e => e.n === L[0].n).length === 1 && sortJ(SMB.clean(pe)) === sortJ(Object.assign({}, SMB.PRESET, pe)), [L.length, pr]);
   }
   if (SX) {
     const PX = Object.assign({}, SMB.PRESET, { out: 'spy', cr: '0', din: '5', dout: '5', xb: '0.8' }, SX.def), TKX = SX.tk;
@@ -341,6 +350,91 @@ const pick = a => a[Math.floor(rnd() * a.length)];
     runsX = recheck(DX, fxX, FULL ? 1200 : 250, genX(0.6, 4), 'SOXL ');
     simDates(DX, fxX, FULL ? 800 : 200, PX, genX(0.5, 3), 'SOXL ');
   }
-  console.log((bad ? 'FAIL ' : '') + 'sma200_test: ' + ok + '개 통과 · ' + bad + '개 실패 (시뮬레이터 대조 ' + n1 + '번 · 실전·세금 검산 TQQQ ' + runs + '번 · SOXL ' + runsX + '번)');
+  /* ── ⑦ 투자전략 시뮬레이터 세금 (2026-11-28 — 양도세 22% · 분배금 미국 원천징수 15% 선택 · SMA 추세 · 그냥 보유) ──
+       · 양도세: 시뮬레이터 엔진(ssRunSma) = 이 엔진 시뮬 방식 + 양도세(선입선출) — 분배금 자료를 끄면 끝 금액·낸 세금·세후 청산이 같아야 함(무작위 손잡이 × 기간)
+       · 원천징수: 늘 들고 있는 설정 = 그냥 보유 — 끝 금액 = 원금 × 가격 비 × 누적 배수 · 그냥 보유 선(ssRun9) · 요약(ssBhTaxEnd)과 같음
+       · 분배금 원가(양도세): 엔진 장부(묶음 나눔)와 그냥 보유 요약(원가 더함) 두 계산이 같은 세후 청산
+       · 분배금 자료(divs.csv) = 가격 자료(수정주가)의 분배락일 수정 계수 변화(1 − 분배금 ÷ 전날 종가) */
+  let taxN = 0;
+  {
+    const TX = M.DS, keepDiv = TX.divY, fxS = i => M.ssFx(i);
+    check('세금 자료 읽음 (분배금 · 원/달러)', !!keepDiv && !!TX.fx && Object.keys(keepDiv).length >= 9 && TX.fx.length === Dsim.d.length, [keepDiv && Object.keys(keepDiv), TX.fx && TX.fx.length]);
+    TX.divY = null;   /* 분배금을 끈 채 — 이 엔진 시뮬 방식엔 분배금이 없음 */
+    let wF = 0, wT = 0, wL = 0;
+    const NT = FULL ? 800 : 250;
+    for (let t = 0; t < NT; t++) {
+      const p = {}; for (const k in SMB.OPTS) p[k] = rnd() < 0.5 ? SMB.PRESET[k] : pick(SMB.OPTS[k])[0];
+      if (t % 4 === 0) Object.assign(p, SMB.PRESET, { out: 'spy', cr: '0', din: '5', dout: '5', xb: '0.8', cost: '0.25' });
+      const a = Math.floor(rnd() * (Dsim.d.length - 600)), b = Math.min(Dsim.d.length - 1, a + 300 + Math.floor(rnd() * (rnd() < 0.3 ? 15000 : 4000)));
+      const cp = M.ssCleanParams('sma', Object.assign({}, p, { tax: '22', wht: '0' }));
+      const r = M.ssRunSma(Object.assign({ initial: 100000, monthly: 0, raise: 0, rate: M.ssRate9(cp), dd: true, ed: Dsim.d[a], xd: Dsim.d[b] }, M.ssOptsSma(cp)));
+      const x = SMB.run(Dsim, p, { from: a, to: b, capital: 100000, mode: 'sim', tax: { fx: fxS, method: 'fifo' }, intTax: 0 });
+      const v = r.points[r.points.length - 1].value, rel = (u, w) => Math.abs(u - w) / Math.max(1, Math.abs(w));
+      wF = Math.max(wF, rel(v, x.final)); wT = Math.max(wT, rel(r.tax.paid, x.taxPaid)); wL = Math.max(wL, rel(r.tax.liq, x.liq));
+      if (rel(v, x.final) > 1e-9 && wF === rel(v, x.final)) check('양도세 대조 한 건', false, [Dsim.d[a], Dsim.d[b], p, v, x.final]);
+      taxN++;
+    }
+    check('시뮬레이터 양도세 = 이 엔진 시뮬 방식 + 양도세: 끝 금액 (상대 1e-9 · ' + NT + '번)', wF < 1e-9, wF);
+    check('시뮬레이터 양도세 = 이 엔진: 낸 양도세 · 끝 날 세후 청산', wT < 1e-9 && wL < 1e-9, [wT, wL]);
+    TX.divY = keepDiv;
+    /* 원천징수 — 늘 들고 있는 SMA(신호 QQQ 10일선 · 50% 넘게 아래일 때만 팖 · 과열·식음·버블 끔 · 비용 0) = 그냥 보유 */
+    const ALW = { sig: 'qqq', win: '10', ul: 'tqqq', cr: '0', eb: '0', xb: '50', oh: '0', cool: '0', ohw: '9', coolw: '7', cb: '0', cs: '0', settle: '0', out: 'cash', din: '0', dout: '0', bg: '0', bga: 'tqqq', bgw: '200', cost: '0' };
+    const smA = SMB.sma(Dsim.px.qqq, 10);
+    let okW = 0, okL = 0, nW = 0, wA = 0, wB = 0, wC = 0;
+    for (const [d0, d1, ul] of [['2011-03-01', '2026-11-27', 'tqqq'], ['2000-01-03', '2026-11-27', 'qqq'], ['1995-01-03', '2026-11-27', 'spy'], ['2015-06-01', '2025-12-31', 'soxl'], ['2010-06-01', '2026-11-27', 'tecl']]) {
+      let a = Dsim.d.findIndex(x => x >= d0); while (a > 0 && !(Dsim.px.qqq[a] > smA[a])) a++;   /* 첫날 '보유' 인 날로 */
+      const b = Dsim.d.lastIndexOf(d1 <= Dsim.d[Dsim.d.length - 1] ? d1 : Dsim.d[Dsim.d.length - 1]);
+      const P = Dsim.px[ul] || M.DS.days.map(x => x[ul]), WF = M.ssWhtFactor(ul, 0.15);
+      const cp = M.ssCleanParams('sma', Object.assign({}, ALW, { ul, bga: ul, tax: '22', wht: '15' }));
+      const r = M.ssRunSma(Object.assign({ initial: 100000, monthly: 0, raise: 0, rate: 0, dd: true, ed: Dsim.d[a], xd: Dsim.d[b] }, M.ssOptsSma(cp)));
+      const v = r.points[r.points.length - 1].value, want = 100000 * M.DS.days[b][ul] / M.DS.days[a][ul] * (WF ? WF[b] / WF[a] : 1);
+      const sold = r.log.some(l => l.action === 'EXIT' || l.action === 'TAX');
+      nW++;
+      const bh = M.ssRun9({ initial: 100000, monthly: 0, raise: 0, rate: 0, qi0: 0, qi1: 1, ed: Dsim.d[a], xd: Dsim.d[b], rows: M.ssExactRows('quarterly', Dsim.d[a], Dsim.d[b]), bhWht: 0.15 }).bh[ul];
+      const bv = bh[bh.length - 1].value, s2 = M.ssBhTaxEnd({ key: ul, d0: Dsim.d[a], d1: Dsim.d[b], initial: 100000, sched: M.ssSchedule(0, 0, Dsim.d[a], Dsim.d[b]), wht: 0.15, tax: 0.22 });
+      const rel = (u, w2) => Math.abs(u - w2) / Math.max(1, Math.abs(w2));
+      wA = Math.max(wA, rel(v, want)); wB = Math.max(wB, rel(bv, want)); wC = Math.max(wC, rel(s2.end, want));
+      if (!sold && rel(v, want) < 1e-9 && rel(bv, want) < 1e-9 && rel(s2.end, want) < 1e-9) okW++;
+      /* 분배금 원가: 엔진 장부(묶음 나눔) 세후 청산 = 그냥 보유 요약(원가 더함) — 같은 원천징수 · 같은 원가 · 비용 0 */
+      if (!sold && rel(r.tax.liq, s2.liq) < 1e-9 && rel(r.tax.whtPaid, s2.wht) < 1e-9 && r.tax.whtPaid > 0) okL++;
+      else check('분배금 원가 대조 ' + ul, false, [r.tax.liq, s2.liq, r.tax.whtPaid, s2.wht, sold]);
+    }
+    check('원천징수: 늘 보유 SMA = 원금 × 가격 비 × 누적 배수 = 그냥 보유 선 = 그냥 보유 요약 (TQQQ·QQQ·SPY·SOXL·TECL)', okW === nW, [okW, nW, wA, wB, wC]);
+    check('분배금 원가: 엔진 장부 세후 청산 = 그냥 보유 요약 · 원천징수 금액 같음', okL === nW, [okL, nW]);
+    /* 원천징수가 없으면(끔 · 자료 없음) 예전과 같은 값 — 그냥 보유 선 · SMA */
+    {
+      const q = M.ssExactRows('quarterly', '2010-03-31', '2025-12-31');
+      const b0 = M.ssRun9({ initial: 10000, monthly: 500, raise: 0, rate: 0.04, qi0: 0, qi1: 1, ed: '2010-03-31', xd: '2025-12-31', rows: q }).bh.tqqq;
+      const b1 = M.ssRun9({ initial: 10000, monthly: 500, raise: 0, rate: 0.04, qi0: 0, qi1: 1, ed: '2010-03-31', xd: '2025-12-31', rows: q, bhWht: 0 }).bh.tqqq;
+      const b2 = M.ssRun9({ initial: 10000, monthly: 500, raise: 0, rate: 0.04, qi0: 0, qi1: 1, ed: '2010-03-31', xd: '2025-12-31', rows: q, bhWht: 0.15 }).bh.tqqq;
+      check('그냥 보유: 원천징수 끔 = 예전 값(한 글자도 같음) · 켬 = 조금 작음', JSON.stringify(b0) === JSON.stringify(b1) && b2[b2.length - 1].value < b0[b0.length - 1].value && b2[b2.length - 1].value > b0[b0.length - 1].value * 0.98, [b0[b0.length - 1].value, b2[b2.length - 1].value]);
+    }
+    /* 적립 + 세금: 숫자가 이상하지 않음(NaN·음수 없음 · 세금 켬 ≤ 끔 · 세후 청산 ≤ 끝 금액) */
+    {
+      const cp0 = M.ssCleanParams('sma', Object.assign({}, SMB.PRESET, { out: 'spy', cr: '0', din: '5', dout: '5', xb: '0.8', cost: '0.25' }));
+      const go = (tax, wht) => { const c = Object.assign({}, cp0, { tax, wht }); return M.ssRunSma(Object.assign({ initial: 10000, monthly: 500, raise: 0.03, rate: 0, dd: true, ed: '1995-01-03', xd: '2026-11-27' }, M.ssOptsSma(c))); };
+      const r0 = go('0', '0'), r1 = go('22', '15'), f0 = r0.points[r0.points.length - 1].value, f1 = r1.points[r1.points.length - 1].value;
+      check('적립 + 세금: 켬 < 끔 · 세후 청산 ≤ 끝 금액 · 낸 양도세 > 0 · 값이 모두 수', f1 < f0 && r1.tax.liq <= f1 + 1e-6 && r1.tax.paid > 0 && r1.points.every(pt => Number.isFinite(pt.value) && pt.value > 0) && r1.log.some(l => l.action === 'TAX'), [f0, f1, r1.tax]);
+    }
+    /* 분배금 자료 = 가격 자료의 분배락일 수정 계수 변화 — 상장 뒤 실제 일봉(data/etfcagr.json · 분할만 반영)로 확인 */
+    {
+      const J = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'etfcagr.json'), 'utf8')).series;
+      const day = (x) => new Date(x * 864e5).toISOString().slice(0, 10);
+      let nn = 0, bb = 0;
+      const rows = fs.readFileSync(path.join(ROOT, 'data', 'stratsim', 'divs.csv'), 'utf8').split('\n').slice(1).filter(Boolean);
+      for (const ln of rows) {
+        const [d8, k, dvs, pcs] = ln.split(','), d = d8.slice(0, 4) + '-' + d8.slice(4, 6) + '-' + d8.slice(6, 8), S2 = J[k.toUpperCase()];
+        const i = Dsim.d.indexOf(d); if (i < 1 || !S2) continue;
+        let x = S2.d0; const m = {}; for (let j = 0; j < S2.c.length; j++) { if (j) x += S2.dd[j - 1]; m[day(x)] = S2.c[j]; }
+        const dp = Dsim.d[i - 1]; if (!m[d] || !m[dp]) continue;
+        const pk = M.DS.days[i][k], pk0 = M.DS.days[i - 1][k]; if (!(pk > 0 && pk0 > 0)) continue;
+        const yy = 1 - (pk0 / m[dp]) / (pk / m[d]), y = +dvs / +pcs; nn++;
+        if (Math.abs(yy - y) > Math.max(2e-4, 0.05 * y)) { bb++; if (bb < 4) check('분배금 ' + k + ' ' + d, false, [y, yy]); }
+        if (nn >= 600) break;
+      }
+      check('분배금 자료 = 수정주가의 분배락일 계수 변화 (5% 안 · ' + nn + '건)', nn >= 300 && bb === 0, [nn, bb]);
+    }
+  }
+  console.log((bad ? 'FAIL ' : '') + 'sma200_test: ' + ok + '개 통과 · ' + bad + '개 실패 (시뮬레이터 대조 ' + n1 + '번 · 실전·세금 검산 TQQQ ' + runs + '번 · SOXL ' + runsX + '번 · 시뮬레이터 세금 대조 ' + taxN + '번)');
   process.exit(bad ? 1 : 0);
 })().catch(e => { console.log('FAIL 예외 ' + (e && e.stack || e)); process.exit(1); });

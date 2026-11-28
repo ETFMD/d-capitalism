@@ -4520,6 +4520,13 @@ def main():
         if _r.returncode != 0:
             fail('sma200', '엔진 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:400])
 
+    # [STRATSIM] 시뮬레이터 분배금 자료(data/stratsim/divs.csv · 원천징수 15%·양도세 원가 — 2026-11-28): 야후 분배금 읽기·파일 쓰기(가짜 응답) · 지금 파일 모양 — 네트워크 없이
+    if not a.etf_audit:
+        _r = subprocess.run([sys.executable, os.path.join(ROOT, 'tests', 'stratsim_divs_test.py')], capture_output=True, text=True, timeout=120)
+        print(_r.stdout.strip().splitlines()[-1] if _r.stdout.strip() else 'stratsim_divs_test: 출력 없음', flush=True)
+        if _r.returncode != 0:
+            fail('stratsim', '분배금 자료 검사 실패: ' + (' | '.join(l for l in _r.stdout.splitlines() if l.startswith('FAIL')) or _r.stderr.strip())[:400])
+
     # 실적발표 캘린더: 야후가 늦은 미국 실적을 나스닥 달력 값으로 먼저(nq_merge) — 네트워크 없이
     if not a.etf_audit:
         _r = subprocess.run([sys.executable, os.path.join(ROOT, 'tests', 'earn_nq_test.py')], capture_output=True, text=True, timeout=120)
