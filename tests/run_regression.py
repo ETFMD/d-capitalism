@@ -3459,6 +3459,14 @@ def stratsim_check(br, base, fail, ignorable):
                 fail(path, '탭 %d개 · 첫 탭 %d행 (기대 6 · %d)' % (t['tabs'], t['rows'], n0))
                 continue
             o = json.loads(base64.urlsafe_b64decode(t['href'].split('#ss=j')[1] + '=='))
+            # 계산 조건 (2026-11-28 사용자 결정): SMA = 거래 비용 0.1% · 양도세 22% · 분배금 원천징수 15% — 열기 링크와 표 위 조건 줄이 같은 값 · 9sig = 세금 없음
+            cond = pg.evaluate("() => (document.getElementById('ssf-cond') || {}).innerText || ''")
+            lp = (o.get('sc') or [{}])[0].get('p') or {}
+            if path == 'sma-overfit/':
+                if (lp.get('cost'), lp.get('tax'), lp.get('wht')) != ('0.1', '22', '15') or not all(x in cond for x in ('0.1%', '양도세 22%', '원천징수 15%')):
+                    fail(path, "계산 조건이 '거래 비용 0.1% · 양도세 22% · 원천징수 15%' 가 아님 — 열기 링크 %s · 조건 줄 %r" % ({k: lp.get(k) for k in ('cost', 'tax', 'wht')}, cond))
+            elif '세금 없음' not in cond or lp.get('tax') not in (None, '0'):
+                fail(path, '계산 조건 줄·링크 이상 (기대: 세금 없음): %r · %s' % (cond, lp.get('tax')))
             # 끝 = 2025-12-31 (맞춘 구간 끝) — 분기 번호는 링크의 q0(자료 첫 분기말)부터 셈 · q0 없으면 예전 1953-03-31 기준
             qk = lambda d: int(d[:4]) * 4 + (int(d[5:7]) - 1) // 3
             o['x'] = qk('2025-12-31') - qk(o.get('q0') or '1953-03-31')

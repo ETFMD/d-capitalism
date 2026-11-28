@@ -2,7 +2,10 @@
 /* [STRATSIM-FIT] 과최적화 탐색기 자료 — data/stratsim/fit-9sig.json · data/stratsim/fit-sma.json
    · 후보 설정: scripts/stratsim_fit_seed.json (기간·목표별 최적화 후보 — 설정만 있고 수치는 없음)
    · 계산: 투자전략 시뮬레이터 화면 코드(src/stratsim/*.js)를 그대로 불러와 화면과 똑같이 계산
-     (시작 $10,000 + 매달 $500 · 9sig 현금 이자 4% · SMA 현금 이자 0% · 거래 비용 0.02% · 맞춘 구간 끝 = 2025년 12월 31일)
+     (시작 $10,000 + 매달 $500 · 맞춘 구간 끝 = 2025년 12월 31일 · 모든 후보에 같이 쓰는 손잡이 = 후보 자료의 fixed:
+      9sig 현금 이자 4% · 거래 비용 0.02% · 세금 없음(9sig 엔진에 세금 계산 없음)
+      SMA 현금 이자 0% · 거래 비용(수수료·슬리피지) 0.1% · 양도세 22% · 분배금 미국 원천징수 15% (2026-11-28 사용자 결정 — 예전 0.02% · 세금 없음)
+      · 세금을 켠 종류는 '보유 대비'의 그냥 보유도 같은 세금 손잡이(선 = 원천징수 뗀 주식 · 양도세는 팔 때 내므로 선에 없음 — 시뮬레이터 선과 같음))
    · 맞춘 구간 지표(연평균·끝 금액·낙폭·샤프·소르티노·칼마·쏠림·보유 대비·작동 규칙·강건성·1990~2010)는
      계산 코드나 후보, 상장 전 구간(prelist.csv)이 바뀔 때만 다시 계산(오래 걸림 — SMA 약 20분), 2026년 이후 구간·1990~최신 지표는 매일
    사용: node scripts/stratsim_fit.cjs [--full] [--kind 9sig|sma] [--limit 행수(시험용)] [--if-stale]
@@ -58,6 +61,20 @@ const engineHash = sha(HASH_FILES.map((f) => fs.readFileSync(path.join(SRC, f), 
 
 const M = loadEngine();
 const DS = M.DS, Q = DS.q, S = M.S;
+// 세금 자료(분배금 · 원/달러) 가운데 맞춘 구간 지표에 드는 몫 — 세금을 켠 종류(후보 자료 fixed)만 해시에 넣음 (2026-11-28)
+//  · 지난 분배금이 고쳐지거나 더해지면(야후) · 지난 환율이 바뀌면 다음 실행이 그 종류를 전부 다시 계산 — 새 날짜가 붙는 것은 상관없음
+//  · 환율은 맞춘 구간 끝 + 14일까지(마지막 날 거래의 결제일 T+1·T+2 환율)
+const TAX_CUT = new Date(Date.parse(FIT_END) + 14 * 864e5).toISOString().slice(0, 10);
+function taxDataHash() {
+  const T = DS.taxRaw || {};
+  // 분배금 비율은 유효 숫자 10자리로 (야후 소수 끝자리 흔들림만으로 다시 계산하지 않게 — 결과에는 1e-10 보다 작은 차이)
+  const dv = (T.divs || []).filter((e) => e.date <= FIT_END).map((e) => e.date + e.k + e.y.toPrecision(10));
+  const fx = T.fx ? T.fx.d.map((d, i) => (d <= TAX_CUT ? d + ':' + T.fx.c[i] : null)).filter(Boolean) : [];
+  return sha(dv.join('|') + '#' + fx.join('|'));
+}
+const kindHash = (fixed) => engineHash + (M.ssTaxOn(fixed) ? '-tax' + taxDataHash() : '');
+// 세금을 켰는데 분배금·환율 자료가 없으면(파일이 없거나 모양이 다름) 엔진이 원천징수 없이 · 환율 1,300원으로 셈 → 그 종류는 쓰지 않음(예전 표 그대로)
+const taxDataMissing = (fixed) => M.ssTaxOn(fixed) && (!DS.divY || !DS.fx);
 const qOfMonth = (ym) => Q.findIndex((r) => r[0].slice(0, 7) === ym);
 const X_FIT = qOfMonth(FIT_END.slice(0, 7)), X_LAST = Q.length - 1, X_2010 = qOfMonth('2010-03');
 if (X_FIT < 0 || Q[X_FIT][0] !== FIT_END) throw new Error('맞춘 구간 끝 분기를 찾지 못함: ' + FIT_END);
@@ -93,7 +110,8 @@ function finalOnly(type, params, e, x) {
   delete M.R.cfgSim[cfg.id];
   return s.end;
 }
-// 날마다 평가액 — 화면 낙폭과 같은 방식(9sig 는 리밸런스 사이 보유 고정 · SMA 는 날마다 보유)
+// 날마다 평가액 — 화면 낙폭과 같은 방식(9sig 는 리밸런스 사이 보유 고정 · SMA 는 날마다 보유 · ssHeldValue)
+//  · SMA 세금: 못 낸 양도세 빚이 남은 돈보다 많은 날은 0 이하 값 그대로 (2026-11-28 — 예전 화면 낙폭은 그날을 건너뛰었음)
 function dailyEquity(sim) {
   const out = [];
   const multi = sim.type === 'sma';
@@ -106,8 +124,8 @@ function dailyEquity(sim) {
     if (row.date > b) break;
     while (ci + 1 < c.length && c[ci + 1].date <= row.date) ci++;
     let v;
-    if (multi) { v = c[ci].cash || 0; for (const k in (c[ci].h || {})) { const px = row[k]; if (px > 0) v += c[ci].h[k] * px; } }
-    else { const px = row[key]; if (!(px > 0)) continue; v = c[ci].shares * px + c[ci].cash; }
+    if (multi) { v = M.ssHeldValue(row, c[ci]); if (v == null) continue; out.push({ date: row.date, v }); continue; }
+    const px = row[key]; if (!(px > 0)) continue; v = c[ci].shares * px + c[ci].cash;
     if (Number.isFinite(v) && v > 0) out.push({ date: row.date, v });
   }
   return out;
@@ -127,6 +145,8 @@ function monthlyReturns(dv, ctx) {
   }
   return rets;
 }
+// 평가액이 한 번이라도 0 이하(세금 빚)로 내려간 구간은 달별 수익률(음수로 나눔)이 뜻이 없음 → 샤프·소르티노·쏠림 없음('—')
+const riskOfEquity = (dv, ctx) => (dv.some((x) => !(x.v > 0)) ? { sharpe: null, sortino: null, conc: null } : riskStats(monthlyReturns(dv, ctx)));
 const mean = (a) => a.reduce((s, x) => s + x, 0) / a.length;
 function riskStats(rets) {
   if (rets.length < 3) return { sharpe: null, sortino: null, conc: null };
@@ -160,16 +180,19 @@ for (const k of Object.keys(KIND)) {
 const COLS = ['final', 'cagr', 'dd', 'sharpe', 'sortino', 'calmar', 'conc', 'vsbh', 'active', 'live', 'robust', 'back', 'backDD', 'fwd', 'fwdDD', 'era', 'eraDD', 'eraSharpe'];
 const STATIC_N = 13;   // 앞 13칸 = 맞춘 구간(고정) · 뒤 5칸 = 날마다
 
+// '보유 대비'의 그냥 보유 — 후보와 같은 세금 손잡이(세금을 켠 후보면 원천징수 뗀 선 · 양도세는 팔 때 내므로 선에 없음 = 시뮬레이터 선)
 const bhCache = new Map();
-function bhCagr(ul, e) {
-  const k = ul + ':' + e;
-  if (!bhCache.has(k)) bhCache.set(k, run('bh', { ul }, e, X_FIT).s.cagr);
+function bhCagr(p, e) {
+  const q = { ul: p.ul };
+  if (M.ssTaxOn(p)) { q.tax = String(p.tax || '0'); q.wht = String(p.wht || '0'); }
+  const k = JSON.stringify(q) + ':' + e;
+  if (!bhCache.has(k)) bhCache.set(k, run('bh', q, e, X_FIT).s.cagr);
   return bhCache.get(k);
 }
 function staticMetrics(kind, p, e, from) {
   const K = KIND[kind];
   const fit = run(kind, p, e, X_FIT), F = fit.s.end;
-  const rs = riskStats(monthlyReturns(dailyEquity(fit.sim), fit.ctx));
+  const rs = riskOfEquity(dailyEquity(fit.sim), fit.ctx);
   const fin = (q) => finalOnly(kind, q, e, X_FIT);
   const live = [];
   for (const [nm, off] of Object.entries(K.rules)) {
@@ -191,7 +214,7 @@ function staticMetrics(kind, p, e, from) {
   let back = null, backDD = null;
   if (from === '2010') { const b = run(kind, p, KIND[kind].e90, X_2010); back = b.s.cagr; backDD = b.s.maxDD; }
   return [Math.round(F), r2(fit.s.cagr, 4), r2(fit.s.maxDD, 4), r2(rs.sharpe, 2), r2(rs.sortino, 2), r2(fit.s.maxDD > 0 ? fit.s.cagr / fit.s.maxDD : null, 2), r2(rs.conc, 0),
-    r2(fit.s.cagr - bhCagr(p.ul, e), 1), K.core + live.length, live.join('+'), nb ? Math.round(ok / nb * 100) : null, r2(back, 1), r2(backDD, 1)];
+    r2(fit.s.cagr - bhCagr(p, e), 1), K.core + live.length, live.join('+'), nb && F > 0 ? Math.round(ok / nb * 100) : null, r2(back, 1), r2(backDD, 1)];   // 끝 금액이 0 이하(세금 빚)면 ±25% 이웃이 뜻이 없어 강건성 없음
 }
 function dynamicMetrics(kind, p, e) {
   // 2026년 이후: 처음(e)부터 오늘까지 이어서 돌린 전략의 2025년 말 대비 수익(적립금 뺌)·그 사이 최대 낙폭
@@ -201,19 +224,19 @@ function dynamicMetrics(kind, p, e) {
   let fwd = null, fwdDD = null, iDec = -1;
   for (let i = 0; i < dv.length && dv[i].date <= DEC_DAY; i++) iDec = i;
   if (iDec >= 0 && iDec === dv.length - 1) { fwd = 0; fwdDD = 0; }
-  else if (iDec >= 0) {
+  else if (iDec >= 0 && dv[iDec].v > 0) {   // 2025년 말 평가액이 0 이하(세금 빚)면 늘어난 비율이 뜻이 없어 없음('—')
     const end = dv[dv.length - 1].date;
     let F = 0;
     if (kind === '9sig') { const lg = all.sim.log; for (let i = 1; i < lg.length; i++) if (lg[i].date > DEC_DAY && lg[i].date <= end) F += lg[i].invested - lg[i - 1].invested; }
     else { const sc = M.ssSchedule(all.ctx.monthly, all.ctx.raise, all.ctx.entryDate, all.ctx.exitDate); for (const it of sc.list) if (it.date > DEC_DAY && it.date <= end) F += it.amount; }
     fwd = ((dv[dv.length - 1].v - F) / dv[iDec].v - 1) * 100;
     let pk = -Infinity, mdd = 0;
-    for (let i = iDec; i < dv.length; i++) { if (dv[i].v > pk) pk = dv[i].v; mdd = Math.max(mdd, 1 - dv[i].v / pk); }
+    for (let i = iDec; i < dv.length; i++) { if (dv[i].v > pk) pk = dv[i].v; mdd = Math.max(mdd, Math.min(1, 1 - dv[i].v / pk)); }   // 0 아래로 가도 100% 까지
     fwdDD = mdd * 100;
   }
   // 1990년부터 오늘까지
   const era = run(kind, p, KIND[kind].e90, X_LAST);
-  const rs = riskStats(monthlyReturns(dailyEquity(era.sim), era.ctx));
+  const rs = riskOfEquity(dailyEquity(era.sim), era.ctx);
   return [r2(fwd, 1), r2(fwdDD, 1), r2(era.s.cagr, 1), r2(era.s.maxDD, 1), r2(rs.sharpe, 2)];
 }
 
@@ -227,7 +250,7 @@ if (args.includes('--if-stale')) {
     if (ONLY && ONLY !== kind) return false;
     let prev = null;
     try { prev = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'stratsim', 'fit-' + kind + '.json'), 'utf8')); } catch (e) { prev = null; }
-    return !prev || prev.engine !== engineHash || prev.seed !== sha(JSON.stringify(seed[kind]));
+    return !prev || prev.engine !== kindHash(seed[kind].fixed) || prev.seed !== sha(JSON.stringify(seed[kind]));
   });
   if (!stale.length) { console.log('탐색기 표: 해시가 지금과 같음 — 다시 계산하지 않음'); return; }
   console.log('탐색기 표: 해시가 바뀜(' + stale.join('·') + ') — 맞춘 구간 지표를 다시 계산');
@@ -235,11 +258,12 @@ if (args.includes('--if-stale')) {
 for (const kind of ['9sig', 'sma']) {
   if (ONLY && ONLY !== kind) continue;
   const sd = seed[kind], keys = sd.keys, fixed = sd.fixed;
-  const seedHash = sha(JSON.stringify(sd));
+  const seedHash = sha(JSON.stringify(sd)), hash = kindHash(fixed);
+  if (taxDataMissing(fixed)) { console.log('::error::' + kind + ': 세금을 켠 후보인데 분배금(data/stratsim/divs.csv)·환율(data/usdkrw.json) 자료가 없음 — 이 종류는 다시 계산하지 않고 예전 표 그대로'); continue; }
   const outPath = path.join(ROOT, 'data', 'stratsim', 'fit-' + kind + '.json');
   let prev = null;
   try { prev = JSON.parse(fs.readFileSync(outPath, 'utf8')); } catch (e) { prev = null; }
-  const reuse = !FULL && prev && prev.engine === engineHash && prev.seed === seedHash && !LIMIT;
+  const reuse = !FULL && prev && prev.engine === hash && prev.seed === seedHash && !LIMIT;
   const prevRows = new Map();
   if (reuse) for (const t of prev.tabs) for (const r of t.rows) prevRows.set(t.key + '|' + r.slice(COLS.length).join(','), r);
   const tabs = [];
@@ -265,11 +289,12 @@ for (const kind of ['9sig', 'sma']) {
     if (t.goal === 'dd') { tab.cagrMin = t.cagrMin; tab.total = t.total; }
     tabs.push(tab);
   }
-  const out = { v: 1, kind, updated: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), engine: engineHash, seed: seedHash, q0: Q[0][0], dataTo: LAST_DAY, fitEnd: FIT_END, fwdFrom: DEC_DAY,
+  const out = { v: 1, kind, updated: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), engine: hash, seed: seedHash, q0: Q[0][0], dataTo: LAST_DAY, fitEnd: FIT_END, fwdFrom: DEC_DAY,
     keys, fixed, cols: COLS, tabs };
   // 검사: 행 수·숫자
   for (const t of tabs) for (const r of t.rows) {
-    if (!(r[0] > 0) || !Number.isFinite(r[1]) || !(r[2] >= 0 && r[2] <= 100)) throw new Error(kind + ' ' + t.key + ': 이상한 결과 ' + JSON.stringify(r.slice(0, 3)));
+    // 끝 금액은 0 이하일 수 있음(SMA 세금: 못 낸 양도세 빚이 남은 돈보다 많음 — 그때 연평균 −100%) · 0 은 계산이 안 된 것
+    if (!Number.isFinite(r[0]) || r[0] === 0 || !Number.isFinite(r[1]) || !(r[2] >= 0 && r[2] <= 100) || (r[0] < 0 && r[1] !== -100)) throw new Error(kind + ' ' + t.key + ': 이상한 결과 ' + JSON.stringify(r.slice(0, 3)));
   }
   const body = (o) => { const c = Object.assign({}, o); delete c.updated; return JSON.stringify(c); };
   if (prev && body(prev) === body(out)) { console.log(`${kind}: 바뀐 것 없음 (${n}행, 고정 지표 재사용 ${hit}행)`); continue; }
@@ -283,4 +308,4 @@ for (const kind of ['9sig', 'sma']) {
 console.log('끝 —', ((Date.now() - t0) / 1000).toFixed(0), '초 · 저장', wrote);
 }
 if (require.main === module) main();
-module.exports = { M, loadEngine, run, finalOnly, ctxFor, dailyEquity, monthlyReturns, riskStats, staticMetrics, dynamicMetrics, KIND, X_FIT, X_LAST };
+module.exports = { M, loadEngine, run, finalOnly, ctxFor, dailyEquity, monthlyReturns, riskStats, riskOfEquity, staticMetrics, dynamicMetrics, bhCagr, kindHash, taxDataHash, KIND, X_FIT, X_LAST };

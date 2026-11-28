@@ -15,6 +15,7 @@
      행마다 넣은 돈 누계 + 그냥 보유 주수로 돈의 날짜·가격까지) · 실제 거래내역의 달 중간 마지막 행 · 정확한 청산일의 SMA 끝 값 ·
      시각이 붙은 날짜 · 아주 작은 값의 IRR 부호 · 자료 첫해~최신(50년 넘음) 적립식 연평균
    · 과최적화 탐색기 자료(data/stratsim/fit-*.json): 탭·행 수가 후보와 같고, 무작위 행의 맞춘 구간 지표를 다시 계산하면 저장된 값과 같음
+     · 계산 조건(2026-11-28): SMA = 거래 비용 0.1% · 양도세 22% · 원천징수 15%(세금이 결과를 실제로 줄임 · 보유 대비 = 세금 켠 그냥 보유 · 세금 자료 해시) · 9sig = 세금 없음
    · 전략 라이브러리 코드 전략(2026-10-21 고친 것): 어느 날 들어온 돈도 사라지지 않음(특히 파는 날) · #1 Faber 는 달의 마지막
      거래일에만 판단(주 단위 화면에서도 같은 거래) · #18 은 주의 마지막 거래일에만 · #26 중심선 = 마지막 W 거래일로 직접 계산한 값
    실패하면 'FAIL …' 줄과 종료 코드 1 */
@@ -63,7 +64,9 @@ for (const kind of ['9sig', 'sma']) {
   D.tabs.forEach((t, i) => {
     n++;
     if (t.key !== sd.tabs[i].key || t.rows.length !== sd.tabs[i].rows.length) fail(kind + ' ' + t.key + ': 행 ' + t.rows.length + ' ≠ ' + sd.tabs[i].rows.length);
-    for (const r of t.rows) if (!(r[0] > 0) || !Number.isFinite(r[1]) || !(r[2] >= 0 && r[2] <= 100) || r[8] == null) { fail(kind + ' ' + t.key + ': 이상한 행 ' + JSON.stringify(r.slice(0, 9))); break; }
+    // 끝 금액 0 이하 = SMA 세금 빚이 남은 돈보다 많음(2026-11-28) — 그때 연평균 −100% · 낙폭 100% · 샤프·소르티노·쏠림·강건성 없음
+    for (const r of t.rows) if (!Number.isFinite(r[0]) || r[0] === 0 || !Number.isFinite(r[1]) || !(r[2] >= 0 && r[2] <= 100) || r[8] == null
+      || (r[0] < 0 && (r[1] !== -100 || r[2] !== 100 || r[3] !== null || r[4] !== null || r[6] !== null || r[10] !== null))) { fail(kind + ' ' + t.key + ': 이상한 행 ' + JSON.stringify(r.slice(0, 11))); break; }
   });
   // 무작위 행 2개(탭마다 다르게)를 다시 계산
   for (const ti of [0, 3]) {
@@ -75,6 +78,70 @@ for (const kind of ['9sig', 'sma']) {
     const same = st.every((v, j) => (typeof v === 'number' ? close(v, r[j], 1e-9) : v === r[j]));
     if (!same) fail(kind + ' ' + t.key + ': 다시 계산한 맞춘 구간 지표가 다름 ' + JSON.stringify(st) + ' ≠ ' + JSON.stringify(r.slice(0, st.length)));
   }
+}
+// 탐색기 계산 조건 (2026-11-28 사용자 결정): SMA = 현금 이자 0% · 거래 비용(수수료·슬리피지) 0.1% · 양도세 22% · 분배금 원천징수 15%
+//  · 9sig = 현금 이자 4% · 0.02% · 세금 없음(9sig 엔진에 세금 계산 없음) — 후보 자료와 저장된 표가 같은 조건
+{
+  const want = { sma: { cr: '0', cost: '0.1', tax: '22', wht: '15' }, '9sig': { cr: '4', cost: '0.02' } };
+  const rd = (kind) => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'stratsim', 'fit-' + kind + '.json'), 'utf8')); } catch (e) { return null; } };
+  for (const kind of ['9sig', 'sma']) {
+    n++;
+    if (JSON.stringify(seed[kind].fixed) !== JSON.stringify(want[kind])) fail(kind + ' 탐색기 계산 조건(후보 자료 fixed) ' + JSON.stringify(seed[kind].fixed) + ' ≠ ' + JSON.stringify(want[kind]));
+    const D = rd(kind);
+    n++;
+    if (!D || JSON.stringify(D.fixed) !== JSON.stringify(want[kind])) fail(kind + ' 탐색기 표의 계산 조건 ' + JSON.stringify(D && D.fixed) + ' 이 후보와 다름 — 표를 다시 계산해야 함');
+  }
+  // 세금 자료를 읽었고(없으면 엔진이 원천징수 없이 · 환율 1,300원으로 셈) 세금이 결과를 실제로 바꿈 · '보유 대비' = 같은 세금을 켠 그냥 보유
+  n++;
+  if (!M.DS.divY || !M.DS.fx) fail('탐색기: 분배금(divs.csv)·환율(usdkrw.json) 자료를 읽지 못함');
+  const D = rd('sma');
+  for (const ti of [0, 2, 4]) {
+    const t = D.tabs[ti], r = t.rows[0], p = Object.assign({}, D.fixed);
+    D.keys.forEach((k, j) => { p[k] = String(r[D.cols.length + j]); });
+    const q = M.ssCleanParams('sma', p), on = F.run('sma', q, t.e, F.X_FIT).s, of = F.run('sma', Object.assign({}, q, { tax: '0', wht: '0' }), t.e, F.X_FIT).s;
+    n++;
+    if (Math.round(on.end) !== r[0] || !(on.end < of.end * 0.9)) fail('탐색기 SMA ' + t.key + ': 세금 켠 끝 금액 ' + Math.round(on.end) + '(표 ' + r[0] + ') · 끈 것 ' + Math.round(of.end) + ' — 세금이 결과를 충분히 줄이지 않음');
+    const bhOn = F.run('bh', { ul: q.ul, tax: '22', wht: '15' }, t.e, F.X_FIT).s.cagr, bhOff = F.run('bh', { ul: q.ul }, t.e, F.X_FIT).s.cagr;
+    n++;
+    if (!(bhOn < bhOff)) fail('탐색기: 그냥 보유 ' + q.ul + ' ' + t.key + ' 원천징수 뗀 연평균 ' + bhOn + ' 이 안 뗀 것 ' + bhOff + ' 보다 작지 않음');
+    n++;
+    if (r[D.cols.indexOf('vsbh')] !== +(on.cagr - bhOn).toFixed(1)) fail('탐색기 SMA ' + t.key + ' 보유 대비 ' + r[D.cols.indexOf('vsbh')] + ' ≠ 연평균 − 세금 켠 그냥 보유 ' + (on.cagr - bhOn).toFixed(1));
+  }
+  // 세금 빚으로 끝 금액이 0 아래인 행 · 끝은 0 위지만 한때 0 아래로 내려가 샤프가 없는 행을 하나씩 다시 계산 — 저장된 값과 같음
+  for (const [nm, pick] of [['끝 금액 0 아래', (r) => r[0] < 0], ['한때 0 아래', (r) => r[0] > 0 && r[3] === null]]) {
+    let hit = null;
+    for (const t of D.tabs) { const r = t.rows.find(pick); if (r) { hit = [t, r]; break; } }
+    n++;
+    if (!hit) { fail('탐색기 SMA: ' + nm + ' 행이 없음 (세금 빚 처리 검사를 못 함)'); continue; }
+    const [t, r] = hit, p = Object.assign({}, D.fixed);
+    D.keys.forEach((k, j) => { p[k] = String(r[D.cols.length + j]); });
+    const st = F.staticMetrics('sma', M.ssCleanParams('sma', p), t.e, t.from);
+    n++;
+    if (!st.every((v, j) => (typeof v === 'number' ? close(v, r[j], 1e-9) : v === r[j]))) fail('탐색기 SMA ' + t.key + ' ' + nm + ' 행 다시 계산이 다름 ' + JSON.stringify(st) + ' ≠ ' + JSON.stringify(r.slice(0, st.length)));
+  }
+  // 평가액이 0 아래(못 낸 양도세 빚이 남은 돈보다 많음)일 때 — 연평균 −100% · 낙폭 100% (예전: 연평균 0% · 그날을 건너뛰어 낙폭이 작게)
+  //  · 빚이 없는데 0 인 날(그 종목 가격이 아직 없음)은 예전처럼 건너뜀 — 가짜 100% 낙폭이 생기지 않게
+  n++;
+  if (M.ssCagrMW(10000, 500, '0', '2000-01-03', '2010-01-04', 10, -5, 70000, null, 'day', true) !== -100 || M.ssCagrMW(10000, 500, '0', '2000-01-03', '2010-01-04', 10, 0, 70000, null, 'day', true) !== 0)
+    fail('연평균: 끝 평가액 −5 → −100% · 0 → 0% 이어야 함');
+  const days = M.DS.days, dAt = (d) => days.find((x) => x.date >= d).date;
+  const ddA = M.ssDailyDDMulti([{ date: dAt('2015-01-02'), h: { tqqq: 100 }, cash: 0 }, { date: dAt('2015-06-01'), h: { tqqq: 1 }, cash: -1e6 }, { date: dAt('2015-12-01'), h: { tqqq: 1 }, cash: -1e6 }]);
+  const ddB = M.ssDailyDDMulti([{ date: dAt('1990-01-02'), h: { spy: 100 }, cash: 0 }, { date: dAt('1990-02-01'), h: { soxl: 100 }, cash: 0 }, { date: dAt('1990-03-01'), h: { soxl: 100 }, cash: -5 }, { date: dAt('1990-04-02'), h: { spy: 100 }, cash: 0 }]);
+  const spyOnly = M.ssDailyDDMulti([{ date: dAt('1990-01-02'), h: { spy: 100 }, cash: 0 }, { date: dAt('1990-02-01'), h: { spy: 0 }, cash: 0 }, { date: dAt('1990-04-02'), h: { spy: 100 }, cash: 0 }]);
+  n++;
+  if (ddA.pct !== 1 || days.find((x) => x.date === dAt('1990-02-01')).soxl > 0 || ddB.pct >= 0.5 || Math.abs(ddB.pct - spyOnly.pct) > 1e-12)
+    fail('낙폭: 빚으로 0 아래 = 100% (' + ddA.pct + ') · 가격 없는 날 건너뜀 ' + ddB.pct + ' = ' + spyOnly.pct);
+  // 해시: 세금을 켠 종류만 세금 자료가 들어감 · 맞춘 구간 안 분배금·환율이 바뀌면 바뀌고, 뒤에 새 날짜가 붙으면 그대로
+  const T = M.DS.taxRaw, dv0 = T.divs, fx0 = T.fx, h0 = F.taxDataHash();
+  T.divs = dv0.concat([{ date: '2026-06-01', k: 'tqqq', y: 0.01 }]); const hA = F.taxDataHash();
+  T.divs = dv0.map((e, i) => (i === 0 ? Object.assign({}, e, { y: e.y * 1.01 }) : e)); const hB = F.taxDataHash();
+  T.divs = dv0; T.fx = { d: fx0.d.concat(['2026-11-30']), c: fx0.c.concat([1500]) }; const hC = F.taxDataHash();
+  T.fx = { d: fx0.d, c: fx0.c.map((v, i) => (i === 100 ? v + 1 : v)) }; const hD = F.taxDataHash();
+  T.fx = fx0;
+  n++;
+  if (hA !== h0 || hB === h0 || hC !== h0 || hD === h0 || F.taxDataHash() !== h0) fail('탐색기 세금 자료 해시: 뒤에 붙음 ' + (hA === h0) + ' · 지난 분배금 고침 ' + (hB !== h0) + ' · 환율 뒤에 붙음 ' + (hC === h0) + ' · 지난 환율 고침 ' + (hD !== h0));
+  n++;
+  if (!/-tax[0-9a-f]{16}$/.test(F.kindHash(seed.sma.fixed)) || /-tax/.test(F.kindHash(seed['9sig'].fixed))) fail('탐색기 해시: SMA(세금 켬)에만 세금 자료가 들어가야 함 ' + F.kindHash(seed.sma.fixed) + ' · ' + F.kindHash(seed['9sig'].fixed));
 }
 // 전략 라이브러리 코드 전략 — 고친 버그가 되살아나지 않게
 {

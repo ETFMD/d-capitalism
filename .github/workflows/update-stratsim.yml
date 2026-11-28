@@ -6,7 +6,8 @@ name: 투자전략 시뮬레이터 자료 갱신
 #  · 마감 뒤 실행(ET 16:00 ~ 다음 날 04:00)에서만 과최적화 탐색기 표의 2026년 이후·1990~최신 지표를 다시 계산(후보 6,293개 — Actions 에서 약 5분 · 바뀐 것이 없으면 쓰지 않음)
 #  · 2026-11-27: 예약 실행이 GitHub 쪽에서 크게 늦거나 빠져(13~22시 UTC 매시 예약 중 하루 1~2번 · 그마저 17:30 ET 를 넘겨 '장 시간 밖'으로 건너뜀)
 #    11-20 뒤 5일 동안 자료가 멈췄음 → 시간 문으로 건너뛰지 않고 늦게 온 실행도 받음(바뀐 것이 없으면 커밋 안 함) · 마감 뒤 따라잡기 예약 추가
-#  · 계산 코드(src/stratsim/00-core·05-params·10-engine·41-render.js)·후보·STATIC_VER 이 바뀌면 탐색기 전체를 다시 계산(Actions 에서 약 20~40분)
+#  · 계산 코드(src/stratsim/00-core·05-params·10-engine·41-render.js)·후보·STATIC_VER 이 바뀌면 탐색기 전체를 다시 계산(Actions 에서 약 40~70분 —
+#    2026-11-28 SMA 후보에 양도세·원천징수·거래 비용 0.1% 를 넣어 예전 20~40분보다 김 · 로컬 41분) · SMA 는 맞춘 구간 안 분배금·환율 자료가 바뀌어도(해시) 다시 계산
 #  · 상장 전 구간 = data/stratsim/prelist.csv(update-etf-bt.yml 이 매주 재현 식으로 만듦 · 이 워크플로는 쓰지 않음) × 야후 상장 첫날 수정 종가
 #    — prelist.csv 가 바뀐 뒤 첫 실행이 가격을 다시 쓰고, 탐색기 해시도 바뀌므로 같은 실행에서 탐색기 표 전체를 다시 계산해 한 커밋으로
 #    (fit-*.json 의 engine 해시가 지금 코드와 다를 때 저절로 — 시간 제한을 넉넉히 둠)
@@ -19,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       full:
-        description: '과최적화 탐색기 전체 다시 계산 (약 20~40분)'
+        description: '과최적화 탐색기 전체 다시 계산 (약 40~70분)'
         type: boolean
         default: false
   push:
@@ -93,7 +94,7 @@ jobs:
       # 장중 실행: 상장 전 구간(prelist.csv)이 바뀌어 위 일봉 단계가 가격을 다시 쓴 경우만 탐색기 표를 같은 커밋으로 다시 계산 (해시가 같으면 바로 끝)
       - name: 과최적화 탐색기 표 (해시가 바뀐 경우만)
         if: steps.gate.outputs.run == 'true' && steps.gate.outputs.fit != 'true'
-        timeout-minutes: 90
+        timeout-minutes: 150   # 2026-11-28 90 → 150: SMA 세금 계산으로 전체 다시 계산이 길어짐(로컬 41분)
         run: node scripts/stratsim_fit.cjs --if-stale
 
       - name: 바뀐 경우에만 커밋

@@ -21,6 +21,18 @@ const ssfPct = (v, d, plus) => (v == null || !Number.isFinite(+v) ? '—' : (plu
 const ssfTick = (a) => (a === 'cash' ? '현금' : String(a).toUpperCase());
 const ssfPill = (a) => '<span class="ssf-pill t' + (SSF_ASSET_TIER[a] != null ? SSF_ASSET_TIER[a] : 0) + '">' + ssfEsc(ssfTick(a)) + '</span>';
 const ssfSign = (v) => (v == null ? '' : v > 0 ? ' ssf-up' : v < 0 ? ' ssf-dn' : '');
+// 모든 후보에 같이 쓰는 조건 — 자료(D.fixed · scripts/stratsim_fit_seed.json)에서 읽음 → 표를 다시 계산하면 글도 저절로 맞음
+//  (2026-11-28: SMA = 현금 이자 0% · 거래 비용 0.1% · 양도세 22% · 분배금 원천징수 15% · 9sig = 현금 이자 4% · 0.02% · 세금 없음)
+function ssfCond(D) {
+  const f = D.fixed || {}, tax = +f.tax || 0, wht = +f.wht || 0;
+  return { cr: f.cr != null ? +f.cr : D.kind === '9sig' ? 4 : 0, cost: f.cost != null ? +f.cost : 0.02, tax, wht, on: tax > 0 || wht > 0 };
+}
+function ssfCondText(D, long) {
+  const c = ssfCond(D), tx = [];
+  if (c.tax > 0) tx.push('양도세 ' + c.tax + '%' + (long ? '(해마다 250만 원 공제 · 이듬해 5월 냄)' : ''));
+  if (c.wht > 0) tx.push('분배금 미국 원천징수 ' + c.wht + '%');
+  return '현금 이자 ' + c.cr + '% · ' + (long ? '사고팔 때마다 ' : '') + '거래 비용(수수료·슬리피지) ' + c.cost + '% · ' + (tx.length ? tx.join(' · ') : '세금 없음');
+}
 
 // ── 열 정의 (m: 지표 이름 · p: 손잡이 이름) ──
 function ssfCols(D) {
@@ -29,14 +41,17 @@ function ssfCols(D) {
   const M = (r, c) => r[mi[c]], P = (r, k) => r[pi[k]];
   const is9 = D.kind === '9sig';
   const nRules = is9 ? 11 : 13;
+  const TX = ssfCond(D).on;   // 세금을 켠 표 — 설명에 세금이 어떻게 들어갔는지 덧붙임
   const ddCls = (v) => (v >= 70 ? 'ssf-dd4' : v >= 55 ? 'ssf-dd3' : v >= 40 ? 'ssf-dd2' : 'ssf-dd1');
   const cols = [
     { id: 'open', h: '', cls: 'ssf-open l', get: (r) => '<a class="ssf-go" target="_blank" rel="noopener" href="' + ssfLink(D, r, P) + '" title="투자전략 시뮬레이터에서 이 설정으로 열기 (새 탭)">열기 ↗</a>' },
     { id: 'rank', h: '#', cls: 'ssf-rank l', get: (r, i) => i + 1, tip: '지금 정렬 순서의 순위입니다. 열 이름을 누르면 그 열로 다시 정렬합니다 — 수익 최대 탭은 연평균 높은 순, 낙폭 최소 탭은 낙폭 작은 순으로 열립니다.' },
-    { id: 'cagr', h: '연평균', v: (r) => M(r, 'cagr'), get: (r) => '<b class="ssf-up">' + ssfPct(M(r, 'cagr'), 1, true) + '</b>',
-      tip: '맞춘 구간(시작 연도~2025년 말)의 돈 가중 연수익률(IRR) — 시작 금액과 매달 적립금이 들어온 날짜를 모두 반영한 연평균입니다. 시뮬레이터에서 같은 설정으로 열었을 때 범례의 연평균과 같습니다.' },
+    { id: 'cagr', h: '연평균', v: (r) => M(r, 'cagr'), get: (r) => '<b class="' + (M(r, 'cagr') < 0 ? 'ssf-dn' : 'ssf-up') + '">' + ssfPct(M(r, 'cagr'), 1, true) + '</b>',
+      tip: '맞춘 구간(시작 연도~2025년 말)의 돈 가중 연수익률(IRR) — 시작 금액과 매달 적립금이 들어온 날짜를 모두 반영한 연평균입니다. 시뮬레이터에서 같은 설정으로 열었을 때 범례의 연평균과 같습니다.'
+        + (TX ? '\n\n거래 비용과 세금(낸 양도세·분배금 원천징수)을 뺀 뒤의 값입니다.' : '') },
     { id: 'final', h: '끝 금액', v: (r) => M(r, 'final'), get: (r) => '<b>' + ssfMoney(M(r, 'final')) + '</b>',
-      tip: '2025년 12월 31일 평가액 — 시작 $10,000 + 매달 $500 를 모든 후보에 똑같이 넣었으므로 그대로 비교할 수 있습니다. 시작 연도가 이를수록 오래 불어나 금액이 큽니다.' },
+      tip: '2025년 12월 31일 평가액 — 시작 $10,000 + 매달 $500 를 모든 후보에 똑같이 넣었으므로 그대로 비교할 수 있습니다. 시작 연도가 이를수록 오래 불어나 금액이 큽니다.'
+        + (TX ? '\n\n세금: 해마다 이듬해 5월에 낸 양도세와 분배금 원천징수를 뺀 평가액입니다. 2025년에 판 이익의 양도세는 2026년 5월에 내므로 아직 빠지지 않았고, 이날 전부 판다면 남은 이익의 양도세가 더 빠집니다(시뮬레이터 \'세금\' 칸의 끝에 다 팔면).\n\n마이너스 = 크게 벌어 판 다음 해 5월 전에 폭락해, 팔 것이 없어 못 낸 양도세(빚)가 남은 돈보다 많은 것 — 그때 연평균은 −100%, 샤프·소르티노·쏠림·강건성은 뜻이 없어 \'—\' 로 둡니다.' : '') },
     { id: 'dd', h: '최대 낙폭', v: (r) => M(r, 'dd'), get: (r) => '<span class="' + ddCls(M(r, 'dd')) + '">−' + (+M(r, 'dd')).toFixed(0) + '%</span>',
       tip: '맞춘 구간 동안 고점에서 저점까지 가장 크게 떨어진 비율 — 날마다 종가로 다시 평가합니다(리밸런스 사이에는 보유 그대로). −55% 는 평가액이 한때 직전 고점보다 55% 낮았다는 뜻입니다.' },
     { id: 'sharpe', h: '샤프', m: 1, v: (r) => M(r, 'sharpe'), get: (r) => (M(r, 'sharpe') == null ? '—' : (+M(r, 'sharpe')).toFixed(2)),
@@ -48,7 +63,8 @@ function ssfCols(D) {
     { id: 'conc', h: '쏠림', m: 1, v: (r) => M(r, 'conc'), get: (r) => (M(r, 'conc') == null ? '—' : M(r, 'conc') + '%'),
       tip: '전체 복리 수익 가운데 가장 좋았던 상위 1% 달이 만든 몫 — 결과가 몇몇 특별한 달에 얼마나 기대는지.\n\n15% 미만 고르게 벌어 되풀이되기 쉬움 · 15~40% 보통 · 40% 넘음 몇 달에 기댐(다른 기간에서 잘 안 통함)' },
     { id: 'vsbh', h: '보유 대비', m: 1, v: (r) => M(r, 'vsbh'), get: (r) => (M(r, 'vsbh') == null ? '—' : '<span class="' + ssfSign(M(r, 'vsbh')) + '">' + (M(r, 'vsbh') > 0 ? '+' : M(r, 'vsbh') < 0 ? '−' : '') + Math.abs(M(r, 'vsbh')).toFixed(1) + '%p</span>'),
-      tip: '이 전략의 연평균 − 같은 ' + (is9 ? '종목' : '주 종목') + '을 그냥 사서 들고 있었을 때의 연평균(같은 $10,000 + 매달 $500). 신호와 타이밍이 그냥 보유보다 무엇을 더했는지 보여 줍니다.\n\n0 보다 크면 보유를 이김 · 작으면 수익을 내줌\n\n낙폭 최소 탭은 덜 흔들리는 것이 목표라 마이너스가 흔합니다.' },
+      tip: '이 전략의 연평균 − 같은 ' + (is9 ? '종목' : '주 종목') + '을 그냥 사서 들고 있었을 때의 연평균(같은 $10,000 + 매달 $500). 신호와 타이밍이 그냥 보유보다 무엇을 더했는지 보여 줍니다.\n\n0 보다 크면 보유를 이김 · 작으면 수익을 내줌\n\n낙폭 최소 탭은 덜 흔들리는 것이 목표라 마이너스가 흔합니다.'
+        + (TX ? '\n\n그냥 보유도 같은 분배금 원천징수를 뗍니다. 그냥 보유는 팔지 않아 양도세를 끝에 팔 때 한 번 내므로(이 값에는 없음), 사고팔 때마다 해마다 양도세를 내는 전략보다 유리하게 나옵니다.' : '') },
     { id: 'active', h: '작동 규칙', m: 1, v: (r) => M(r, 'active'),
       get: (r) => { const l = String(M(r, 'live') || '').split('+').filter(Boolean).map((x) => SSF_RULE_KO[x] || x).join(' · ') || '없음'; return '<span class="ssf-tipc" data-tip="결과를 바꾸는 규칙: ' + ssfEsc(l) + '">' + M(r, 'active') + '/' + nRules + '</span>'; },
       tip: (is9 ? '손잡이 11개 가운데 결과를 실제로 바꾸는 개수. 기본 5개(종목·현금 둘 곳·주기·목표 성장·현금 비중)는 늘 세고, 규칙 6개(폭락 버티기·급등 되돌림·매수 한도·적립금 바로 투자·리밸런스 시점·목표 기준)는 그 규칙을 꺼 봤을 때 끝 금액이 달라질 때만 셉니다.\n\n5 = 기본 손잡이만, 맞출 여지가 적음 · 11 = 모든 규칙이 작동, 맞출 여지가 가장 큼'
@@ -56,7 +72,8 @@ function ssfCols(D) {
     { id: 'robust', h: '강건성', m: 1, v: (r) => M(r, 'robust'), get: (r) => (M(r, 'robust') == null ? '—' : '<span class="' + (M(r, 'robust') >= 70 ? 'ssf-good' : M(r, 'robust') >= 40 ? 'ssf-mid' : 'ssf-bad') + '">' + M(r, 'robust') + '%</span>'),
       tip: '조절 손잡이마다 선택지를 한 칸 위·아래로 바꿔 다시 돌렸을 때, 끝 금액이 이 설정의 ±25% 안에 드는 이웃의 비율.\n\n70% 넘음 넓은 고원(강건함) · 40~70% 보통 · 40% 미만 칼날 위(과최적화 가능성이 큼)' },
     { id: 'fwd', h: '26년 이후', m: 1, v: (r) => M(r, 'fwd'), get: (r) => (M(r, 'fwd') == null ? '—' : '<span class="ssf-tipc' + ssfSign(M(r, 'fwd')) + '" data-tip="그 사이 최대 낙폭 −' + (M(r, 'fwdDD') != null ? (+M(r, 'fwdDD')).toFixed(1) : '?') + '%">' + ssfPct(M(r, 'fwd'), 1, true) + '</span>'),
-      tip: '어떤 후보도 맞추는 데 쓰지 않은 2026년 1월 1일부터 최신 자료일까지의 수익률(연율 아님) — 맞춘 구간부터 이어서 돌린 전략이 2025년 말 평가액 대비 얼마나 늘었는지(그 사이 적립금은 뺌). 매일 갱신되는 진짜 시험 구간입니다.\n\n시뮬레이터에서 2026년에 새로 시작하면 현금에서 출발하므로 이 값과 다를 수 있습니다. 마우스를 올리면 그 구간 최대 낙폭.' },
+      tip: '어떤 후보도 맞추는 데 쓰지 않은 2026년 1월 1일부터 최신 자료일까지의 수익률(연율 아님) — 맞춘 구간부터 이어서 돌린 전략이 2025년 말 평가액 대비 얼마나 늘었는지(그 사이 적립금은 뺌). 매일 갱신되는 진짜 시험 구간입니다.\n\n시뮬레이터에서 2026년에 새로 시작하면 현금에서 출발하므로 이 값과 다를 수 있습니다. 마우스를 올리면 그 구간 최대 낙폭.'
+        + (TX ? '\n\n2026년 5월에 낸 2025년 몫 양도세도 이 구간에 들어갑니다.' : '') },
     { id: 'back', h: '1990–2010', m: 1, only2010: 1, v: (r) => M(r, 'back'), get: (r) => (M(r, 'back') == null ? '—' : '<span class="ssf-tipc' + ssfSign(M(r, 'back')) + '" data-tip="그 구간 최대 낙폭 −' + (M(r, 'backDD') != null ? (+M(r, 'backDD')).toFixed(1) : '?') + '%">' + ssfPct(M(r, 'back'), 0, true) + '</span>'),
       tip: '이 설정을 1990년부터 2010년까지 돌렸을 때의 연평균 — 맞춘 구간 이전이라 한 번도 본 적 없는 구간으로 거꾸로 시험합니다(2010년 탭에만).\n\n맞춘 구간 연평균에 가깝고 낙폭도 비슷하면 다른 시대에도 통함 · 0 근처·마이너스·낙폭 폭발이면 2010년대에만 맞춘 것. 마우스를 올리면 그 구간 최대 낙폭.' },
     { id: 'era', h: '1990–최신', m: 1, v: (r) => M(r, 'era'), get: (r) => (M(r, 'era') == null ? '—' : '<span class="ssf-tipc' + ssfSign(M(r, 'era')) + '" data-tip="최대 낙폭 −' + (M(r, 'eraDD') != null ? (+M(r, 'eraDD')).toFixed(1) : '?') + '% · 샤프 ' + (M(r, 'eraSharpe') != null ? (+M(r, 'eraSharpe')).toFixed(2) : '?') + '">' + ssfPct(M(r, 'era'), 0, true) + '</span>'),
@@ -228,6 +245,7 @@ function ssfDrawPane(t) {
   }).join('');
   pane.innerHTML = '<div class="ssf-bar"><button type="button" class="ssf-btn' + (st.open ? ' on' : '') + '" data-act="filters">필터' + (nSet ? ' <span class="ssf-badge">' + nSet + '</span>' : '') + '</button>'
     + '<button type="button" class="ssf-btn" data-act="reset"' + (nSet ? '' : ' disabled') + '>필터 지우기</button><button type="button" class="ssf-btn" data-act="csv">CSV 받기</button><span class="ssf-count" id="ssf-count"></span></div>'
+    + '<p class="ssf-cond' + (ssfCond(SSF.D).on ? ' tax' : '') + '" id="ssf-cond">계산 조건: ' + ssfEsc(ssfCondText(SSF.D, false)) + '</p>'
     + '<div class="ssf-filters' + (st.open ? ' open' : '') + '">' + fparts + '</div>'
     + '<div class="ssf-scroll" id="ssf-scroll"><table class="ssf-tbl" id="ssf-tbl"></table></div>'
     + '<p class="ssf-foot">' + ssfFoot(t) + '</p>';
@@ -237,10 +255,12 @@ function ssfFoot(t) {
   const D = SSF.D, n = t.rows.length;
   // 1971 탭 후보는 원래 1953~2025년으로 찾은 것 — 이 사이트 자료는 1971년부터(그 전 나스닥 값은 검증할 수 없는 가상값이라 뺌)라 1971~2025년으로 다시 잼
   const span = t.from === '1971' ? '원래 1953~2025년 구간에 맞춰 찾은(이 사이트 자료는 1971년부터라 1971~2025년으로 다시 잰)' : t.from + '~2025년 구간에 맞춰 찾은';
-  const fresh = '자료: ' + D.dataTo.replace(/-/g, '.') + '까지 · 맞춘 구간 끝 ' + D.fitEnd.replace(/-/g, '.') + ' · 모든 후보에 시작 $10,000 + 매달 $500 (같은 돈이라 끝 금액을 그대로 비교) · 현금 이자 ' + (D.kind === '9sig' ? '4%' : '0%') + ' · 거래 비용 0.02%';
+  const tx = ssfCond(D).on;
+  const fresh = '자료: ' + D.dataTo.replace(/-/g, '.') + '까지 · 맞춘 구간 끝 ' + D.fitEnd.replace(/-/g, '.') + ' · 모든 후보에 시작 $10,000 + 매달 $500 (같은 돈이라 끝 금액을 그대로 비교) · ' + ssfCondText(D, true)
+    + (tx ? ' — 후보는 한국 세금 없이 찾은 설정이라, 세금·거래 비용을 넣은 이 표에서는 순위가 바뀝니다. 세금 없이 보려면 열기로 연 시뮬레이터에서 그 전략의 세금 손잡이를 끄면 됩니다' : '');
   if (t.goal === 'dd') {
     const ok = t.rows.filter((r) => r[SSF.C.mi.cagr] >= t.cagrMin).length;
-    return '<b>연평균 ' + t.cagrMin + '% 이상</b>을 지키면서 <b>최대 낙폭이 가장 작도록</b> ' + span + ' 설정 ' + n + '개(후보 ' + t.total + '개 가운데 조건을 만족했던 것)입니다. 이 사이트 계산으로 다시 돌린 지금 조건을 만족하는 것은 ' + ok + '개입니다. 낙폭 작은 순으로 열립니다. ' + fresh + '.';
+    return '<b>연평균 ' + t.cagrMin + '% 이상</b>을 지키면서 <b>최대 낙폭이 가장 작도록</b> ' + span + ' 설정 ' + n + '개(후보 ' + t.total + '개 가운데 조건을 만족했던 것)입니다. ' + (tx ? '세금·거래 비용을 넣어 ' : '') + '이 사이트 계산으로 다시 돌린 지금 조건을 만족하는 것은 ' + ok + '개입니다. 낙폭 작은 순으로 열립니다. ' + fresh + '.';
   }
   return '<b>끝 금액이 가장 크도록</b>(= 돈 가중 연평균 최대) ' + span + ' 설정 ' + n + '개입니다. 연평균 높은 순으로 열립니다. 2026년부터는 어떤 설정도 맞추는 데 쓰지 않은 구간이라 \'26년 이후\' 열이 진짜 시험입니다. ' + fresh + '.';
 }
