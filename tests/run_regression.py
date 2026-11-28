@@ -3467,6 +3467,18 @@ def stratsim_check(br, base, fail, ignorable):
                     fail(path, "계산 조건이 '거래 비용 0.1% · 양도세 22% · 원천징수 15%' 가 아님 — 열기 링크 %s · 조건 줄 %r" % ({k: lp.get(k) for k in ('cost', 'tax', 'wht')}, cond))
             elif '세금 없음' not in cond or lp.get('tax') not in (None, '0'):
                 fail(path, '계산 조건 줄·링크 이상 (기대: 세금 없음): %r · %s' % (cond, lp.get('tax')))
+            # 낙폭 최소 탭 아래 글 = 세후 하한(cagrMinNet · 2026-11-29 사용자 결정)과 그 하한을 넘는 개수 — 받은 표 자료로 셈
+            if path == 'sma-overfit/':
+                dd = pg.evaluate("""async () => { const D = await (await fetch('data/stratsim/fit-sma.json', { cache: 'no-cache' })).json();
+                  const ci = D.cols.indexOf('cagr'), out = [];
+                  for (const t of D.tabs.filter((x) => x.goal === 'dd')) {
+                    document.querySelector('.ssf-tab[data-k="' + t.key + '"]').click(); await new Promise((r) => setTimeout(r, 300));
+                    out.push({ key: t.key, net: t.cagrMinNet, ok: t.rows.filter((r) => r[ci] >= t.cagrMinNet).length, foot: (document.querySelector('.ssf-foot') || {}).innerText || '' });
+                  }
+                  document.querySelector('.ssf-tab').click(); return out; }""")
+                for x in dd:
+                    if x['net'] is None or ('세후 연평균 %s%%' % x['net']) not in x['foot'] or ('넘는 것은 %d개' % x['ok']) not in x['foot']:
+                        fail(path, '낙폭 최소 %s 아래 글이 세후 하한 %s%%·%s개와 다름: %r' % (x['key'], x['net'], x['ok'], x['foot'][:160]))
             # 끝 = 2025-12-31 (맞춘 구간 끝) — 분기 번호는 링크의 q0(자료 첫 분기말)부터 셈 · q0 없으면 예전 1953-03-31 기준
             qk = lambda d: int(d[:4]) * 4 + (int(d[5:7]) - 1) // 3
             o['x'] = qk('2025-12-31') - qk(o.get('q0') or '1953-03-31')

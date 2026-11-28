@@ -140,6 +140,20 @@ for (const kind of ['9sig', 'sma']) {
   T.fx = fx0;
   n++;
   if (hA !== h0 || hB === h0 || hC !== h0 || hD === h0 || F.taxDataHash() !== h0) fail('탐색기 세금 자료 해시: 뒤에 붙음 ' + (hA === h0) + ' · 지난 분배금 고침 ' + (hB !== h0) + ' · 환율 뒤에 붙음 ' + (hC === h0) + ' · 지난 환율 고침 ' + (hD !== h0));
+  // 낙폭 최소 탭의 세후 하한(cagrMinNet · 2026-11-29 사용자 결정): 세금을 켠 SMA 만 · 원래 하한보다 낮음 · 저장된 표에도 같은 값 · 후보 해시에는 안 들어감
+  for (const kind of ['sma', '9sig']) {
+    const Dk = rd(kind), tax = M.ssTaxOn(seed[kind].fixed);
+    seed[kind].tabs.forEach((t, i) => {
+      if (t.goal !== 'dd') return;
+      const net = t.cagrMinNet, sv = Dk && Dk.tabs[i] ? Dk.tabs[i].cagrMinNet : undefined;
+      n++;
+      if (tax ? !(net > 0 && net < t.cagrMin && sv === net) : (net != null || sv != null)) fail(kind + ' ' + t.key + ' 세후 하한 이상: 후보 ' + net + ' · 표 ' + sv + ' · 원래 ' + t.cagrMin);
+    });
+  }
+  n++;
+  if (JSON.stringify(seed.sma.tabs.filter((t) => t.goal === 'dd').map((t) => [t.cagrMin, t.cagrMinNet])) !== '[[60,50],[30,24],[18,14]]') fail('SMA 낙폭 최소 탭 하한 ' + JSON.stringify(seed.sma.tabs.filter((t) => t.goal === 'dd').map((t) => [t.cagrMin, t.cagrMinNet])) + ' ≠ 세전 60·30·18 → 세후 50·24·14');
+  n++;
+  if (F.seedHashOf(seed.sma) !== F.seedHashOf(JSON.parse(JSON.stringify(seed.sma, (k, v) => (k === 'cagrMinNet' ? undefined : v))))) fail('후보 해시에 세후 하한이 들어감 — 하한만 바꿔도 표 전체를 다시 계산하게 됨');
   n++;
   if (!/-tax[0-9a-f]{16}$/.test(F.kindHash(seed.sma.fixed)) || /-tax/.test(F.kindHash(seed['9sig'].fixed))) fail('탐색기 해시: SMA(세금 켬)에만 세금 자료가 들어가야 함 ' + F.kindHash(seed.sma.fixed) + ' · ' + F.kindHash(seed['9sig'].fixed));
 }
@@ -169,6 +183,30 @@ for (const kind of ['9sig', 'sma']) {
     const tx = all.filter((e) => e.name === 'TECL SMA 250'), TXP = { sig: 'xlk', win: '250', ul: 'tecl', cr: '0', eb: '0', xb: '3', oh: '90', cool: '60', ohw: '7', coolw: '14', cb: '0', cs: '10', settle: '2', out: 'cash', din: '0', dout: '15', bg: '75', bga: 'tecl', bgw: '250', cost: '0.25', tax: '22', wht: '15' };
     n++;
     if (tx.length !== 1 || !tx[0].preset || tx[0].preset.type !== 'sma' || JSON.stringify(tx[0].preset.params) !== JSON.stringify(TXP)) fail("라이브러리 'TECL SMA 250' 프리셋 없음·이상: " + JSON.stringify(tx));
+    // 과최적화 탐색기 1위 프리셋 (2026-11-29 사용자 결정): SMA #33~38 = SMA 탐색기 표와 같은 조건(현금 이자·거래 비용·양도세·원천징수) ·
+    //  9sig #27~32 = 9sig 탐색기와 같은 조건 · 같은 설정이 탐색기 표에 있으면 써 보기 숫자 = 표 (연평균 소수 넷째 자리까지)
+    const FD = { sma: JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'stratsim', 'fit-sma.json'), 'utf8')), '9sig': JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'stratsim', 'fit-9sig.json'), 'utf8')) };
+    const ovf = all.filter((e) => e.tag === 'overfit' && e.preset);
+    n++;
+    if (ovf.filter((e) => e.preset.type === 'sma').map((e) => e.n).join() !== '33,34,35,36,37,38' || ovf.filter((e) => e.preset.type === '9sig').map((e) => e.n).join() !== '27,28,29,30,31,32') fail('라이브러리 과최적화 프리셋 번호 이상: ' + ovf.map((e) => e.n + e.preset.type).join());
+    let same = 0;
+    for (const e of ovf) {
+      const D = FD[e.preset.type], fx = D.fixed, pp = e.preset.params;
+      const cond = ['cr', 'cost', 'tax', 'wht'].filter((k) => String(pp[k] == null ? '' : pp[k]) !== String(fx[k] == null ? '' : fx[k]));
+      n++;
+      if (cond.length) fail('라이브러리 #' + e.n + ' 조건이 탐색기 표와 다름: ' + cond.map((k) => k + ' ' + pp[k] + ' ≠ ' + fx[k]).join(', '));
+      const from = (e.name.match(/(\d{4})–2025$/) || [])[1], era = from === '1953' ? '1971' : from;
+      for (const t of D.tabs.filter((x) => x.from === era)) {
+        const r = t.rows.find((row) => D.keys.every((k, j) => String(row[D.cols.length + j]) === String(pp[k])));
+        if (!r) continue;
+        const got = F.run(e.preset.type, M.ssCleanParams(e.preset.type, Object.assign(M.ssDefaults(e.preset.type), pp)), t.e, F.X_FIT).s;
+        n++; same++;
+        if (+got.cagr.toFixed(4) !== r[D.cols.indexOf('cagr')] || Math.round(got.end) !== r[0]) fail('라이브러리 #' + e.n + ' 써 보기 숫자가 탐색기 ' + t.key + ' 표와 다름: ' + got.cagr.toFixed(4) + ' · ' + Math.round(got.end) + ' ≠ ' + r[D.cols.indexOf('cagr')] + ' · ' + r[0]);
+        break;
+      }
+    }
+    n++;
+    if (same < 10) fail('라이브러리 과최적화 프리셋 중 탐색기 표에서 같은 설정을 찾은 것이 ' + same + '개뿐 (10개 이상이어야)');
   }
   const LIB = lctx.__L.lib.filter((e) => e.code);
   const DSd = M.DS.days, ND = DSd.length;
@@ -455,7 +493,9 @@ for (const kind of ['9sig', 'sma']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'stratsim', '30-library.js'), 'utf8') + ';globalThis.__L = { lib: SS_LIBRARY };', lx);
   const lib = lx.__L.lib, on = lib.filter((e) => e.preset && e.preset.params && (+e.preset.params.tax > 0 || +e.preset.params.wht > 0)).map((e) => e.name).sort();
   n++;
-  if (JSON.stringify(on) !== JSON.stringify(['SMA 200', 'SOXL SMA 160', 'TECL SMA 250'])) fail('라이브러리 세금 켠 전략 = SMA 200 · SOXL SMA 160 · TECL SMA 250 만: ' + JSON.stringify(on));
+  // 2026-11-29: SMA 과최적화 탐색기 1위 프리셋 6개(#33~38)도 켬 — 탐색기 표와 같은 조건(0.1% · 22 · 15 — 위 '과최적화 탐색기 1위 프리셋' 검사)
+  const ON = ['SMA 200', 'SMA · 최고 수익 1953–2025', 'SMA · 최고 수익 1990–2025', 'SMA · 최고 수익 2010–2025', 'SMA · 최저 낙폭 1953–2025', 'SMA · 최저 낙폭 1990–2025', 'SMA · 최저 낙폭 2010–2025', 'SOXL SMA 160', 'TECL SMA 250'];
+  if (JSON.stringify(on) !== JSON.stringify(ON)) fail('라이브러리 세금 켠 전략 = SMA 200 · SOXL SMA 160 · TECL SMA 250 · SMA 과최적화 1위 6개만: ' + JSON.stringify(on));
   for (const nm of ['SMA 200', 'SOXL SMA 160', 'TECL SMA 250']) {
     const e = lib.find((x) => x.name === nm), pp = e && e.preset.params;
     n++;

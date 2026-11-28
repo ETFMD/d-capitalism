@@ -173,6 +173,8 @@ const KIND = {
 };
 // 1990년부터 구간(1990–2010 · 1990–최신)의 진입 분기 = 후보 자료의 1990년 탭 진입 분기
 const SEED = JSON.parse(fs.readFileSync(path.join(__dirname, 'stratsim_fit_seed.json'), 'utf8'));
+// 후보 해시 — 세후 하한(cagrMinNet · 낙폭 최소 탭 아래 글에만 씀 · 지표 계산과 무관)은 빼고 셈 → 하한만 바꾸면 맞춘 구간 지표를 다시 계산하지 않음
+const seedHashOf = (sd) => sha(JSON.stringify(sd, (k, v) => (k === 'cagrMinNet' ? undefined : v)));
 for (const k of Object.keys(KIND)) {
   KIND[k].e90 = ((SEED[k] && SEED[k].tabs) || []).find((t) => t.from === '1990')?.e;
   if (!KIND[k].e90) throw new Error(k + ': 후보 자료에 1990년 탭이 없음');
@@ -250,7 +252,7 @@ if (args.includes('--if-stale')) {
     if (ONLY && ONLY !== kind) return false;
     let prev = null;
     try { prev = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'stratsim', 'fit-' + kind + '.json'), 'utf8')); } catch (e) { prev = null; }
-    return !prev || prev.engine !== kindHash(seed[kind].fixed) || prev.seed !== sha(JSON.stringify(seed[kind]));
+    return !prev || prev.engine !== kindHash(seed[kind].fixed) || prev.seed !== seedHashOf(seed[kind]);
   });
   if (!stale.length) { console.log('탐색기 표: 해시가 지금과 같음 — 다시 계산하지 않음'); return; }
   console.log('탐색기 표: 해시가 바뀜(' + stale.join('·') + ') — 맞춘 구간 지표를 다시 계산');
@@ -258,7 +260,7 @@ if (args.includes('--if-stale')) {
 for (const kind of ['9sig', 'sma']) {
   if (ONLY && ONLY !== kind) continue;
   const sd = seed[kind], keys = sd.keys, fixed = sd.fixed;
-  const seedHash = sha(JSON.stringify(sd)), hash = kindHash(fixed);
+  const seedHash = seedHashOf(sd), hash = kindHash(fixed);
   if (taxDataMissing(fixed)) { console.log('::error::' + kind + ': 세금을 켠 후보인데 분배금(data/stratsim/divs.csv)·환율(data/usdkrw.json) 자료가 없음 — 이 종류는 다시 계산하지 않고 예전 표 그대로'); continue; }
   const outPath = path.join(ROOT, 'data', 'stratsim', 'fit-' + kind + '.json');
   let prev = null;
@@ -286,7 +288,7 @@ for (const kind of ['9sig', 'sma']) {
       if (n % 200 === 0) console.log(`  ${kind} ${n}행 · ${((Date.now() - t0) / 1000).toFixed(0)}초`);
     }
     const tab = { key: t.key, goal: t.goal, from: t.from, e: t.e, rows };
-    if (t.goal === 'dd') { tab.cagrMin = t.cagrMin; tab.total = t.total; }
+    if (t.goal === 'dd') { tab.cagrMin = t.cagrMin; tab.total = t.total; if (t.cagrMinNet != null) tab.cagrMinNet = t.cagrMinNet; }   // cagrMin = 원래(세금 없이) 하한 · cagrMinNet = 세금 켠 표의 세후 하한
     tabs.push(tab);
   }
   const out = { v: 1, kind, updated: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), engine: hash, seed: seedHash, q0: Q[0][0], dataTo: LAST_DAY, fitEnd: FIT_END, fwdFrom: DEC_DAY,
@@ -308,4 +310,4 @@ for (const kind of ['9sig', 'sma']) {
 console.log('끝 —', ((Date.now() - t0) / 1000).toFixed(0), '초 · 저장', wrote);
 }
 if (require.main === module) main();
-module.exports = { M, loadEngine, run, finalOnly, ctxFor, dailyEquity, monthlyReturns, riskStats, riskOfEquity, staticMetrics, dynamicMetrics, bhCagr, kindHash, taxDataHash, KIND, X_FIT, X_LAST };
+module.exports = { M, seedHashOf, loadEngine, run, finalOnly, ctxFor, dailyEquity, monthlyReturns, riskStats, riskOfEquity, staticMetrics, dynamicMetrics, bhCagr, kindHash, taxDataHash, KIND, X_FIT, X_LAST };
