@@ -147,7 +147,7 @@ function ssSetTaxData(divs, fx) {
 }
 function ssAlignTax() {
   const R = DS.taxRaw;
-  DS.divY = null; DS.fx = null;
+  DS.divY = null; DS.fx = null; DS.whtF = {};   // 원천징수 배수 캐시도 새 분배금 자료로 다시
   if (!R || !DS.days) return;
   const N = DS.days.length;
   if (R.divs && R.divs.length) {
@@ -978,11 +978,45 @@ function ssRun9(o) {
 
   // 매수 후 보유(한 종목): 시작에 전부 사고, 적립금은 그달 가격으로 계속 삼
   //  분배금 원천징수(o.bhWht · 2026-11-28): 주식 수 = 기준 주식 수 n × 그날 누적 배수(ssWhtFactor) — 원천징수가 없으면 배수 1(예전과 같은 값)
+  //  세금 요약(o.bhTax = { key, tax(양도세 소수) } · 2026-11-28): 그 종목 선만 — 선과 같은 자리에서 n 이 바뀔 때마다 원화 원가를 셈
+  //   · 넣은 돈 = 그날(결제일) 환율로 원가 · 분배락일 = 그날 아침 주식(n × 전날 배수)의 g 몫 중 원천징수 뺀 나머지를 그날 가격으로 다시 산 원가
+  //   · 뺀 돈(실제 거래내역) = 평균 단가로 판 것 — 그해(결제일 해) 판 이익 · 끝 날 전부 판다고 보고: 해마다 (그해 이익 − 250만 원) × 세율
+  //   (그냥 보유 선은 세금을 내지 않음 — 낼 양도세는 요약에서만 뺌) → r.bhTax = { key, wht: 낸 원천징수($), due: 낼 양도세($), end: 끝 평가금($) }
   const holdOnly = (col, needPx) => {
     const pts = [], smp = [];
     const key = SS_KEY_OF[col], WF = key ? ssWhtFactor(key, +o.bhWht || 0) : null;
     const fAt = WF ? (d) => { const i = DS.idx.get(d); return i == null ? 1 : WF[i]; } : () => 1;
     let n = S[0][col] ? initial / S[0][col] / fAt(S[0][0]) : 0, pd = S[0][0], wf = S[0][0];
+    // 세금 장부(그 종목 선만): bk = 결제일 환율·해 · basis = 원가(원) · realY = 해마다 판 이익(원) · whtPaid = 낸 원천징수($)
+    const TX = o.bhTax && key && o.bhTax.key === key && DS.days && DS.idx ? { bk: ssTaxBook(+o.bhTax.tax || 0), basis: 0, realY: {}, wht: 0, tj: -1 } : null;
+    if (TX) {
+      const i0 = DS.idx.get(S[0][0]);
+      TX.tj = i0 == null ? -1 : i0;
+      if (n > 0 && i0 != null) TX.basis = initial * TX.bk.fxAt(i0);
+    }
+    const W = +o.bhWht || 0;
+    const divTo = (d) => {   // d 까지 분배락일 — 그날 아침 들고 있던 주식(그날 넣은 돈 전)
+      const i = DS.idx.get(d);
+      if (i == null) return;
+      for (let j = TX.tj + 1; j <= i; j++) {
+        const g = n > 0 ? ssDivShare(key, j) : 0;
+        if (g > 0) { const v = g * n * (WF ? WF[j - 1] : 1) * DS.days[j][key]; TX.wht += W * v; TX.basis += (1 - W) * v * TX.bk.fxAt(j); }
+      }
+      if (i > TX.tj) TX.tj = i;
+    };
+    // 선이 n 을 바꾸기 바로 전에(같은 날 · 같은 가격) — 넣은 돈은 원가 · 뺀 돈은 평균 단가로 판 이익
+    const book = (d, amt, px) => {
+      if (!TX || !amt) return;
+      divTo(d);
+      const i = DS.idx.get(d);
+      if (i == null) return;
+      if (amt > 0) TX.basis += amt * TX.bk.fxAt(i);
+      else {
+        const v = n * fAt(d) * px;
+        if (v > 0) { const f = Math.min(1, -amt / v), y = TX.bk.yearOf(i); TX.realY[y] = (TX.realY[y] || 0) + f * (v * TX.bk.fxAt(i) - TX.basis); TX.basis *= 1 - f; }
+      }
+    };
+    const add = (d, amt, px) => { book(d, amt, px); n += amt / px / fAt(d); };
     const weeks = (upto) => { ssEachWeekEnd(wf, upto, sampleW && !!key, (d) => { if (d[key] > 0) smp.push({ date: d.date, value: n * fAt(d.date) * d[key] }); }); wf = upto; };
     const month = (mRow) => {
       const days = daysOf(mRow[0].slice(0, 7));
@@ -992,14 +1026,14 @@ function ssRun9(o) {
           const dp = key ? DS.days[DS.idx.get(d)][key] : null;
           const px = dp > 0 ? dp : mRow[col];
           const amt = sched.byDate.get(d) || 0;
-          if (needPx ? px : true) n += amt / px / fAt(d);
+          if (needPx ? px : true) add(d, amt, px);
           if ((sampleW || sampleQ) && dp > 0) smp.push({ date: d, value: n * fAt(d) * dp });
         }
         weeks(mRow[0]);
       } else {
         weeks(mRow[0]);
         const amt = sched.byMonth.get(mRow[0].slice(0, 7)) || 0, px = mRow[col];
-        if (needPx ? px : true) n += amt / px / fAt(mRow[0]);
+        if (needPx ? px : true) add(mRow[0], amt, px);
         if (sampleQ && px > 0 && ssIsQEndMonth(mRow[0])) smp.push({ date: mRow[0], value: n * fAt(mRow[0]) * px });
       }
     };
@@ -1012,7 +1046,7 @@ function ssRun9(o) {
         if (qi === S.length - 1) for (const d of tailDays(qd)) {
           weeks(d);
           const dp = key ? DS.days[DS.idx.get(d)][key] : null, px = dp > 0 ? dp : qp, amt = sched.byDate.get(d) || 0;
-          if (needPx ? px : true) n += amt / px / fAt(d);
+          if (needPx ? px : true) add(d, amt, px);
           if ((sampleW || sampleQ) && dp > 0) smp.push({ date: d, value: n * fAt(d) * dp });
         }
         weeks(qd);
@@ -1022,15 +1056,29 @@ function ssRun9(o) {
       pts.push({ date: qd, value: qp ? nq * qp : 0, price: qp, shares: nq });
       pd = qd;
     }
-    return { pts, smp };
+    let tax = null;
+    if (TX) {
+      const qd = S[S.length - 1][0], i1 = DS.idx.get(qd), end = pts[pts.length - 1].value;
+      if (i1 != null) {
+        divTo(qd);
+        const ey = TX.bk.yearOf(i1), rate = TX.bk.rate;
+        let dueK = 0;
+        for (const y in TX.realY) if (+y !== ey) dueK += Math.max(0, TX.realY[y] - SS_TAX_DED) * rate;
+        dueK += Math.max(0, (TX.realY[ey] || 0) + end * TX.bk.fxAt(i1) - TX.basis - SS_TAX_DED) * rate;
+        tax = { key, wht: TX.wht, due: dueK / ssFx(i1), end };
+      }
+    }
+    return { pts, smp, tax };
   };
   const bh = {}, bhS = {};
+  let bhTax = null;
   // TQQQ·QQQ 는 가격이 0인 기간도 적립을 셈(원본과 같게), 나머지는 그 기간 가격이 있어야
   [['tqqq', false], ['qqq', false], ['spy', true], ['qld', true], ['sso', true], ['spxl', true], ['sqqq', true], ['soxl', true], ['soxx', true], ['tecl', true], ['xlk', true]].forEach(([a, need]) => {
     const r = holdOnly(SS_COL[a], need);
     bh[a] = r.pts; bhS[a] = r.smp;
+    if (r.tax) bhTax = r.tax;
   });
-  return { log, samples, bh, bhS, contributed: invested };
+  return { log, samples, bh, bhS, contributed: invested, bhTax };
 }
 
 // ── 세금 (2026-11-28 — 양도세 22% · 분배금 미국 원천징수 15% 선택 · SMA 추세 · 그냥 보유) ──────────
@@ -1091,36 +1139,6 @@ function ssWhtFactor(key, w) {
   for (let i = 0; i < N; i++) { const g = ssDivShare(key, i); if (g > 0) f *= 1 - w * g; out[i] = f; }
   return (DS.whtF[ck] = out);
 }
-// 그냥 보유의 세금 요약 — 팔지 않으므로 해마다 내는 양도세는 없음 · 끝 날 전부 판다고 보고 그해 한 번 공제(250만 원)
-//   원가 = 넣은 돈 × 그날 결제 환율 + 분배금 다시 산 몫 · 중간에 뺀 돈(실제 거래내역)은 평균 단가로 뺀 손익을 끝 날 손익에 더함
-//   o = { key, d0, d1, initial, sched, wht(소수), tax(소수) } → { wht: 낸 원천징수($), due: 끝에 다 팔면 낼 양도세($), liq: 낸 뒤 금액($), end: 끝 평가금($) }
-function ssBhTaxEnd(o) {
-  const key = o.key, i0 = DS.idx.get(o.d0), i1 = DS.idx.get(o.d1);
-  if (i0 == null || i1 == null || i1 < i0) return null;
-  const P = (i) => DS.days[i][key] || 0, book = o.tax > 0 ? ssTaxBook(o.tax) : null, w = o.wht || 0, sched = o.sched;
-  let n = P(i0) > 0 ? o.initial / P(i0) : 0, basis = book ? o.initial * book.fxAt(i0) : 0, real = 0, wht = 0;
-  for (let i = i0 + 1; i <= i1; i++) {
-    const p = P(i);
-    if (!(p > 0)) continue;
-    const g = n > 0 ? ssDivShare(key, i) : 0;
-    if (g > 0) {
-      if (book) basis += (1 - w) * g * n * p * book.fxAt(i);
-      wht += w * g * n * p; n *= 1 - w * g;
-    }
-    const amt = sched && sched.byDate ? sched.byDate.get(DS.days[i].date) || 0 : 0;
-    if (amt > 0) { n += amt / p; if (book) basis += amt * book.fxAt(i); }
-    else if (amt < 0 && n > 0) {
-      const f = Math.min(1, -amt / (n * p));
-      if (book) { real += f * (n * p * book.fxAt(i) - basis); basis *= 1 - f; }
-      n *= 1 - f;
-    }
-  }
-  const end = n * P(i1);
-  let due = 0;
-  if (book) { const gainK = end * book.fxAt(i1) + real - basis; due = Math.max(0, gainK - SS_TAX_DED) * o.tax / ssFx(i1); }
-  return { wht, due, liq: end - due, end };
-}
-
 // ── SMA 추세 전략 ───────────────────────────────────────────────────────
 // o = { initial, monthly, raise, rate(현금 연이율, 소수), qi0, qi1, ed, xd, sched,
 //       signal('qqq'), win(200), ul(열 1), entryBuf, exitBuf(%), ohRsi, coolRsi(0=끔), ohWin, coolWin(10),
@@ -1200,7 +1218,7 @@ function ssRunSma(o) {
   let held = biggest(r0);
   const points = [{ date: r0[0], value: value(r0), state }];
   const ul0 = r0[ul] || 0;
-  const log = [{ date: r0[0], state, held, action: 'START', fee: held !== 'cash' ? initial * cost : 0, price: ul0, shares: shSum(), stockVal: value(r0) - cash, cash, total: value(r0), invested: initial }];
+  const log = [{ date: r0[0], state, held, action: 'START', fee: held !== 'cash' ? initial * cost : 0, price: ul0, shares: shSum(), stockVal: value(r0) - cash + taxExt, cash, total: value(r0), invested: initial }];
   const qEnd = new Set();
   for (let q = o.qi0; q <= o.qi1; q++) qEnd.add(DS.q[q][0]);
   const dd = o.dd ? [{ date: r0[0], h: holding(), cash }] : null;
@@ -1264,7 +1282,7 @@ function ssRunSma(o) {
       if (sold) lastSell = m;
     }
     const entry = (action, h, fee, extra) => {
-      const r = { date: d, state, held: h, action, fee: fee || 0, price: ulPx, shares: shSum(), stockVal: value(row) - cash, cash, total: value(row), invested };
+      const r = { date: d, state, held: h, action, fee: fee || 0, price: ulPx, shares: shSum(), stockVal: value(row) - cash + taxExt, cash, total: value(row), invested };
       if (extra != null) r.contribAmt = extra;
       log.push(r);
     };
@@ -1292,7 +1310,7 @@ function ssRunSma(o) {
         if (ext > 1e-9) { taxExt += ext; T.ext = ext; }
         if (short0) cash = 0;   // 모자라 팔아서 낸 날 — 남은 잔돈(소수점 오차)으로 사지 않음 (SMB 시뮬 방식과 같게)
         if (!(shSum() > 0)) held = 'cash';
-        entry('TAX', biggest(row), tFee);
+        entry('TAX', held, tFee);
         log[log.length - 1].tax = usd;
       }
     }
@@ -1317,14 +1335,14 @@ function ssRunSma(o) {
       }
     }
     if (!traded && moneyDay && lastAmt > 0) entry('CONTRIB', held, 0, lastAmt);
-    if (dd) dd.push({ date: d, h: holding(), cash });
+    if (dd) dd.push({ date: d, h: holding(), cash: cash - taxExt });   // 못 낸 양도세(빚)는 현금에서 뺌 — 평가금(value)과 같게
     if (qEnd.has(d) || (o.sampleW && ssWeekLast(d, steps[m + 1] && steps[m + 1][0]))) points.push({ date: d, value: value(row), state });
   }
   const last = steps[b];
   // 청산일이 분기말이 아니면(정확한 날짜) 그날 값도 점으로 — 없으면 화면 끝 값이 직전 분기말 값으로 남았음
   if (last && points[points.length - 1].date !== last[0]) points.push({ date: last[0], value: value(last), state });
   if (last && (!log.length || log[log.length - 1].date !== last[0])) {
-    log.push({ date: last[0], state, held: biggest(last), action: 'END', fee: 0, price: last[ul] || 0, shares: shSum(), stockVal: value(last) - cash, cash, total: value(last), invested });
+    log.push({ date: last[0], state, held: biggest(last), action: 'END', fee: 0, price: last[ul] || 0, shares: shSum(), stockVal: value(last) - cash + taxExt, cash, total: value(last), invested });
   }
   // 세금 요약 — 낸 양도세·원천징수 · 아직 안 낸 양도세(지난해 몫 + 올해 실현 손익) · 끝 날 전부 팔고 세금까지 낸 뒤 금액(SMB liq 와 같은 식)
   let tax = null;
@@ -3913,6 +3931,15 @@ function ssBaseDefaults(type) {
   }
   return d;
 }
+// 공유 링크로 연 화면: 그냥 보유 기본 선의 세금 — 링크에 창 값(bx)이 있으면 그것 · 없으면 받은 저장 전략을 따른 표준값
+//   (저장 전략을 받은 뒤에 부름 · 보낸 화면과 같은 선 · 2026-11-28)
+function ssApplySharedBhTax(shared) {
+  const d = ssBaseDefaults('bh'), bx = shared && shared.bx && typeof shared.bx === 'object' ? shared.bx : {};
+  for (const k of ['tax', 'wht']) {
+    const p = SS_PDEF['bh.' + k], v = k in bx ? String(bx[k]) : null;
+    S.base.bh[k] = v != null && p && p.opts && p.opts.some((o) => o[0] === v) ? v : d[k];   // 링크 값이 이상하면 표준값
+  }
+}
 const SS_RAISE_OPTS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '12', '15', '20', '25'];
 
 function ssLoadStorage() {
@@ -3953,6 +3980,8 @@ function ssShareState() {
   if (S.ed) o.ed = S.ed;
   if (S.xd) o.xd = S.xd;
   if (S.base.bh.ul !== 'tqqq') o.bu = S.base.bh.ul;
+  // 그냥 보유 설정 창이 열려 있으면 그 창의 세금도 (닫혀 있으면 받는 쪽도 저장 전략을 따름 — ssBaseDefaults · 2026-11-28)
+  if (S.panel === 'bh') o.bx = { tax: S.base.bh.tax, wht: S.base.bh.wht };
   const d9 = ssDiffParams('9sig', S.base['9sig']), ds = ssDiffParams('sma', S.base.sma);
   if (d9) o.b9 = d9;
   if (ds) o.bs = ds;
@@ -4147,7 +4176,9 @@ function ssRender() {
   const ovOpt = anyOv ? { ed: entryDate, xd: exitDate } : {};
   const sampleW = grain === 'weekly' && mainPeriod !== 'weekly';
   const pBh = ssBaseEff('bh'), tBh = ssBhTaxOf(pBh);   // 그냥 보유 기본 선의 세금(원천징수는 선에 · 양도세는 끝 날 요약에)
-  const base = ssRun9(Object.assign({ initial, monthly, raise, rate: ssRate9(p9), baseRate: rate, qi0, qi1: x, period: mainPeriod, rows, sched, sampleQ: false, sampleW, bhWht: tBh.wht }, ovOpt, ssOpts9(p9)));
+  const bhUl = pBh.ul, bhKey = SS_COL[bhUl] ? bhUl : 'tqqq';
+  const base = ssRun9(Object.assign({ initial, monthly, raise, rate: ssRate9(p9), baseRate: rate, qi0, qi1: x, period: mainPeriod, rows, sched, sampleQ: false, sampleW, bhWht: tBh.wht,
+    bhTax: ssTaxOn(pBh) ? { key: bhKey, tax: tBh.tax } : null }, ovOpt, ssOpts9(p9)));
   R.base = base;
   const ctx = { initial, monthly, raise, rate, qi0, qi1: x, e, ed: anyOv ? entryDate : '', xd: anyOv ? exitDate : '', anyOv, entryDate, exitDate, sched, grain, latest, prevDay, labels: [], years: 1, contributed: base.contributed };
   R.ctx = ctx;
@@ -4173,13 +4204,12 @@ function ssRender() {
   const metrics = {}, yday = {}, datasets = [];
   const defl = S.infl ? ssInflFactor(prevDay, labels[0]) : 1;
   // ── 그냥 보유 (기본 선)
-  const bhUl = pBh.ul, bhKey = SS_COL[bhUl] ? bhUl : 'tqqq';
   const bhPts = base.bh[bhKey] || [];
   const bhD = onLabels(sampleW ? (base.bhS[bhKey] || []) : bhPts, (p) => p.value);
   const bhFinal = bhPts.length ? bhPts[bhPts.length - 1].value : 0;
   const bhDD = bhPts.length && bhPts[0].shares != null ? ssDailyDD(bhPts.map((p) => ({ date: p.date, shares: p.shares, cash: 0 })), bhKey) : ssSeriesDD(bhD, labels);
   metrics.bh = { cagr: mw(bhFinal, 'r9'), start: bhD[0], end: bhD[bhD.length - 1], maxDD: bhDD.pct * 100, ddPeak: bhDD.peakDate, ddTrough: bhDD.troughDate,
-    tax: ssTaxOn(pBh) && bhPts.length ? ssBhTaxSum(bhKey, tBh, ctx, bhPts) : null };
+    tax: ssTaxOn(pBh) && bhPts.length ? ssBhTaxSum(base.bhTax, tBh) : null };
   if (latest && bhPts.length && bhPts[bhPts.length - 1].shares > 0) { const y = ssRepriceYesterday({ [bhKey]: bhPts[bhPts.length - 1].shares }, 0); if (y != null) yday.bh = y * defl; }
   datasets.push(ssDs('bh', '그냥 보유 ' + bhKey.toUpperCase() + (ssTaxOn(pBh) ? ' · 세금' : ''), bhD, ssBaseColor('bh'), { borderWidth: 2, borderDash: [6, 3], hidden: S.hide.bh }));
   // ── 현금 복리 (모든 적립을 이자 붙는 현금으로)
@@ -4316,10 +4346,10 @@ function ssCfgSeries(cfg, ctx, lite) {
   } else if (cfg.type === 'bh') {
     const q = exactQ();
     const tb = ssBhTaxOf(p);
-    const r = ssRun9(Object.assign({}, common, { rate: 0, rows: q, sampleW: ctx.grain === 'weekly', bhWht: tb.wht }, ovOpt));
-    const key = SS_COL[p.ul] ? p.ul : 'tqqq';
+    const key = SS_COL[p.ul] ? p.ul : 'tqqq', taxOn = !lite && ssTaxOn(p);
+    const r = ssRun9(Object.assign({}, common, { rate: 0, rows: q, sampleW: ctx.grain === 'weekly', bhWht: tb.wht, bhTax: taxOn ? { key, tax: tb.tax } : null }, ovOpt));
     const raw = r.bh[key] || [], samp = r.bhS[key] || [];
-    if (!lite && ssTaxOn(p) && raw.length) taxSum = ssBhTaxSum(key, tb, ctx, raw);
+    if (taxOn && raw.length) taxSum = ssBhTaxSum(r.bhTax, tb);
     points = (ctx.grain === 'weekly' ? samp : raw).map((pt) => ({ date: pt.date, value: pt.value }));
     ddc = raw.map((pt) => ({ date: pt.date, shares: pt.shares, cash: 0 }));
     ddKey = key;
@@ -4341,18 +4371,14 @@ function ssCfgSeries(cfg, ctx, lite) {
   const cagr = ssCfgCagr(ctx, finalV, mode, cd0, L.length ? ssSrcDate(points, L[L.length - 1]) : null);
   return { data, cagr, maxDD: dd.pct * 100, start: startV, end: finalV, sub, ddPeak: dd.peakDate, ddTrough: dd.troughDate, yday: yd, tax: taxSum };
 }
-// 세금 요약(화면 통계 칸) — SMA: 엔진 결과 r.tax · 그냥 보유: ssBhTaxEnd(끝 날 전부 판다고 보고)
+// 세금 요약(화면 통계 칸) — SMA: 엔진 결과 r.tax · 그냥 보유: ssRun9 의 r.bhTax(선과 같은 자리에서 셈 · 끝 날 전부 판다고 보고)
 //   { rate, wht, paid(낸 양도세 $), whtPaid(낸 원천징수 $), due(아직 안 낸 양도세 $), liq(끝 날 전부 팔고 세금까지 낸 뒤 $), hold(그냥 보유), fx·divs(자료 받음) }
 function ssTaxSum(t) {
   return { rate: t.rate, wht: t.wht, paid: t.paid, whtPaid: t.whtPaid, due: t.due, liq: t.liq, ext: t.ext, hold: false, fx: t.fx, divs: t.divs };
 }
-function ssBhTaxSum(key, tb, ctx, pts) {
-  const d0 = String(pts[0].date), d1 = String(pts[pts.length - 1].date);
-  const r = ssBhTaxEnd({ key, d0, d1, initial: ctx.initial, sched: ctx.sched || ssSchedule(ctx.monthly, ctx.raise, d0, d1), wht: tb.wht, tax: tb.tax });
-  if (!r) return null;
-  // 끝 금액은 선의 끝 값을 그대로(같은 계산 — 시험이 둘이 같은지 확인) · 낼 양도세만 뺌
-  const end = pts[pts.length - 1].value;
-  return { rate: tb.tax, wht: tb.wht, paid: 0, whtPaid: r.wht, due: r.due, liq: end - r.due, ext: 0, hold: true, fx: !!DS.fx, divs: !!DS.divY };
+function ssBhTaxSum(t, tb) {
+  if (!t) return null;
+  return { rate: tb.tax, wht: tb.wht, paid: 0, whtPaid: t.wht, due: t.due, liq: t.end - t.due, ext: 0, hold: true, fx: !!DS.fx, divs: !!DS.divY };
 }
 
 // 사용자 전략: 격리 실행 결과(캐시)로 선을 만듦 — 없으면 실행을 걸어 두고, 돌아오면 다시 그림
@@ -5387,7 +5413,10 @@ function ssTaxCard(t) {
   if (t.rate > 0 && !t.hold) sub.push('낸 양도세 ' + ssMoney(Math.round(t.paid || 0)));
   if (t.wht > 0) sub.push('원천징수 ' + ssMoney(Math.round(t.whtPaid || 0)) + (t.divs ? '' : ' (분배금 자료 없음)'));
   if (t.rate > 0) sub.push((t.hold ? '끝에 팔면 낼 양도세 ' : '아직 안 낸 양도세 ') + ssMoney(Math.round(t.due || 0)) + (t.fx ? '' : ' (원/달러 자료 없어 1,300원)'));
-  const tip = '끝 날 종가에 전부 팔고(거래 비용 포함) 아직 안 낸 양도세까지 낸 뒤 남는 금액입니다' + (t.hold ? ' — 그냥 보유는 팔지 않으므로 끝 날 한 번에 판다고 보고 그해 250만 원을 한 번 뺍니다.' : ' — 지난해 세금 중 아직 안 낸 것(5월 전) + 올해 판 이익 + 끝 날 팔 때 생기는 이익을 합쳐 250만 원을 빼고 셉니다.')
+  // 분배금 자료가 없으면 수정주가에 든 분배금(다시 산 몫)의 원가를 못 더함 — 그만큼 양도세가 조금 큼
+  if (t.rate > 0 && !t.divs) sub.push('분배금 자료 없음 — 분배금도 차익으로 셈');
+  const tip = (t.hold ? '끝 날 종가에 전부 판다고 보고 양도세까지 낸 뒤 남는 금액입니다 — 그냥 보유는 팔지 않으므로 끝 날 한 번에 팔아 그해 250만 원을 뺍니다(거래 비용은 그냥 보유 선처럼 셈하지 않음). 실제 거래내역으로 중간에 뺀 돈은 그날 평균 단가로 판 것으로 보고 그해 따로 250만 원을 뺍니다.'
+    : '끝 날 종가에 전부 팔고(거래 비용 포함) 아직 안 낸 양도세까지 낸 뒤 남는 금액입니다 — 지난해 세금 중 아직 안 낸 것(5월 전) + 올해 판 이익 + 끝 날 팔 때 생기는 이익을 합쳐 250만 원을 빼고 셉니다.')
     + '\n\n차트의 선과 끝 금액은 그날까지 실제로 낸 세금만 뺀 평가액입니다.';
   return ssStatCard('끝에 다 팔면 (세후)', 'dollar', ssMoney(Math.round(t.liq || 0)), '', sub.join(' · '), tip).replace('<div class="ss-stat">', '<div class="ss-stat ss-wide">');
 }
@@ -9098,6 +9127,7 @@ async function ssBoot() {
     if (shared.b9) S.base['9sig'] = ssCleanParams('9sig', shared.b9);
     if (shared.bs) S.base.sma = ssCleanParams('sma', shared.bs);
     if (Array.isArray(shared.sc)) mapped = ssImportShared(shared.sc);
+    ssApplySharedBhTax(shared);
     if (Array.isArray(shared.tx) && shared.tx.length) ssTxFromShared(shared.tx);
     const anKey = (k) => { if (typeof k !== 'string') return null; if (k.indexOf('cfg:') !== 0) return k; const i = parseInt(k.slice(4), 10); const c = mapped && mapped[i]; const id = c ? ssResolveShared(c) : null; return id ? 'cfg:' + id : null; };
     if (shared.as) { const k = anKey(shared.as); if (k) S.an.strategy = k; }

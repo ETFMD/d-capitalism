@@ -352,7 +352,8 @@ const pick = a => a[Math.floor(rnd() * a.length)];
   }
   /* ── ⑦ 투자전략 시뮬레이터 세금 (2026-11-28 — 양도세 22% · 분배금 미국 원천징수 15% 선택 · SMA 추세 · 그냥 보유) ──
        · 양도세: 시뮬레이터 엔진(ssRunSma) = 이 엔진 시뮬 방식 + 양도세(선입선출) — 분배금 자료를 끄면 끝 금액·낸 세금·세후 청산이 같아야 함(무작위 손잡이 × 기간)
-       · 원천징수: 늘 들고 있는 설정 = 그냥 보유 — 끝 금액 = 원금 × 가격 비 × 누적 배수 · 그냥 보유 선(ssRun9) · 요약(ssBhTaxEnd)과 같음
+       · 원천징수: 늘 들고 있는 설정 = 그냥 보유 — 끝 금액 = 원금 × 가격 비 × 누적 배수 · 그냥 보유 선(ssRun9) · 요약(ssRun9 r.bhTax)과 같음
+       · 그냥 보유 요약은 선과 같은 길: 적립(달 중간 진입 · 상장 전) 원가 = 가격을 1로 바꾼 같은 선의 끝 값 · 중간에 뺀 돈은 그해 판 이익(손 계산)
        · 분배금 원가(양도세): 엔진 장부(묶음 나눔)와 그냥 보유 요약(원가 더함) 두 계산이 같은 세후 청산
        · 분배금 자료(divs.csv) = 가격 자료(수정주가)의 분배락일 수정 계수 변화(1 − 분배금 ÷ 전날 종가) */
   let taxN = 0;
@@ -360,7 +361,7 @@ const pick = a => a[Math.floor(rnd() * a.length)];
     const TX = M.DS, keepDiv = TX.divY, fxS = i => M.ssFx(i);
     check('세금 자료 읽음 (분배금 · 원/달러)', !!keepDiv && !!TX.fx && Object.keys(keepDiv).length >= 9 && TX.fx.length === Dsim.d.length, [keepDiv && Object.keys(keepDiv), TX.fx && TX.fx.length]);
     TX.divY = null;   /* 분배금을 끈 채 — 이 엔진 시뮬 방식엔 분배금이 없음 */
-    let wF = 0, wT = 0, wL = 0;
+    let wF = 0, wT = 0, wL = 0, nTaxRow = 0, badTaxRow = 0;
     const NT = FULL ? 800 : 250;
     for (let t = 0; t < NT; t++) {
       const p = {}; for (const k in SMB.OPTS) p[k] = rnd() < 0.5 ? SMB.PRESET[k] : pick(SMB.OPTS[k])[0];
@@ -372,10 +373,13 @@ const pick = a => a[Math.floor(rnd() * a.length)];
       const v = r.points[r.points.length - 1].value, rel = (u, w) => Math.abs(u - w) / Math.max(1, Math.abs(w));
       wF = Math.max(wF, rel(v, x.final)); wT = Math.max(wT, rel(r.tax.paid, x.taxPaid)); wL = Math.max(wL, rel(r.tax.liq, x.liq));
       if (rel(v, x.final) > 1e-9 && wF === rel(v, x.final)) check('양도세 대조 한 건', false, [Dsim.d[a], Dsim.d[b], p, v, x.final]);
+      /* 기록의 TAX 행 = 지금 든 것 그대로(다 팔렸으면 현금) — 종목별 보유 기간·다음 행 '무엇 → 무엇' 이 세금 낸 날에 바뀌지 않게 */
+      for (let i = 1; i < r.log.length; i++) if (r.log[i].action === 'TAX') { nTaxRow++; if (r.log[i].held !== (r.log[i].shares > 0 ? r.log[i - 1].held : 'cash')) badTaxRow++; }
       taxN++;
     }
     check('시뮬레이터 양도세 = 이 엔진 시뮬 방식 + 양도세: 끝 금액 (상대 1e-9 · ' + NT + '번)', wF < 1e-9, wF);
     check('시뮬레이터 양도세 = 이 엔진: 낸 양도세 · 끝 날 세후 청산', wT < 1e-9 && wL < 1e-9, [wT, wL]);
+    check('기록의 TAX 행 = 지금 든 것 (' + nTaxRow + '행)', nTaxRow > 50 && badTaxRow === 0, [nTaxRow, badTaxRow]);
     TX.divY = keepDiv;
     /* 원천징수 — 늘 들고 있는 SMA(신호 QQQ 10일선 · 50% 넘게 아래일 때만 팖 · 과열·식음·버블 끔 · 비용 0) = 그냥 보유 */
     const ALW = { sig: 'qqq', win: '10', ul: 'tqqq', cr: '0', eb: '0', xb: '50', oh: '0', cool: '0', ohw: '9', coolw: '7', cb: '0', cs: '0', settle: '0', out: 'cash', din: '0', dout: '0', bg: '0', bga: 'tqqq', bgw: '200', cost: '0' };
@@ -390,8 +394,8 @@ const pick = a => a[Math.floor(rnd() * a.length)];
       const v = r.points[r.points.length - 1].value, want = 100000 * M.DS.days[b][ul] / M.DS.days[a][ul] * (WF ? WF[b] / WF[a] : 1);
       const sold = r.log.some(l => l.action === 'EXIT' || l.action === 'TAX');
       nW++;
-      const bh = M.ssRun9({ initial: 100000, monthly: 0, raise: 0, rate: 0, qi0: 0, qi1: 1, ed: Dsim.d[a], xd: Dsim.d[b], rows: M.ssExactRows('quarterly', Dsim.d[a], Dsim.d[b]), bhWht: 0.15 }).bh[ul];
-      const bv = bh[bh.length - 1].value, s2 = M.ssBhTaxEnd({ key: ul, d0: Dsim.d[a], d1: Dsim.d[b], initial: 100000, sched: M.ssSchedule(0, 0, Dsim.d[a], Dsim.d[b]), wht: 0.15, tax: 0.22 });
+      const r9 = M.ssRun9({ initial: 100000, monthly: 0, raise: 0, rate: 0, qi0: 0, qi1: 1, ed: Dsim.d[a], xd: Dsim.d[b], rows: M.ssExactRows('quarterly', Dsim.d[a], Dsim.d[b]), bhWht: 0.15, bhTax: { key: ul, tax: 0.22 } });
+      const bh = r9.bh[ul], bv = bh[bh.length - 1].value, s2 = { end: r9.bhTax.end, wht: r9.bhTax.wht, liq: r9.bhTax.end - r9.bhTax.due };
       const rel = (u, w2) => Math.abs(u - w2) / Math.max(1, Math.abs(w2));
       wA = Math.max(wA, rel(v, want)); wB = Math.max(wB, rel(bv, want)); wC = Math.max(wC, rel(s2.end, want));
       if (!sold && rel(v, want) < 1e-9 && rel(bv, want) < 1e-9 && rel(s2.end, want) < 1e-9) okW++;
@@ -423,6 +427,82 @@ const pick = a => a[Math.floor(rnd() * a.length)];
       const yT = +Dsim.d[st(t)].slice(0, 4), pay = Dsim.d.findIndex(x => x >= (yT + 1) + '-05-01'), want = Math.max(0, gain - 2500000) * 0.22 / fxS(pay);
       const tl = r.log.filter(l => l.action === 'TAX');
       check('중간에 뺀 돈의 양도세 = 손 계산 (판 이익 − 250만 원 × 22% · 이듬해 5월 첫 거래일)', r.tax && Math.abs(r.tax.paid - want) < 1e-6 * want && tl.length === 1 && tl[0].date === Dsim.d[pay] && want > 1000, [r.tax && r.tax.paid, want, tl.map(l => l.date), Dsim.d[pay]]);
+      TX.divY = keepDiv;
+    }
+    /* 팔 것이 없어 못 낸 양도세(빚 · taxExt): 평가금 = −빚 · 낙폭 자료의 현금도 −빚 · 기록의 주식 평가금은 0(빚을 주식에서 빼지 않음) · TAX 행은 지금 든 것(현금) */
+    {
+      TX.divY = null;
+      let a = Dsim.d.findIndex(x => x >= '2016-03-01'); while (!(Dsim.px.qqq[a] > smA[a])) a++;
+      const t = Dsim.d.findIndex(x => x >= '2017-07-03'), b = Dsim.d.findIndex(x => x >= '2019-12-31');
+      const sched = { byDate: new Map([[Dsim.d[t], -1e8]]), byMonth: new Map(), list: [{ date: Dsim.d[t], amount: -1e8 }] };
+      const cp = M.ssCleanParams('sma', Object.assign({}, ALW, { ul: 'qqq', bga: 'qqq', tax: '22', wht: '0' }));
+      const r = M.ssRunSma(Object.assign({ initial: 100000, monthly: 0, raise: 0, rate: 0, dd: true, ed: Dsim.d[a], xd: Dsim.d[b], sched }, M.ssOptsSma(cp)));
+      const ext = r.tax && r.tax.ext, end = r.log[r.log.length - 1], tl = r.log.filter(l => l.action === 'TAX'), ld = r.dd[r.dd.length - 1];
+      check('못 낸 양도세(빚): 평가금 = −빚 · 낙폭 자료 현금 = −빚 · 주식 평가금 0 · TAX 행 = 현금', ext > 1000 && Math.abs(r.points[r.points.length - 1].value + ext) < 1e-6 && Math.abs(ld.cash + ext) < 1e-6
+        && Math.abs(end.stockVal) < 1e-9 && tl.length === 1 && tl[0].held === 'cash' && Math.abs(tl[0].stockVal) < 1e-9, [ext, r.points[r.points.length - 1].value, ld, end.stockVal, tl.map(l => [l.held, l.stockVal])]);
+      TX.divY = keepDiv;
+    }
+    /* 그냥 보유 요약 = 선과 같은 길 (2026-11-28 검토 결함 — 예전 요약은 따로 날마다 셈: 달 중간 진입의 그달 적립 · 상장 전 원금이 선과 달랐음)
+         · 환율 고정(자료 끔 → 1,300원) · 분배금 끔: 원가 = 선에 들어간 달러 = 그 종목 가격을 1로 바꾼 같은 선의 끝 값
+           → 낼 양도세 = max(0, (끝 값 − 들어간 달러) × 1,300 − 250만) × 22% ÷ 1,300  (적립 · 달 중간 진입 · 상장 전 · 실제 거래내역 날짜) */
+    {
+      const keepFx = TX.fx, keepDivB = TX.divY, SAVE = {};
+      for (const k of ['days', 'rows', 'idx', 'q', 'm', 'w', 'y', 'mIn', 'nfci', 'smaD', 'smaM', 'rsiD', 'rsiM', 'whtF', 'divY', 'fx']) SAVE[k] = M.DS[k];
+      const cases = [['tqqq', '2010-03-15', '2025-11-20', 500, 0.03, null], ['spy', '1995-02-14', '2026-11-27', 300, 0, null], ['soxl', '1990-05-10', '2000-03-10', 200, 0, null],
+        ['qqq', '2001-07-17', '2019-08-14', 1000, 0.05, null], ['tecl', '2009-01-02', '2024-06-12', 0, 0, [['2012-02-15', 5000], ['2015-11-03', 7000], ['2020-03-23', 20000], ['2024-06-12', 3000]]]];
+      const runB = (key, d0, d1, mo, ra, lst) => {
+        const sched = lst ? { byDate: new Map(lst), byMonth: new Map(), list: lst.map(([date, amount]) => ({ date, amount })) } : undefined;
+        return M.ssRun9({ initial: 10000, monthly: mo, raise: ra, rate: 0, qi0: 0, qi1: 1, ed: d0, xd: d1, rows: M.ssExactRows('quarterly', d0, d1), sched, bhTax: { key, tax: 0.22 } });
+      };
+      let okP = 0, wP = 0;
+      const real = cases.map(([key, d0, d1, mo, ra, lst]) => { M.DS.fx = null; M.DS.divY = null; return runB(key, d0, d1, mo, ra, lst); });
+      const unit = {};
+      cases.forEach(([key, d0, d1, mo, ra, lst], ci) => {
+        M.ssInitData(SAVE.days.map(d => { const c = Object.assign({}, d); if (c[key] > 0) c[key] = 1; return c; }), null);
+        M.DS.fx = null; M.DS.divY = null;
+        const rc = runB(key, d0, d1, mo, ra, lst), cb = rc.bh[key];
+        unit[ci] = cb[cb.length - 1].value;
+      });
+      Object.assign(M.DS, SAVE);
+      cases.forEach(([key, d0, d1], ci) => {
+        const r = real[ci], b = r.bh[key], V = b[b.length - 1].value, C = unit[ci];
+        const want = Math.max(0, (V - C) * 1300 - 2500000) * 0.22 / 1300, got = r.bhTax && r.bhTax.due;
+        const e = Math.abs(got - want) / Math.max(1, want); wP = Math.max(wP, e);
+        if (e < 1e-9 && r.bhTax.end === V && want > 0) okP++; else check('그냥 보유 요약 길 ' + key + ' ' + d0, false, [got, want, V, C]);
+      });
+      check('그냥 보유 요약 = 선과 같은 길: 원가 = 가격 1 선의 끝 값 (적립·달 중간 진입·상장 전 SOXL·실제 거래내역 날짜 · ' + cases.length + '가지)', okP === cases.length, [okP, wP]);
+      check('그냥 보유 요약 시험 뒤 자료 되돌림', M.DS.days === SAVE.days && M.DS.fx === keepFx && M.DS.divY === keepDivB && M.DS.idx.size === Dsim.d.length);
+    }
+    /* 그냥 보유 · 적립 + 분배금 + 원천징수 + 양도세 = 늘 보유 SMA(실제 거래내역 날짜 적립 · 비용 0) — 엔진 장부(선입선출 · 묶음 나눔)와 같은 세후 청산 */
+    {
+      const lst = [['2012-02-15', 5000], ['2013-05-06', 3000], ['2016-11-09', 8000], ['2020-03-23', 20000], ['2022-10-13', 6000]];
+      const sched = { byDate: new Map(lst), byMonth: new Map(), list: lst.map(([date, amount]) => ({ date, amount })) };
+      let a = Dsim.d.findIndex(x => x >= '2011-03-01'); while (!(Dsim.px.qqq[a] > smA[a])) a++;
+      const b = Dsim.d.lastIndexOf('2026-11-27') >= 0 ? Dsim.d.lastIndexOf('2026-11-27') : Dsim.d.length - 1;
+      let okS = 0;
+      for (const ul of ['tqqq', 'qqq', 'spy']) {
+        const cp = M.ssCleanParams('sma', Object.assign({}, ALW, { ul, bga: ul, tax: '22', wht: '15' }));
+        const r = M.ssRunSma(Object.assign({ initial: 100000, monthly: 0, raise: 0, rate: 0, dd: true, ed: Dsim.d[a], xd: Dsim.d[b], sched }, M.ssOptsSma(cp)));
+        const r9 = M.ssRun9({ initial: 100000, monthly: 0, raise: 0, rate: 0, qi0: 0, qi1: 1, ed: Dsim.d[a], xd: Dsim.d[b], rows: M.ssExactRows('quarterly', Dsim.d[a], Dsim.d[b]), sched, bhWht: 0.15, bhTax: { key: ul, tax: 0.22 } });
+        const v = r.points[r.points.length - 1].value, sold = r.log.some(l => l.action === 'EXIT' || l.action === 'TAX'), rel = (u, w2) => Math.abs(u - w2) / Math.max(1, Math.abs(w2));
+        const t9 = r9.bhTax, liq9 = t9.end - t9.due;
+        if (!sold && rel(v, t9.end) < 1e-9 && rel(r.tax.liq, liq9) < 1e-9 && rel(r.tax.whtPaid, t9.wht) < 1e-9 && t9.due > 0) okS++;
+        else check('적립 + 세금 대조 ' + ul, false, [v, t9.end, r.tax.liq, liq9, r.tax.whtPaid, t9.wht, sold]);
+      }
+      check('그냥 보유 · 적립 + 분배금 원천징수 + 양도세 = 늘 보유 SMA 엔진 장부 (끝 값 · 세후 청산 · 원천징수 · TQQQ·QQQ·SPY)', okS === 3, okS);
+    }
+    /* 그냥 보유 · 중간에 뺀 돈 = 평균 단가로 판 것 · 그해 이익과 끝 해 이익을 따로 공제 (손 계산 · 분배금 끔 · 실제 환율) */
+    {
+      TX.divY = null;
+      const a = Dsim.d.findIndex(x => x >= '2016-03-01'), t = Dsim.d.findIndex(x => x >= '2017-07-03'), b = Dsim.d.findIndex(x => x >= '2018-12-31');
+      const sched = { byDate: new Map([[Dsim.d[t], -60000]]), byMonth: new Map(), list: [{ date: Dsim.d[t], amount: -60000 }] };
+      const r9 = M.ssRun9({ initial: 100000, monthly: 0, raise: 0, rate: 0, qi0: 0, qi1: 1, ed: Dsim.d[a], xd: Dsim.d[b], rows: M.ssExactRows('quarterly', Dsim.d[a], Dsim.d[b]), sched, bhTax: { key: 'qqq', tax: 0.22 } });
+      const st = i => Math.min(Dsim.d.length - 1, i + (Dsim.d[i] < '2024-05-28' ? 2 : 1)), P = i => M.DS.days[i].qqq;
+      const n0 = 100000 / P(a), b0 = 100000 * fxS(st(a)), v = n0 * P(t), f = 60000 / v, realT = f * (v * fxS(st(t)) - b0), b1 = b0 * (1 - f), n1 = n0 - 60000 / P(t);
+      const V = n1 * P(b), yT = +Dsim.d[st(t)].slice(0, 4), yB = +Dsim.d[st(b)].slice(0, 4);
+      const dueK = (yT !== yB ? Math.max(0, realT - 2500000) * 0.22 + Math.max(0, V * fxS(st(b)) - b1 - 2500000) * 0.22 : Math.max(0, realT + V * fxS(st(b)) - b1 - 2500000) * 0.22);
+      const want = dueK / fxS(b), got = r9.bhTax.due;
+      check('그냥 보유 · 중간에 뺀 돈 = 손 계산 (평균 단가 · 해마다 공제 · ' + yT + '·' + yB + ')', yT !== yB && Math.abs(got - want) < 1e-9 * want && Math.abs(r9.bhTax.end - V) < 1e-9 * V && realT > 2500000, [got, want, r9.bhTax.end, V, realT]);
       TX.divY = keepDiv;
     }
     /* 적립 + 세금: 숫자가 이상하지 않음(NaN·음수 없음 · 세금 켬 ≤ 끔 · 세후 청산 ≤ 끝 금액) */

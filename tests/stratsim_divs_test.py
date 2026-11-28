@@ -2,7 +2,8 @@
 """[STRATSIM] 투자전략 시뮬레이터 분배금 자료(data/stratsim/divs.csv) 검사 — python3 tests/stratsim_divs_test.py
    · scripts/update_stratsim.py 의 야후 분배금 읽기(yahoo_daily(sym, divs))를 가짜 야후 응답으로:
      분배락일(거래소 시간대 날짜) · 전날 종가(분할만 반영 close) · 일봉에 없는 날·첫날·이상한 값 건너뜀 · 응답에 분배금이 없으면 빈 목록
-   · update_divs(): 받은 종목은 새 줄 · 받지 못한 종목은 예전 줄 그대로 · 상장일 전 분배금 뺌 · 바뀐 것이 없으면 쓰지 않음(False)
+   · update_divs(): 받은 종목은 받은 첫 날 전 예전 줄 + 새 줄 · 응답에 분배금이 없거나 받지 못한 종목은 예전 줄 그대로 · 상장일 전 분배금 뺌 · 바뀐 것이 없으면 쓰지 않음(False)
+   · main(): 분배금 갱신이 터져도 가격 · nfci · 갱신 시각은 그대로
    (2026-11-28 — 시뮬레이터 '분배금 미국 원천징수 15%'·양도세 원가)
    실패하면 'FAIL …' 줄과 종료 코드 1"""
 import importlib.util, json, os, sys, tempfile, datetime
@@ -69,9 +70,34 @@ U.DIV_GOT['qqq'] = [('2024-01-17', 0.5, 108.0)]
 U.DIV_GOT['spy'] = []
 ch = U.update_divs()
 txt = open(U.DIVS, encoding='utf-8').read()
-check('받은 종목 새 줄 · 못 받은 종목(xlk) 예전 줄 · 받았는데 없는 종목(spy) 줄 없음 · 날짜순',
-      ch and txt == 'date,asset,div,prev_close\n20200210,xlk,0.3,90\n20240117,qqq,0.5,108\n', txt)
+check('받은 종목 = 받은 첫 날 전 예전 줄 + 새 줄 · 못 받은 종목(xlk) 예전 줄 · 응답에 분배금이 없는 종목(spy)도 예전 줄 그대로 · 날짜순',
+      ch and txt == 'date,asset,div,prev_close\n20200110,qqq,0.4,200\n20200110,spy,1.2,300\n20200210,xlk,0.3,90\n20240117,qqq,0.5,108\n', txt)
 check('바뀐 것이 없으면 쓰지 않음', U.update_divs() is False)
+# 받은 구간 안의 예전 날은 받은 값 (날짜를 고친 분배금이 두 번 세지지 않음 · 같은 날은 새 값)
+open(U.DIVS, 'w', encoding='utf-8').write('date,asset,div,prev_close\n20190110,qqq,0.3,150\n20200110,qqq,0.4,200\n20200410,qqq,0.4,210\n')
+U.DIV_GOT.clear()
+U.DIV_GOT['qqq'] = [('2020-01-10', 0.45, 201.0), ('2020-04-13', 0.4, 210.0)]
+U.update_divs()
+txt = open(U.DIVS, encoding='utf-8').read()
+check('받은 구간: 같은 날 = 새 값 · 날짜가 바뀐 분배금(04-10 → 04-13) 한 번만 · 받은 첫 날 전 예전 줄은 그대로',
+      txt == 'date,asset,div,prev_close\n20190110,qqq,0.3,150\n20200110,qqq,0.45,201\n20200413,qqq,0.4,210\n', txt)
+# 분배금 갱신이 터져도 실행은 계속 (가격 · nfci · 갱신 시각) — main 이 잡음
+calls = []
+U.update_prices = lambda fetch=True: (calls.append('p'), U.DIV_GOT.update({'qqq': [('2024-01-17', 0.5, 108.0)]}), True)[2]
+def boom():
+    raise OSError('disk full')
+U.update_divs = boom
+U.update_nfci = lambda: (calls.append('n'), False)[1]
+U.STAMP = os.path.join(TMP, 'updated.txt')
+sys_argv = sys.argv[:]
+sys.argv = [sys.argv[0]]
+try:
+    U.main()
+    okm = True
+except Exception as e:
+    okm = repr(e)
+sys.argv = sys_argv
+check('분배금 갱신 실패 → 실행은 계속(nfci · 갱신 시각)', okm is True and calls == ['p', 'n'] and os.path.exists(U.STAMP), [okm, calls])
 U.DIV_GOT.clear()
 U.DIV_GOT['tqqq'] = [(d, a, p) for d, a, p in [('2010-01-04', 0.1, 50.0), ('2010-03-01', 0.1, 50.0)] if d >= U.IPO['tqqq']]
 check('상장일 전 분배금은 넣지 않음(update_prices 와 같은 거름)', U.DIV_GOT['tqqq'] == [('2010-03-01', 0.1, 50.0)])

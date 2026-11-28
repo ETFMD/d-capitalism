@@ -142,7 +142,7 @@ function ssSetTaxData(divs, fx) {
 }
 function ssAlignTax() {
   const R = DS.taxRaw;
-  DS.divY = null; DS.fx = null;
+  DS.divY = null; DS.fx = null; DS.whtF = {};   // 원천징수 배수 캐시도 새 분배금 자료로 다시
   if (!R || !DS.days) return;
   const N = DS.days.length;
   if (R.divs && R.divs.length) {

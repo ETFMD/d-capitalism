@@ -108,6 +108,15 @@ function ssBaseDefaults(type) {
   }
   return d;
 }
+// 공유 링크로 연 화면: 그냥 보유 기본 선의 세금 — 링크에 창 값(bx)이 있으면 그것 · 없으면 받은 저장 전략을 따른 표준값
+//   (저장 전략을 받은 뒤에 부름 · 보낸 화면과 같은 선 · 2026-11-28)
+function ssApplySharedBhTax(shared) {
+  const d = ssBaseDefaults('bh'), bx = shared && shared.bx && typeof shared.bx === 'object' ? shared.bx : {};
+  for (const k of ['tax', 'wht']) {
+    const p = SS_PDEF['bh.' + k], v = k in bx ? String(bx[k]) : null;
+    S.base.bh[k] = v != null && p && p.opts && p.opts.some((o) => o[0] === v) ? v : d[k];   // 링크 값이 이상하면 표준값
+  }
+}
 const SS_RAISE_OPTS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '12', '15', '20', '25'];
 
 function ssLoadStorage() {
@@ -148,6 +157,8 @@ function ssShareState() {
   if (S.ed) o.ed = S.ed;
   if (S.xd) o.xd = S.xd;
   if (S.base.bh.ul !== 'tqqq') o.bu = S.base.bh.ul;
+  // 그냥 보유 설정 창이 열려 있으면 그 창의 세금도 (닫혀 있으면 받는 쪽도 저장 전략을 따름 — ssBaseDefaults · 2026-11-28)
+  if (S.panel === 'bh') o.bx = { tax: S.base.bh.tax, wht: S.base.bh.wht };
   const d9 = ssDiffParams('9sig', S.base['9sig']), ds = ssDiffParams('sma', S.base.sma);
   if (d9) o.b9 = d9;
   if (ds) o.bs = ds;

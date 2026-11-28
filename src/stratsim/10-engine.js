@@ -259,11 +259,45 @@ function ssRun9(o) {
 
   // 매수 후 보유(한 종목): 시작에 전부 사고, 적립금은 그달 가격으로 계속 삼
   //  분배금 원천징수(o.bhWht · 2026-11-28): 주식 수 = 기준 주식 수 n × 그날 누적 배수(ssWhtFactor) — 원천징수가 없으면 배수 1(예전과 같은 값)
+  //  세금 요약(o.bhTax = { key, tax(양도세 소수) } · 2026-11-28): 그 종목 선만 — 선과 같은 자리에서 n 이 바뀔 때마다 원화 원가를 셈
+  //   · 넣은 돈 = 그날(결제일) 환율로 원가 · 분배락일 = 그날 아침 주식(n × 전날 배수)의 g 몫 중 원천징수 뺀 나머지를 그날 가격으로 다시 산 원가
+  //   · 뺀 돈(실제 거래내역) = 평균 단가로 판 것 — 그해(결제일 해) 판 이익 · 끝 날 전부 판다고 보고: 해마다 (그해 이익 − 250만 원) × 세율
+  //   (그냥 보유 선은 세금을 내지 않음 — 낼 양도세는 요약에서만 뺌) → r.bhTax = { key, wht: 낸 원천징수($), due: 낼 양도세($), end: 끝 평가금($) }
   const holdOnly = (col, needPx) => {
     const pts = [], smp = [];
     const key = SS_KEY_OF[col], WF = key ? ssWhtFactor(key, +o.bhWht || 0) : null;
     const fAt = WF ? (d) => { const i = DS.idx.get(d); return i == null ? 1 : WF[i]; } : () => 1;
     let n = S[0][col] ? initial / S[0][col] / fAt(S[0][0]) : 0, pd = S[0][0], wf = S[0][0];
+    // 세금 장부(그 종목 선만): bk = 결제일 환율·해 · basis = 원가(원) · realY = 해마다 판 이익(원) · whtPaid = 낸 원천징수($)
+    const TX = o.bhTax && key && o.bhTax.key === key && DS.days && DS.idx ? { bk: ssTaxBook(+o.bhTax.tax || 0), basis: 0, realY: {}, wht: 0, tj: -1 } : null;
+    if (TX) {
+      const i0 = DS.idx.get(S[0][0]);
+      TX.tj = i0 == null ? -1 : i0;
+      if (n > 0 && i0 != null) TX.basis = initial * TX.bk.fxAt(i0);
+    }
+    const W = +o.bhWht || 0;
+    const divTo = (d) => {   // d 까지 분배락일 — 그날 아침 들고 있던 주식(그날 넣은 돈 전)
+      const i = DS.idx.get(d);
+      if (i == null) return;
+      for (let j = TX.tj + 1; j <= i; j++) {
+        const g = n > 0 ? ssDivShare(key, j) : 0;
+        if (g > 0) { const v = g * n * (WF ? WF[j - 1] : 1) * DS.days[j][key]; TX.wht += W * v; TX.basis += (1 - W) * v * TX.bk.fxAt(j); }
+      }
+      if (i > TX.tj) TX.tj = i;
+    };
+    // 선이 n 을 바꾸기 바로 전에(같은 날 · 같은 가격) — 넣은 돈은 원가 · 뺀 돈은 평균 단가로 판 이익
+    const book = (d, amt, px) => {
+      if (!TX || !amt) return;
+      divTo(d);
+      const i = DS.idx.get(d);
+      if (i == null) return;
+      if (amt > 0) TX.basis += amt * TX.bk.fxAt(i);
+      else {
+        const v = n * fAt(d) * px;
+        if (v > 0) { const f = Math.min(1, -amt / v), y = TX.bk.yearOf(i); TX.realY[y] = (TX.realY[y] || 0) + f * (v * TX.bk.fxAt(i) - TX.basis); TX.basis *= 1 - f; }
+      }
+    };
+    const add = (d, amt, px) => { book(d, amt, px); n += amt / px / fAt(d); };
     const weeks = (upto) => { ssEachWeekEnd(wf, upto, sampleW && !!key, (d) => { if (d[key] > 0) smp.push({ date: d.date, value: n * fAt(d.date) * d[key] }); }); wf = upto; };
     const month = (mRow) => {
       const days = daysOf(mRow[0].slice(0, 7));
@@ -273,14 +307,14 @@ function ssRun9(o) {
           const dp = key ? DS.days[DS.idx.get(d)][key] : null;
           const px = dp > 0 ? dp : mRow[col];
           const amt = sched.byDate.get(d) || 0;
-          if (needPx ? px : true) n += amt / px / fAt(d);
+          if (needPx ? px : true) add(d, amt, px);
           if ((sampleW || sampleQ) && dp > 0) smp.push({ date: d, value: n * fAt(d) * dp });
         }
         weeks(mRow[0]);
       } else {
         weeks(mRow[0]);
         const amt = sched.byMonth.get(mRow[0].slice(0, 7)) || 0, px = mRow[col];
-        if (needPx ? px : true) n += amt / px / fAt(mRow[0]);
+        if (needPx ? px : true) add(mRow[0], amt, px);
         if (sampleQ && px > 0 && ssIsQEndMonth(mRow[0])) smp.push({ date: mRow[0], value: n * fAt(mRow[0]) * px });
       }
     };
@@ -293,7 +327,7 @@ function ssRun9(o) {
         if (qi === S.length - 1) for (const d of tailDays(qd)) {
           weeks(d);
           const dp = key ? DS.days[DS.idx.get(d)][key] : null, px = dp > 0 ? dp : qp, amt = sched.byDate.get(d) || 0;
-          if (needPx ? px : true) n += amt / px / fAt(d);
+          if (needPx ? px : true) add(d, amt, px);
           if ((sampleW || sampleQ) && dp > 0) smp.push({ date: d, value: n * fAt(d) * dp });
         }
         weeks(qd);
@@ -303,15 +337,29 @@ function ssRun9(o) {
       pts.push({ date: qd, value: qp ? nq * qp : 0, price: qp, shares: nq });
       pd = qd;
     }
-    return { pts, smp };
+    let tax = null;
+    if (TX) {
+      const qd = S[S.length - 1][0], i1 = DS.idx.get(qd), end = pts[pts.length - 1].value;
+      if (i1 != null) {
+        divTo(qd);
+        const ey = TX.bk.yearOf(i1), rate = TX.bk.rate;
+        let dueK = 0;
+        for (const y in TX.realY) if (+y !== ey) dueK += Math.max(0, TX.realY[y] - SS_TAX_DED) * rate;
+        dueK += Math.max(0, (TX.realY[ey] || 0) + end * TX.bk.fxAt(i1) - TX.basis - SS_TAX_DED) * rate;
+        tax = { key, wht: TX.wht, due: dueK / ssFx(i1), end };
+      }
+    }
+    return { pts, smp, tax };
   };
   const bh = {}, bhS = {};
+  let bhTax = null;
   // TQQQ·QQQ 는 가격이 0인 기간도 적립을 셈(원본과 같게), 나머지는 그 기간 가격이 있어야
   [['tqqq', false], ['qqq', false], ['spy', true], ['qld', true], ['sso', true], ['spxl', true], ['sqqq', true], ['soxl', true], ['soxx', true], ['tecl', true], ['xlk', true]].forEach(([a, need]) => {
     const r = holdOnly(SS_COL[a], need);
     bh[a] = r.pts; bhS[a] = r.smp;
+    if (r.tax) bhTax = r.tax;
   });
-  return { log, samples, bh, bhS, contributed: invested };
+  return { log, samples, bh, bhS, contributed: invested, bhTax };
 }
 
 // ── 세금 (2026-11-28 — 양도세 22% · 분배금 미국 원천징수 15% 선택 · SMA 추세 · 그냥 보유) ──────────
@@ -372,36 +420,6 @@ function ssWhtFactor(key, w) {
   for (let i = 0; i < N; i++) { const g = ssDivShare(key, i); if (g > 0) f *= 1 - w * g; out[i] = f; }
   return (DS.whtF[ck] = out);
 }
-// 그냥 보유의 세금 요약 — 팔지 않으므로 해마다 내는 양도세는 없음 · 끝 날 전부 판다고 보고 그해 한 번 공제(250만 원)
-//   원가 = 넣은 돈 × 그날 결제 환율 + 분배금 다시 산 몫 · 중간에 뺀 돈(실제 거래내역)은 평균 단가로 뺀 손익을 끝 날 손익에 더함
-//   o = { key, d0, d1, initial, sched, wht(소수), tax(소수) } → { wht: 낸 원천징수($), due: 끝에 다 팔면 낼 양도세($), liq: 낸 뒤 금액($), end: 끝 평가금($) }
-function ssBhTaxEnd(o) {
-  const key = o.key, i0 = DS.idx.get(o.d0), i1 = DS.idx.get(o.d1);
-  if (i0 == null || i1 == null || i1 < i0) return null;
-  const P = (i) => DS.days[i][key] || 0, book = o.tax > 0 ? ssTaxBook(o.tax) : null, w = o.wht || 0, sched = o.sched;
-  let n = P(i0) > 0 ? o.initial / P(i0) : 0, basis = book ? o.initial * book.fxAt(i0) : 0, real = 0, wht = 0;
-  for (let i = i0 + 1; i <= i1; i++) {
-    const p = P(i);
-    if (!(p > 0)) continue;
-    const g = n > 0 ? ssDivShare(key, i) : 0;
-    if (g > 0) {
-      if (book) basis += (1 - w) * g * n * p * book.fxAt(i);
-      wht += w * g * n * p; n *= 1 - w * g;
-    }
-    const amt = sched && sched.byDate ? sched.byDate.get(DS.days[i].date) || 0 : 0;
-    if (amt > 0) { n += amt / p; if (book) basis += amt * book.fxAt(i); }
-    else if (amt < 0 && n > 0) {
-      const f = Math.min(1, -amt / (n * p));
-      if (book) { real += f * (n * p * book.fxAt(i) - basis); basis *= 1 - f; }
-      n *= 1 - f;
-    }
-  }
-  const end = n * P(i1);
-  let due = 0;
-  if (book) { const gainK = end * book.fxAt(i1) + real - basis; due = Math.max(0, gainK - SS_TAX_DED) * o.tax / ssFx(i1); }
-  return { wht, due, liq: end - due, end };
-}
-
 // ── SMA 추세 전략 ───────────────────────────────────────────────────────
 // o = { initial, monthly, raise, rate(현금 연이율, 소수), qi0, qi1, ed, xd, sched,
 //       signal('qqq'), win(200), ul(열 1), entryBuf, exitBuf(%), ohRsi, coolRsi(0=끔), ohWin, coolWin(10),
@@ -481,7 +499,7 @@ function ssRunSma(o) {
   let held = biggest(r0);
   const points = [{ date: r0[0], value: value(r0), state }];
   const ul0 = r0[ul] || 0;
-  const log = [{ date: r0[0], state, held, action: 'START', fee: held !== 'cash' ? initial * cost : 0, price: ul0, shares: shSum(), stockVal: value(r0) - cash, cash, total: value(r0), invested: initial }];
+  const log = [{ date: r0[0], state, held, action: 'START', fee: held !== 'cash' ? initial * cost : 0, price: ul0, shares: shSum(), stockVal: value(r0) - cash + taxExt, cash, total: value(r0), invested: initial }];
   const qEnd = new Set();
   for (let q = o.qi0; q <= o.qi1; q++) qEnd.add(DS.q[q][0]);
   const dd = o.dd ? [{ date: r0[0], h: holding(), cash }] : null;
@@ -545,7 +563,7 @@ function ssRunSma(o) {
       if (sold) lastSell = m;
     }
     const entry = (action, h, fee, extra) => {
-      const r = { date: d, state, held: h, action, fee: fee || 0, price: ulPx, shares: shSum(), stockVal: value(row) - cash, cash, total: value(row), invested };
+      const r = { date: d, state, held: h, action, fee: fee || 0, price: ulPx, shares: shSum(), stockVal: value(row) - cash + taxExt, cash, total: value(row), invested };
       if (extra != null) r.contribAmt = extra;
       log.push(r);
     };
@@ -573,7 +591,7 @@ function ssRunSma(o) {
         if (ext > 1e-9) { taxExt += ext; T.ext = ext; }
         if (short0) cash = 0;   // 모자라 팔아서 낸 날 — 남은 잔돈(소수점 오차)으로 사지 않음 (SMB 시뮬 방식과 같게)
         if (!(shSum() > 0)) held = 'cash';
-        entry('TAX', biggest(row), tFee);
+        entry('TAX', held, tFee);
         log[log.length - 1].tax = usd;
       }
     }
@@ -598,14 +616,14 @@ function ssRunSma(o) {
       }
     }
     if (!traded && moneyDay && lastAmt > 0) entry('CONTRIB', held, 0, lastAmt);
-    if (dd) dd.push({ date: d, h: holding(), cash });
+    if (dd) dd.push({ date: d, h: holding(), cash: cash - taxExt });   // 못 낸 양도세(빚)는 현금에서 뺌 — 평가금(value)과 같게
     if (qEnd.has(d) || (o.sampleW && ssWeekLast(d, steps[m + 1] && steps[m + 1][0]))) points.push({ date: d, value: value(row), state });
   }
   const last = steps[b];
   // 청산일이 분기말이 아니면(정확한 날짜) 그날 값도 점으로 — 없으면 화면 끝 값이 직전 분기말 값으로 남았음
   if (last && points[points.length - 1].date !== last[0]) points.push({ date: last[0], value: value(last), state });
   if (last && (!log.length || log[log.length - 1].date !== last[0])) {
-    log.push({ date: last[0], state, held: biggest(last), action: 'END', fee: 0, price: last[ul] || 0, shares: shSum(), stockVal: value(last) - cash, cash, total: value(last), invested });
+    log.push({ date: last[0], state, held: biggest(last), action: 'END', fee: 0, price: last[ul] || 0, shares: shSum(), stockVal: value(last) - cash + taxExt, cash, total: value(last), invested });
   }
   // 세금 요약 — 낸 양도세·원천징수 · 아직 안 낸 양도세(지난해 몫 + 올해 실현 손익) · 끝 날 전부 팔고 세금까지 낸 뒤 금액(SMB liq 와 같은 식)
   let tax = null;

@@ -87,12 +87,14 @@ def yahoo_daily(sym, divs=None):
             if divs is not None:
                 try:
                     cl = (((res.get('indicators') or {}).get('quote') or [{}])[0] or {}).get('close') or []
-                    closes = []
+                    closes, alld = [], set()
                     for t, v in zip(ts, cl):
+                        dd = datetime.datetime.fromtimestamp(t, tz).strftime('%Y-%m-%d')
+                        alld.add(dd)
                         if v is not None and math.isfinite(v) and v > 0:
-                            closes.append((datetime.datetime.fromtimestamp(t, tz).strftime('%Y-%m-%d'), float(v)))
+                            closes.append((dd, float(v)))
                     closes.sort()
-                    cdates = [d for d, _ in closes]
+                    cdates, alls = [d for d, _ in closes], sorted(alld)
                     import bisect
                     for e in ((res.get('events') or {}).get('dividends') or {}).values():
                         amt = float(e.get('amount') or 0)
@@ -103,6 +105,10 @@ def yahoo_daily(sym, divs=None):
                         if j <= 0 or j >= len(cdates) or cdates[j] != d:
                             continue            # 분배락일이 일봉에 없음 · 첫날 — 전날 종가를 모름
                         pc = closes[j - 1][1]
+                        ja = bisect.bisect_left(alls, d)
+                        if ja > 0 and alls[ja - 1] != closes[j - 1][0]:
+                            # 바로 전 거래일 종가가 빔 — 그 앞 종가로 (하루 가격 변동만큼의 작은 오차 · 건너뛰면 그 분배금 전체가 빠짐)
+                            print(f'::warning::{sym} {d} 분배락 전날({alls[ja - 1]}) 종가가 빔 — {closes[j - 1][0]} 종가로 셈')
                         if not (0 < amt / pc < 0.5):
                             print(f'::warning::{sym} {d} 분배금 {amt} / 전날 종가 {pc} 가 이상 — 건너뜀')
                             continue
@@ -341,7 +347,9 @@ def update_prices(fetch=True):
 
 
 def update_divs():
-    """divs.csv — 이번에 받은 종목은 새 값, 받지 못한 종목은 예전 줄 그대로 · 바뀔 때만 씀 (True = 바뀜)"""
+    """divs.csv — 받은 종목은 새 값으로 합침 · 받지 못한 종목은 예전 줄 그대로 · 바뀔 때만 씀 (True = 바뀜)
+    합치는 규칙(2026-11-28 검토): 야후가 이번에 분배금을 하나도 주지 않으면(응답에서 빠짐) 예전 줄 그대로 + 경고 — 종목 줄이 통째로 지워지지 않게
+      · 받은 것이 있으면 받은 첫 날 전의 예전 줄 + 받은 줄 (같은 구간은 받은 값 — 날짜를 고친 분배금이 두 번 세지지 않게) · 그 구간에서 빠진 예전 날은 경고"""
     old = {}
     if os.path.exists(DIVS):
         for ln in open(DIVS, encoding='utf-8').read().splitlines()[1:]:
@@ -350,10 +358,23 @@ def update_divs():
                 old.setdefault(c[1], []).append(ln)
     rows = []
     for c in COLS:
-        if c in DIV_GOT:
-            rows += [f"{d.replace('-', '')},{c},{fmt(a)},{fmt(pc)}" for d, a, pc in DIV_GOT[c]]
-        else:
-            rows += old.get(c, [])
+        prev = old.get(c, [])
+        if c not in DIV_GOT:
+            rows += prev
+            continue
+        new = [f"{d.replace('-', '')},{c},{fmt(a)},{fmt(pc)}" for d, a, pc in DIV_GOT[c]]
+        if not new:
+            if prev:
+                print(f'::warning::{c}: 야후 응답에 분배금이 없음 — divs.csv 의 예전 {len(prev)}줄 그대로')
+            rows += prev
+            continue
+        first = min(r.split(',')[0] for r in new)
+        keep = [r for r in prev if r.split(',')[0] < first]
+        got = {r.split(',')[0] for r in new}
+        gone = [r.split(',')[0] for r in prev if r.split(',')[0] >= first and r.split(',')[0] not in got]
+        if gone:
+            print(f'::warning::{c}: 예전에 있던 분배락일 {len(gone)}개가 이번 야후 응답에 없음 — 뺌 ({", ".join(gone[:5])})')
+        rows += keep + new
     rows.sort()
     text = 'date,asset,div,prev_close\n' + ''.join(r + '\n' for r in rows)
     cur = open(DIVS, encoding='utf-8').read() if os.path.exists(DIVS) else ''
@@ -398,7 +419,10 @@ def main():
     only = '--prelist-only' in sys.argv[1:]
     ch = update_prices(fetch=not only)
     if not only and DIV_GOT:
-        ch = update_divs() or ch
+        try:                        # 분배금은 덤 — 실패해도 이미 쓴 prices.csv · nfci · 갱신 시각은 그대로 진행
+            ch = update_divs() or ch
+        except Exception as e:
+            print(f'::warning::divs.csv: 갱신 실패 — 그대로 둠 ({e!r})')
     if not only:
         try:
             ch = update_nfci() or ch

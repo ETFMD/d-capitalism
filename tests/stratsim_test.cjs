@@ -371,6 +371,16 @@ for (const kind of ['9sig', 'sma']) {
   const d0 = M.ssDefaults('sma'), b0 = M.ssDefaults('bh');
   n++;
   if (d0.tax !== '0' || d0.wht !== '0' || b0.tax !== '0' || b0.wht !== '0') fail('새 전략·그냥 보유 기본값은 세금 끔: ' + JSON.stringify([d0, b0]));
+  // 분배금 자료를 새로 받으면 원천징수 배수도 새로 (캐시가 예전 자료 값을 남기지 않음)
+  {
+    const raw = M.DS.taxRaw, f1 = M.ssWhtFactor('qqq', 0.15), a1 = f1 && f1[f1.length - 1];
+    M.ssSetTaxData(raw.divs.map((e) => Object.assign({}, e, { y: e.y / 2 })), raw.fx);
+    const f2 = M.ssWhtFactor('qqq', 0.15), a2 = f2 && f2[f2.length - 1];
+    M.ssSetTaxData(raw.divs, raw.fx);
+    const f3 = M.ssWhtFactor('qqq', 0.15), a3 = f3 && f3[f3.length - 1];
+    n++;
+    if (!(a1 > 0.5 && a1 < 1 && a2 > a1 && a2 < 1 && a3 === a1)) fail('분배금 자료를 바꾸면 원천징수 배수도 새로: ' + JSON.stringify([a1, a2, a3]));
+  }
   // 저장 전략이 세금을 켜면 그냥 보유 기본 선도 같은 세금(보이는 것만) · 화면 숫자에 세금 요약
   const p43 = M.ssCleanParams('sma', lib.find((x) => x.name === 'SMA 200').preset.params);
   S.saved = [{ id: 't1', type: 'sma', name: 'SMA 200', params: p43, color: '#ffffff', hidden: false }];
@@ -384,6 +394,40 @@ for (const kind of ['9sig', 'sma']) {
   if (!mt || !mt.tax || !(mt.tax.paid > 0) || !(mt.tax.whtPaid > 0) || !(mt.tax.liq > 0 && mt.tax.liq <= mt.end * 1.0001) || mt.tax.hold) fail('SMA 200 세금 요약: ' + JSON.stringify(mt && mt.tax));
   n++;
   if (!mb || !mb.tax || !mb.tax.hold || !(mb.tax.due > 0) || !(mb.tax.whtPaid > 0) || Math.abs(mb.tax.liq - (mb.end - mb.tax.due)) > 1e-6 || !/세금/.test(lb)) fail('그냥 보유 세금 요약·선 이름: ' + JSON.stringify([mb && mb.tax, lb]));
+  // 그냥 보유 세금 칸 = 기본 선을 그린 같은 실행(ssRun9 r.bhTax) — 선과 다른 길로 따로 세지 않음
+  n++;
+  if (!M.R.base.bhTax || M.R.base.bhTax.key !== 'tqqq' || mb.tax.due !== M.R.base.bhTax.due || mb.tax.whtPaid !== M.R.base.bhTax.wht
+    || Math.abs(M.R.base.bhTax.end - M.R.base.bh.tqqq[M.R.base.bh.tqqq.length - 1].value) > 1e-9) fail('그냥 보유 세금 칸 = 기본 선 실행: ' + JSON.stringify([mb.tax, M.R.base.bhTax]));
+  // 공유 링크: 그냥 보유 창이 열려 있으면 그 창의 세금(bx) · 닫혀 있으면 없음 · 받는 쪽은 bx 또는 받은 저장 전략을 따른 표준값
+  {
+    const keepB = S.base.bh, keepP = S.panel;
+    S.panel = 'bh'; S.base.bh = { ul: 'spy', tax: '0', wht: '15' };
+    const o1 = M.ssShareState();
+    S.panel = null;
+    const o2 = M.ssShareState();
+    n++;
+    if (!o1.bx || o1.bx.tax !== '0' || o1.bx.wht !== '15' || o2.bx) fail('공유 링크 bx: ' + JSON.stringify([o1.bx, o2.bx]));
+    S.base.bh = { ul: 'spy', tax: '0', wht: '0' }; M.ssApplySharedBhTax({ bx: { tax: '0', wht: '15' } });
+    const r1 = Object.assign({}, S.base.bh);
+    S.base.bh = { ul: 'spy', tax: '0', wht: '0' }; M.ssApplySharedBhTax({});
+    const r2 = Object.assign({}, S.base.bh);
+    S.base.bh = { ul: 'spy', tax: '0', wht: '0' }; M.ssApplySharedBhTax({ bx: { tax: '99', wht: 'x' } });
+    const r3 = Object.assign({}, S.base.bh);
+    n++;
+    if (r1.tax !== '0' || r1.wht !== '15' || r1.ul !== 'spy' || r2.tax !== '22' || r2.wht !== '15' || r3.tax !== '22' || r3.wht !== '15')
+      fail('공유 링크 받기 — bx · 저장 전략 따름 · 이상한 값은 표준값: ' + JSON.stringify([r1, r2, r3]));
+    S.base.bh = keepB; S.panel = keepP;
+  }
+  // 저장한 그냥 보유(세금 켬)의 세금 칸 = 그 선을 그린 같은 실행
+  {
+    const keepS = S.saved;
+    S.saved = [{ id: 'tb', type: 'bh', name: 'SPY', params: M.ssCleanParams('bh', { ul: 'spy', tax: '22', wht: '15' }), color: '#dddddd', hidden: false }];
+    M.ssRender();
+    const mq = M.R.metrics['cfg:tb'];
+    n++;
+    if (!mq || !mq.tax || !mq.tax.hold || !(mq.tax.due > 0) || !(mq.tax.whtPaid > 0) || Math.abs(mq.tax.liq - (mq.end - mq.tax.due)) > 1e-6 * mq.end) fail('저장한 그냥 보유 세금 칸: ' + JSON.stringify(mq && mq.tax));
+    S.saved = keepS; M.ssRender();
+  }
   S.saved[0].hidden = true;
   n++;
   if (M.ssBaseDefaults('bh').tax !== '0') fail('숨긴 저장 전략은 그냥 보유 기본 선 세금에 안 들어감');

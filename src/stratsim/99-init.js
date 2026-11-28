@@ -55,6 +55,7 @@ async function ssBoot() {
     if (shared.b9) S.base['9sig'] = ssCleanParams('9sig', shared.b9);
     if (shared.bs) S.base.sma = ssCleanParams('sma', shared.bs);
     if (Array.isArray(shared.sc)) mapped = ssImportShared(shared.sc);
+    ssApplySharedBhTax(shared);
     if (Array.isArray(shared.tx) && shared.tx.length) ssTxFromShared(shared.tx);
     const anKey = (k) => { if (typeof k !== 'string') return null; if (k.indexOf('cfg:') !== 0) return k; const i = parseInt(k.slice(4), 10); const c = mapped && mapped[i]; const id = c ? ssResolveShared(c) : null; return id ? 'cfg:' + id : null; };
     if (shared.as) { const k = anKey(shared.as); if (k) S.an.strategy = k; }
