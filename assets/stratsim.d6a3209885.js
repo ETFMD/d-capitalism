@@ -139,7 +139,8 @@ function ssShiftRows(period, offset, entryDate, exitDate) {
   }
   return out;
 }
-// 정확한 날짜(달력): 진입일 행 + 그 사이 기간 끝 행 + 청산일 행
+// 9sig 매주·매달·매 분기 행 = 진입일 행 + 그 사이 기간 끝(주·달·분기 마지막 거래일) 행 + 청산일 행
+//   (2026-11-28 — 분기 번호로 고른 기간도 같은 규칙: ssRun9 가 rows 없이 불리면 이것으로 만듦)
 function ssExactRows(period, entryDate, exitDate) {
   if (!DS.days) return [];
   const e = DS.idx.get(entryDate), x = DS.idx.get(exitDate);
@@ -149,6 +150,49 @@ function ssExactRows(period, entryDate, exitDate) {
   for (const r of src) if (r[0] > entryDate && r[0] < exitDate) out.push(r);
   out.push(DS.rows[x]);
   return out;
+}
+
+// 9sig 매년 행 (2026-11-28 · 분기 번호·정확한 날짜 같은 규칙)
+//   진입일 행 + 1년마다 기념일 행 + 청산일이 마지막 기념일 행 뒤면 청산일 행('현재 평가' = snapAt — 리밸런스 안 함)
+//   기념일 = 진입일이 그달 마지막 거래일이면(분기 경계는 늘 그럼) 해마다 같은 달의 마지막 거래일,
+//            아니면 같은 달·날(그달에 없는 날은 그달 마지막 날) 이하 마지막 거래일
+//   · 그해 기념일이 자료에서 아직 오지 않았으면(같은 달이 덜 끝남 · 그 날이 자료 끝 뒤) 넣지 않음 · 기념일 행이 청산일이면 그 날 리밸런스로 끝
+//   (예전 분기 번호 = 기념일 이하 마지막 '월말' 행 — 1989-12-29 진입이면 해마다 11월 말처럼 한 달 일찍 · 예전 정확한 날짜 = 달력 연말 행)
+function ssAnnivRows(d0, d1) {
+  const out = { rows: [], snapAt: -1 };
+  if (!DS.days || !d0 || !d1) return out;
+  const a = DS.idx.get(d0), b = DS.idx.get(d1), N = DS.days.length;
+  if (a == null || b == null || a >= b) return out;
+  const rows = [DS.rows[a]], p2 = (v) => String(v).padStart(2, '0'), ym = (s) => s.slice(0, 7);
+  const y0 = +d0.slice(0, 4), m0 = +d0.slice(5, 7), dd = +d0.slice(8, 10);
+  const monthEnd = ym(DS.days[a + 1].date) !== ym(d0);   // a < b 라 다음 거래일이 있음
+  let j = a;
+  for (let k = 1; ; k++) {
+    const y = y0 + k, mm = String(y).padStart(4, '0') + '-' + p2(m0);
+    let i = j;
+    if (monthEnd) {
+      while (i + 1 < N && ym(DS.days[i + 1].date) <= mm) i++;
+      if (i + 1 >= N) break;                          // 그달이 자료에서 아직 안 끝남
+      if (ym(DS.days[i].date) !== mm) continue;       // (그달 거래일이 없는 자료 — 없음)
+    } else {
+      const ann = mm + '-' + p2(Math.min(dd, new Date(Date.UTC(y, m0, 0)).getUTCDate()));
+      while (i + 1 < N && DS.days[i + 1].date <= ann) i++;
+      if (i + 1 >= N && DS.days[i].date < ann) break; // 그 날이 자료 끝 뒤 — 아직 안 옴
+    }
+    if (i > b) break;                                 // 청산일 뒤
+    if (i === j) continue;                            // (1년 넘게 거래일이 없는 자료 — 없음)
+    rows.push(DS.rows[i]); j = i;
+    if (i === b) break;
+  }
+  if (j < b) { rows.push(DS.rows[b]); out.snapAt = rows.length - 1; }
+  out.rows = rows;
+  return out;
+}
+// 월말 행(DS.m) 중 날짜가 (after, upto] 인 위치 [lo, hi) — 이분 탐색 (어떤 행 목록에서도 '앞 행 뒤 ~ 이 행까지의 달')
+function ssMonthSpan(after, upto) {
+  const m = DS.m;
+  const firstAfter = (d) => { let lo = 0, hi = m.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (m[mid][0] <= d) lo = mid + 1; else hi = mid; } return lo; };
+  return [firstAfter(after), firstAfter(upto)];
 }
 
 // 이동평균: 창 안 값이 모두 양수일 때만 (아니면 null)
@@ -652,8 +696,7 @@ function ssRun9(o) {
   const raise = o.raise || 0;
   const bRate = (o.baseRate != null ? +o.baseRate : (o.rate || 0)) / 12;
   const period = o.period || 'quarterly';
-  const pRows = ssPeriodRows(period);
-  let rows = o.rows || pRows || DS.q;
+  let rows = o.rows || null;
   let qi0 = o.qi0, qi1 = o.qi1;
   const growth = o.growth != null ? o.growth : 0.09;
   const crashDrop = o.crashDrop != null ? +o.crashDrop : 30;
@@ -675,38 +718,27 @@ function ssRun9(o) {
   const fromTarget = !!o.fromTarget;
   const cost = Math.max(0, +o.cost || 0) / 100;
 
-  // 연간 = 진입일부터 12달마다(기념일) — 기념일 이하 마지막 월말 행. 청산일이 마지막 기념일보다 뒤면 '현재 평가' 행(리밸런스 안 함)
-  let custom = false, snapAt = -1;
-  if (period === 'yearly' && !o.rows) {
-    const d0 = DS.q[qi0] && DS.q[qi0][0], d1 = DS.q[qi1] && DS.q[qi1][0];
-    if (d0 && d1) {
-      // 1년 뒤 같은 달·날 (없는 날은 Date.UTC 규칙대로 다음 달로 — 2/29 → 3/1)
-      const nextYear = (iso) => new Date(Date.UTC(+iso.slice(0, 4) + 1, +iso.slice(5, 7) - 1, +iso.slice(8, 10))).toISOString().slice(0, 10);
-      // 그 날짜 이하 마지막 월말 행 (없으면 null)
-      const monthEndOnOrBefore = (iso) => { let k = -1; while (k + 1 < DS.m.length && DS.m[k + 1][0] <= iso) k++; return k < 0 ? null : DS.m[k]; };
-      const roll = [];
-      let anniv = d0;
-      while (anniv <= d1) { const row = monthEndOnOrBefore(anniv); if (row) roll.push(row); anniv = nextYear(anniv); }
-      const lastRoll = roll.length ? roll[roll.length - 1][0] : null;
-      if (lastRoll !== null && d1 > lastRoll) {
-        const tail = monthEndOnOrBefore(d1);
-        if (tail && tail[0] > lastRoll) { roll.push(tail); snapAt = roll.length - 1; }
-      }
-      if (roll.length >= 2) { rows = roll; qi0 = 0; qi1 = roll.length - 1; custom = true; }
+  // 기간 행 (2026-11-28 — 분기 번호로 고른 기간과 정확한 날짜로 고른 기간이 같은 규칙 · 같은 날이면 같은 숫자)
+  //   매주·매달·매 분기 = 진입일 행 + 그 사이 기간 끝 행 + 청산일 행 (ssExactRows)
+  //     예전 분기 번호의 매주는 진입 이하 마지막 주말 행 ~ 청산 이상 첫 주말 행이라 고른 기간보다 앞뒤로 며칠 넓었음(원본과 같았음)
+  //   매년 = 진입일부터 1년마다 기념일(진입일이 달의 마지막 거래일이면 해마다 같은 달 마지막 거래일 · 아니면 같은 날 이하 마지막 거래일)
+  //          + 마지막 기념일 뒤 청산일은 '현재 평가' 행(리밸런스 안 함) (ssAnnivRows)
+  //   분기 번호의 매 분기는 예전 그대로 DS.q 위치 · rows 를 받으면(리밸런스 시점 옮김 등) 그 행에서 진입·청산 날짜로 위치를 찾음
+  let snapAt = -1;
+  const dE = o.ed || (DS.q[qi0] && DS.q[qi0][0]), dX = o.xd || (DS.q[qi1] && DS.q[qi1][0]);
+  if (!o.rows) {
+    let own = null;
+    if (dE && dX) {
+      if (period === 'yearly') { const a = ssAnnivRows(dE, dX); if (a.rows.length >= 2) { own = a.rows; snapAt = a.snapAt; } }
+      else if (period !== 'quarterly' || o.ed || o.xd) { const q = ssExactRows(period, dE, dX); if (q.length >= 2) own = q; }
     }
+    if (own) { rows = own; qi0 = 0; qi1 = own.length - 1; } else rows = DS.q;
+  } else if (rows !== DS.q && dE && dX) {
+    let e = 0, x = rows.length - 1;
+    for (let i = 0; i < rows.length; i++) { if (rows[i][0] <= dE) e = i; else break; }
+    for (let i = rows.length - 1; i >= 0; i--) { if (rows[i][0] >= dX) x = i; else break; }
+    qi0 = e; qi1 = x;
   }
-  // 분기 행이 아닌 행(주·월·연 기간 또는 맞춤 행)이면 진입·청산 날짜로 위치를 다시 찾음
-  if (!custom && rows !== DS.q && ((period !== 'quarterly' && pRows) || o.rows)) {
-    const d0 = o.ed || (DS.q[qi0] && DS.q[qi0][0]), d1 = o.xd || (DS.q[qi1] && DS.q[qi1][0]);
-    if (d0 && d1) {
-      let e = 0, x = rows.length - 1;
-      for (let i = 0; i < rows.length; i++) { if (rows[i][0] <= d0) e = i; else break; }
-      for (let i = rows.length - 1; i >= 0; i--) { if (rows[i][0] >= d1) x = i; else break; }
-      qi0 = e; qi1 = x;
-    }
-  }
-  const fastMonths = rows === pRows || (period === 'quarterly' && rows === DS.q);
-  const monthsOf = DS.mIn[period];
   const S = rows.slice(qi0, qi1 + 1);
   if (S.length < 2) return { log: [], samples: [], bh: {}, bhS: {}, contributed: o.initial };
 
@@ -806,8 +838,7 @@ function ssRun9(o) {
         putMoney(mRow[ul], mRow[0], mRow);
       }
     };
-    if (fastMonths) for (const mi of monthsOf[qi0 + qi]) doMonth(DS.m[mi]);
-    else for (const r of DS.m) if (r[0] > prevDate && r[0] <= qDate) doMonth(r);
+    { const [lo, hi] = ssMonthSpan(prevDate, qDate); for (let mi = lo; mi < hi; mi++) doMonth(DS.m[mi]); }
     // 마지막 행이 달 중간(정확한 청산일 · 주 단위 · 리밸런스 시점 옮김)이면 그달 월말 행은 위에서 안 돎 →
     // 실제 거래내역의 그달 입금 중 이 날까지 것을 그날 가격으로 넣음 (이자는 달마다라 덜 찬 달은 없음 · 공식 적립은 월말 금액이라 없음)
     if (qi === S.length - 1) for (const d of tailDays(qDate)) {
@@ -900,8 +931,7 @@ function ssRun9(o) {
     for (let qi = 0; qi < S.length; qi++) {
       const qd = S[qi][0], qp = S[qi][col];
       if (qi > 0 && (!needPx || qp)) {
-        if (fastMonths) for (const mi of monthsOf[qi0 + qi]) month(DS.m[mi]);
-        else for (const r of DS.m) if (r[0] > pd && r[0] <= qd) month(r);
+        { const [lo, hi] = ssMonthSpan(pd, qd); for (let mi = lo; mi < hi; mi++) month(DS.m[mi]); }
         // 마지막 행이 달 중간이면 실제 거래내역의 그달 그 날까지 입금도 (9sig 쪽과 같은 규칙)
         if (qi === S.length - 1) for (const d of tailDays(qd)) {
           weeks(d);
@@ -2782,7 +2812,7 @@ const SL_SELF = '직접 고른 전략 — 숫자는 이 앱의 자체 백테스�
 const SL_APP = '앱의 기본 전략 — 숫자는 이 앱이 표준 기본값으로 돌린 백테스트';
 const sll = (...a) => a.join('\n');
 // 과최적화 탐색기 1위 설정 (프리셋)
-function slFit(n, eng, goal, span, cagr, dd, params) {
+function slFit(n, eng, goal, span, cagr, dd, params, note) {
   const E = eng === '9sig' ? '9sig' : 'SMA', G = goal === 'ret' ? '최고 수익' : '최저 낙폭';
   // 원래 1953년부터 찾은 후보 — 이 사이트 자료는 1971년부터(그 전 나스닥 값은 검증할 수 없는 가상값이라 뺌)라 탐색기에서는 1971–2025 탭
   const now = /^1953/.test(span) ? '의 ‘' + G + ' ' + span.replace(/^1953/, '1971') + '’ 탭(이 사이트 자료는 1971년부터 — 그 전 나스닥 값은 검증할 수 없는 가상값이라 뺌)' : '';
@@ -2790,7 +2820,8 @@ function slFit(n, eng, goal, span, cagr, dd, params) {
     n, name: E + ' · ' + G + ' ' + span, tag: 'overfit',
     rules: sll(E + ' 과최적화 탐색기의 ‘' + G + ' ' + span + '’ 후보를 처음 찾을 때 1위였던 설정 — 그 구간에 맞춘 값(당시 표본 안 CAGR ' + cagr + '%, 낙폭 ' + dd + '%). 지금 계산으로 다시 돌린 값과 순위는 탐색기 표' + now + '에서 볼 수 있습니다.',
       '앱의 ' + E + ' 엔진 그대로 돌아가므로 써 보면 모든 손잡이를 바꿀 수 있습니다.',
-      '그 구간을 뒤져 고른 값이라 다른 구간은 훨씬 나빠 보일 것으로 예상하세요 — 추천이 아니라 과최적화의 차이를 보여 주려고 둔 것입니다.'),
+      '그 구간을 뒤져 고른 값이라 다른 구간은 훨씬 나빠 보일 것으로 예상하세요 — 추천이 아니라 과최적화의 차이를 보여 주려고 둔 것입니다.',
+      ...(note ? [note] : [])),
     reported: '처음 찾을 때 ' + span + ' 표본 안: CAGR ' + cagr + '% / 낙폭 −' + dd + '%',
     preset: { type: eng, params },
   };
@@ -3021,7 +3052,8 @@ const SS_LIBRARY = [
   // 과최적화 탐색기 1위 — 구간에 맞춰 찾은 최고점이지 예측이 아님 (차이를 보이려고 둠)
   slFit(27, '9sig', 'ret', '2010–2025', '55.33', '69.91', { ul: 'tqqq', g: '130', cd: '5', cw: '24', sp: '25', per: 'monthly', cash: '90', cr: '4', bp: '100', dep: '75', tc: 'holding', park: 'cash', rp: '10', st: '0', cost: '0.02' }),
   slFit(28, '9sig', 'dd', '2010–2025', '30.01', '19.41', { ul: 'tqqq', g: '12', cd: '25', cw: '21', sp: '100', per: 'yearly', cash: '70', cr: '4', bp: '70', dep: '0', tc: 'holding', park: 'qld', rp: '10', st: '0', cost: '0.02' }),
-  slFit(29, '9sig', 'ret', '1990–2025', '42.24', '81.66', { ul: 'tqqq', g: '150', cd: '5', cw: '36', sp: '200', per: 'yearly', cash: '0', cr: '4', bp: '100', dep: '100', tc: 'holding', park: 'cash', rp: '0', st: '0', cost: '0.02' }),
+  slFit(29, '9sig', 'ret', '1990–2025', '42.24', '81.66', { ul: 'tqqq', g: '150', cd: '5', cw: '36', sp: '200', per: 'yearly', cash: '0', cr: '4', bp: '100', dep: '100', tc: 'holding', park: 'cash', rp: '0', st: '0', cost: '0.02' },
+    '2026-11-28 매년 리밸런스 날을 바로잡은 뒤 이 설정의 1990–2025 숫자는 연 약 29.0% · 낙폭 −86.6% 로 크게 낮아졌습니다 — 1989-12-29 진입이면 예전 계산은 1990~2025년 36번 중 31번을 11월 마지막 거래일(한 달 일찍)에 리밸런스했고, 지금은 해마다 같은 달인 12월 마지막 거래일입니다. 리밸런스 날 하나로 숫자가 이만큼 흔들리는 것도 과최적화의 모습입니다.'),
   slFit(30, '9sig', 'dd', '1990–2025', '18.12', '22.67', { ul: 'tqqq', g: '0.5', cd: '5', cw: '60', sp: '250', per: 'quarterly', cash: '70', cr: '4', bp: '70', dep: '50', tc: 'holding', park: 'cash', rp: '30', st: '0', cost: '0.02' }),
   slFit(31, '9sig', 'ret', '1953–2025', '19.96', '96.58', { ul: 'tqqq', g: '40', cd: '25', cw: '24', sp: '160', per: 'quarterly', cash: '40', cr: '4', bp: '85', dep: '100', tc: 'target', park: 'cash', rp: '30', st: '0', cost: '0.02' }),
   slFit(32, '9sig', 'dd', '1953–2025', '12.01', '45.8', { ul: 'tqqq', g: '15', cd: '20', cw: '48', sp: '50', per: 'yearly', cash: '60', cr: '4', bp: '50', dep: '0', tc: 'holding', park: 'cash', rp: '15', st: '25', cost: '0.02' }),
@@ -4006,7 +4038,7 @@ function ssCfgSeries(cfg, ctx, lite) {
     let rows = null;
     const rp = +p.rp || 0;
     if (rp > 0) { const off = Math.round(rp / 100 * ((SS_PERIOD_DAYS[per] || 63) - 1)); const q = ssShiftRows(per, off, ctx.entryDate, ctx.exitDate); if (q && q.length >= 2) rows = q; }
-    if (!rows && ctx.anyOv) { const q = ssExactRows(per, ctx.entryDate, ctx.exitDate); if (q && q.length >= 2) rows = q; }
+    // 정확한 날짜 기간도 rows 없이 → ssRun9 가 분기 번호와 같은 규칙으로 행을 만듦(매년 = 기념일 · 2026-11-28 — 예전엔 여기서 달력 연말 행을 넘김)
     const sampleQ = ctx.grain === 'quarterly' && per === 'yearly', sampleW = ctx.grain === 'weekly' && per !== 'weekly';
     const r = ssRun9(Object.assign({}, common, { rate: ssRate9(p), period: per, rows, sampleQ, sampleW, noBH: !!lite }, ovOpt, o9));
     const sr = sampleQ || sampleW ? r.samples : r.log;
@@ -6745,7 +6777,7 @@ function ssPdTotals(type, owner, k) {
         let rows = null;
         const rp = +p.rp || 0;
         if (rp > 0) { const off = Math.round(rp / 100 * ((SS_PERIOD_DAYS[per] || 63) - 1)); const q = ssShiftRows(per, off, ctx.entryDate, ctx.exitDate); if (q && q.length >= 2) rows = q; }
-        if (!rows && ctx.anyOv) { const q = ssExactRows(per, ctx.entryDate, ctx.exitDate); if (q && q.length >= 2) rows = q; }
+        // 정확한 날짜도 rows 없이 → ssRun9 가 본 화면과 같은 규칙으로 행을 만듦 (2026-11-28)
         const r = ssRun9(Object.assign({}, common, { rate: ssRate9(p), baseRate: ctx.rate, period: per, rows, noBH: true }, ov, ssOpts9(p)));
         return r.log.length ? r.log[r.log.length - 1].total : 0;
       }
