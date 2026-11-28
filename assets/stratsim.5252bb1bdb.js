@@ -3073,13 +3073,16 @@ function slFit(n, eng, goal, span, cagr, dd, params, note) {
   const E = eng === '9sig' ? '9sig' : 'SMA', G = goal === 'ret' ? '최고 수익' : '최저 낙폭';
   // 원래 1953년부터 찾은 후보 — 이 사이트 자료는 1971년부터(그 전 나스닥 값은 검증할 수 없는 가상값이라 뺌)라 탐색기에서는 1971–2025 탭
   const now = /^1953/.test(span) ? '의 ‘' + G + ' ' + span.replace(/^1953/, '1971') + '’ 탭(이 사이트 자료는 1971년부터 — 그 전 나스닥 값은 검증할 수 없는 가상값이라 뺌)' : '';
+  // 세금을 켠 프리셋(SMA — 2026-11-29 사용자 결정: 탐색기 표와 같은 조건 · 거래 비용 0.1% · 양도세 22% · 원천징수 15%)은 그 사실을 적음
+  const tx = +params.tax > 0 || +params.wht > 0;
   return {
     n, name: E + ' · ' + G + ' ' + span, tag: 'overfit',
-    rules: sll(E + ' 과최적화 탐색기의 ‘' + G + ' ' + span + '’ 후보를 처음 찾을 때 1위였던 설정 — 그 구간에 맞춘 값(당시 표본 안 CAGR ' + cagr + '%, 낙폭 ' + dd + '%). 지금 계산으로 다시 돌린 값과 순위는 탐색기 표' + now + '에서 볼 수 있습니다.',
+    rules: sll(E + ' 과최적화 탐색기의 ‘' + G + ' ' + span + '’ 후보를 처음 찾을 때 1위였던 설정 — 그 구간에 맞춘 값(당시 표본 안 CAGR ' + cagr + '%, 낙폭 ' + dd + '%' + (tx ? ' — 세금 없이 잰 값' : '') + '). 지금 계산으로 다시 돌린 값과 순위는 탐색기 표' + now + '에서 볼 수 있습니다.',
+      ...(tx ? ['탐색기 표와 같은 조건으로 돌아갑니다 — 거래 비용(수수료·슬리피지) ' + params.cost + '% · 양도세 ' + params.tax + '% · 분배금 미국 원천징수 ' + params.wht + '%. 그래서 써 보면 위의 처음 찾을 때 숫자보다 낮게 나옵니다. 세금 없이 보려면 패널 아래 세금 손잡이를 끄면 됩니다.'] : []),
       '앱의 ' + E + ' 엔진 그대로 돌아가므로 써 보면 모든 손잡이를 바꿀 수 있습니다.',
       '그 구간을 뒤져 고른 값이라 다른 구간은 훨씬 나빠 보일 것으로 예상하세요 — 추천이 아니라 과최적화의 차이를 보여 주려고 둔 것입니다.',
       ...(note ? [note] : [])),
-    reported: '처음 찾을 때 ' + span + ' 표본 안: CAGR ' + cagr + '% / 낙폭 −' + dd + '%',
+    reported: '처음 찾을 때 ' + span + ' 표본 안' + (tx ? '(세금 없음)' : '') + ': CAGR ' + cagr + '% / 낙폭 −' + dd + '%',
     preset: { type: eng, params },
   };
 }
@@ -3313,6 +3316,7 @@ const SS_LIBRARY = [
       '백테스트에서 11번 작동했고 모두 1971년~2007년 11월 사이, 매번 3주~15개월 현금으로 있었습니다. 위기 내내 현금으로 있지는 않습니다: 2008년에는 2007년 11월 30일에 팔고 2008년 4월 1일에 가격 규칙에 넘겼으며, 가격 규칙은 2008년 봄·여름에 여러 번 들락날락한 뒤 2008년 9월 15일에 팔고 2009년 4월에 되샀습니다.'),
     reported: '거부(veto) 부분은 따로 검증함: 1973년부터의 시기표, 52개 창 전진 검증, 흐름을 살린 부트스트랩(다시 뽑은 경로의 87%), 연준 당시 발표 자료, 위약 시험. 이득은 띄엄띄엄 — 몇 번의 신용 위기가 거의 다 만듦', code: SL_CODE[44] },
   // 과최적화 탐색기 1위 — 구간에 맞춰 찾은 최고점이지 예측이 아님 (차이를 보이려고 둠)
+  //  · SMA #33~38 = 2026-11-29 사용자 결정: SMA 탐색기 표와 같은 조건(거래 비용 0.1% · 양도세 22% · 분배금 원천징수 15% — 예전 0.02% · 세금 없음) · 9sig #27~32 는 9sig 탐색기와 같은 0.02% · 세금 없음(9sig 엔진에 세금 없음)
   slFit(27, '9sig', 'ret', '2010–2025', '55.33', '69.91', { ul: 'tqqq', g: '130', cd: '5', cw: '24', sp: '25', per: 'monthly', cash: '90', cr: '4', bp: '100', dep: '75', tc: 'holding', park: 'cash', rp: '10', st: '0', cost: '0.02' }),
   slFit(28, '9sig', 'dd', '2010–2025', '30.01', '19.41', { ul: 'tqqq', g: '12', cd: '25', cw: '21', sp: '100', per: 'yearly', cash: '70', cr: '4', bp: '70', dep: '0', tc: 'holding', park: 'qld', rp: '10', st: '0', cost: '0.02' }),
   slFit(29, '9sig', 'ret', '1990–2025', '42.24', '81.66', { ul: 'tqqq', g: '150', cd: '5', cw: '36', sp: '200', per: 'yearly', cash: '0', cr: '4', bp: '100', dep: '100', tc: 'holding', park: 'cash', rp: '0', st: '0', cost: '0.02' },
@@ -3320,12 +3324,12 @@ const SS_LIBRARY = [
   slFit(30, '9sig', 'dd', '1990–2025', '18.12', '22.67', { ul: 'tqqq', g: '0.5', cd: '5', cw: '60', sp: '250', per: 'quarterly', cash: '70', cr: '4', bp: '70', dep: '50', tc: 'holding', park: 'cash', rp: '30', st: '0', cost: '0.02' }),
   slFit(31, '9sig', 'ret', '1953–2025', '19.96', '96.58', { ul: 'tqqq', g: '40', cd: '25', cw: '24', sp: '160', per: 'quarterly', cash: '40', cr: '4', bp: '85', dep: '100', tc: 'target', park: 'cash', rp: '30', st: '0', cost: '0.02' }),
   slFit(32, '9sig', 'dd', '1953–2025', '12.01', '45.8', { ul: 'tqqq', g: '15', cd: '20', cw: '48', sp: '50', per: 'yearly', cash: '60', cr: '4', bp: '50', dep: '0', tc: 'holding', park: 'cash', rp: '15', st: '25', cost: '0.02' }),
-  slFit(33, 'sma', 'ret', '2010–2025', '79.79', '74.03', { sig: 'spy', win: '280', ul: 'sso', cr: '0', eb: '5', xb: '1.9', oh: '20', cool: '55', ohw: '3', coolw: '22', cb: '3', cs: '10', settle: '5', out: 'tqqq', din: '10', dout: '5', bg: '55', bga: 'tqqq', bgw: '250', cost: '0.02' }),
-  slFit(34, 'sma', 'dd', '2010–2025', '61.01', '44.5', { sig: 'qqq', win: '30', ul: 'tqqq', cr: '0', eb: '0.1', xb: '3.5', oh: '65', cool: '65', ohw: '4', coolw: '17', cb: '3', cs: '10', settle: '1', out: 'sso', din: '7', dout: '42', bg: '35', bga: 'sso', bgw: '270', cost: '0.02' }),
-  slFit(35, 'sma', 'ret', '1990–2025', '54.13', '81.66', { sig: 'qqq', win: '30', ul: 'spy', cr: '0', eb: '13', xb: '12', oh: '80', cool: '70', ohw: '6', coolw: '16', cb: '0', cs: '10', settle: '5', out: 'tqqq', din: '7', dout: '25', bg: '30', bga: 'sso', bgw: '270', cost: '0.02' }),
-  slFit(36, 'sma', 'dd', '1990–2025', '31.28', '39.46', { sig: 'spxl', win: '220', ul: 'tqqq', cr: '0', eb: '0', xb: '5', oh: '15', cool: '45', ohw: '2', coolw: '8', cb: '0', cs: '10', settle: '0', out: 'cash', din: '4', dout: '12', bg: '30', bga: 'sso', bgw: '270', cost: '0.02' }),
-  slFit(37, 'sma', 'ret', '1953–2025', '29.97', '83.6', { sig: 'spxl', win: '20', ul: 'tqqq', cr: '0', eb: '0.4', xb: '0.4', oh: '80', cool: '0', ohw: '12', coolw: '17', cb: '0', cs: '0', settle: '0', out: 'spy', din: '1', dout: '6', bg: '35', bga: 'qld', bgw: '300', cost: '0.02' }),
-  slFit(38, 'sma', 'dd', '1953–2025', '18', '51.79', { sig: 'spxl', win: '20', ul: 'qld', cr: '0', eb: '0.5', xb: '0.3', oh: '85', cool: '75', ohw: '8', coolw: '25', cb: '0', cs: '0', settle: '1', out: 'cash', din: '0', dout: '5', bg: '20', bga: 'qqq', bgw: '250', cost: '0.02' }),
+  slFit(33, 'sma', 'ret', '2010–2025', '79.79', '74.03', { sig: 'spy', win: '280', ul: 'sso', cr: '0', eb: '5', xb: '1.9', oh: '20', cool: '55', ohw: '3', coolw: '22', cb: '3', cs: '10', settle: '5', out: 'tqqq', din: '10', dout: '5', bg: '55', bga: 'tqqq', bgw: '250', cost: '0.1', tax: '22', wht: '15' }),
+  slFit(34, 'sma', 'dd', '2010–2025', '61.01', '44.5', { sig: 'qqq', win: '30', ul: 'tqqq', cr: '0', eb: '0.1', xb: '3.5', oh: '65', cool: '65', ohw: '4', coolw: '17', cb: '3', cs: '10', settle: '1', out: 'sso', din: '7', dout: '42', bg: '35', bga: 'sso', bgw: '270', cost: '0.1', tax: '22', wht: '15' }),
+  slFit(35, 'sma', 'ret', '1990–2025', '54.13', '81.66', { sig: 'qqq', win: '30', ul: 'spy', cr: '0', eb: '13', xb: '12', oh: '80', cool: '70', ohw: '6', coolw: '16', cb: '0', cs: '10', settle: '5', out: 'tqqq', din: '7', dout: '25', bg: '30', bga: 'sso', bgw: '270', cost: '0.1', tax: '22', wht: '15' }),
+  slFit(36, 'sma', 'dd', '1990–2025', '31.28', '39.46', { sig: 'spxl', win: '220', ul: 'tqqq', cr: '0', eb: '0', xb: '5', oh: '15', cool: '45', ohw: '2', coolw: '8', cb: '0', cs: '10', settle: '0', out: 'cash', din: '4', dout: '12', bg: '30', bga: 'sso', bgw: '270', cost: '0.1', tax: '22', wht: '15' }),
+  slFit(37, 'sma', 'ret', '1953–2025', '29.97', '83.6', { sig: 'spxl', win: '20', ul: 'tqqq', cr: '0', eb: '0.4', xb: '0.4', oh: '80', cool: '0', ohw: '12', coolw: '17', cb: '0', cs: '0', settle: '0', out: 'spy', din: '1', dout: '6', bg: '35', bga: 'qld', bgw: '300', cost: '0.1', tax: '22', wht: '15' }),
+  slFit(38, 'sma', 'dd', '1953–2025', '18', '51.79', { sig: 'spxl', win: '20', ul: 'qld', cr: '0', eb: '0.5', xb: '0.3', oh: '85', cool: '75', ohw: '8', coolw: '25', cb: '0', cs: '0', settle: '1', out: 'cash', din: '0', dout: '5', bg: '20', bga: 'qqq', bgw: '250', cost: '0.1', tax: '22', wht: '15' }),
 ];
 const slRunnable = (e) => !!(e && (e.preset || e.code));
 

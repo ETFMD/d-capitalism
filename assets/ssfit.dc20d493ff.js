@@ -264,7 +264,10 @@ function ssfFoot(t) {
   const fresh = '자료: ' + D.dataTo.replace(/-/g, '.') + '까지 · 맞춘 구간 끝 ' + D.fitEnd.replace(/-/g, '.') + ' · 모든 후보에 시작 $10,000 + 매달 $500 (같은 돈이라 끝 금액을 그대로 비교) · ' + ssfCondText(D, true)
     + (tx ? ' — 후보는 한국 세금 없이 찾은 설정이라, 세금·거래 비용을 넣은 이 표에서는 순위가 바뀝니다. 세금 없이 보려면 열기로 연 시뮬레이터에서 그 전략의 세금 손잡이를 끄면 됩니다' : '');
   if (t.goal === 'dd') {
-    const ok = t.rows.filter((r) => r[SSF.C.mi.cagr] >= t.cagrMin).length;
+    // 세금을 켠 표 = 세후 하한(cagrMinNet · 2026-11-29 사용자 결정 — 세금 없이 원래 하한 근처이던 후보들의 세후 연평균 중앙값)으로 셈
+    const net = tx && t.cagrMinNet != null ? +t.cagrMinNet : null, lim = net != null ? net : t.cagrMin;
+    const ok = t.rows.filter((r) => r[SSF.C.mi.cagr] >= lim).length;
+    if (net != null) return '<b>세금 없이 연평균 ' + t.cagrMin + '% 이상</b>을 지키면서 <b>최대 낙폭이 가장 작도록</b> ' + span + ' 설정 ' + n + '개(후보 ' + t.total + '개 가운데 조건을 만족했던 것)입니다. 세금·거래 비용을 넣은 이 표의 하한은 <b>세후 연평균 ' + net + '%</b>입니다 — 세금 없이 ' + t.cagrMin + '% 근처이던 후보들이 세금·비용을 넣으면 보통 ' + net + '% 안팎이 되므로 같은 수준입니다. 지금 계산으로 이 하한을 넘는 것은 ' + ok + '개입니다. 낙폭 작은 순으로 열립니다. ' + fresh + '.';
     return '<b>연평균 ' + t.cagrMin + '% 이상</b>을 지키면서 <b>최대 낙폭이 가장 작도록</b> ' + span + ' 설정 ' + n + '개(후보 ' + t.total + '개 가운데 조건을 만족했던 것)입니다. ' + (tx ? '세금·거래 비용을 넣어 ' : '') + '이 사이트 계산으로 다시 돌린 지금 조건을 만족하는 것은 ' + ok + '개입니다. 낙폭 작은 순으로 열립니다. ' + fresh + '.';
   }
   return '<b>끝 금액이 가장 크도록</b>(= 돈 가중 연평균 최대) ' + span + ' 설정 ' + n + '개입니다. 연평균 높은 순으로 열립니다. 2026년부터는 어떤 설정도 맞추는 데 쓰지 않은 구간이라 \'26년 이후\' 열이 진짜 시험입니다. ' + fresh + '.';
