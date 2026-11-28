@@ -441,8 +441,11 @@ function ssFlows(initial, monthly, raise, d0, d1, sched, mode, final) {
   return flows;
 }
 // 돈 가중 CAGR(%) — 못 풀면 (평가액/넣은 돈)^(1/년) − 1 · mode·final 은 ssFlows 와 같음
+//  · 끝 평가액이 0 아래(SMA 세금: 팔 것이 없어 못 낸 양도세 빚이 남은 돈보다 많음 — 2026-11-28)면 −100%(넣은 돈을 모두 잃고 빚까지) — 예전엔 0% 로 보였음
 function ssCagrMW(initial, monthly, raise, d0, d1, years, finalV, contributed, sched, mode, final) {
-  if (!(finalV > 0) || !(years > 0)) return 0;
+  if (!(years > 0)) return 0;
+  if (finalV < 0) return -100;
+  if (!(finalV > 0)) return 0;
   const flows = ssFlows(initial, monthly, raise, d0, d1, sched, mode, final);
   flows.push({ t: years, cf: finalV });
   const r = ssIrr(flows);
@@ -458,7 +461,7 @@ function ssPeakTracker() {
     worst,
     push(v, at) {
       if (v > top) { top = v; topAt = at; return; }
-      if (top > 0) { const fall = (top - v) / top; if (fall > worst.pct) { worst.pct = fall; worst.from = topAt; worst.to = at; } }
+      if (top > 0) { const fall = Math.min(1, (top - v) / top); if (fall > worst.pct) { worst.pct = fall; worst.from = topAt; worst.to = at; } }   // 0 아래(빚)로 내려가도 낙폭은 100% 까지
     },
   };
 }
@@ -488,11 +491,21 @@ function ssDailyDD(ctrl, key) {
 function ssDailyDDMulti(ctrl) {
   const t = ssPeakTracker();
   if (ctrl && ctrl.length && DS.days) ssEachHeldDay(ctrl, (row, c) => {
-    let v = c.cash || 0;
-    for (const k in (c.h || {})) { const px = row[k]; if (px > 0) v += c.h[k] * px; }
-    if (Number.isFinite(v) && v > 0) t.push(v, row.date);
+    const v = ssHeldValue(row, c);
+    if (v != null) t.push(v, row.date);
   });
   return { pct: t.worst.pct, peakDate: t.worst.from, troughDate: t.worst.to };
+}
+// 기준점 c 를 그날 종가로 평가 — 낙폭·탐색기 지표가 쓰는 값 (못 쓰는 날은 null)
+//  · 0 보다 크면 그대로 (예전과 같음 — 가격이 빠진 종목은 빼고 셈)
+//  · 0 이하는 SMA 세금 빚(c.cash < 0 = 현금 − 못 낸 양도세)이 남은 돈보다 많은 날만 — 들고 있는 종목이 모두 그날 가격이 있을 때 (2026-11-28)
+//    (빚이 없는데 0 인 날 = 가격이 빠진 날이라 예전처럼 건너뜀 — 가짜 100% 낙폭이 생기지 않게)
+function ssHeldValue(row, c) {
+  let v = c.cash || 0, miss = false;
+  for (const k in (c.h || {})) { const q = c.h[k]; if (!(q > 0)) continue; const px = row[k]; if (px > 0) v += q * px; else miss = true; }
+  if (!Number.isFinite(v)) return null;
+  if (v > 0) return v;
+  return (c.cash || 0) < 0 && !miss ? v : null;
 }
 // 값 시리즈의 최대 낙폭 (dates 가 있으면 고점·저점 날짜)
 function ssSeriesDD(vals, dates) {
