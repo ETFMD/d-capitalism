@@ -409,6 +409,22 @@ const pick = a => a[Math.floor(rnd() * a.length)];
       const b2 = M.ssRun9({ initial: 10000, monthly: 500, raise: 0, rate: 0.04, qi0: 0, qi1: 1, ed: '2010-03-31', xd: '2025-12-31', rows: q, bhWht: 0.15 }).bh.tqqq;
       check('그냥 보유: 원천징수 끔 = 예전 값(한 글자도 같음) · 켬 = 조금 작음', JSON.stringify(b0) === JSON.stringify(b1) && b2[b2.length - 1].value < b0[b0.length - 1].value && b2[b2.length - 1].value > b0[b0.length - 1].value * 0.98, [b0[b0.length - 1].value, b2[b2.length - 1].value]);
     }
+    /* 중간에 뺀 돈(실제 거래내역)도 판 것 — 늘 보유 SMA · 비용 0 · 분배금 끔: 판 이익(원화) − 250만 원 × 22% 를 이듬해 5월 첫 거래일에 냄 (손 계산과 같음) */
+    {
+      TX.divY = null;
+      const a = Dsim.d.indexOf('2016-03-01') >= 0 ? Dsim.d.indexOf('2016-03-01') : Dsim.d.findIndex(x => x >= '2016-03-01');
+      let a2 = a; while (!(Dsim.px.qqq[a2] > smA[a2])) a2++;
+      const t = Dsim.d.findIndex(x => x >= '2017-07-03'), b = Dsim.d.findIndex(x => x >= '2018-12-31');
+      const sched = { byDate: new Map([[Dsim.d[t], -60000]]), byMonth: new Map(), list: [{ date: Dsim.d[t], amount: -60000 }] };
+      const cp = M.ssCleanParams('sma', Object.assign({}, ALW, { ul: 'qqq', bga: 'qqq', tax: '22', wht: '0' }));
+      const r = M.ssRunSma(Object.assign({ initial: 100000, monthly: 0, raise: 0, rate: 0, dd: true, ed: Dsim.d[a2], xd: Dsim.d[b], sched }, M.ssOptsSma(cp)));
+      const st = i => i + (Dsim.d[i] < '2024-05-28' ? 2 : 1), P = i => M.DS.days[i].qqq;
+      const sh0 = 100000 / P(a2), unit = 100000 * fxS(st(a2)) / sh0, q = 60000 / P(t), gain = 60000 * fxS(st(t)) - q * unit;
+      const yT = +Dsim.d[st(t)].slice(0, 4), pay = Dsim.d.findIndex(x => x >= (yT + 1) + '-05-01'), want = Math.max(0, gain - 2500000) * 0.22 / fxS(pay);
+      const tl = r.log.filter(l => l.action === 'TAX');
+      check('중간에 뺀 돈의 양도세 = 손 계산 (판 이익 − 250만 원 × 22% · 이듬해 5월 첫 거래일)', r.tax && Math.abs(r.tax.paid - want) < 1e-6 * want && tl.length === 1 && tl[0].date === Dsim.d[pay] && want > 1000, [r.tax && r.tax.paid, want, tl.map(l => l.date), Dsim.d[pay]]);
+      TX.divY = keepDiv;
+    }
     /* 적립 + 세금: 숫자가 이상하지 않음(NaN·음수 없음 · 세금 켬 ≤ 끔 · 세후 청산 ≤ 끝 금액) */
     {
       const cp0 = M.ssCleanParams('sma', Object.assign({}, SMB.PRESET, { out: 'spy', cr: '0', din: '5', dout: '5', xb: '0.8', cost: '0.25' }));
@@ -433,6 +449,17 @@ const pick = a => a[Math.floor(rnd() * a.length)];
         if (nn >= 600) break;
       }
       check('분배금 자료 = 수정주가의 분배락일 계수 변화 (5% 안 · ' + nn + '건)', nn >= 300 && bb === 0, [nn, bb]);
+      /* 원천징수 몫 g(ssDivShare) = 그날 평가금 중 분배금 몫 — 실제 종가(분할만 반영)로 따로 셈: 분배금 × (1 − 분배금 ÷ 전날 종가) ÷ 그날 종가 (0.1% 안) */
+      let ng = 0, wg = 0;
+      for (const ln of rows) {
+        const [d8, k, dvs, pcs] = ln.split(','), d = d8.slice(0, 4) + '-' + d8.slice(4, 6) + '-' + d8.slice(6, 8), S2 = J[k.toUpperCase()], i = M.DS.idx.get(d);
+        if (i == null || !S2) continue;
+        let x = S2.d0; const m = {}; for (let j = 0; j < S2.c.length; j++) { if (j) x += S2.dd[j - 1]; m[day(x)] = S2.c[j]; }
+        if (!m[d]) continue;
+        const y = +dvs / +pcs, truth = +dvs * (1 - y) / m[d];
+        wg = Math.max(wg, Math.abs(M.ssDivShare(k, i) / truth - 1)); ng++;
+      }
+      check('원천징수 몫 = 실제 종가로 셈한 그날 분배금 몫 (0.1% 안 · ' + ng + '건)', ng >= 300 && wg < 1e-3, [ng, wg]);
     }
   }
   console.log((bad ? 'FAIL ' : '') + 'sma200_test: ' + ok + '개 통과 · ' + bad + '개 실패 (시뮬레이터 대조 ' + n1 + '번 · 실전·세금 검산 TQQQ ' + runs + '번 · SOXL ' + runsX + '번 · 시뮬레이터 세금 대조 ' + taxN + '번)');
