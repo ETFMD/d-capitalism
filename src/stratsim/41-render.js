@@ -226,7 +226,7 @@ function ssCfgSeries(cfg, ctx, lite) {
     let rows = null;
     const rp = +p.rp || 0;
     if (rp > 0) { const off = Math.round(rp / 100 * ((SS_PERIOD_DAYS[per] || 63) - 1)); const q = ssShiftRows(per, off, ctx.entryDate, ctx.exitDate); if (q && q.length >= 2) rows = q; }
-    if (!rows && ctx.anyOv) { const q = ssExactRows(per, ctx.entryDate, ctx.exitDate); if (q && q.length >= 2) rows = q; }
+    // 정확한 날짜 기간도 rows 없이 → ssRun9 가 분기 번호와 같은 규칙으로 행을 만듦(매년 = 기념일 · 2026-11-28 — 예전엔 여기서 달력 연말 행을 넘김)
     const sampleQ = ctx.grain === 'quarterly' && per === 'yearly', sampleW = ctx.grain === 'weekly' && per !== 'weekly';
     const r = ssRun9(Object.assign({}, common, { rate: ssRate9(p), period: per, rows, sampleQ, sampleW, noBH: !!lite }, ovOpt, o9));
     const sr = sampleQ || sampleW ? r.samples : r.log;

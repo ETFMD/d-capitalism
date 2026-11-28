@@ -134,7 +134,8 @@ function ssShiftRows(period, offset, entryDate, exitDate) {
   }
   return out;
 }
-// 정확한 날짜(달력): 진입일 행 + 그 사이 기간 끝 행 + 청산일 행
+// 9sig 매주·매달·매 분기 행 = 진입일 행 + 그 사이 기간 끝(주·달·분기 마지막 거래일) 행 + 청산일 행
+//   (2026-11-28 — 분기 번호로 고른 기간도 같은 규칙: ssRun9 가 rows 없이 불리면 이것으로 만듦)
 function ssExactRows(period, entryDate, exitDate) {
   if (!DS.days) return [];
   const e = DS.idx.get(entryDate), x = DS.idx.get(exitDate);
@@ -144,6 +145,49 @@ function ssExactRows(period, entryDate, exitDate) {
   for (const r of src) if (r[0] > entryDate && r[0] < exitDate) out.push(r);
   out.push(DS.rows[x]);
   return out;
+}
+
+// 9sig 매년 행 (2026-11-28 · 분기 번호·정확한 날짜 같은 규칙)
+//   진입일 행 + 1년마다 기념일 행 + 청산일이 마지막 기념일 행 뒤면 청산일 행('현재 평가' = snapAt — 리밸런스 안 함)
+//   기념일 = 진입일이 그달 마지막 거래일이면(분기 경계는 늘 그럼) 해마다 같은 달의 마지막 거래일,
+//            아니면 같은 달·날(그달에 없는 날은 그달 마지막 날) 이하 마지막 거래일
+//   · 그해 기념일이 자료에서 아직 오지 않았으면(같은 달이 덜 끝남 · 그 날이 자료 끝 뒤) 넣지 않음 · 기념일 행이 청산일이면 그 날 리밸런스로 끝
+//   (예전 분기 번호 = 기념일 이하 마지막 '월말' 행 — 1989-12-29 진입이면 해마다 11월 말처럼 한 달 일찍 · 예전 정확한 날짜 = 달력 연말 행)
+function ssAnnivRows(d0, d1) {
+  const out = { rows: [], snapAt: -1 };
+  if (!DS.days || !d0 || !d1) return out;
+  const a = DS.idx.get(d0), b = DS.idx.get(d1), N = DS.days.length;
+  if (a == null || b == null || a >= b) return out;
+  const rows = [DS.rows[a]], p2 = (v) => String(v).padStart(2, '0'), ym = (s) => s.slice(0, 7);
+  const y0 = +d0.slice(0, 4), m0 = +d0.slice(5, 7), dd = +d0.slice(8, 10);
+  const monthEnd = ym(DS.days[a + 1].date) !== ym(d0);   // a < b 라 다음 거래일이 있음
+  let j = a;
+  for (let k = 1; ; k++) {
+    const y = y0 + k, mm = String(y).padStart(4, '0') + '-' + p2(m0);
+    let i = j;
+    if (monthEnd) {
+      while (i + 1 < N && ym(DS.days[i + 1].date) <= mm) i++;
+      if (i + 1 >= N) break;                          // 그달이 자료에서 아직 안 끝남
+      if (ym(DS.days[i].date) !== mm) continue;       // (그달 거래일이 없는 자료 — 없음)
+    } else {
+      const ann = mm + '-' + p2(Math.min(dd, new Date(Date.UTC(y, m0, 0)).getUTCDate()));
+      while (i + 1 < N && DS.days[i + 1].date <= ann) i++;
+      if (i + 1 >= N && DS.days[i].date < ann) break; // 그 날이 자료 끝 뒤 — 아직 안 옴
+    }
+    if (i > b) break;                                 // 청산일 뒤
+    if (i === j) continue;                            // (1년 넘게 거래일이 없는 자료 — 없음)
+    rows.push(DS.rows[i]); j = i;
+    if (i === b) break;
+  }
+  if (j < b) { rows.push(DS.rows[b]); out.snapAt = rows.length - 1; }
+  out.rows = rows;
+  return out;
+}
+// 월말 행(DS.m) 중 날짜가 (after, upto] 인 위치 [lo, hi) — 이분 탐색 (어떤 행 목록에서도 '앞 행 뒤 ~ 이 행까지의 달')
+function ssMonthSpan(after, upto) {
+  const m = DS.m;
+  const firstAfter = (d) => { let lo = 0, hi = m.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (m[mid][0] <= d) lo = mid + 1; else hi = mid; } return lo; };
+  return [firstAfter(after), firstAfter(upto)];
 }
 
 // 이동평균: 창 안 값이 모두 양수일 때만 (아니면 null)

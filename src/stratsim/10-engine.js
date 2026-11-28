@@ -51,8 +51,7 @@ function ssRun9(o) {
   const raise = o.raise || 0;
   const bRate = (o.baseRate != null ? +o.baseRate : (o.rate || 0)) / 12;
   const period = o.period || 'quarterly';
-  const pRows = ssPeriodRows(period);
-  let rows = o.rows || pRows || DS.q;
+  let rows = o.rows || null;
   let qi0 = o.qi0, qi1 = o.qi1;
   const growth = o.growth != null ? o.growth : 0.09;
   const crashDrop = o.crashDrop != null ? +o.crashDrop : 30;
@@ -74,38 +73,27 @@ function ssRun9(o) {
   const fromTarget = !!o.fromTarget;
   const cost = Math.max(0, +o.cost || 0) / 100;
 
-  // 연간 = 진입일부터 12달마다(기념일) — 기념일 이하 마지막 월말 행. 청산일이 마지막 기념일보다 뒤면 '현재 평가' 행(리밸런스 안 함)
-  let custom = false, snapAt = -1;
-  if (period === 'yearly' && !o.rows) {
-    const d0 = DS.q[qi0] && DS.q[qi0][0], d1 = DS.q[qi1] && DS.q[qi1][0];
-    if (d0 && d1) {
-      // 1년 뒤 같은 달·날 (없는 날은 Date.UTC 규칙대로 다음 달로 — 2/29 → 3/1)
-      const nextYear = (iso) => new Date(Date.UTC(+iso.slice(0, 4) + 1, +iso.slice(5, 7) - 1, +iso.slice(8, 10))).toISOString().slice(0, 10);
-      // 그 날짜 이하 마지막 월말 행 (없으면 null)
-      const monthEndOnOrBefore = (iso) => { let k = -1; while (k + 1 < DS.m.length && DS.m[k + 1][0] <= iso) k++; return k < 0 ? null : DS.m[k]; };
-      const roll = [];
-      let anniv = d0;
-      while (anniv <= d1) { const row = monthEndOnOrBefore(anniv); if (row) roll.push(row); anniv = nextYear(anniv); }
-      const lastRoll = roll.length ? roll[roll.length - 1][0] : null;
-      if (lastRoll !== null && d1 > lastRoll) {
-        const tail = monthEndOnOrBefore(d1);
-        if (tail && tail[0] > lastRoll) { roll.push(tail); snapAt = roll.length - 1; }
-      }
-      if (roll.length >= 2) { rows = roll; qi0 = 0; qi1 = roll.length - 1; custom = true; }
+  // 기간 행 (2026-11-28 — 분기 번호로 고른 기간과 정확한 날짜로 고른 기간이 같은 규칙 · 같은 날이면 같은 숫자)
+  //   매주·매달·매 분기 = 진입일 행 + 그 사이 기간 끝 행 + 청산일 행 (ssExactRows)
+  //     예전 분기 번호의 매주는 진입 이하 마지막 주말 행 ~ 청산 이상 첫 주말 행이라 고른 기간보다 앞뒤로 며칠 넓었음(원본과 같았음)
+  //   매년 = 진입일부터 1년마다 기념일(진입일이 달의 마지막 거래일이면 해마다 같은 달 마지막 거래일 · 아니면 같은 날 이하 마지막 거래일)
+  //          + 마지막 기념일 뒤 청산일은 '현재 평가' 행(리밸런스 안 함) (ssAnnivRows)
+  //   분기 번호의 매 분기는 예전 그대로 DS.q 위치 · rows 를 받으면(리밸런스 시점 옮김 등) 그 행에서 진입·청산 날짜로 위치를 찾음
+  let snapAt = -1;
+  const dE = o.ed || (DS.q[qi0] && DS.q[qi0][0]), dX = o.xd || (DS.q[qi1] && DS.q[qi1][0]);
+  if (!o.rows) {
+    let own = null;
+    if (dE && dX) {
+      if (period === 'yearly') { const a = ssAnnivRows(dE, dX); if (a.rows.length >= 2) { own = a.rows; snapAt = a.snapAt; } }
+      else if (period !== 'quarterly' || o.ed || o.xd) { const q = ssExactRows(period, dE, dX); if (q.length >= 2) own = q; }
     }
+    if (own) { rows = own; qi0 = 0; qi1 = own.length - 1; } else rows = DS.q;
+  } else if (rows !== DS.q && dE && dX) {
+    let e = 0, x = rows.length - 1;
+    for (let i = 0; i < rows.length; i++) { if (rows[i][0] <= dE) e = i; else break; }
+    for (let i = rows.length - 1; i >= 0; i--) { if (rows[i][0] >= dX) x = i; else break; }
+    qi0 = e; qi1 = x;
   }
-  // 분기 행이 아닌 행(주·월·연 기간 또는 맞춤 행)이면 진입·청산 날짜로 위치를 다시 찾음
-  if (!custom && rows !== DS.q && ((period !== 'quarterly' && pRows) || o.rows)) {
-    const d0 = o.ed || (DS.q[qi0] && DS.q[qi0][0]), d1 = o.xd || (DS.q[qi1] && DS.q[qi1][0]);
-    if (d0 && d1) {
-      let e = 0, x = rows.length - 1;
-      for (let i = 0; i < rows.length; i++) { if (rows[i][0] <= d0) e = i; else break; }
-      for (let i = rows.length - 1; i >= 0; i--) { if (rows[i][0] >= d1) x = i; else break; }
-      qi0 = e; qi1 = x;
-    }
-  }
-  const fastMonths = rows === pRows || (period === 'quarterly' && rows === DS.q);
-  const monthsOf = DS.mIn[period];
   const S = rows.slice(qi0, qi1 + 1);
   if (S.length < 2) return { log: [], samples: [], bh: {}, bhS: {}, contributed: o.initial };
 
@@ -205,8 +193,7 @@ function ssRun9(o) {
         putMoney(mRow[ul], mRow[0], mRow);
       }
     };
-    if (fastMonths) for (const mi of monthsOf[qi0 + qi]) doMonth(DS.m[mi]);
-    else for (const r of DS.m) if (r[0] > prevDate && r[0] <= qDate) doMonth(r);
+    { const [lo, hi] = ssMonthSpan(prevDate, qDate); for (let mi = lo; mi < hi; mi++) doMonth(DS.m[mi]); }
     // 마지막 행이 달 중간(정확한 청산일 · 주 단위 · 리밸런스 시점 옮김)이면 그달 월말 행은 위에서 안 돎 →
     // 실제 거래내역의 그달 입금 중 이 날까지 것을 그날 가격으로 넣음 (이자는 달마다라 덜 찬 달은 없음 · 공식 적립은 월말 금액이라 없음)
     if (qi === S.length - 1) for (const d of tailDays(qDate)) {
@@ -299,8 +286,7 @@ function ssRun9(o) {
     for (let qi = 0; qi < S.length; qi++) {
       const qd = S[qi][0], qp = S[qi][col];
       if (qi > 0 && (!needPx || qp)) {
-        if (fastMonths) for (const mi of monthsOf[qi0 + qi]) month(DS.m[mi]);
-        else for (const r of DS.m) if (r[0] > pd && r[0] <= qd) month(r);
+        { const [lo, hi] = ssMonthSpan(pd, qd); for (let mi = lo; mi < hi; mi++) month(DS.m[mi]); }
         // 마지막 행이 달 중간이면 실제 거래내역의 그달 그 날까지 입금도 (9sig 쪽과 같은 규칙)
         if (qi === S.length - 1) for (const d of tailDays(qd)) {
           weeks(d);

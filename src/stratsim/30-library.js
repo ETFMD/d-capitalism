@@ -1390,7 +1390,7 @@ const SL_SELF = '직접 고른 전략 — 숫자는 이 앱의 자체 백테스�
 const SL_APP = '앱의 기본 전략 — 숫자는 이 앱이 표준 기본값으로 돌린 백테스트';
 const sll = (...a) => a.join('\n');
 // 과최적화 탐색기 1위 설정 (프리셋)
-function slFit(n, eng, goal, span, cagr, dd, params) {
+function slFit(n, eng, goal, span, cagr, dd, params, note) {
   const E = eng === '9sig' ? '9sig' : 'SMA', G = goal === 'ret' ? '최고 수익' : '최저 낙폭';
   // 원래 1953년부터 찾은 후보 — 이 사이트 자료는 1971년부터(그 전 나스닥 값은 검증할 수 없는 가상값이라 뺌)라 탐색기에서는 1971–2025 탭
   const now = /^1953/.test(span) ? '의 ‘' + G + ' ' + span.replace(/^1953/, '1971') + '’ 탭(이 사이트 자료는 1971년부터 — 그 전 나스닥 값은 검증할 수 없는 가상값이라 뺌)' : '';
@@ -1398,7 +1398,8 @@ function slFit(n, eng, goal, span, cagr, dd, params) {
     n, name: E + ' · ' + G + ' ' + span, tag: 'overfit',
     rules: sll(E + ' 과최적화 탐색기의 ‘' + G + ' ' + span + '’ 후보를 처음 찾을 때 1위였던 설정 — 그 구간에 맞춘 값(당시 표본 안 CAGR ' + cagr + '%, 낙폭 ' + dd + '%). 지금 계산으로 다시 돌린 값과 순위는 탐색기 표' + now + '에서 볼 수 있습니다.',
       '앱의 ' + E + ' 엔진 그대로 돌아가므로 써 보면 모든 손잡이를 바꿀 수 있습니다.',
-      '그 구간을 뒤져 고른 값이라 다른 구간은 훨씬 나빠 보일 것으로 예상하세요 — 추천이 아니라 과최적화의 차이를 보여 주려고 둔 것입니다.'),
+      '그 구간을 뒤져 고른 값이라 다른 구간은 훨씬 나빠 보일 것으로 예상하세요 — 추천이 아니라 과최적화의 차이를 보여 주려고 둔 것입니다.',
+      ...(note ? [note] : [])),
     reported: '처음 찾을 때 ' + span + ' 표본 안: CAGR ' + cagr + '% / 낙폭 −' + dd + '%',
     preset: { type: eng, params },
   };
@@ -1629,7 +1630,8 @@ const SS_LIBRARY = [
   // 과최적화 탐색기 1위 — 구간에 맞춰 찾은 최고점이지 예측이 아님 (차이를 보이려고 둠)
   slFit(27, '9sig', 'ret', '2010–2025', '55.33', '69.91', { ul: 'tqqq', g: '130', cd: '5', cw: '24', sp: '25', per: 'monthly', cash: '90', cr: '4', bp: '100', dep: '75', tc: 'holding', park: 'cash', rp: '10', st: '0', cost: '0.02' }),
   slFit(28, '9sig', 'dd', '2010–2025', '30.01', '19.41', { ul: 'tqqq', g: '12', cd: '25', cw: '21', sp: '100', per: 'yearly', cash: '70', cr: '4', bp: '70', dep: '0', tc: 'holding', park: 'qld', rp: '10', st: '0', cost: '0.02' }),
-  slFit(29, '9sig', 'ret', '1990–2025', '42.24', '81.66', { ul: 'tqqq', g: '150', cd: '5', cw: '36', sp: '200', per: 'yearly', cash: '0', cr: '4', bp: '100', dep: '100', tc: 'holding', park: 'cash', rp: '0', st: '0', cost: '0.02' }),
+  slFit(29, '9sig', 'ret', '1990–2025', '42.24', '81.66', { ul: 'tqqq', g: '150', cd: '5', cw: '36', sp: '200', per: 'yearly', cash: '0', cr: '4', bp: '100', dep: '100', tc: 'holding', park: 'cash', rp: '0', st: '0', cost: '0.02' },
+    '2026-11-28 매년 리밸런스 날을 바로잡은 뒤 이 설정의 1990–2025 숫자는 연 약 29.0% · 낙폭 −86.6% 로 크게 낮아졌습니다 — 1989-12-29 진입이면 예전 계산은 1990~2025년 36번 중 31번을 11월 마지막 거래일(한 달 일찍)에 리밸런스했고, 지금은 해마다 같은 달인 12월 마지막 거래일입니다. 리밸런스 날 하나로 숫자가 이만큼 흔들리는 것도 과최적화의 모습입니다.'),
   slFit(30, '9sig', 'dd', '1990–2025', '18.12', '22.67', { ul: 'tqqq', g: '0.5', cd: '5', cw: '60', sp: '250', per: 'quarterly', cash: '70', cr: '4', bp: '70', dep: '50', tc: 'holding', park: 'cash', rp: '30', st: '0', cost: '0.02' }),
   slFit(31, '9sig', 'ret', '1953–2025', '19.96', '96.58', { ul: 'tqqq', g: '40', cd: '25', cw: '24', sp: '160', per: 'quarterly', cash: '40', cr: '4', bp: '85', dep: '100', tc: 'target', park: 'cash', rp: '30', st: '0', cost: '0.02' }),
   slFit(32, '9sig', 'dd', '1953–2025', '12.01', '45.8', { ul: 'tqqq', g: '15', cd: '20', cw: '48', sp: '50', per: 'yearly', cash: '60', cr: '4', bp: '50', dep: '0', tc: 'holding', park: 'cash', rp: '15', st: '25', cost: '0.02' }),

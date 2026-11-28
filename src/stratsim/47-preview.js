@@ -26,7 +26,7 @@ function ssPdTotals(type, owner, k) {
         let rows = null;
         const rp = +p.rp || 0;
         if (rp > 0) { const off = Math.round(rp / 100 * ((SS_PERIOD_DAYS[per] || 63) - 1)); const q = ssShiftRows(per, off, ctx.entryDate, ctx.exitDate); if (q && q.length >= 2) rows = q; }
-        if (!rows && ctx.anyOv) { const q = ssExactRows(per, ctx.entryDate, ctx.exitDate); if (q && q.length >= 2) rows = q; }
+        // 정확한 날짜도 rows 없이 → ssRun9 가 본 화면과 같은 규칙으로 행을 만듦 (2026-11-28)
         const r = ssRun9(Object.assign({}, common, { rate: ssRate9(p), baseRate: ctx.rate, period: per, rows, noBH: true }, ov, ssOpts9(p)));
         return r.log.length ? r.log[r.log.length - 1].total : 0;
       }
