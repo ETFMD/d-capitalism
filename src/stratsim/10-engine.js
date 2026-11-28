@@ -3,23 +3,21 @@
    ssRunSma : 이동평균 추세 전략(SMA) — 버퍼·확인·RSI 과열/식음·버블 보험·분할 매수·T+N
    적립 일정 : ssSchedule (공식) — 실제 거래내역이 있으면 같은 모양의 일정을 대신 넘김      */
 
-// 적립 일정: byMonth = 월말 거래일 기준 금액(9sig·보유·적금선), byDate/list = 달이 바뀐 첫 거래일(일별로 걷는 전략)
+// 적립 일정 = d0 뒤 달이 바뀐 첫 거래일마다(d1 까지) 한 번 — byDate/list = 그 날 · byMonth = 그 달(같은 달·같은 금액)
+//   모든 계산(9sig·그냥 보유·현금 복리·SMA·사용자 코드)이 같은 달에 같은 돈을 넣음 (2026-11-28 — 예전 byMonth 는 '월말이 (d0, d1]' 인 달이라
+//   달 중간 진입이면 첫 달 월말이 하나 더 들어가 9sig·그냥 보유·현금 복리만 넣은 돈이 한 달 치 많았음: 3-31 과 4-1 에 연달아 넣음)
 // 금액 = 매달 × (1+인상률)^(그해 − 시작 해)
 function ssSchedule(monthly, raise, d0, d1) {
   const s = { byDate: new Map(), byMonth: new Map(), list: [], priceDateByMonth: new Map() };
-  if (!(monthly > 0) || !d0 || !d1) return s;
+  if (!(monthly > 0) || !d0 || !d1 || !DS.days) return s;
   const y0 = +d0.slice(0, 4), amt = (d) => monthly * Math.pow(1 + (raise || 0), +d.slice(0, 4) - y0);
-  if (DS.m) for (const r of DS.m) if (r[0] > d0 && r[0] <= d1) s.byMonth.set(r[0].slice(0, 7), amt(r[0]));
-  if (DS.days) {
-    const a = DS.idx.get(d0), b = DS.idx.get(d1);
-    if (a != null && b != null) {
-      let pm = null;
-      for (let i = a; i <= b; i++) {
-        const d = DS.days[i].date, mo = d.slice(0, 7);
-        if (pm !== null && mo !== pm) { const v = amt(d); s.byDate.set(d, v); s.list.push({ date: d, amount: v }); }
-        pm = mo;
-      }
-    }
+  const a = DS.idx.get(d0), b = DS.idx.get(d1);
+  if (a == null || b == null) return s;
+  let pm = null;
+  for (let i = a; i <= b; i++) {
+    const d = DS.days[i].date, mo = d.slice(0, 7);
+    if (pm !== null && mo !== pm) { const v = amt(d); s.byDate.set(d, v); s.byMonth.set(mo, v); s.list.push({ date: d, amount: v }); }
+    pm = mo;
   }
   return s;
 }
@@ -195,7 +193,7 @@ function ssRun9(o) {
     };
     { const [lo, hi] = ssMonthSpan(prevDate, qDate); for (let mi = lo; mi < hi; mi++) doMonth(DS.m[mi]); }
     // 마지막 행이 달 중간(정확한 청산일 · 주 단위 · 리밸런스 시점 옮김)이면 그달 월말 행은 위에서 안 돎 →
-    // 실제 거래내역의 그달 입금 중 이 날까지 것을 그날 가격으로 넣음 (이자는 달마다라 덜 찬 달은 없음 · 공식 적립은 월말 금액이라 없음)
+    // 그달 일정(공식 적립 = 그달 첫 거래일 · 실제 거래내역) 중 이 날까지 것을 그날 가격으로 넣음 (이자는 달마다라 덜 찬 달은 없음 · SMA 와 같은 돈)
     if (qi === S.length - 1) for (const d of tailDays(qDate)) {
       fillWeeks(d);
       const row = DS.rows[DS.idx.get(d)], dp = ulKey ? DS.days[DS.idx.get(d)][ulKey] : 0;

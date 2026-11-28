@@ -471,6 +471,17 @@ const pick = a => a[Math.floor(rnd() * a.length)];
         if (e < 1e-9 && r.bhTax.end === V && want > 0) okP++; else check('그냥 보유 요약 길 ' + key + ' ' + d0, false, [got, want, V, C]);
       });
       check('그냥 보유 요약 = 선과 같은 길: 원가 = 가격 1 선의 끝 값 (적립·달 중간 진입·상장 전 SOXL·실제 거래내역 날짜 · ' + cases.length + '가지)', okP === cases.length, [okP, wP]);
+      /* 넣은 돈: 그냥 보유 선에 실제로 들어간 달러(가격 1 선의 끝 값) = SMA 엔진 넣은 돈 = 9sig 넣은 돈 — 가격이 늘 있는 종목 (2026-11-28 · 예전엔 달 중간 진입이면 그냥 보유·9sig 만 한 달 치 더) */
+      let okU = 0, nU = 0;
+      cases.forEach(([key, d0, d1, mo, ra, lst], ci) => {
+        if (key === 'soxl') return;
+        nU++;
+        const sched = lst ? { byDate: new Map(lst), byMonth: new Map(), list: lst.map(([date, amount]) => ({ date, amount })) } : undefined;
+        const rs = M.ssRunSma(Object.assign({ initial: 10000, monthly: mo, raise: ra, rate: 0, ed: d0, xd: d1, sched }, M.ssOptsSma(M.ssCleanParams('sma', {}))));
+        if (Math.abs(unit[ci] - rs.contributed) < 1e-6 && Math.abs(real[ci].contributed - rs.contributed) < 1e-6) okU++;
+        else check('넣은 돈 ' + key + ' ' + d0, false, [unit[ci], rs.contributed, real[ci].contributed]);
+      });
+      check('넣은 돈: 그냥 보유 선에 들어간 달러 = SMA = 9sig (' + nU + '가지 · 달 중간 진입 포함)', okU === nU && nU === 4, [okU, nU]);
       check('그냥 보유 요약 시험 뒤 자료 되돌림', M.DS.days === SAVE.days && M.DS.fx === keepFx && M.DS.divY === keepDivB && M.DS.idx.size === Dsim.d.length);
     }
     /* 그냥 보유 · 적립 + 분배금 + 원천징수 + 양도세 = 늘 보유 SMA(실제 거래내역 날짜 적립 · 비용 0) — 엔진 장부(선입선출 · 묶음 나눔)와 같은 세후 청산 */

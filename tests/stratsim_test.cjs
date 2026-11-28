@@ -354,6 +354,32 @@ for (const kind of ['9sig', 'sma']) {
     if (shot(e, x, '', '', i, m) !== shot(e, x, Q[e - 1][0], Q[x][0], i, m)) fail('분기 번호 ↔ 정확한 날짜(같은 날 ' + Q[e - 1][0] + '~' + Q[x][0] + ') 화면 숫자가 다름');
   }
 }
+// 넣은 돈 = 모든 계산이 같은 날 같은 돈 (2026-11-28 — 예전엔 달 중간 진입이면 9sig·그냥 보유·현금 복리만 첫 달 월말에 한 번 더 넣어
+//   SMA 보다 한 달 치 많았음: 3-31 과 4-1 에 연달아) — 무작위 진입·청산(달 중간 포함) × 9sig 주기 4가지 × 인상률:
+//   ssRun9 넣은 돈 = ssRunSma 넣은 돈 = 연평균(돈 가중) 흐름 합(r9 · r9base · day) · 공식 일정의 달 = 날짜의 달
+{
+  const Dd = M.DS.days.map((d) => d.date), cpS = M.ssCleanParams('sma', {});
+  let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  let nC = 0, badC = 0, mid = 0, ex = null;
+  for (let t = 0; t < 160; t++) {
+    const ia = 200 + Math.floor(rnd() * (Dd.length - 900)), ib = Math.min(Dd.length - 1, ia + 30 + Math.floor(rnd() * 6000));
+    const a = Dd[ia], b = Dd[ib], mo = [100, 500, 1234.5][t % 3], ra = [0, 0.03, 0.1][t % 3], per = ['quarterly', 'monthly', 'weekly', 'yearly'][t % 4];
+    if (Dd[ia + 1] && Dd[ia + 1].slice(0, 7) === a.slice(0, 7)) mid++;
+    const r9 = M.ssRun9(Object.assign({ initial: 10000, monthly: mo, raise: ra, rate: 0, qi0: 0, qi1: 1, ed: a, xd: b, period: per }, M.ssOpts9(Object.assign(M.ssDefaults('9sig'), { per }))));
+    const rs = M.ssRunSma(Object.assign({ initial: 10000, monthly: mo, raise: ra, rate: 0, ed: a, xd: b }, M.ssOptsSma(cpS)));
+    const sc = M.ssSchedule(mo, ra, a, b), fl = (mode) => -M.ssFlows(10000, mo, ra, a, b, sc, mode).reduce((x, f) => x + f.cf, 0);
+    const v = [r9.contributed, rs.contributed, fl('r9'), fl('r9base'), fl('day'), r9.log[r9.log.length - 1].invested];
+    const months = [...sc.byMonth.keys()].join(), dmon = [...new Set(sc.list.map((x) => x.date.slice(0, 7)))].join();
+    nC++;
+    if (!(v.every((x) => Math.abs(x - v[1]) < 1e-6) && months === dmon && r9.log[0].date === a && r9.log[r9.log.length - 1].date === b)) { badC++; if (!ex) ex = { a, b, per, v }; }
+  }
+  n++;
+  if (badC || mid < 100) fail('넣은 돈: 9sig = SMA = 연평균 흐름 (' + nC + '번 · 달 중간 진입 ' + mid + '번) — 다름 ' + badC + '번 ' + JSON.stringify(ex));
+  // 손 계산: 2015-01-02(달 첫 거래일) 진입 ~ 2015-12-31, 매달 500 → 2~12월 11번 = 1만 + 5,500 (예전 9sig 는 1월 말까지 12번 = 16,000)
+  const h9 = M.ssRun9(Object.assign({ initial: 10000, monthly: 500, raise: 0, rate: 0, qi0: 0, qi1: 1, ed: '2015-01-02', xd: '2015-12-31', period: 'quarterly' }, M.ssOpts9(M.ssDefaults('9sig'))));
+  n++;
+  if (h9.contributed !== 15500) fail('넣은 돈 손 계산 2015-01-02 ~ 2015-12-31 = 15,500: ' + h9.contributed);
+}
 // 세금 (2026-11-28 — 양도세 22% · 분배금 미국 원천징수 15% 선택 · SMA 추세 · 그냥 보유 · 엔진 대조는 tests/sma200_test.cjs ⑦)
 {
   const vm = require('vm'), lx = { console, Math, Date, JSON, Number, String, Array, Object, Boolean, RegExp, Error, Map, Set, parseFloat, parseInt, isFinite, Infinity, NaN,
